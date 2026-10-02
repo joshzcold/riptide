@@ -6,6 +6,7 @@ pub mod command;
 pub mod completion;
 pub mod config;
 pub mod engine;
+pub mod help;
 pub mod hints;
 pub mod key;
 pub mod keymap;

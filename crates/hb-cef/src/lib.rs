@@ -7,6 +7,7 @@ mod dialogs;
 mod downloads;
 mod eval;
 mod favicons;
+mod help;
 mod hints;
 mod permissions;
 mod prompts;
@@ -122,7 +123,7 @@ fn early_cli() -> Result<(Cli, Paths), i32> {
         return Err(0);
     }
     if cli.version {
-        println!("hackers-browser {}", env!("CARGO_PKG_VERSION"));
+        println!("{}", help::version_line());
         return Err(0);
     }
     let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {

@@ -58,6 +58,9 @@ pub struct Shell {
     pub autoconfig: Option<AutoConfig>,
     /// Settings the user's config files set, which beat `:set` at startup.
     pub overridden: std::collections::BTreeSet<String>,
+    /// Which file set each setting, and the files read, for the help page.
+    pub setting_sources: std::collections::BTreeMap<String, String>,
+    pub config_files: Vec<std::path::PathBuf>,
     pub window: Option<Window>,
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
@@ -95,6 +98,8 @@ impl Shell {
             paths,
             autoconfig: None,
             overridden: Default::default(),
+            setting_sources: Default::default(),
+            config_files: Vec::new(),
             window: None,
             content: None,
             tabs: TabList::default(),
@@ -206,7 +211,7 @@ pub fn load_config() -> Vec<String> {
     };
     // Runs Lua, but never calls into CEF, so it is safe outside the borrow.
     let loaded = hb_config::load(&paths);
-    with(|s| {
+    let errors = with(|s| {
         s.engine.reset_config();
         let mut errors = loaded.errors;
         for op in &loaded.ops {
@@ -216,13 +221,24 @@ pub fn load_config() -> Vec<String> {
         }
         s.autoconfig = Some(loaded.autoconfig);
         s.overridden = loaded.overridden;
+        s.setting_sources = loaded.sources;
+        s.config_files = loaded.files;
         storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
         errors
     })
-    .unwrap_or_default()
+    .unwrap_or_default();
+    crate::help::refresh();
+    errors
 }
 
 fn persist(op: hb_core::config::ConfigOp) {
+    if let hb_core::config::ConfigOp::Set { name, .. } = &op {
+        with(|s| {
+            s.setting_sources
+                .insert(name.clone(), ":set (autoconfig.toml)".to_string())
+        });
+    }
+    crate::help::refresh();
     with(|s| {
         storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"))
     });
@@ -274,6 +290,7 @@ pub fn apply(effects: Vec<Effect>) {
 
 fn run_command(command: Command, count: Option<u32>) {
     if tabs::run_command(&command, count)
+        || crate::help::run_command(&command)
         || storage::run_command(&command)
         || crate::downloads::run_command(&command, count)
     {

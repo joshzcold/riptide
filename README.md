@@ -147,6 +147,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `b` / `B` | Open a quickmark here / in a new tab |
 | `M` | Bookmark this page |
 | `gb` / `gB` | Open a bookmark here / in a new tab |
+| `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
+| `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
 | `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |

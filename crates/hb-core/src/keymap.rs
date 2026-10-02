@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::key::{Key, KeyParseError};
+use crate::key::{Key, KeyParseError, format_sequence};
 use crate::mode::Mode;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,6 +80,21 @@ impl Keymap {
             .bindings
             .get_mut(&mode)
             .is_some_and(|m| m.remove(&seq).is_some()))
+    }
+
+    /// A mode's bindings as `(keys, command)` in qutebrowser notation, sorted by keys.
+    pub fn bindings(&self, mode: Mode) -> Vec<(String, String)> {
+        let mut list: Vec<(String, String)> = self
+            .bindings
+            .get(&mode)
+            .map(|m| {
+                m.iter()
+                    .map(|(k, c)| (format_sequence(k), c.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        list.sort();
+        list
     }
 
     /// An exact match wins even when longer bindings share the prefix.
@@ -176,6 +191,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("M", "bookmark-add"),
     ("gb", "cmd-set-text -s :bookmark-load"),
     ("gB", "cmd-set-text -s :bookmark-load -t"),
+    ("<F1>", "help"),
     ("ZQ", "quit"),
     ("ZZ", "quit --save"),
     ("<Ctrl-q>", "quit"),

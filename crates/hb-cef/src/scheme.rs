@@ -18,12 +18,14 @@ const CSP: &str =
     "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:";
 
 /// Pages served under `hb://`, by host and path.
-fn page(host: &str, path: &str) -> Option<(&'static str, &'static str)> {
+fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
     let html = "text/html";
+    let embedded = |text: &'static str| Some((Arc::from(text.as_bytes()), html));
     match (host, path) {
-        ("ui", "/tabbar.html") => Some((ui::TABBAR_HTML, html)),
-        ("ui", "/statusbar.html") => Some((ui::STATUSBAR_HTML, html)),
-        ("ui", "/completion.html") => Some((ui::COMPLETION_HTML, html)),
+        ("ui", "/tabbar.html") => embedded(ui::TABBAR_HTML),
+        ("ui", "/statusbar.html") => embedded(ui::STATUSBAR_HTML),
+        ("ui", "/completion.html") => embedded(ui::COMPLETION_HTML),
+        ("help", "/") => Some((crate::help::page(), html)),
         _ => None,
     }
 }
@@ -60,16 +62,16 @@ wrap_scheme_handler_factory! {
             let found = split_url(&url).and_then(|(host, path)| page(host, path));
             let (body, mime, status) = match found {
                 Some((body, mime)) => (body, mime, 200),
-                None => ("<!doctype html><title>Not found</title>Not found", "text/html", 404),
+                None => (Arc::from(&b"<!doctype html><title>Not found</title>Not found"[..]), "text/html", 404),
             };
-            Some(HbResource::new(body.as_bytes(), mime, status, Arc::new(AtomicUsize::new(0))))
+            Some(HbResource::new(body, mime, status, Arc::new(AtomicUsize::new(0))))
         }
     }
 }
 
 wrap_resource_handler! {
     struct HbResource {
-        body: &'static [u8],
+        body: Arc<[u8]>,
         mime: &'static str,
         status: i32,
         // Shared so clones of the handler agree on how much was read.

@@ -222,6 +222,12 @@ expect_exit() {
     [[ $code == 0 ]] && pass || fail "exit code '${code:-still running}'"
 }
 
+step ":help :open opens the generated help page"
+xdotool key shift+semicolon
+xdotool type --delay 5 "help :open"
+xdotool key Return
+expect_title "hackers-browser help"
+
 step "web pages can't see or embed hb:// UI pages"
 xdotool key shift+semicolon
 xdotool type --delay 5 "open file://$work/isolation.html"

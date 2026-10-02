@@ -378,7 +378,18 @@ Original plan:
 - The same channel later serves userscripts' `QUTE_FIFO`-style command input (M9 and M12).
 - **Tests:** protocol and argument handling in a CEF-free crate. A smoke step sends `:open -t` to the running test browser.
 
-### M16 — Help pages
+### M16 — Help pages ✅ done 2026-10-02
+
+Result:
+- **Data:** `hb_core::help::build` assembles commands (with the keys bound to them, including `cmd-set-text` prefills), settings (current value, default, type, and the file that set it) and per-mode bindings (with changed and removed ones marked) from the live registries. Unit tested.
+- **Page:** `hb-cef/src/help.rs` fills `ui/help.html` with that JSON and rebuilds it after every config load and `:set`/`:bind`. The scheme handler serves it from a shared `RwLock`.
+- **Look:** light/dark themes, sticky search (`/`), side navigation and anchors (`:help :open`, `:help hints.chars`, `:help bindings`, `:version`). Built with `textContent` only.
+- **Commands:** `:help [-t] [topic]`, `:version` and `F1`. `--version` now prints the git commit and CEF/Chromium versions (from `hb-cef/build.rs`).
+- A smoke step opens `:help :open`.
+
+Not done: help for Lua-defined commands (M12).
+
+Original plan:
 - **`:help [topic]`** opens `hb://help`, a set of pages generated from the live registries, so it is always current:
   - **commands:** name, arguments and description from `COMMANDS`, with any `config.lua`-defined commands added once M12 exists
   - **settings:** type, default, *current value* and where it was set (default, `config.toml`, `config.lua` or `:set`)

@@ -146,6 +146,10 @@ impl Engine {
         &self.settings
     }
 
+    pub fn keymap(&self) -> &Keymap {
+        &self.keymap
+    }
+
     /// Back to the built-in settings and bindings, before re-reading config.
     pub fn reset_config(&mut self) {
         self.keymap = Keymap::defaults();
@@ -944,7 +948,7 @@ mod tests {
         let mut e = engine();
         assert!(press(&mut e, "x")[0].consumed);
         assert!(!press(&mut e, "<Space>")[0].consumed);
-        assert!(!press(&mut e, "<F1>")[0].consumed);
+        assert!(!press(&mut e, "<F2>")[0].consumed);
         // A broken sequence is swallowed rather than leaking its last key to the page.
         let out = press(&mut e, "g<Space>");
         assert!(out[1].consumed);

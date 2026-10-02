@@ -134,6 +134,12 @@ pub enum Command {
         keys: String,
     },
     ConfigSource,
+    /// Open the help page, optionally at a topic, in a new tab with `tab`.
+    Help {
+        tab: bool,
+        topic: Option<String>,
+    },
+    Version,
     CompletionFocus(FocusDirection),
     /// Answer the active prompt; `value` is yes/no for y/n questions.
     PromptAccept {
@@ -270,6 +276,11 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("unbind", "Remove a key binding: :unbind [--mode m] keys"),
     spec("config-source", "Reload the configuration files"),
+    spec(
+        "help",
+        "Show help: :help [-t] [:command | setting | section]",
+    ),
+    spec("version", "Show version, paths and loaded config files"),
     spec(
         "quickmark-add",
         "Save a quickmark: :quickmark-add <url> <name>",
@@ -503,6 +514,15 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "config-source" => Command::ConfigSource,
+        "help" => {
+            let tab = args.flag(&["-t", "--tab"]).is_some();
+            let topic = args.rest();
+            Command::Help {
+                tab,
+                topic: (!topic.is_empty()).then(|| topic.to_string()),
+            }
+        }
+        "version" => Command::Version,
         "quickmark-add" => {
             let url = args.required("url")?.to_string();
             let name = args.rest();
