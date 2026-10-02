@@ -4,6 +4,7 @@
 pub mod cmdline;
 pub mod command;
 pub mod engine;
+pub mod hints;
 pub mod key;
 pub mod keymap;
 pub mod mode;

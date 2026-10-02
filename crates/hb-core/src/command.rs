@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use crate::hints::{HintGroup, HintRequest, HintTarget};
 use crate::mode::Mode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +53,13 @@ pub enum TabMoveTarget {
     End,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YankWhat {
+    Url,
+    Title,
+    Domain,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Open {
@@ -93,6 +101,8 @@ pub enum Command {
     TabMove(Option<TabMoveTarget>),
     TabOnly,
     Undo,
+    Hint(HintRequest),
+    Yank(YankWhat),
     Quit,
 }
 
@@ -149,6 +159,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("tab-only", "Close all tabs except the current one"),
     spec("undo", "Re-open the last closed tab"),
+    spec(
+        "hint",
+        "Label elements to follow: [--rapid] [group] [target] [fill text]",
+    ),
+    spec(
+        "yank",
+        "Copy the page's url, title or domain to the clipboard",
+    ),
     spec("quit", "Quit the browser"),
     hidden("command-accept", "Execute the command line"),
     hidden(
@@ -202,6 +220,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             let mut target = OpenTarget::Current;
             let mut related = false;
             while let Some(flag) = args.flag(&[
+                "--",
                 "-r",
                 "--related",
                 "-t",
@@ -214,6 +233,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 "--private",
             ]) {
                 target = match flag {
+                    "--" => break,
                     "-r" | "--related" => {
                         related = true;
                         continue;
@@ -301,6 +321,33 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }),
         "tab-only" => Command::TabOnly,
         "undo" => Command::Undo,
+        "hint" => {
+            let rapid = args.flag(&["-r", "--rapid"]).is_some();
+            let group = match args.optional() {
+                Some(g) => g.parse::<HintGroup>().map_err(|e| args.error(e))?,
+                None => HintGroup::All,
+            };
+            let target = match args.optional() {
+                Some(t) => t.parse::<HintTarget>().map_err(|e| args.error(e))?,
+                None => HintTarget::Normal,
+            };
+            let fill = args.rest();
+            if target == HintTarget::Fill && fill.is_empty() {
+                return Err(args.error("the fill target needs command text"));
+            }
+            Command::Hint(HintRequest {
+                group,
+                target,
+                rapid,
+                fill: (!fill.is_empty()).then(|| fill.to_string()),
+            })
+        }
+        "yank" => Command::Yank(match args.optional() {
+            None | Some("url") => YankWhat::Url,
+            Some("title") => YankWhat::Title,
+            Some("domain") => YankWhat::Domain,
+            Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
+        }),
         "quit" | "q" | "qa" | "wq" => Command::Quit,
         name => match parse_readline(name) {
             Some(rl) => Command::Readline(rl),
@@ -526,6 +573,55 @@ mod tests {
             parse("tab-move 1.5"),
             Err(CommandError::BadArgs { .. })
         ));
+    }
+
+    #[test]
+    fn parses_hint_and_yank() {
+        assert_eq!(
+            parse("hint").unwrap(),
+            Command::Hint(HintRequest {
+                group: HintGroup::All,
+                target: HintTarget::Normal,
+                rapid: false,
+                fill: None
+            })
+        );
+        assert_eq!(
+            parse("hint --rapid links tab-bg").unwrap(),
+            Command::Hint(HintRequest {
+                group: HintGroup::Links,
+                target: HintTarget::TabBg,
+                rapid: true,
+                fill: None
+            })
+        );
+        assert_eq!(
+            parse("hint links fill :open -t {hint-url}").unwrap(),
+            Command::Hint(HintRequest {
+                group: HintGroup::Links,
+                target: HintTarget::Fill,
+                rapid: false,
+                fill: Some(":open -t {hint-url}".into())
+            })
+        );
+        assert!(matches!(
+            parse("hint links fill"),
+            Err(CommandError::BadArgs { .. })
+        ));
+        assert_eq!(
+            parse("open -t -- -t is text").unwrap(),
+            Command::Open {
+                target: OpenTarget::Tab,
+                related: false,
+                url: Some("-t is text".into())
+            }
+        );
+        assert!(matches!(
+            parse("hint everything"),
+            Err(CommandError::BadArgs { .. })
+        ));
+        assert_eq!(parse("yank title").unwrap(), Command::Yank(YankWhat::Title));
+        assert_eq!(parse("yank").unwrap(), Command::Yank(YankWhat::Url));
     }
 
     #[test]

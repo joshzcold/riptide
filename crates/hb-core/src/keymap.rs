@@ -40,6 +40,8 @@ impl Keymap {
             map.bind(Mode::Command, keys, cmd)
                 .expect("valid default binding");
         }
+        map.bind(Mode::Hint, "<Escape>", "mode-leave")
+            .expect("valid default binding");
         map.bind(Mode::Insert, "<Escape>", "mode-leave")
             .expect("valid default binding");
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
@@ -133,6 +135,23 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("gK", "tab-move -"),
     ("gm", "tab-move"),
     ("co", "tab-only"),
+    ("f", "hint"),
+    ("F", "hint all tab"),
+    (";b", "hint all tab-bg"),
+    (";f", "hint all tab"),
+    (";h", "hint all hover"),
+    (";i", "hint images current"),
+    (";I", "hint images tab"),
+    (";o", "hint links fill :open {hint-url}"),
+    (";O", "hint links fill :open -t -r {hint-url}"),
+    (";r", "hint --rapid links tab-bg"),
+    (";t", "hint inputs"),
+    (";y", "hint links yank"),
+    ("yy", "yank"),
+    ("yt", "yank title"),
+    ("yd", "yank domain"),
+    ("pp", "open -- {clipboard}"),
+    ("PP", "open -t -- {clipboard}"),
     ("ZQ", "quit"),
     ("ZZ", "quit"),
     ("<Ctrl-q>", "quit"),

@@ -24,11 +24,12 @@ trap cleanup EXIT
 cat >"$work/page.html" <<'EOF'
 <!doctype html><title>ready</title>
 <input id="f" style="position:fixed;top:0;left:0;width:300px;height:40px">
+<button id="b" style="position:fixed;top:0;left:320px;height:40px" onclick="clicked = event.isTrusted ? 'trusted' : 'synthetic'; report()">b</button>
 <div style="height:5000px"></div>
 <script>
-let keys = 0;
+let keys = 0, clicked = 'no';
 const f = document.getElementById('f');
-const report = () => { document.title = `s=${Math.round(scrollY)} k=${keys} v=${f.value}`; };
+const report = () => { document.title = `s=${Math.round(scrollY)} k=${keys} v=${f.value} c=${clicked}`; };
 // Modifier-only presses reach the page by design, so leave them out of the count.
 addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) { keys++; report(); } });
 addEventListener('scroll', report);
@@ -80,11 +81,11 @@ step "clicking a field enters insert mode"
 xdotool mousemove --window "$window" 50 40 click 1
 sleep 0.3
 xdotool type --delay 20 abc
-expect_title "s=0 k=3 v=abc"
+expect_title "s=0 k=3 v=abc c=no"
 
 step "Escape leaves insert mode, 5j scrolls 200px"
 xdotool key Escape 5 j
-expect_title "s=200 k=3 v=abc"
+expect_title "s=200 k=3 v=abc c=no"
 
 step "G scrolls to the bottom without page keys"
 xdotool key shift+g
@@ -102,6 +103,18 @@ expect_first_page() {
     done
     fail "title was '$title'"
 }
+
+step "f + label clicks the button for real"
+xdotool key f
+sleep 0.5
+xdotool key s
+title=""
+for _ in $(seq $((TIMEOUT * 10))); do
+    title=$(xdotool getwindowname "$window")
+    [[ $title == *" k=3 v=abc c=trusted - hackers-browser" ]] && break
+    sleep 0.1
+done
+[[ $title == *" k=3 v=abc c=trusted - hackers-browser" ]] && pass || fail "title was '$title'"
 
 step ":open -t opens and focuses a new tab"
 xdotool key shift+semicolon

@@ -2,6 +2,9 @@
 //! `hb-core` inputs and carries out the effects the engine returns.
 
 mod client;
+mod clipboard;
+mod eval;
+mod hints;
 mod renderer;
 mod shell;
 mod tabs;
@@ -33,7 +36,9 @@ wrap_browser_process_handler! {
 
     impl BrowserProcessHandler {
         fn on_context_initialized(&self) {
-            shell::install(shell::Shell::new(Engine::new(Keymap::defaults())));
+            let mut engine = Engine::new(Keymap::defaults());
+            engine.set_clipboard_reader(clipboard::read);
+            shell::install(shell::Shell::new(engine));
             window::create(start_url());
         }
     }

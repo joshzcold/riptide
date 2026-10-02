@@ -3,10 +3,8 @@ use hb_core::Modifiers;
 use hb_core::engine::Level;
 use hb_core::vk::{self, RawKey};
 
-use crate::renderer::FOCUS_MESSAGE;
-use crate::shell;
-use crate::tabs;
-use crate::ui;
+use crate::renderer::{EVAL_RESULT_MESSAGE, FOCUS_MESSAGE};
+use crate::{eval, shell, tabs, ui};
 
 #[cfg(target_os = "linux")]
 type OsEvent = sys::XEvent;
@@ -50,7 +48,14 @@ wrap_client! {
             message: Option<&mut ProcessMessage>,
         ) -> ::std::os::raw::c_int {
             let Some(message) = message else { return 0 };
-            if self.role != Role::Tab || CefString::from(&message.name()).to_string() != FOCUS_MESSAGE {
+            let name = CefString::from(&message.name()).to_string();
+            if name == EVAL_RESULT_MESSAGE {
+                if let Some(args) = message.argument_list() {
+                    eval::complete(args.int(0), args.bool(1) != 0, CefString::from(&args.string(2)).to_string());
+                }
+                return 1;
+            }
+            if self.role != Role::Tab || name != FOCUS_MESSAGE {
                 return 0;
             }
             let editable = message.argument_list().is_some_and(|args| args.bool(0) != 0);

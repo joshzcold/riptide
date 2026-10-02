@@ -1,0 +1,259 @@
+use std::fmt;
+use std::str::FromStr;
+
+pub const DEFAULT_HINT_CHARS: &str = "asdfghjkl";
+
+/// Which elements get hints, like qutebrowser's `hints.selectors` groups.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HintGroup {
+    All,
+    Links,
+    Images,
+    Inputs,
+}
+
+/// What to do with the chosen element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HintTarget {
+    /// Click it.
+    Normal,
+    /// Open its URL in a new tab, focused.
+    Tab,
+    /// Open its URL in a new background tab.
+    TabBg,
+    /// Copy its URL to the clipboard.
+    Yank,
+    /// Move the mouse over it.
+    Hover,
+    /// Put a command on the command line with `{hint-url}` filled in.
+    Fill,
+    /// Open its URL in the current tab.
+    Current,
+}
+
+macro_rules! names {
+    ($ty:ident { $($variant:ident => $name:literal),* $(,)? }) => {
+        impl $ty {
+            pub fn name(self) -> &'static str {
+                match self { $($ty::$variant => $name),* }
+            }
+        }
+        impl FromStr for $ty {
+            type Err = String;
+            fn from_str(s: &str) -> Result<Self, String> {
+                match s {
+                    $($name => Ok($ty::$variant),)*
+                    _ => Err(format!("unknown {}: {s}", stringify!($ty))),
+                }
+            }
+        }
+        impl fmt::Display for $ty {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(self.name())
+            }
+        }
+    };
+}
+
+names!(HintGroup { All => "all", Links => "links", Images => "images", Inputs => "inputs" });
+names!(HintTarget {
+    Normal => "normal",
+    Tab => "tab",
+    TabBg => "tab-bg",
+    Yank => "yank",
+    Hover => "hover",
+    Fill => "fill",
+    Current => "current",
+});
+
+/// A parsed `:hint` command.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HintRequest {
+    pub group: HintGroup,
+    pub target: HintTarget,
+    /// Stay in hint mode after following, like `--rapid`.
+    pub rapid: bool,
+    /// Command text for the `fill` target.
+    pub fill: Option<String>,
+}
+
+/// One hintable element as reported by the page.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HintItem {
+    pub url: Option<String>,
+}
+
+/// Labels for `count` hints, using qutebrowser's scattered letter algorithm:
+/// as many labels as possible are one character shorter, and no label is a
+/// prefix of another.
+pub fn labels(count: usize, chars: &str) -> Vec<String> {
+    let chars: Vec<char> = chars.chars().collect();
+    let base = chars.len();
+    if count == 0 || base < 2 {
+        return Vec::new();
+    }
+    let mut needed = 1u32;
+    while base.pow(needed) < count {
+        needed += 1;
+    }
+    let short_count = if needed > 1 {
+        (base.pow(needed) - count) / base
+    } else {
+        0
+    };
+    let long_count = count - short_count;
+    let mut labels: Vec<String> = (0..short_count)
+        .map(|i| number_to_label(i, &chars, needed - 1))
+        .collect();
+    let start = short_count * base;
+    labels.extend((start..start + long_count).map(|i| number_to_label(i, &chars, needed)));
+    scatter(labels, base)
+}
+
+fn number_to_label(mut number: usize, chars: &[char], digits: u32) -> String {
+    let base = chars.len();
+    let mut label = Vec::new();
+    loop {
+        label.push(chars[number % base]);
+        number /= base;
+        if number == 0 {
+            break;
+        }
+    }
+    while label.len() < digits as usize {
+        label.push(chars[0]);
+    }
+    label.iter().rev().collect()
+}
+
+/// Spread labels so neighbouring elements start with different characters.
+fn scatter(labels: Vec<String>, buckets: usize) -> Vec<String> {
+    let mut out: Vec<Vec<String>> = vec![Vec::new(); buckets];
+    for (i, label) in labels.into_iter().enumerate() {
+        out[i % buckets].push(label);
+    }
+    out.into_iter().flatten().collect()
+}
+
+/// State while hint mode is active.
+#[derive(Clone, Debug)]
+pub struct HintSession {
+    pub request: HintRequest,
+    pub items: Vec<HintItem>,
+    pub labels: Vec<String>,
+    pub typed: String,
+}
+
+/// Result of typing a character in hint mode.
+#[derive(Debug, PartialEq, Eq)]
+pub enum HintInput {
+    /// The typed text narrowed the hints; nothing chosen yet.
+    Filtered,
+    /// The typed text uniquely matches this item.
+    Chosen(usize),
+    /// No label starts with the typed text; the key was ignored.
+    NoMatch,
+}
+
+impl HintSession {
+    pub fn new(request: HintRequest, items: Vec<HintItem>, chars: &str) -> Self {
+        let labels = labels(items.len(), chars);
+        Self {
+            request,
+            items,
+            labels,
+            typed: String::new(),
+        }
+    }
+
+    pub fn push(&mut self, c: char) -> HintInput {
+        let mut typed = self.typed.clone();
+        typed.push(c);
+        if !self.labels.iter().any(|l| l.starts_with(&typed)) {
+            return HintInput::NoMatch;
+        }
+        match self.labels.iter().position(|l| *l == typed) {
+            Some(index) => {
+                self.typed.clear();
+                HintInput::Chosen(index)
+            }
+            None => {
+                self.typed = typed;
+                HintInput::Filtered
+            }
+        }
+    }
+
+    pub fn pop(&mut self) {
+        self.typed.pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_prefix_free(labels: &[String]) -> bool {
+        labels.iter().enumerate().all(|(i, a)| {
+            labels
+                .iter()
+                .enumerate()
+                .all(|(j, b)| i == j || !b.starts_with(a.as_str()))
+        })
+    }
+
+    #[test]
+    fn single_chars_when_they_fit() {
+        assert_eq!(labels(3, "asd"), ["a", "s", "d"]);
+        assert_eq!(labels(1, DEFAULT_HINT_CHARS), ["a"]);
+        assert!(labels(0, DEFAULT_HINT_CHARS).is_empty());
+    }
+
+    #[test]
+    fn mixes_short_and_long_labels() {
+        // 3 chars, 4 items: floor((9 - 4) / 3) = 1 one-char label, 3 two-char labels.
+        let l = labels(4, "asd");
+        assert_eq!(l.len(), 4);
+        assert_eq!(l.iter().filter(|s| s.len() == 1).count(), 1);
+        assert!(is_prefix_free(&l));
+    }
+
+    #[test]
+    fn matches_qutebrowser_for_small_alphabet() {
+        // Same output as qutebrowser's _hint_scattered(1, "abc", 5 elems).
+        assert_eq!(labels(5, "abc"), ["a", "bc", "ba", "ca", "bb"]);
+    }
+
+    #[test]
+    fn large_counts_are_unique_and_prefix_free() {
+        for count in [9, 10, 80, 81, 82, 500] {
+            let l = labels(count, DEFAULT_HINT_CHARS);
+            assert_eq!(l.len(), count);
+            let mut unique = l.clone();
+            unique.sort();
+            unique.dedup();
+            assert_eq!(unique.len(), count, "duplicates for {count}");
+            assert!(is_prefix_free(&l), "prefix clash for {count}");
+        }
+    }
+
+    #[test]
+    fn session_filters_and_chooses() {
+        let request = HintRequest {
+            group: HintGroup::All,
+            target: HintTarget::Normal,
+            rapid: false,
+            fill: None,
+        };
+        let items = vec![HintItem { url: None }; 5];
+        // Labels: [a, bc, ba, ca, bb]
+        let mut s = HintSession::new(request, items, "abc");
+        assert_eq!(s.push('x'), HintInput::NoMatch);
+        assert_eq!(s.push('c'), HintInput::Filtered);
+        assert_eq!(s.typed, "c");
+        s.pop();
+        assert_eq!(s.push('b'), HintInput::Filtered);
+        assert_eq!(s.push('a'), HintInput::Chosen(2));
+        assert_eq!(s.typed, "");
+    }
+}

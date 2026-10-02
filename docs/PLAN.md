@@ -56,7 +56,7 @@ Single executable. CEF launches subprocesses (renderer, GPU, utility) by re-exec
 Most qutebrowser features that touch page content are injected JavaScript (it does the same):
 
 - **Scrolling:** `window.scrollBy` / element-aware scrolling.
-- **Hints:** JS collects clickable elements, draws labels in a shadow-DOM overlay, reports positions; Rust owns label generation and key matching.
+- **Hints:** JS collects clickable elements, draws labels in a shadow-DOM overlay, reports positions; Rust owns label generation and key matching. Results come back through an eval channel: the browser asks our renderer-process code to evaluate a script, and that Rust code replies with the result. Pages can't forge replies, and no global function is exposed to page scripts.
 - **Search (`/`, `n`, `N`):** native `CefBrowserHost::Find`.
 - **Caret mode:** JS Selection API.
 
@@ -135,15 +135,17 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Multiple windows
 
 ### Hints
-- [ ] `f` / `F` follow (current / new tab), `;y` yank, `;d` download, `;i` image, `;r` rapid
-- [ ] Letter and number hint modes, configurable chars
+- [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
+- [ ] `;d` download (needs M7)
+- [ ] Number hint mode, configurable chars (M5), hints inside iframes
 
 ### Command line
 - [ ] `:` command entry with history, fuzzy completion (commands, URLs, history, bookmarks, tabs, settings)
 - [ ] Command chaining (`;;`), aliases, `:bind` / `:unbind`, `:set`
 
 ### Yank / paste
-- [ ] `yy`, `yt`, `yd`, `pp`, `PP`
+- [x] `yy`, `yt`, `yd`, `pp`, `PP` (`{clipboard}` is substituted per command, so pasted text can't add `;;` commands)
+- [ ] Primary selection (`yY`, `pP`)
 
 ### Content
 - [ ] Ad blocking (EasyList / uBlock lists) and host blocking
@@ -214,8 +216,10 @@ M1 is essentially complete as a by-product (modes, key parser, scrolling, naviga
 
 Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserView`s share a fill-layout panel, and only the current one is visible. Popups go through CEF's `on_popup_browser_view_created`, so `window.opener` survives. A page's `window.close()` closes only its tab. Gaps: undo restores the URL only (not back/forward history), closing a tab skips `beforeunload` prompts, and there is still a single window.
 
-### M4 — Hints
+### M4 — Hints ✅ done 2026-10-02
 - JS hint engine, all hint targets, rapid mode.
+
+Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: iframes aren't hinted; a page can interfere with hints on its own page by redefining `window.__hbHints`; labels for elements that move after the hints are drawn don't follow them.
 
 ### M5 — Config
 - `config.toml` (settings, bindings, aliases, per-domain overrides); `:set`, `:bind`, live reload.

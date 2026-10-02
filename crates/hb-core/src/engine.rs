@@ -2,6 +2,7 @@ use serde::Serialize;
 
 use crate::cmdline::{History, LineEditor};
 use crate::command::{self, COMMANDS, Command};
+use crate::hints::{DEFAULT_HINT_CHARS, HintInput, HintItem, HintRequest, HintSession, HintTarget};
 use crate::key::{Key, KeyCode, format_sequence};
 use crate::keymap::{Keymap, Lookup};
 use crate::mode::Mode;
@@ -16,6 +17,20 @@ pub enum Effect {
     ModeChanged {
         from: Mode,
         to: Mode,
+    },
+    /// Draw these hint labels, one per item, in page order.
+    ShowHints {
+        labels: Vec<String>,
+    },
+    /// Only show labels starting with `typed`.
+    FilterHints {
+        typed: String,
+    },
+    /// Act on the chosen element.
+    FollowHint {
+        index: usize,
+        url: Option<String>,
+        target: HintTarget,
     },
 }
 
@@ -72,6 +87,8 @@ pub struct Engine {
     message: Option<Message>,
     message_generation: u64,
     url: String,
+    clipboard: Option<Box<dyn Fn() -> Option<String>>>,
+    hints: Option<HintSession>,
     dirty: bool,
 }
 
@@ -87,6 +104,8 @@ impl Engine {
             message: None,
             message_generation: 0,
             url: String::new(),
+            clipboard: None,
+            hints: None,
             dirty: true,
         }
     }
@@ -103,6 +122,9 @@ impl Engine {
     pub fn status(&self) -> StatusView {
         let mut keystring = self.count.map(|c| c.to_string()).unwrap_or_default();
         keystring.push_str(&format_sequence(&self.pending));
+        if let Some(hints) = &self.hints {
+            keystring.push_str(&hints.typed);
+        }
         StatusView {
             mode: self.mode,
             command_line: (self.mode == Mode::Command).then(|| CommandLineView {
@@ -133,6 +155,27 @@ impl Engine {
                 description: c.description,
             })
             .collect()
+    }
+
+    /// Lets `{clipboard}` in commands read the system clipboard.
+    pub fn set_clipboard_reader(&mut self, reader: impl Fn() -> Option<String> + 'static) {
+        self.clipboard = Some(Box::new(reader));
+    }
+
+    /// Begin hint mode once the page has reported its hintable elements.
+    pub fn start_hints(&mut self, request: HintRequest, items: Vec<HintItem>) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        if items.is_empty() {
+            self.show_message(Level::Info, "No elements found");
+            return effects;
+        }
+        let session = HintSession::new(request, items, DEFAULT_HINT_CHARS);
+        effects.push(Effect::ShowHints {
+            labels: session.labels.clone(),
+        });
+        self.hints = Some(session);
+        self.set_mode(Mode::Hint, &mut effects);
+        effects
     }
 
     pub fn set_url(&mut self, url: &str) {
@@ -176,7 +219,7 @@ impl Engine {
     /// `tabs.mode_on_change = normal`.
     pub fn tab_switched(&mut self) -> Vec<Effect> {
         let mut effects = Vec::new();
-        if matches!(self.mode, Mode::Insert | Mode::Passthrough) {
+        if matches!(self.mode, Mode::Insert | Mode::Passthrough | Mode::Hint) {
             self.set_mode(Mode::Normal, &mut effects);
         }
         effects
@@ -187,7 +230,7 @@ impl Engine {
         if self.message.take().is_some() {
             self.dirty = true;
         }
-        if self.mode == Mode::Insert {
+        if matches!(self.mode, Mode::Insert | Mode::Hint) {
             self.set_mode(Mode::Normal, &mut effects);
         }
         effects
@@ -198,24 +241,42 @@ impl Engine {
             Mode::Normal => self.handle_normal(key),
             Mode::Command => self.handle_command(key),
             Mode::Insert | Mode::Passthrough => self.handle_passthrough(key),
+            Mode::Hint => self.handle_hint(key),
         }
     }
 
-    /// Run a command string such as `scroll down ;; reload`.
+    /// Run a command string such as `scroll down ;; reload`. Variables are
+    /// filled in after splitting on `;;`, so their contents cannot add commands.
     pub fn execute_str(&mut self, line: &str, count: Option<u32>) -> Vec<Effect> {
-        let line = line.replace("{url}", &self.url);
         let mut effects = Vec::new();
-        match command::parse_line(&line) {
-            Ok(commands) => {
-                for cmd in commands {
-                    self.execute(cmd, count, &mut effects);
+        for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {
+            let result = self
+                .substitute(piece)
+                .and_then(|piece| command::parse(&piece).map_err(|e| e.to_string()));
+            match result {
+                Ok(cmd) => self.execute(cmd, count, &mut effects),
+                Err(e) => {
+                    self.show_message(Level::Error, e);
+                    break;
                 }
-            }
-            Err(e) => {
-                self.show_message(Level::Error, e.to_string());
             }
         }
         effects
+    }
+
+    fn substitute(&self, piece: &str) -> Result<String, String> {
+        let mut piece = piece.replace("{url}", &self.url);
+        if piece.contains("{clipboard}") {
+            let text = self
+                .clipboard
+                .as_ref()
+                .and_then(|read| read())
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .ok_or("Clipboard is empty")?;
+            piece = piece.replace("{clipboard}", &text);
+        }
+        Ok(piece)
     }
 
     fn handle_normal(&mut self, key: Key) -> KeyOutcome {
@@ -263,6 +324,58 @@ impl Engine {
             self.dirty = true;
         }
         consumed(Vec::new())
+    }
+
+    fn handle_hint(&mut self, key: Key) -> KeyOutcome {
+        if let Lookup::Exact(cmd) = self.keymap.lookup(Mode::Hint, &[key]) {
+            let cmd = cmd.to_string();
+            return consumed(self.execute_str(&cmd, None));
+        }
+        let mut effects = Vec::new();
+        let Some(session) = self.hints.as_mut() else {
+            return consumed(effects);
+        };
+        let input = match (key.code, key.text()) {
+            (KeyCode::Backspace, _) => {
+                session.pop();
+                HintInput::Filtered
+            }
+            (_, Some(c)) => session.push(c),
+            _ => return consumed(effects),
+        };
+        self.dirty = true;
+        match input {
+            HintInput::NoMatch => {}
+            HintInput::Filtered => effects.push(Effect::FilterHints {
+                typed: session.typed.clone(),
+            }),
+            HintInput::Chosen(index) => {
+                let url = session.items[index].url.clone();
+                let request = session.request.clone();
+                if request.rapid {
+                    effects.push(Effect::FilterHints {
+                        typed: String::new(),
+                    });
+                } else {
+                    self.set_mode(Mode::Normal, &mut effects);
+                }
+                match (request.target, request.fill) {
+                    (HintTarget::Fill, Some(fill)) => {
+                        let text = fill.replace("{hint-url}", url.as_deref().unwrap_or_default());
+                        self.execute(
+                            Command::CmdSetText {
+                                text,
+                                append_space: false,
+                            },
+                            None,
+                            &mut effects,
+                        );
+                    }
+                    (target, _) => effects.push(Effect::FollowHint { index, url, target }),
+                }
+            }
+        }
+        consumed(effects)
     }
 
     fn handle_passthrough(&mut self, key: Key) -> KeyOutcome {
@@ -334,6 +447,9 @@ impl Engine {
             self.cmdline.clear();
             self.history.reset();
         }
+        if self.mode == Mode::Hint {
+            self.hints = None;
+        }
         if mode == Mode::Command && self.cmdline.text().is_empty() {
             self.cmdline.set(":");
         }
@@ -365,6 +481,7 @@ fn is_forwardable(key: Key) -> bool {
 mod tests {
     use super::*;
     use crate::command::{Direction, OpenTarget, TabTarget};
+    use crate::hints::{HintItem, HintRequest, HintTarget};
 
     fn engine() -> Engine {
         Engine::new(Keymap::defaults())
@@ -579,6 +696,151 @@ mod tests {
         press(&mut e, ":");
         e.tab_switched();
         assert_eq!(e.mode(), Mode::Command);
+    }
+
+    fn hint_request(target: HintTarget, rapid: bool, fill: Option<&str>) -> HintRequest {
+        HintRequest {
+            group: crate::hints::HintGroup::All,
+            target,
+            rapid,
+            fill: fill.map(String::from),
+        }
+    }
+
+    fn items(n: usize) -> Vec<HintItem> {
+        (0..n)
+            .map(|i| HintItem {
+                url: Some(format!("https://example.com/{i}")),
+            })
+            .collect()
+    }
+
+    fn all_effects(outcomes: &[KeyOutcome]) -> Vec<Effect> {
+        outcomes.iter().flat_map(|o| o.effects.clone()).collect()
+    }
+
+    #[test]
+    fn f_requests_hints_and_choosing_follows() {
+        let mut e = engine();
+        let out = press(&mut e, "f");
+        assert_eq!(
+            runs(&out),
+            vec![(
+                Command::Hint(hint_request(HintTarget::Normal, false, None)),
+                None
+            )]
+        );
+        let effects = e.start_hints(hint_request(HintTarget::Normal, false, None), items(3));
+        assert_eq!(
+            effects[0],
+            Effect::ShowHints {
+                labels: vec!["a".into(), "s".into(), "d".into()]
+            }
+        );
+        assert_eq!(e.mode(), Mode::Hint);
+        let effects = all_effects(&press(&mut e, "s"));
+        assert_eq!(e.mode(), Mode::Normal);
+        assert!(effects.contains(&Effect::FollowHint {
+            index: 1,
+            url: Some("https://example.com/1".into()),
+            target: HintTarget::Normal
+        }));
+    }
+
+    #[test]
+    fn hint_typing_filters_and_escape_cancels() {
+        let mut e = engine();
+        e.start_hints(hint_request(HintTarget::Tab, false, None), items(20));
+        let label = e
+            .hints
+            .as_ref()
+            .unwrap()
+            .labels
+            .iter()
+            .find(|l| l.len() == 2)
+            .unwrap()
+            .clone();
+        let first = label.chars().next().unwrap().to_string();
+        let effects = all_effects(&press(&mut e, &first));
+        assert_eq!(
+            effects,
+            vec![Effect::FilterHints {
+                typed: first.clone()
+            }]
+        );
+        assert_eq!(e.status().keystring, first);
+        // A key no label continues with is ignored.
+        assert!(all_effects(&press(&mut e, "z")).is_empty());
+        press(&mut e, "<Escape>");
+        assert_eq!(e.mode(), Mode::Normal);
+        assert!(e.hints.is_none());
+    }
+
+    #[test]
+    fn rapid_hints_stay_active() {
+        let mut e = engine();
+        e.start_hints(hint_request(HintTarget::TabBg, true, None), items(3));
+        let effects = all_effects(&press(&mut e, "a"));
+        assert_eq!(e.mode(), Mode::Hint);
+        assert!(effects.contains(&Effect::FilterHints {
+            typed: String::new()
+        }));
+        assert!(matches!(
+            effects.last(),
+            Some(Effect::FollowHint { index: 0, .. })
+        ));
+    }
+
+    #[test]
+    fn fill_target_sets_command_line() {
+        let mut e = engine();
+        e.start_hints(
+            hint_request(HintTarget::Fill, false, Some(":open -t {hint-url}")),
+            items(3),
+        );
+        press(&mut e, "d");
+        assert_eq!(e.mode(), Mode::Command);
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open -t https://example.com/2"
+        );
+    }
+
+    #[test]
+    fn no_elements_shows_message() {
+        let mut e = engine();
+        assert!(
+            e.start_hints(hint_request(HintTarget::Normal, false, None), Vec::new())
+                .is_empty()
+        );
+        assert_eq!(e.mode(), Mode::Normal);
+        assert_eq!(e.status().message.unwrap().text, "No elements found");
+    }
+
+    #[test]
+    fn clipboard_substitution_cannot_chain_commands() {
+        let mut e = engine();
+        e.set_clipboard_reader(|| Some("evil ;; quit".into()));
+        let out = press(&mut e, "pp");
+        assert_eq!(
+            runs(&out),
+            vec![(
+                Command::Open {
+                    target: OpenTarget::Current,
+                    related: false,
+                    url: Some("evil ;; quit".into())
+                },
+                None
+            )]
+        );
+    }
+
+    #[test]
+    fn empty_clipboard_is_an_error() {
+        let mut e = engine();
+        e.set_clipboard_reader(|| Some("  ".into()));
+        assert!(runs(&press(&mut e, "pp")).is_empty());
+        assert_eq!(e.status().message.unwrap().text, "Clipboard is empty");
     }
 
     #[test]

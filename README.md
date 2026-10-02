@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0 and 3: core modes and tabs). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0, 3 and 4: core modes, tabs and hints). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
 
 ## Building
 
@@ -58,6 +58,13 @@ Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `
 | `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |
 | `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |
 | `co` | `tab-only` |
+| `f` / `F` / `;b` | Hint elements; click / open in a new tab / open in a background tab |
+| `;y` / `;h` / `;t` | Hint a link to yank / an element to hover / an input to focus |
+| `;i` / `;I` | Hint an image; open it here / in a new tab |
+| `;o` / `;O` | Hint a link and put `:open` (or `:open -t`) with its URL on the command line |
+| `;r` | Rapid hinting: open several links in background tabs (leave with `Escape`) |
+| `yy` / `yt` / `yd` | Yank the URL / title / domain |
+| `pp` / `PP` | Open the clipboard contents here / in a new tab |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |
 | `Ctrl-v` | Passthrough mode (leave with `Shift-Escape`) |

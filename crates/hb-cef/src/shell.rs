@@ -4,14 +4,14 @@
 use std::cell::RefCell;
 
 use cef::*;
-use hb_core::command::{Direction, OpenTarget};
+use hb_core::command::{Direction, OpenTarget, YankWhat};
 use hb_core::engine::{Completion, Level};
 use hb_core::tabs::{Position, TabList};
 use hb_core::url::{DEFAULT_SEARCH_ENGINE, DEFAULT_START_PAGE, fuzzy_url};
-use hb_core::{Command, Effect, Engine};
+use hb_core::{Command, Effect, Engine, Mode};
 use serde_json::json;
 
-use crate::tabs;
+use crate::{clipboard, hints, tabs};
 
 const SCROLL_JS: &str = include_str!("../js/scroll.js");
 const SCROLL_STEP_PX: u32 = 40;
@@ -66,6 +66,8 @@ pub struct Shell {
     pub window_closing: bool,
     pub open_browsers: usize,
     pub suppress_char: bool,
+    /// Browser id of the tab currently showing hint labels.
+    pub hint_browser: Option<i32>,
     last_status: String,
     last_tabbar: String,
     last_completion: Vec<Completion>,
@@ -91,6 +93,7 @@ impl Shell {
             window_closing: false,
             open_browsers: 0,
             suppress_char: false,
+            hint_browser: None,
             last_status: String::new(),
             last_tabbar: String::new(),
             last_completion: Vec::new(),
@@ -156,7 +159,15 @@ pub fn apply(effects: Vec<Effect>) {
     for effect in effects {
         match effect {
             Effect::Run { command, count } => run_command(command, count),
-            Effect::ModeChanged { from, to } => tracing::debug!(%from, %to, "mode changed"),
+            Effect::ModeChanged { from, to } => {
+                tracing::debug!(%from, %to, "mode changed");
+                if from == Mode::Hint {
+                    hints::clear();
+                }
+            }
+            Effect::ShowHints { labels } => hints::show(&labels),
+            Effect::FilterHints { typed } => hints::filter(&typed),
+            Effect::FollowHint { index, url, target } => hints::follow(index, url, target),
         }
     }
     refresh_ui();
@@ -165,6 +176,11 @@ pub fn apply(effects: Vec<Effect>) {
 fn run_command(command: Command, count: Option<u32>) {
     if tabs::run_command(&command, count) {
         return;
+    }
+    match command {
+        Command::Hint(request) => return hints::request(request),
+        Command::Yank(what) => return yank(what),
+        _ => {}
     }
     let Some(browser) = with(|s| s.current_browser()).flatten() else {
         return;
@@ -248,6 +264,32 @@ fn run_command(command: Command, count: Option<u32>) {
             "command reached the browser layer but is handled by the engine"
         ),
     }
+}
+
+fn yank(what: YankWhat) {
+    let Some((url, title)) =
+        with(|s| s.tabs.current().map(|t| (t.url.clone(), t.title.clone()))).flatten()
+    else {
+        return;
+    };
+    match what {
+        YankWhat::Url => clipboard::yank(&url, "URL"),
+        YankWhat::Title => clipboard::yank(&title, "title"),
+        YankWhat::Domain => match domain_of(&url) {
+            Some(domain) => clipboard::yank(&domain, "domain"),
+            None => show_message(Level::Error, "This page has no domain"),
+        },
+    }
+}
+
+/// `scheme://host[:port]`, like qutebrowser's `:yank domain`.
+fn domain_of(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let host = rest
+        .split(['/', '?', '#'])
+        .next()
+        .filter(|h| !h.is_empty())?;
+    Some(format!("{scheme}://{host}"))
 }
 
 fn scroll(browser: &Browser, op: &str, x: &str, y: &str) {

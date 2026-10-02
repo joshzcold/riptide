@@ -10,10 +10,17 @@ pub enum Mode {
     Insert,
     Command,
     Passthrough,
+    Hint,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 4] = [Mode::Normal, Mode::Insert, Mode::Command, Mode::Passthrough];
+    pub const ALL: [Mode; 5] = [
+        Mode::Normal,
+        Mode::Insert,
+        Mode::Command,
+        Mode::Passthrough,
+        Mode::Hint,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -21,6 +28,7 @@ impl Mode {
             Mode::Insert => "insert",
             Mode::Command => "command",
             Mode::Passthrough => "passthrough",
+            Mode::Hint => "hint",
         }
     }
 }
