@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Runs Task (https://taskfile.dev), downloading a pinned release into .bin/ when
+# it is not installed. All arguments pass straight through, e.g. ./task check.
+set -euo pipefail
+
+VERSION=3.54.0
+
+# From task_checksums.txt of the release; plain case so macOS bash 3.2 works.
+expected_sha256() {
+    case $1 in
+        linux_amd64) echo 680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb ;;
+        linux_arm64) echo d7189d439d4a6058e39e1b2acd7c8b27acd4856691b408f23b242e4294e1df5b ;;
+        darwin_amd64) echo 0543b0844a725814c0412d3f4bed12873ce9ed0da207b15775f63a97d734aac0 ;;
+        darwin_arm64) echo 12a69fcf37bb8d5bc9150c44f9a936775b73e59ff044c2c245232f198c135637 ;;
+    esac
+}
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "$root"
+
+# Prefer an installed Task, skipping this script if the repo is on PATH.
+for name in task go-task; do
+    found=$(command -v "$name" || true)
+    if [[ -n $found && $found != "$root/task" ]]; then
+        exec "$found" "$@"
+    fi
+done
+
+bin=$root/.bin/task-$VERSION
+if [[ ! -x $bin ]]; then
+    case $(uname -s) in
+        Linux) os=linux ;;
+        Darwin) os=darwin ;;
+        *) echo "./task: unsupported OS $(uname -s); install Task from https://taskfile.dev" >&2; exit 1 ;;
+    esac
+    case $(uname -m) in
+        x86_64 | amd64) arch=amd64 ;;
+        aarch64 | arm64) arch=arm64 ;;
+        *) echo "./task: unsupported CPU $(uname -m); install Task from https://taskfile.dev" >&2; exit 1 ;;
+    esac
+    asset=task_${os}_${arch}.tar.gz
+    tmp=$(mktemp -d)
+
+    echo "./task: downloading Task v$VERSION ($os/$arch)" >&2
+    curl -fsSL -o "$tmp/$asset" "https://github.com/go-task/task/releases/download/v$VERSION/$asset"
+    if command -v sha256sum >/dev/null; then
+        actual=$(sha256sum "$tmp/$asset" | cut -d' ' -f1)
+    else
+        actual=$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)
+    fi
+    if [[ $actual != "$(expected_sha256 "${os}_${arch}")" ]]; then
+        echo "./task: checksum mismatch for $asset (got $actual)" >&2
+        rm -rf "$tmp"
+        exit 1
+    fi
+    tar -xzf "$tmp/$asset" -C "$tmp" task
+    mkdir -p "$root/.bin"
+    mv "$tmp/task" "$bin"
+    chmod +x "$bin"
+    rm -rf "$tmp"
+fi
+
+exec "$bin" "$@"

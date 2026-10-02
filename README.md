@@ -8,19 +8,21 @@ A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qute
 
 ## Building
 
-Requirements: Rust 1.88+ (edition 2024) and [Task](https://taskfile.dev/installation/). The smoke test also needs `Xvfb` and `xdotool`.
+Requirements: Rust 1.88+ (edition 2024). The smoke test also needs `Xvfb` and `xdotool`.
+
+Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your installed `task` if there is one. Otherwise it downloads a pinned, checksum-verified release into `.bin/`. Arguments pass straight through.
 
 ```sh
-task setup            # once: download CEF (~1.5 GB) into $CEF_PATH, default ~/.local/share/cef
-task run              # build and launch; or: task run -- example.com
-task                  # list all tasks
+./task setup          # once: download CEF (~1.5 GB) into $CEF_PATH, default ~/.local/share/cef
+./task run            # build and launch; or: ./task run -- example.com
+./task                # list all tasks
 ```
 
-`task setup` reads the pinned `cef` crate version from `Cargo.lock` and fetches the matching CEF build. It skips the download when that version is already installed, and `build`, `run` and `lint` run it automatically. Set `CEF_PATH` to keep the binaries somewhere else.
+`./task setup` reads the pinned `cef` crate version from `Cargo.lock` and fetches the matching CEF build. It skips the download when that version is already installed, and `build`, `run` and `lint` run it automatically. Set `CEF_PATH` to keep the binaries somewhere else.
 
 The build copies `libcef.so` and Chromium's resources next to the binary. The binary finds them through an `$ORIGIN` rpath.
 
-Logging goes to stderr and uses the `HB_LOG` filter, e.g. `HB_LOG=hb_cef=trace task run`. Browser data and `cef.log` live in `~/.local/share/hackers-browser/`.
+Logging goes to stderr and uses the `HB_LOG` filter, e.g. `HB_LOG=hb_cef=trace ./task run`. Browser data and `cef.log` live in `~/.local/share/hackers-browser/`.
 
 <details>
 <summary>Without Task</summary>
@@ -68,10 +70,10 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 
 | Command | What it runs |
 |---|---|
-| `task test` | Unit tests for `hb-core` (modes, keys, commands, URLs); no browser needed |
-| `task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
-| `task lint` | `cargo fmt --check` and `clippy -D warnings` |
-| `task check` | All of the above |
+| `./task test` | Unit tests for `hb-core` (modes, keys, commands, URLs); no browser needed |
+| `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
+| `./task lint` | `cargo fmt --check` and `clippy -D warnings` |
+| `./task check` | All of the above |
 
 The smoke test uses a temporary profile, so it never touches your browsing data.
 
