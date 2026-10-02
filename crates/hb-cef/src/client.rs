@@ -34,7 +34,7 @@ wrap_client! {
 
     impl Client {
         fn keyboard_handler(&self) -> Option<KeyboardHandler> {
-            Some(HbKeyboardHandler::new())
+            Some(HbKeyboardHandler::new(self.role))
         }
 
         fn display_handler(&self) -> Option<DisplayHandler> {
@@ -112,7 +112,9 @@ wrap_client! {
 }
 
 wrap_keyboard_handler! {
-    struct HbKeyboardHandler {}
+    struct HbKeyboardHandler {
+        role: Role,
+    }
 
     impl KeyboardHandler {
         // The native event's type differs per platform; on macOS it is a raw pointer.
@@ -124,7 +126,7 @@ wrap_keyboard_handler! {
             _os_event: Option<&mut OsEvent>,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
-            event.is_some_and(handle_key_event).into()
+            event.is_some_and(|e| route_key_event(self.role, e)).into()
         }
 
         #[cfg(target_os = "macos")]
@@ -135,9 +137,38 @@ wrap_keyboard_handler! {
             _os_event: *mut u8,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
-            event.is_some_and(handle_key_event).into()
+            event.is_some_and(|e| route_key_event(self.role, e)).into()
         }
     }
+}
+
+/// Keys normally arrive from the focused tab. If a UI view (tab bar, status
+/// bar, overlay) has keyboard focus instead, e.g. after a click on the tab
+/// bar, keys the engine doesn't consume would land in that view, so they're
+/// sent on to the current tab and focus goes back to it.
+fn route_key_event(role: Role, event: &KeyEvent) -> bool {
+    let consumed = handle_key_event(event);
+    if consumed || role == Role::Tab {
+        return consumed;
+    }
+    // During prompts the status bar has focus on purpose (see `focus_for_prompt`).
+    let prompting = shell::with(|s| {
+        matches!(
+            s.engine.mode(),
+            hb_core::Mode::Prompt | hb_core::Mode::YesNo
+        )
+    });
+    if prompting.unwrap_or(true) {
+        return consumed;
+    }
+    let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten() else {
+        return false;
+    };
+    if let Some(host) = tab.browser().and_then(|b| b.host()) {
+        host.send_key_event(Some(event));
+    }
+    View::from(&tab).request_focus();
+    true
 }
 
 /// Returns true when the key is consumed and must not reach the page.
