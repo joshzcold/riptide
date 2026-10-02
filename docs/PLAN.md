@@ -347,6 +347,7 @@ Not done:
 - Saving favicons in sessions (they're re-fetched when the page loads).
 - Middle-clicking links in pages to open background tabs works through Chromium's popup handling but isn't tested yet.
 - Mouse back/forward buttons.
+- **Lost keys after `:open -t` (seen under Xvfb only):** a key sent by `xdotool` just as a tab opened from the command line finishes loading is dropped about 1 time in 5. It never reaches `OnPreKeyEvent`, `CefWindowDelegate::OnKeyEvent` or a high-priority window accelerator, so it's lost below Views (X11/aura). Tabs opened through the remote command don't lose keys (0/16), nor do keys sent 0.3 s after the load (0/12). It hasn't been seen with a real keyboard and window manager yet. The smoke test pauses 0.3 s after that step; check again on a real desktop and with Wayland (M10).
 
 Original plan:
 - **Pinned tabs** (qutebrowser's `:tab-pin`, `Ctrl-p`):

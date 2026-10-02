@@ -195,6 +195,9 @@ done
 step ":open -t opens and focuses a new tab"
 run "open -t file://$work/second.html"
 expect_title "second"
+# Under Xvfb, a key sent just as a tab opened from the command line finishes
+# loading is sometimes dropped before CEF sees it (docs/PLAN.md, M14 gaps).
+nap 0.3
 
 step "K switches back to the first tab"
 xdotool key shift+k
