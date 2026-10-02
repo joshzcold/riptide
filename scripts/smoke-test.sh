@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# End-to-end check of the real browser on a throwaway X display. The test page
-# reports its state through document.title, which we read via the window name.
+# End-to-end check of the real browser on a throwaway X display. The window
+# title is set to "{mode}::{page title}", so the test can wait for the
+# browser's mode before each key instead of guessing with sleeps, and the test
+# pages report their state through document.title.
 set -euo pipefail
 
 BIN=${BIN:-target/debug/hackers-browser}
@@ -20,6 +22,8 @@ work=$(mktemp -d)
 xvfb_pid=""
 browser_pid=""
 cleanup() {
+    # SMOKE_LOG=path keeps the browser log for debugging.
+    [[ -n ${SMOKE_LOG:-} && -f $work/browser.log ]] && cp "$work/browser.log" "$SMOKE_LOG"
     [[ -n $browser_pid ]] && kill "$browser_pid" 2>/dev/null || true
     [[ -n $xvfb_pid ]] && kill "$xvfb_pid" 2>/dev/null || true
     rm -rf "$work"
@@ -77,15 +81,42 @@ step() { printf '  %-48s' "$1"; }
 pass() { echo "ok"; }
 fail() { echo "FAIL ($1)"; failures=$((failures + 1)); }
 
-# Polls the window title until it matches, failing after TIMEOUT seconds.
+name() { xdotool getwindowname "$window" 2>/dev/null || true; }
+page_title() { local n; n=$(name); echo "${n#*::}"; }
+mode() { local n; n=$(name); echo "${n%%::*}"; }
+
+# Polls the page title until it matches, failing after TIMEOUT seconds.
 expect_title() {
-    local want=$1 title=""
+    local want=$1
     for _ in $(seq $((TIMEOUT * 10))); do
-        title=$(xdotool getwindowname "$window" 2>/dev/null || true)
-        [[ $title == "$want - hackers-browser" ]] && { pass; return; }
+        [[ $(page_title) == "$want" ]] && { pass; return; }
         sleep 0.1
     done
-    fail "title was '$title'"
+    fail "title was '$(name)'"
+}
+
+# Waits (quietly) for the browser to reach a mode; the next check reports it.
+wait_mode() {
+    for _ in $(seq $((TIMEOUT * 10))); do
+        [[ $(mode) == "$1" ]] && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+# Runs a command through the command line.
+run() {
+    xdotool key shift+semicolon
+    wait_mode command || true
+    xdotool type --delay 5 "$1"
+    xdotool key Return
+}
+
+# Follows the hint with the given label.
+hint() {
+    xdotool key f
+    wait_mode hint || true
+    xdotool key "$1"
 }
 
 echo "smoke-test on $DISPLAY"
@@ -95,12 +126,13 @@ cat >"$work/base/config/config.lua" <<EOF
 hb.bind("X", "open -t file://$work/second.html")
 c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
+c.window.title_format = "{mode}::{current_title}"
 EOF
-"$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^ready - hackers-browser$" | head -1 || true)
+window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::ready$" | head -1 || true)
 if [[ -z $window ]]; then
     fail "no window"
     tail -20 "$work/browser.log" >&2
@@ -108,56 +140,54 @@ if [[ -z $window ]]; then
 fi
 pass
 xdotool windowfocus --sync "$window"
-# Let the first page settle before the first keys (cold caches on CI).
-nap 1
+# Keys sent before the page has keyboard focus can be lost, so retry the
+# first hint until hint mode shows up.
+for _ in 1 2 3 4 5; do
+    xdotool key f
+    wait_mode hint && break
+done
 
 # Focus the field through a hint (a real CEF click), which doesn't depend on
 # where the window lands on the display, unlike an xdotool click.
 step "focusing a field enters insert mode"
-xdotool key f
-nap 0.5
 xdotool key a
-nap 0.3
+wait_mode insert || true
 xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc c=no"
 
 step "Escape leaves insert mode, 5j scrolls 200px"
-xdotool key Escape 5 j
+xdotool key Escape
+wait_mode normal || true
+xdotool key 5 j
 expect_title "s=200 k=3 v=abc c=no"
 
 step "G scrolls to the bottom without page keys"
 xdotool key shift+g
 nap 0.5
-title=$(xdotool getwindowname "$window")
+title=$(page_title)
 [[ $title =~ ^s=([0-9]+)\ k=3\  && ${BASH_REMATCH[1]} -gt 3000 ]] && pass || fail "title was '$title'"
 
 # Matches the first page's title whatever its scroll state.
 expect_first_page() {
-    local title=""
     for _ in $(seq $((TIMEOUT * 10))); do
-        title=$(xdotool getwindowname "$window" 2>/dev/null || true)
-        [[ $title == s=*" - hackers-browser" ]] && { pass; return; }
+        [[ $(page_title) == s=* ]] && { pass; return; }
         sleep 0.1
     done
-    fail "title was '$title'"
+    fail "title was '$(name)'"
 }
 
 step "f + label clicks the button for real"
-xdotool key f
-nap 0.5
-xdotool key s
+hint s
 title=""
 for _ in $(seq $((TIMEOUT * 10))); do
-    title=$(xdotool getwindowname "$window")
-    [[ $title == *" k=3 v=abc c=trusted - hackers-browser" ]] && break
+    title=$(page_title)
+    [[ $title == *" k=3 v=abc c=trusted" ]] && break
     sleep 0.1
 done
-[[ $title == *" k=3 v=abc c=trusted - hackers-browser" ]] && pass || fail "title was '$title'"
+[[ $title == *" k=3 v=abc c=trusted" ]] && pass || fail "title was '$title'"
 
 step ":open -t opens and focuses a new tab"
-xdotool key shift+semicolon
-xdotool type --delay 5 "open -t file://$work/second.html"
-xdotool key Return
+run "open -t file://$work/second.html"
 expect_title "second"
 
 step "K switches back to the first tab"
@@ -177,20 +207,16 @@ xdotool key ctrl+p
 nap 0.3
 xdotool key d
 nap 0.5
-title=$(xdotool getwindowname "$window")
-xdotool key shift+semicolon
-xdotool type --delay 5 "tab-close --force"
-xdotool key Return
-if [[ $title == "second - hackers-browser" ]]; then expect_first_page; else fail "d closed the pinned tab ('$title')"; fi
+title=$(page_title)
+run "tab-close --force"
+if [[ $title == "second" ]]; then expect_first_page; else fail "d closed the pinned tab ('$title')"; fi
 
 step "a key bound in config.lua works"
 xdotool key d shift+x
 expect_title "second"
 
 step ":set persists to autoconfig.toml"
-xdotool key shift+semicolon
-xdotool type --delay 5 "set messages.timeout 5000"
-xdotool key Return
+run "set messages.timeout 5000"
 for _ in $(seq $((TIMEOUT * 10))); do
     grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && break
     sleep 0.1
@@ -198,11 +224,10 @@ done
 grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && pass || fail "autoconfig.toml not written"
 
 step ":open completes from history with Tab"
-xdotool key shift+semicolon
-xdotool type --delay 5 "open -t about:blank"
-xdotool key Return
+run "open -t about:blank"
 expect_title "about:blank"
 xdotool key shift+semicolon
+wait_mode command || true
 xdotool type --delay 5 "open secon"
 nap 0.3
 xdotool key Tab Return
@@ -223,9 +248,7 @@ expect_exit() {
 }
 
 step ":help :open opens the generated help page"
-xdotool key shift+semicolon
-xdotool type --delay 5 "help :open"
-xdotool key Return
+run "help :open"
 expect_title "hackers-browser help"
 
 step "a second invocation hands its arguments to this browser"
@@ -234,51 +257,41 @@ code=0
 if (( code == 0 )); then expect_title "second"; else fail "second invocation exited with $code"; fi
 
 step "web pages can't see or embed hb:// UI pages"
-xdotool key shift+semicolon
-xdotool type --delay 5 "open file://$work/isolation.html"
-xdotool key Return
+run "open file://$work/isolation.html"
 expect_title "hb=undefined frame=empty"
 
 step "a JavaScript confirm() is answered with y"
-xdotool key shift+semicolon
-xdotool type --delay 5 "open file://$work/dialogs.html"
-xdotool key Return
+run "open file://$work/dialogs.html"
 expect_title "dialogs"
-xdotool key f
-nap 0.5
-xdotool key a
-nap 0.5
+hint a
+wait_mode yesno || true
 xdotool key y
 expect_title "confirm true"
 
 step "downloads save to downloads.location.directory"
-xdotool key f
-nap 0.5
-xdotool key s
+hint s
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
 [[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
 
 step ":wq with several tabs saves and exits cleanly"
-xdotool key shift+semicolon
-xdotool type --delay 5 "set auto_save.session true"
-xdotool key Return
-xdotool key shift+semicolon w q Return
+run "set auto_save.session true"
+run "wq"
 expect_exit
 
 step "restarting restores the session"
 "$BIN" --basedir "$work/base" >>"$work/browser.log" 2>&1 &
 browser_pid=$!
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^dialogs - hackers-browser$" | head -1 || true)
+window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::dialogs$" | head -1 || true)
 [[ -n $window ]] && pass || fail "no restored window"
 
 step ":quit exits cleanly"
 [[ -n $window ]] && xdotool windowfocus --sync "$window"
-xdotool key shift+semicolon q u i t Return
+run "quit"
 expect_exit
 
 if (( failures > 0 )); then
     echo "smoke-test: $failures check(s) failed; browser log:" >&2
-    tail -20 "$work/browser.log" >&2
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -vE "dbus|libva|vaapi|gpu" | tail -30 >&2
     exit 1
 fi
 echo "smoke-test: all checks passed"
