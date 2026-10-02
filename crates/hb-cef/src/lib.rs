@@ -10,6 +10,7 @@ mod favicons;
 mod help;
 mod hints;
 mod permissions;
+mod privacy;
 mod prompts;
 mod remote;
 mod renderer;
@@ -57,6 +58,7 @@ wrap_app! {
             let browser_process = process_type.is_none_or(|t| t.to_string().is_empty());
             if browser_process && let Some(command_line) = command_line {
                 command_line.append_switch(Some(&CefString::from("disable-chrome-login-prompt")));
+                privacy::append_switches(command_line);
             }
         }
 
@@ -189,7 +191,8 @@ pub fn run() -> i32 {
             hb_config::remote::Item::Command(command) => commands.push(command),
         }
     }
-    let profile = paths.data_dir.join("default");
+    // Chromium names its profile directory "Default" whatever cache_path says.
+    let profile = paths.data_dir.join("Default");
     if let Err(e) = std::fs::create_dir_all(&profile) {
         eprintln!("hackers-browser: cannot create {}: {e}", profile.display());
         return 1;
@@ -206,6 +209,7 @@ pub fn run() -> i32 {
         tracing::warn!("Chromium sandbox {}", sandbox.describe());
     }
     let _ = help::SANDBOX.set(sandbox.describe());
+    privacy::seed_prefs(&paths.data_dir, &profile);
     let settings = Settings {
         no_sandbox: (!sandbox.is_on()).into(),
         persist_session_cookies: 1,

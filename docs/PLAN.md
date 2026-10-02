@@ -161,7 +161,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] TLS certificate errors: Chromium blocks them; no "proceed anyway" prompt yet
 - [ ] Dark mode (Chromium `--force-dark-mode` / blink settings)
 - [ ] Widevine DRM, opt-in (M11)
-- [ ] Review of background Google service traffic (M8)
+- [x] Review of background Google service traffic (M8; one `ListAccounts` call left)
 
 ### Help and tooling
 - [ ] `:help` pages generated from the live commands, settings and bindings; `:version` (M16)
@@ -292,11 +292,14 @@ Gaps:
 
 ### M8 — Content blocking & privacy
 - adblock-rust via `OnBeforeResourceLoad`; filter-list updates (`:adblock-update`); per-domain settings; private windows.
-- **Review background Google service traffic.** CEF's component updater is on by default. On first run it already downloads, without asking: Widevine (21 MB), Safe Browsing lists, optimization hints, Variations (Google's feature-config download), certificate revocation lists (CRLSets) and more. These end up as directories under `~/.local/share/hackers-browser/`.
-  - List every Google endpoint the browser contacts (watch a fresh profile's network traffic) and what each one provides.
-  - Decide keep/disable/opt-in per item. Keep security updates (CRLSets, certificate/PKI metadata); disable or make opt-in anything that only serves Google (optimization hints, Variations).
-  - Find a per-component switch. `--disable-component-update` turns off everything, including CRLSets, which we should not lose.
-  - Document the result in the README.
+- ✅ **Background Google traffic reviewed** (2026-10-02). Method: a fresh profile on `about:blank` for 90 s with `--log-net-log`. Each request was mapped to its Chromium source through its traffic-annotation hash (`hash(id) = fold(c, h*31 + c) mod 138003713` over `tools/traffic_annotation/summary/annotations.xml`). Results are in the README's "Network traffic" table. Before: 8 Google hosts and 122 MB downloaded. After: CRLSets, subresource filter rules, network time and one `ListAccounts`, 5.8 MB.
+  - Changes are in `hb-cef/src/privacy.rs`: `component_updates.component_updates_enabled = false` (Chromium still updates the components it exempts as security data, as with the `ComponentUpdatesEnabled` policy), spell-check dictionaries off, sign-in off, Chrome's default search engine off, and `--disable-features=AimEnabled,PreconnectToSearch,SearchEnginePreconnect2`, merged with any `--disable-features` the user passes.
+  - Prefs are written into `Local State` and `Default/Preferences` before CEF starts, because these services start within 100 ms. `CefPreferenceManager::SetPreference` from `on_context_initialized` is too late. Through cef-rs it also fails silently unless the `error` out-string is non-empty, since an empty `CefString` is passed as NULL.
+  - Feature names in `libcef.so` strings carry a `k` prefix that Chromium strips at runtime (`kAimEnabled` → `AimEnabled`). Class names such as `AimEligibilityService` are not features.
+  - The profile lives in `data/Default`: Chromium uses that name whatever `cache_path` says, so `cache_path` now points there.
+  - Left: `accounts.google.com/ListAccounts` (`gaia_auth_list_accounts`) still runs once at startup. Some startup service asks `GaiaCookieManagerService` for the cookie jar, which isn't found yet.
+  - **Widevine is no longer downloaded**, since it updates through the component updater. M11 must find a way to update only the Widevine component when the user opts in.
+- Original item: Review background Google service traffic (component updater, Safe Browsing, optimization hints, Variations, CRLSets). Keep security updates; disable or make opt-in what only serves Google. Document in the README.
 
 ### M9 — Power features
 - Caret mode, marks, macros, userscripts, greasemonkey, `:open-editor`, search engines.

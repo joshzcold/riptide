@@ -58,6 +58,21 @@ Ubuntu 23.10 and later block user namespaces through AppArmor unless a program h
 
 macOS and Windows builds run without the sandbox for now; it needs the app bundle and installer work in M10.
 
+### Network traffic
+
+Chromium calls Google in the background. hackers-browser turns off the calls that only serve Google and keeps the security updates (`crates/hb-cef/src/privacy.rs`). Measured on a fresh profile left on `about:blank` for 90 seconds, with `--log-net-log`:
+
+| Request | Purpose | Status |
+|---|---|---|
+| `update.googleapis.com`, `edgedl.me.gvt1.com` | Component updates | Only the components Chromium marks as security data still update: certificate revocation lists (CRLSets) and the subresource filter rules. The ~20 others no longer download, saving ~115 MB per profile. These include Widevine, optimization hints, the on-device suggest model, TTS and the password-strength data. |
+| `clients2.google.com/time` | Secure network time, used to explain certificate date errors | kept |
+| `redirector.gvt1.com/…/dict` | Spell-check dictionary | off until spell checking arrives (M17) |
+| `www.google.com/async/folae` | AI Mode eligibility | off (`--disable-features=AimEnabled`) |
+| `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; hackers-browser has its own `url.searchengines`) |
+| `accounts.google.com/ListAccounts` | Google accounts in the cookie jar | **still sent** once at startup. Google sign-in is off, but something still asks for the cookie jar; it carries your google.com cookies if you have any. |
+
+The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `hackers-browser --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
+
 ## Configuration
 
 Run `hackers-browser --paths` to see where config and data live. All config files are optional and load in this order (later wins):
