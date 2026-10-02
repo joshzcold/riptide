@@ -76,6 +76,12 @@ tasks:
       - task: test
       - task: smoke
 
+  hooks:
+    desc: Install a git hook that checks commit messages (Conventional Commits)
+    cmds:
+      - printf '#!/bin/sh\nexec scripts/check-commits.sh --file "$1"\n' > .git/hooks/commit-msg
+      - chmod +x .git/hooks/commit-msg
+
   clean:
     desc: Remove build output (keeps the shared CEF binaries)
     cmds:

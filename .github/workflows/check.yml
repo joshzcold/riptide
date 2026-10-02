@@ -1,0 +1,89 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  commits:
+    name: commit messages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Conventional Commits
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch or a force push has no usable base; check just the tip.
+          if [[ $BASE =~ ^0+$ ]] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            range="$HEAD~1..$HEAD"
+          else
+            range="$BASE..$HEAD"
+          fi
+          scripts/check-commits.sh "$range"
+
+  linux:
+    name: linux (lint, tests, smoke)
+    runs-on: ubuntu-24.04
+    env:
+      CEF_PATH: ${{ github.workspace }}/../cef
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CEF runtime libraries, Xvfb and xdotool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xdotool libnss3 libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+            libcups2t64 libpango-1.0-0 libcairo2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxrandr2 libxi6 libdrm2 libdbus-1-3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache CEF binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CEF_PATH }}
+          key: cef-linux-${{ hashFiles('Cargo.lock') }}
+      - run: ./task setup
+      - run: ./task lint
+      - run: ./task test
+      - run: ./task smoke
+
+  build:
+    name: ${{ matrix.os }} (build, unit tests)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # cef-dll-sys downloads CEF into its build directory, which this caches.
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --locked
+      - name: Unit tests
+        run: cargo test --locked -p hb-core -p hb-config -p hb-storage
+      - name: Run without CEF (--version, --paths)
+        shell: bash
+        run: |
+          bin=target/debug/hackers-browser
+          [[ -f $bin.exe ]] && bin=$bin.exe
+          "$bin" --version
+          "$bin" --paths

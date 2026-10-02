@@ -94,8 +94,62 @@ fn path_string(path: &Path) -> CefString {
     CefString::from(path.to_string_lossy().as_ref())
 }
 
+/// Answer `--help`, `--version`, `--paths` and `--lua-types` without CEF.
+/// Returns `Err(exit code)` when the process should stop here.
+fn early_cli() -> Result<(Cli, Paths), i32> {
+    let cli = match Cli::parse(std::env::args().skip(1)) {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("hackers-browser: {e}\n\n{}", hb_config::cli::USAGE);
+            return Err(2);
+        }
+    };
+    if cli.help {
+        println!("{}", hb_config::cli::USAGE);
+        return Err(0);
+    }
+    if cli.lua_types {
+        print!("{}", hb_config::lua_types::generate());
+        return Err(0);
+    }
+    if cli.version {
+        println!("hackers-browser {}", env!("CARGO_PKG_VERSION"));
+        return Err(0);
+    }
+    let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {
+        eprintln!("hackers-browser: {e}");
+        2
+    })?;
+    if cli.print_paths {
+        println!("config: {}", paths.config_dir.display());
+        println!("data:   {}", paths.data_dir.display());
+        return Err(0);
+    }
+    Ok((cli, paths))
+}
+
 /// Entry point for the browser process and every CEF subprocess. Returns the exit code.
 pub fn run() -> i32 {
+    // CEF subprocesses carry `--type=…`; everything else is the browser process.
+    let subprocess = std::env::args().any(|a| a.starts_with("--type="));
+    let early = if subprocess { None } else { Some(early_cli()) };
+    if let Some(Err(code)) = early {
+        return code;
+    }
+
+    // On macOS the CEF framework is loaded at runtime from the app bundle.
+    #[cfg(target_os = "macos")]
+    let _library = {
+        let loader = library_loader::LibraryLoader::new(
+            &std::env::current_exe().unwrap_or_default(),
+            subprocess,
+        );
+        if !loader.load() {
+            eprintln!("hackers-browser: could not load the Chromium Embedded Framework");
+            return 1;
+        }
+        loader
+    };
     let _ = api_hash(sys::CEF_API_VERSION_LAST, 0);
 
     let args = args::Args::new();
@@ -108,38 +162,9 @@ pub fn run() -> i32 {
     if code >= 0 {
         return code;
     }
-
-    let cli = match Cli::parse(std::env::args().skip(1)) {
-        Ok(cli) => cli,
-        Err(e) => {
-            eprintln!("hackers-browser: {e}\n\n{}", hb_config::cli::USAGE);
-            return 2;
-        }
+    let Some(Ok((cli, paths))) = early else {
+        return 1;
     };
-    if cli.help {
-        println!("{}", hb_config::cli::USAGE);
-        return 0;
-    }
-    if cli.lua_types {
-        print!("{}", hb_config::lua_types::generate());
-        return 0;
-    }
-    if cli.version {
-        println!("hackers-browser {}", env!("CARGO_PKG_VERSION"));
-        return 0;
-    }
-    let paths = match Paths::resolve(cli.basedir.as_deref()) {
-        Ok(paths) => paths,
-        Err(e) => {
-            eprintln!("hackers-browser: {e}");
-            return 2;
-        }
-    };
-    if cli.print_paths {
-        println!("config: {}", paths.config_dir.display());
-        println!("data:   {}", paths.data_dir.display());
-        return 0;
-    }
     let profile = paths.data_dir.join("default");
     if let Err(e) = std::fs::create_dir_all(&profile) {
         eprintln!("hackers-browser: cannot create {}: {e}", profile.display());

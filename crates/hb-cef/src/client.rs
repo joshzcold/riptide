@@ -8,6 +8,8 @@ use crate::{eval, shell, storage, tabs, ui};
 
 #[cfg(target_os = "linux")]
 type OsEvent = sys::XEvent;
+#[cfg(windows)]
+type OsEvent = sys::MSG;
 
 /// Which part of the window a browser belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,11 +93,24 @@ wrap_keyboard_handler! {
     struct HbKeyboardHandler {}
 
     impl KeyboardHandler {
+        // The native event's type differs per platform; on macOS it is a raw pointer.
+        #[cfg(not(target_os = "macos"))]
         fn on_pre_key_event(
             &self,
             _browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
             _os_event: Option<&mut OsEvent>,
+            _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
+        ) -> ::std::os::raw::c_int {
+            event.is_some_and(handle_key_event).into()
+        }
+
+        #[cfg(target_os = "macos")]
+        fn on_pre_key_event(
+            &self,
+            _browser: Option<&mut Browser>,
+            event: Option<&KeyEvent>,
+            _os_event: *mut u8,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
             event.is_some_and(handle_key_event).into()

@@ -176,6 +176,22 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 
 The smoke test uses a temporary profile, so it never touches your browsing data.
 
+### CI
+
+[`.github/workflows/check.yml`](.github/workflows/check.yml) runs on every push to `main` and every pull request:
+
+| Job | Runs |
+|---|---|
+| commit messages | `scripts/check-commits.sh` on the new commits |
+| linux | `./task lint`, `./task test`, `./task smoke` (Xvfb, cached CEF download) |
+| macos, windows | `cargo build`, the unit tests, and `--version`/`--paths` |
+
+macOS and Windows are built and unit-tested but can't run the browser yet; packaging (M10) adds the app bundle and installer they need.
+
+### Commit messages
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org), which the changelog will be generated from: `feat(tabs): add pinned tabs`, `fix: …`, `docs: …`, `ci: …`. Run `./task hooks` once to check messages locally before CI does.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
