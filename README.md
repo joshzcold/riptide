@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0 and 3–7: core modes, tabs, hints, config, storage, prompts and downloads). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0 and 3–7: core modes, tabs, hints, config, storage, prompts and downloads). One window, Linux/X11 only. Not ready for daily browsing.
 
 ## Building
 
@@ -36,6 +36,27 @@ cargo build && ./target/debug/hackers-browser
 
 Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `target/` instead.
 </details>
+
+### Sandbox
+
+On Linux, Chromium's sandbox needs unprivileged user namespaces or a setuid-root `chrome-sandbox` next to the binary. The browser checks at startup. If neither is available, it runs without the sandbox and logs a warning. The help page (`:help`) shows the result under "Sandbox". `--no-sandbox` turns it off on purpose.
+
+Ubuntu 23.10 and later block user namespaces through AppArmor unless a program has a profile that allows them. Pick one of these fixes:
+
+- **An AppArmor profile (recommended).** It only affects this binary. Save it as `/etc/apparmor.d/hackers-browser`, then load it with `sudo apparmor_parser -r /etc/apparmor.d/hackers-browser`:
+  ```
+  abi <abi/4.0>,
+  include <tunables/global>
+
+  profile hackers-browser /path/to/hackers-browser/target/*/hackers-browser flags=(unconfined) {
+    userns,
+    include if exists <local/hackers-browser>
+  }
+  ```
+- **Setuid helper:** `sudo chown root:root target/debug/chrome-sandbox && sudo chmod 4755 target/debug/chrome-sandbox`. A rebuild that copies the file again undoes this.
+- **System-wide:** `sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0` (CI does this). It lowers the hardening for every program.
+
+macOS and Windows builds run without the sandbox for now; it needs the app bundle and installer work in M10.
 
 ## Configuration
 

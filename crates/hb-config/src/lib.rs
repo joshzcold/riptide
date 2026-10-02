@@ -14,6 +14,7 @@ pub mod lua;
 pub mod lua_types;
 pub mod paths;
 pub mod remote;
+pub mod sandbox;
 pub mod toml_file;
 
 use std::collections::{BTreeMap, BTreeSet};

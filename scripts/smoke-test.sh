@@ -140,6 +140,12 @@ if [[ -z $window ]]; then
 fi
 pass
 xdotool windowfocus --sync "$window"
+
+# CI enables user namespaces, so it checks that the sandbox really runs.
+if [[ -n ${EXPECT_SANDBOX:-} ]]; then
+    step "the Chromium sandbox is on"
+    grep -q "Chromium sandbox on" "$work/browser.log" && pass || fail "$(grep -o 'Chromium sandbox.*' "$work/browser.log")"
+fi
 # Keys sent before the page has keyboard focus can be lost, so retry the
 # first hint until hint mode shows up.
 for _ in 1 2 3 4 5; do

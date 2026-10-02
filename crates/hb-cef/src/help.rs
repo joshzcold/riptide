@@ -26,6 +26,9 @@ fn cef_version() -> String {
 }
 
 /// `hackers-browser 0.1.0 (abc1234, CEF …)` for `--version`.
+/// The sandbox state, decided once at startup.
+pub static SANDBOX: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
 pub fn version_line() -> String {
     format!(
         "hackers-browser {} ({}, CEF {})",
@@ -65,6 +68,10 @@ pub fn refresh() {
                 s.paths.data_dir.display().to_string(),
             ),
             ("Config files loaded".to_string(), files),
+            (
+                "Sandbox".to_string(),
+                SANDBOX.get().cloned().unwrap_or_default(),
+            ),
         ];
         let data = hb_core::help::build(s.engine.keymap(), s.engine.settings(), &sources, info);
         // `</` would end the inline <script> early.

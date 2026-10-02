@@ -195,8 +195,19 @@ pub fn run() -> i32 {
         return 1;
     }
 
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+        .unwrap_or_default();
+    let sandbox = hb_config::sandbox::detect(&exe_dir, cli.no_sandbox);
+    if sandbox.is_on() {
+        tracing::info!("Chromium sandbox {}", sandbox.describe());
+    } else {
+        tracing::warn!("Chromium sandbox {}", sandbox.describe());
+    }
+    let _ = help::SANDBOX.set(sandbox.describe());
     let settings = Settings {
-        no_sandbox: (!cfg!(feature = "sandbox")).into(),
+        no_sandbox: (!sandbox.is_on()).into(),
         persist_session_cookies: 1,
         log_severity: LogSeverity::WARNING,
         root_cache_path: path_string(&paths.data_dir),

@@ -12,6 +12,8 @@ pub struct Cli {
     pub target: Option<String>,
     pub help: bool,
     pub version: bool,
+    /// Turn Chromium's sandbox off; Chromium reads the same switch.
+    pub no_sandbox: bool,
     pub urls: Vec<String>,
 }
 
@@ -23,6 +25,7 @@ Options:
   --paths         Print the config and data directories, then exit
   --lua-types     Print lua-language-server definitions for config.lua
   --target WHERE  Open URLs in a running browser as: tab, tab-bg, window, current
+  --no-sandbox    Run without Chromium's sandbox (not recommended)
 
 Arguments starting with ':' run as commands, e.g. hackers-browser ':open -t x'.
 If the browser is already running for this profile, the arguments go to it.
@@ -52,6 +55,7 @@ impl Cli {
                     }
                     cli.target = Some(target);
                 }
+                "--no-sandbox" => cli.no_sandbox = true,
                 "-h" | "--help" => cli.help = true,
                 "-V" | "--version" => cli.version = true,
                 _ => match arg.strip_prefix("--basedir=") {
@@ -90,6 +94,7 @@ mod tests {
             Some(PathBuf::from("/x"))
         );
         assert!(parse(&["--paths"]).unwrap().print_paths);
+        assert!(parse(&["--no-sandbox"]).unwrap().no_sandbox);
         assert!(parse(&["--basedir"]).is_err());
     }
 }

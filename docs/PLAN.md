@@ -209,7 +209,7 @@ Lessons learned:
 - The command line is a Rust-owned buffer. Keys are consumed in `OnPreKeyEvent` and the status bar just displays the text, so UI pages never need keyboard focus.
 
 Known gaps carried forward:
-- **The Chromium sandbox is disabled** (`no_sandbox`). On Linux, the `sandbox` feature needs a SUID-root `chrome-sandbox` or unprivileged user namespaces. Ubuntu 24.04's AppArmor restricts the latter. Resolve before anyone uses this for real browsing (target: M8 or earlier).
+- ~~The Chromium sandbox is disabled.~~ Since M8, the sandbox is on whenever Linux allows it (user namespaces, or a setuid `chrome-sandbox`). Otherwise the browser warns and runs without it (`hb_config::sandbox`). CI enables user namespaces and checks that the sandbox runs. The AppArmor profile in the README hasn't been tried on a real Ubuntu machine yet (it needs root). macOS and Windows still run unsandboxed until M10.
 - Popups and `:open -t/-b/-w` load in the current tab until M3.
 - When an event carries no character, key translation falls back to a US layout. Verify with other layouts.
 - Status messages expire after 3 s. Completion covers only command names (M2 extends it).

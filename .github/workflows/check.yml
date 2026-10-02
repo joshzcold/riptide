@@ -62,7 +62,12 @@ jobs:
       - run: ./task setup
       - run: ./task lint
       - run: ./task test
+      # Ubuntu 24.04 blocks unprivileged user namespaces, which the sandbox needs.
+      - name: Allow user namespaces for the sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: ./task smoke
+        env:
+          EXPECT_SANDBOX: "1"
 
   build:
     name: ${{ matrix.os }} (build, unit tests)
