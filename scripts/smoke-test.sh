@@ -96,7 +96,7 @@ hb.bind("X", "open -t file://$work/second.html")
 c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
 EOF
-"$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
@@ -253,7 +253,8 @@ expect_exit
 
 if (( failures > 0 )); then
     echo "smoke-test: $failures check(s) failed; browser log:" >&2
-    tail -20 "$work/browser.log" >&2
+    # Mode changes and key routing explain most failures; Chromium's own noise doesn't.
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -E "mode changed|key|focus|WARN|ERROR hb" | grep -v "dbus" | head -80 >&2
     exit 1
 fi
 echo "smoke-test: all checks passed"

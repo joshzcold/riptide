@@ -63,6 +63,8 @@ jobs:
       - run: ./task lint
       - run: ./task test
       - run: ./task smoke
+        env:
+          HB_LOG: hb_cef=trace,info
 
   build:
     name: ${{ matrix.os }} (build, unit tests)
