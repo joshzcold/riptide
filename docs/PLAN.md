@@ -132,7 +132,9 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Tabs
 - [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
 - [x] `:tab-move`, `:tab-only`, `:open -t/-b/-r`, popups as tabs (keeping `window.opener`)
-- [ ] `:tab-pin`, `:tab-clone`, `:tab-give`, `:tab-take`
+- [ ] `:tab-pin` and pinned tabs (M14), `:tab-clone`, `:tab-give`, `:tab-take`
+- [ ] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
+- [ ] Favicons in the tab bar and completion (M14)
 - [ ] Multiple windows
 
 ### Hints
@@ -159,6 +161,12 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Dark mode (Chromium `--force-dark-mode` / blink settings)
 - [ ] Widevine DRM, opt-in (M11)
 - [ ] Review of background Google service traffic (M8)
+
+### Help and tooling
+- [ ] `:help` pages generated from the live commands, settings and bindings; `:version` (M16)
+- [ ] `hackers-browser ':cmd' url` talks to the running instance (M15)
+- [ ] Spell checking with keyboard-driven suggestions (M17)
+- [ ] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18)
 
 ### Extensibility
 - [ ] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility)
@@ -302,6 +310,98 @@ Builds on the M5 Lua config API.
 - A small runtime API: current tab URL and title, open URLs, run commands, show messages.
 - Userscripts written in Lua, alongside qutebrowser-compatible external userscripts (M9).
 - Decide on a sandbox for third-party scripts (e.g. no `io`/`os` unless allowed). The user's own `config.lua` stays fully trusted.
+
+### M13 — Internal pages and a UI channel (foundation for M14 and M16)
+- **`hb://` scheme:** register it with `CefSchemeRegistrar::AddCustomScheme` and serve it from embedded files through a `CefSchemeHandlerFactory`. Move the tab bar, status bar and overlay pages off `data:` URLs onto `hb://ui/...`.
+- **UI → Rust messages:** in the renderer's `OnContextCreated`, add a `window.hb.send(name, json)` function **only for frames whose URL is `hb://`**. Web pages never see it.
+  - The browser process accepts these messages only from our UI browsers, and still validates every field. This is the reverse of the eval channel, needed for clicks in the tab bar and for links on the help page.
+- Opening `hb://` from a web page (link, redirect, `window.open`) is blocked in `OnBeforeBrowse`. Only the user (`:open hb://help`) or the browser itself can open it.
+
+### M14 — Tabs: pinned, mouse, favicons
+- **Pinned tabs** (qutebrowser's `:tab-pin`, `Ctrl-p`):
+  - Pinned tabs sit at the left and shrink to favicon + number.
+  - `tab-close` and `tab-only` skip them unless given `--force`; `tab-move` can't push an unpinned tab in among them.
+  - `tabs.pinned.frozen` (default true) makes `:open` in a pinned tab open a new tab instead. `tabs.pinned.shrink` controls the shrinking.
+  - Pin state is saved in sessions: add `pinned = true` to `TabState`, with `#[serde(default)]` so old session files still load.
+  - The core logic goes in `TabList` (pinned count, move/close rules) with unit tests.
+- **Mouse support:**
+  - Tab bar (via the M13 channel): left-click switches, middle-click closes, wheel cycles, and dragging reorders (using `TabList::move_current` semantics).
+  - Pages: middle-click on a link opens a background tab. Chromium already reports this as `NEW_BACKGROUND_TAB` to `on_before_popup`; verify it and honour `tabs.background`.
+  - Mouse back/forward buttons map to `back`/`forward`.
+  - Setting `tabs.mousewheel_switching` (default true).
+- **Favicons:**
+  - `DisplayHandler::OnFaviconURLChange` supplies the icon URLs, and `BrowserHost::DownloadImage(url, is_favicon=true, max_size=32)` fetches the image. `CefImage::GetAsPNG` converts it to a `data:image/png` URL for the tab bar.
+  - Cached per URL for the session. Also shown in `:open` completion, cached in `history.sqlite`, and saved in sessions.
+  - Setting `tabs.favicons.show` (`always`, `never`, `pinned`).
+  - Fetching icons is a network request the page asked for anyway, so it adds no new tracking. Size and format are capped, and only images are accepted.
+
+### M15 — Commands from the terminal (single instance + IPC)
+- **Behaviour:** `hackers-browser example.com` or `hackers-browser ':open -t example.com' ':tab-focus 1'`, run while the browser is already open, sends the URLs and commands to that instance and exits, like qutebrowser.
+  - A URL opens per `new_instance_open_target` (`tab`, `tab-bg`, `window`).
+  - An argument starting with `:` runs as a command.
+  - `--target` overrides the open target for one call.
+- **Transport:** a local socket per profile.
+  - On Unix, `$XDG_RUNTIME_DIR/hackers-browser/<hash of basedir>.sock`, or the data dir if `XDG_RUNTIME_DIR` isn't set. The directory is `0700` and the socket `0600`, and the server checks the peer's user id (`SO_PEERCRED` / `getpeereid`).
+  - On Windows, a named pipe restricted to the current user.
+  - The [`interprocess`](https://crates.io/crates/interprocess) crate covers both. The protocol is versioned JSON lines (`{"version":1,"args":[…],"cwd":"…","target":…}`).
+- **Startup order:** check for a running instance before CEF initialises, because Chromium's profile lock would otherwise refuse the second process. Remove a stale socket left behind by a crash.
+- **Security:** anyone who can write to the socket can run commands, including `:spawn` once that exists (M9). Only the same user may connect, and nothing listens on the network.
+- The same channel later serves userscripts' `QUTE_FIFO`-style command input (M9 and M12).
+- **Tests:** protocol and argument handling in a CEF-free crate. A smoke step sends `:open -t` to the running test browser.
+
+### M16 — Help pages
+- **`:help [topic]`** opens `hb://help`, a set of pages generated from the live registries, so it is always current:
+  - **commands:** name, arguments and description from `COMMANDS`, with any `config.lua`-defined commands added once M12 exists
+  - **settings:** type, default, *current value* and where it was set (default, `config.toml`, `config.lua` or `:set`)
+  - **key bindings:** per mode, including the user's bindings, with changes from the defaults marked
+  - plus pages on modes, hints, the config files and their paths, and the Lua API
+  - `:help :open` and `:help hints.chars` jump straight to an entry.
+- **Look:** clean and readable in light and dark themes (following `prefers-color-scheme`), keyboard-first.
+  - `f` hints and `/` search work normally.
+  - A search box filters commands and settings as you type, and the page works without a mouse.
+- `:version` (`hb://version`) shows the version, git commit, CEF/Chromium version, the paths from `--paths`, and the loaded config files.
+- Bindings: `F1` and `:help`, as in qutebrowser.
+- **Tests:** the generated pages render without errors (a smoke step opens `:help` and checks the title). A unit test checks every command and setting appears.
+
+### M17 — Spell checking
+- **Chromium's spell checker is built into CEF.** Turn it on per profile with `RequestContext::SetPreference("browser.enable_spellchecking", true)` and `spellcheck.dictionaries = [...]`. Keep `spellcheck.use_spelling_service = false` so typed text is never sent to Google.
+- **Settings:** `spellcheck.languages` (list, default empty, so spell checking is off). Applied live when changed.
+- **Dictionaries:**
+  - Chromium downloads `.bdic` files from `redirector.gvt1.com` the first time a language is enabled. That is part of the M8 Google traffic review.
+  - Also offer `hackers-browser --install-dictionary en-US`, like qutebrowser's `dictcli`, which fetches from the Chromium dictionary repository and verifies a pinned checksum.
+  - Document both and let the user choose.
+- **Fixing words from the keyboard:**
+  - `:spell-suggest` puts the suggestions for the misspelled word under the cursor in the completion popup (`Tab` to pick, `Return` to replace). It uses `CefContextMenuParams::GetDictionarySuggestions` / `BrowserHost::ReplaceMisspelling`, or a renderer query if the context-menu path needs a right-click.
+  - `:spell-add` (`AddWordToDictionary`) adds the word to your dictionary.
+  - Right-click suggestions come for free through CEF's context menu.
+- Open question: should spell checking stay off by default (privacy-friendly) or follow the system locale?
+
+### M18 — Versioning, changelog and CI
+- **One version for the whole workspace** (`workspace.package.version`), following semver. Stay on 0.x until the plan's core is done.
+- **The binary reports what it is:**
+  - `--version` prints e.g. `hackers-browser 0.4.0 (abc1234, CEF 154.0.32, Chromium 154.0.8037.58)`.
+  - The git commit comes from a `build.rs` (`git describe --always --dirty`), falling back to "unknown" in source tarballs.
+  - CEF and Chromium versions come from `cef::sys` constants.
+  - `:version` shows the same (M16).
+- **Changelog:** `CHANGELOG.md` generated by [git-cliff](https://git-cliff.org) from commit messages; cef-rs uses the same setup.
+  - Releases are tagged `vX.Y.Z` and the release notes come from the changelog.
+  - In the browser, `:changelog` opens the bundled `CHANGELOG.md` (`hb://changelog`), and the first start after an upgrade shows "Updated to 0.5.0. :changelog for details" in the status bar.
+- **CI (GitHub Actions)** — none exists yet, so this should come early:
+  - `check.yml` on every push/PR runs `./task lint test smoke` on Ubuntu, with Xvfb and the CEF download cached by version.
+  - macOS and Windows jobs build and run the unit tests (`--paths` checks), which verifies the cross-platform path code early.
+  - `release.yml` on a `v*` tag builds release binaries, attaches them to a GitHub release, and publishes the changelog section. This feeds M10's packaging later.
+  - Optionally use [release-plz](https://release-plz.dev) to open "release vX.Y.Z" PRs that bump the version and changelog automatically.
+- **Decision needed:** git-cliff works best with [Conventional Commits](https://www.conventionalcommits.org) (`feat:`, `fix:` …). This repo's commits so far are plain sentences. Either adopt Conventional Commits from now on, or configure git-cliff to group by keywords.
+
+**Suggested order:**
+1. M18's CI part first, because it catches regressions on all three platforms from now on.
+2. M13, since M14 and M16 depend on it.
+3. M14.
+4. M16.
+5. M15.
+6. M17, after M8's Google traffic review.
+
+The rest of M18 (releases) can land whenever the first release is cut.
 
 ### M11 — Widevine DRM (opt-in)
 Depends on M5 (settings) and the M8 component review.
