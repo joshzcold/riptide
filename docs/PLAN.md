@@ -152,6 +152,8 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Permission prompts (geolocation, camera, notifications)
 - [ ] HTTP auth and JS dialogs in the prompt UI
 - [ ] Dark mode (Chromium `--force-dark-mode` / blink settings)
+- [ ] Widevine DRM, opt-in (M11)
+- [ ] Review of background Google service traffic (M8)
 
 ### Extensibility
 - [ ] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility)
@@ -227,12 +229,47 @@ Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserVi
 
 ### M8 — Content blocking & privacy
 - adblock-rust via `OnBeforeResourceLoad`; filter-list updates (`:adblock-update`); per-domain settings; private windows.
+- **Review background Google service traffic.** CEF's component updater is on by default. On first run it already downloads, without asking: Widevine (21 MB), Safe Browsing lists, optimization hints, Variations (Google's feature-config download), certificate revocation lists (CRLSets) and more. These end up as directories under `~/.local/share/hackers-browser/`.
+  - List every Google endpoint the browser contacts (watch a fresh profile's network traffic) and what each one provides.
+  - Decide keep/disable/opt-in per item. Keep security updates (CRLSets, certificate/PKI metadata); disable or make opt-in anything that only serves Google (optimization hints, Variations).
+  - Find a per-component switch. `--disable-component-update` turns off everything, including CRLSets, which we should not lose.
+  - Document the result in the README.
 
 ### M9 — Power features
 - Caret mode, marks, macros, userscripts, greasemonkey, `:open-editor`, search engines.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
+
+### M11 — Widevine DRM (opt-in)
+Depends on M5 (settings) and the M8 component review.
+
+Tested 2026-10-02 on CEF 154 / Linux with the stock (Spotify CDN) build and no code changes:
+
+| Check | Result |
+|---|---|
+| VP9 / AV1 / Opus | ✅ supported |
+| H.264 / AAC | ❌ not in prebuilt CEF builds |
+| Widevine at first launch | ❌ not available |
+| ~1 min later | CEF's component updater downloaded Widevine 4.10.3050.0 into the profile |
+| Widevine after a restart | ✅ `com.widevine.alpha` available with VP9 |
+
+Actual protected playback is not yet verified.
+
+`CefRegisterWidevineCdm` no longer exists ([cef#3149](https://github.com/chromiumembedded/cef/issues/3149)). There is nothing to bundle or register: CEF fetches the CDM from Google itself.
+
+Work:
+- A `content.widevine` setting, **off by default**. When off, Widevine is neither downloaded nor loaded; when on, the component updater fetches it.
+- After the first download, show "Widevine downloaded; restart to enable" (on Linux the CDM loads only at the next launch).
+- A test page or smoke check that reports EME support, plus a manual playback test against a public Widevine demo stream.
+- Document the limits:
+  - Only VP9/AV1 content works (no H.264/AAC).
+  - Linux Widevine is the software-only level (L3), which services often limit to lower resolutions.
+  - Windows/macOS builds would need VMP signing for many services.
+- **Before release, a qualified reviewer must check the licensing:** Google's Widevine terms for third-party browsers, and a GPL-3.0 application loading a proprietary CDM at runtime.
+
+### Deferred — proprietary codecs (H.264 / AAC)
+Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.
 
 ---
 
@@ -256,7 +293,8 @@ Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserVi
 | Views overlay limitations (transparency, z-order) | Validated in M0; OSR is the fallback |
 | Wayland support in CEF | Start on X11 (current session); track CEF's Ozone/Wayland status |
 | Large binary distribution (~200MB+) | Expected for any CEF app; document clearly |
-| Widevine/DRM unavailable in CEF | Document; not a goal |
+| DRM: stock CEF has Widevine (via component updater) but no H.264/AAC | Opt-in Widevine in M11 for VP9/AV1 content; H.264/AAC deferred (needs a source build) |
+| Silent background traffic to Google services | Review and per-component decisions in M8 |
 
 ## Open questions
 
