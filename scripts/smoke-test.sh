@@ -172,6 +172,17 @@ step "u restores it"
 xdotool key u
 expect_title "second"
 
+step "pinned tabs refuse d but close with --force"
+xdotool key ctrl+p
+nap 0.3
+xdotool key d
+nap 0.5
+title=$(xdotool getwindowname "$window")
+xdotool key shift+semicolon
+xdotool type --delay 5 "tab-close --force"
+xdotool key Return
+if [[ $title == "second - hackers-browser" ]]; then expect_first_page; else fail "d closed the pinned tab ('$title')"; fi
+
 step "a key bound in config.lua works"
 xdotool key d shift+x
 expect_title "second"
@@ -180,7 +191,10 @@ step ":set persists to autoconfig.toml"
 xdotool key shift+semicolon
 xdotool type --delay 5 "set messages.timeout 5000"
 xdotool key Return
-nap 0.5
+for _ in $(seq $((TIMEOUT * 10))); do
+    grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && break
+    sleep 0.1
+done
 grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && pass || fail "autoconfig.toml not written"
 
 step ":open completes from history with Tab"

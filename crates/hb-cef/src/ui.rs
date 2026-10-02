@@ -14,6 +14,12 @@ pub const COMPLETION_URL: &str = "hb://ui/completion.html";
 pub fn handle_message(message: UiMessage) {
     match message {
         UiMessage::SelectTab { index } => crate::tabs::select(index),
+        UiMessage::CloseTab { index } => {
+            crate::tabs::close_unless_pinned(index, false);
+            crate::shell::refresh_ui();
+        }
+        UiMessage::CycleTab { forward } => crate::tabs::cycle(forward),
+        UiMessage::MoveTab { from, to } => crate::tabs::move_tab(from, to),
     }
 }
 

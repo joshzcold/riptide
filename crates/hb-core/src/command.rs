@@ -102,12 +102,20 @@ pub enum Command {
     CommandHistoryNext,
     Readline(Readline),
     ClearKeychain,
-    TabClose,
+    /// `force` also closes pinned tabs.
+    TabClose {
+        force: bool,
+    },
+    /// Toggle pinning; the count picks the tab.
+    TabPin,
     TabNext,
     TabPrev,
     TabFocus(Option<TabTarget>),
     TabMove(Option<TabMoveTarget>),
-    TabOnly,
+    /// Close other tabs; `force` closes pinned ones too.
+    TabOnly {
+        force: bool,
+    },
     Undo,
     Hint(HintRequest),
     Yank(YankWhat),
@@ -227,7 +235,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("mode-enter", "Enter a key mode"),
     spec("mode-leave", "Leave the current mode"),
     spec("cmd-set-text", "Preset the command line text"),
-    spec("tab-close", "Close the current tab"),
+    spec(
+        "tab-close",
+        "Close the current tab (--force: even if pinned)",
+    ),
+    spec(
+        "tab-pin",
+        "Pin or unpin the current tab (count: tab number)",
+    ),
     spec("tab-next", "Switch to the next tab"),
     spec("tab-prev", "Switch to the previous tab"),
     spec("tab-focus", "Select a tab by number, or 'last'"),
@@ -412,7 +427,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "command-history-prev" => Command::CommandHistoryPrev,
         "command-history-next" => Command::CommandHistoryNext,
         "clear-keychain" => Command::ClearKeychain,
-        "tab-close" => Command::TabClose,
+        "tab-close" => Command::TabClose {
+            force: args.flag(&["-f", "--force"]).is_some(),
+        },
+        "tab-pin" => Command::TabPin,
         "tab-next" => Command::TabNext,
         "tab-prev" => Command::TabPrev,
         "tab-focus" => Command::TabFocus(match args.optional() {
@@ -428,7 +446,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             Some("end") => Some(TabMoveTarget::End),
             Some(_) => Some(TabMoveTarget::Absolute(args.parse_last_int("index")?)),
         }),
-        "tab-only" => Command::TabOnly,
+        "tab-only" => Command::TabOnly {
+            force: args.flag(&["-f", "--force"]).is_some(),
+        },
         "undo" => Command::Undo,
         "hint" => {
             let rapid = args.flag(&["-r", "--rapid"]).is_some();

@@ -222,6 +222,13 @@ wrap_display_handler! {
             shell::refresh_ui();
         }
 
+        fn on_favicon_urlchange(&self, browser: Option<&mut Browser>, icon_urls: Option<&mut CefStringList>) {
+            let urls = icon_urls.map(crate::favicons::read_list).unwrap_or_default();
+            if let Some(browser) = browser {
+                crate::favicons::changed(browser, urls);
+            }
+        }
+
         fn on_loading_progress_change(&self, browser: Option<&mut Browser>, progress: f64) {
             shell::with_tab(browser, |s, index, _| {
                 if let Some(tab) = s.tabs.get_mut(index)

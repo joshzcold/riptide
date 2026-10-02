@@ -28,16 +28,31 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                 None => shell::show_message(Level::Error, "There is no previous tab"),
             },
         },
-        Command::TabClose => {
+        Command::TabClose { force } => {
             if let Some(index) = shell::with(|s| s.tabs.current_index()) {
+                close_unless_pinned(index, *force);
+            }
+        }
+        Command::TabOnly { force } => {
+            let (current, len, pinned) =
+                shell::with(|s| (s.tabs.current_index(), s.tabs.len(), s.tabs.pinned_count()))
+                    .unwrap_or_default();
+            // Pinned tabs come first, so closing from the end keeps indices valid.
+            for index in (0..len)
+                .rev()
+                .filter(|&i| i != current && (*force || i >= pinned))
+            {
                 close(index);
             }
         }
-        Command::TabOnly => {
-            let (current, len) =
-                shell::with(|s| (s.tabs.current_index(), s.tabs.len())).unwrap_or_default();
-            for index in (0..len).rev().filter(|&i| i != current) {
-                close(index);
+        Command::TabPin => {
+            let target = match count {
+                Some(c) => shell::with(|s| resolve_index(i64::from(c), s.tabs.len())).flatten(),
+                None => shell::with(|s| s.tabs.current_index()),
+            };
+            match target {
+                Some(index) => toggle_pin(index),
+                None => shell::show_message(Level::Error, format!("There's no tab with index {n}")),
             }
         }
         Command::TabMove(target) => move_current(*target, count),
@@ -49,6 +64,43 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     }
     shell::refresh_ui();
     true
+}
+
+/// Close a tab from a command or a middle-click; pinned tabs need `force`.
+pub fn close_unless_pinned(index: usize, force: bool) {
+    if !force && shell::with(|s| s.tabs.is_pinned(index)).unwrap_or(false) {
+        return shell::show_message(
+            Level::Error,
+            "Tab is pinned! Use :tab-close --force to close it",
+        );
+    }
+    close(index);
+}
+
+fn toggle_pin(index: usize) {
+    shell::with(|s| {
+        let pin = !s.tabs.is_pinned(index);
+        s.tabs.set_pinned(index, pin);
+    });
+}
+
+/// Mouse-wheel and drag in the tab bar.
+pub fn cycle(forward: bool) {
+    let enabled =
+        shell::with(|s| s.engine.settings().bool("tabs.mousewheel_switching")).unwrap_or(false);
+    if let Some(index) = enabled
+        .then(|| shell::with(|s| s.tabs.offset(if forward { 1 } else { -1 })))
+        .flatten()
+    {
+        select(index);
+    }
+}
+
+pub fn move_tab(from: usize, to: usize) {
+    shell::with(|s| s.tabs.move_tab(from, to));
+    if let Some(index) = shell::with(|s| s.tabs.current_index()) {
+        select(index);
+    }
 }
 
 /// Open `url` in a new tab.
@@ -174,6 +226,14 @@ pub fn restore(session: &hb_storage::Session) {
     for _ in 0..old {
         close(0);
     }
+    // Saved sessions list pinned tabs first, so pinning in order keeps it.
+    shell::with(|s| {
+        for (index, tab) in window.tabs.iter().enumerate() {
+            if tab.pinned {
+                s.tabs.set_pinned(index, true);
+            }
+        }
+    });
     switch_to(window.active.min(window.tabs.len() - 1), true);
 }
 

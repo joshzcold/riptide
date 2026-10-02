@@ -9,9 +9,10 @@
     --even-bg: #a9a9a9;
     --fg: #ffffff;
     --selected-bg: #000000;
+    --pinned-bg: #4a4a8a;
     --indicator-loading: #0000aa;
-    --indicator-done: #009900;
     --indicator-error: #ff0000;
+    --drop-mark: #ffd700;
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
   html, body {
@@ -34,37 +35,110 @@
     padding: 0 4px 0 0;
     white-space: pre;
     line-height: 1.5;
+    box-sizing: border-box;
   }
   .tab:nth-child(odd) { background: var(--odd-bg); }
   .tab:nth-child(even) { background: var(--even-bg); }
+  .tab.pinned { background: var(--pinned-bg); }
+  .tab.shrunk { flex: 0 0 auto; }
   .tab.selected { background: var(--selected-bg); }
+  .tab.drop-before { box-shadow: inset 3px 0 0 var(--drop-mark); }
   .indicator { width: 3px; align-self: stretch; flex-shrink: 0; }
   .loading .indicator { background: var(--indicator-loading); }
   .error .indicator { background: var(--indicator-error); }
+  .icon { width: 16px; height: 16px; flex-shrink: 0; }
   .title { overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
 <body>
 <div id="tabs"></div>
 <script>
-  window.hbRender = ({ tabs, current }) => {
-    const bar = document.getElementById("tabs");
-    bar.replaceChildren(...tabs.map((tab, i) => {
-      const el = document.createElement("div");
-      el.className = "tab";
-      if (i === current) el.classList.add("selected");
-      if (tab.loading) el.classList.add("loading");
-      if (tab.error) el.classList.add("error");
-      const indicator = document.createElement("span");
-      indicator.className = "indicator";
-      const title = document.createElement("span");
-      title.className = "title";
-      title.textContent = `${i + 1}: ${tab.title || tab.url || "about:blank"}`;
-      el.title = tab.url;
-      el.append(indicator, title);
-      el.addEventListener("click", () => hb.send("select-tab", JSON.stringify({ index: i })));
-      return el;
-    }));
+  const bar = document.getElementById("tabs");
+  const send = (name, data) => hb.send(name, JSON.stringify(data));
+
+  // Drag to reorder with plain pointer events: press on a tab, move a few
+  // pixels, release over another. (HTML5 drag and drop would involve the
+  // OS and let tabs be dropped into other applications.)
+  const DRAG_THRESHOLD = 5;
+  let press = null;
+  const tabIndexAt = (x, y) => {
+    const el = document.elementFromPoint(x, y)?.closest(".tab");
+    return el ? Number(el.dataset.index) : null;
+  };
+  const clearMarks = () => bar.querySelectorAll(".drop-before").forEach((el) => el.classList.remove("drop-before"));
+  bar.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const index = tabIndexAt(e.clientX, e.clientY);
+    if (index === null) return;
+    press = { index, x: e.clientX, dragging: false };
+    bar.setPointerCapture(e.pointerId);
+  });
+  bar.addEventListener("pointermove", (e) => {
+    if (!press) return;
+    if (!press.dragging && Math.abs(e.clientX - press.x) < DRAG_THRESHOLD) return;
+    press.dragging = true;
+    clearMarks();
+    const over = tabIndexAt(e.clientX, e.clientY);
+    if (over !== null && over !== press.index) bar.children[over].classList.add("drop-before");
+  });
+  bar.addEventListener("pointerup", (e) => {
+    if (!press) return;
+    const { index, dragging } = press;
+    press = null;
+    clearMarks();
+    const over = tabIndexAt(e.clientX, e.clientY);
+    if (!dragging) send("select-tab", { index });
+    else if (over !== null && over !== index) send("move-tab", { from: index, to: over });
+  });
+  bar.addEventListener("pointercancel", () => { press = null; clearMarks(); });
+
+  // One wheel notch switches one tab, however finely the device scrolls.
+  let wheelAt = 0;
+  bar.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const now = Date.now();
+    if (now - wheelAt < 120 || e.deltaY === 0) return;
+    wheelAt = now;
+    send("cycle-tab", { forward: e.deltaY > 0 });
+  }, { passive: false });
+
+  function tabElement(tab, i, current, shrink) {
+    const el = document.createElement("div");
+    el.className = "tab";
+    if (i === current) el.classList.add("selected");
+    if (tab.pinned) el.classList.add("pinned");
+    if (tab.pinned && shrink) el.classList.add("shrunk");
+    if (tab.loading) el.classList.add("loading");
+    if (tab.error) el.classList.add("error");
+    el.title = tab.title ? `${tab.title}\n${tab.url}` : tab.url;
+
+    const indicator = document.createElement("span");
+    indicator.className = "indicator";
+    el.append(indicator);
+    if (tab.favicon) {
+      const icon = document.createElement("img");
+      icon.className = "icon";
+      icon.src = tab.favicon;
+      icon.alt = "";
+      icon.draggable = false;
+      el.append(icon);
+    }
+    const title = document.createElement("span");
+    title.className = "title";
+    const name = tab.title || tab.url || "about:blank";
+    title.textContent = tab.pinned && shrink ? `${i + 1}` : `${i + 1}: ${name}`;
+    el.append(title);
+
+    el.dataset.index = String(i);
+    // Middle-click closes, like most browsers.
+    el.addEventListener("mousedown", (e) => { if (e.button === 1) e.preventDefault(); });
+    el.addEventListener("auxclick", (e) => { if (e.button === 1) send("close-tab", { index: i }); });
+
+    return el;
+  }
+
+  window.hbRender = ({ tabs, current, shrink }) => {
+    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrink)));
   };
 </script>
 </body>

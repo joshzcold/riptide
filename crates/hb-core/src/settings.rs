@@ -322,6 +322,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Milliseconds before a status bar message clears (0 keeps it)"
     ),
     def!(
+        "tabs.favicons.show",
+        Kind::Enum(&["always", "never", "pinned"]),
+        s("always"),
+        "Show site icons in the tab bar: always, never, or only on pinned tabs"
+    ),
+    def!(
         "tabs.last_close",
         Kind::Enum(&["ignore", "blank", "startpage", "default-page", "close"]),
         s("ignore"),
@@ -334,6 +340,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Mode after switching tabs: back to normal, or keep insert/passthrough"
     ),
     def!(
+        "tabs.mousewheel_switching",
+        Kind::Bool,
+        Value::Bool(true),
+        "Switch tabs with the mouse wheel over the tab bar"
+    ),
+    def!(
         "tabs.new_position.related",
         Kind::Enum(POSITIONS),
         s("next"),
@@ -344,6 +356,18 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(POSITIONS),
         s("last"),
         "Where other new tabs go (:open -t)"
+    ),
+    def!(
+        "tabs.pinned.frozen",
+        Kind::Bool,
+        Value::Bool(true),
+        "Keep pinned tabs on their page: :open in a pinned tab opens a new tab"
+    ),
+    def!(
+        "tabs.pinned.shrink",
+        Kind::Bool,
+        Value::Bool(true),
+        "Shrink pinned tabs to their icon and number"
     ),
     def!(
         "url.default_page",

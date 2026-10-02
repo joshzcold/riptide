@@ -330,7 +330,23 @@ Original plan:
   - The browser process accepts these messages only from our UI browsers, and still validates every field. This is the reverse of the eval channel, needed for clicks in the tab bar and for links on the help page.
 - Opening `hb://` from a web page (link, redirect, `window.open`) is blocked in `OnBeforeBrowse`. Only the user (`:open hb://help`) or the browser itself can open it.
 
-### M14 — Tabs: pinned, mouse, favicons
+### M14 — Tabs: pinned, mouse, favicons ✅ done 2026-10-02
+
+Result:
+- **Pinned tabs:** `TabList` keeps them first (unit tested: pinning, moves, inserts and removals stay outside or inside the block as they should). Added `:tab-pin` / `Ctrl-p`, `--force` for `tab-close`/`tab-only`, the `tabs.pinned.frozen` and `tabs.pinned.shrink` settings, and pin state in sessions (older session files still load).
+- **Mouse in the tab bar:** click, middle-click to close (pinned tabs refuse), wheel (`tabs.mousewheel_switching`) and drag to reorder, all as allowlisted `hb.send` messages. Drag uses pointer events rather than HTML5 drag and drop, so it never involves the OS or other applications.
+- **Favicons:** from `OnFaviconURLChange` and `DownloadImage` (32 px, at most 64 KB as PNG), shown per `tabs.favicons.show`.
+- **Bugs found on the way:**
+  - The `cef` crate's `CefStringList::clone` copies the opaque C struct, so iterating a clone is always empty; we read the list through the C API instead. Worth reporting upstream.
+  - A new tab could miss keyboard focus requested before its browser existed (`on_after_created` now re-focuses it).
+
+Not done:
+- Favicons in `:open` completion and cached in history.
+- Saving favicons in sessions (they're re-fetched when the page loads).
+- Middle-clicking links in pages to open background tabs works through Chromium's popup handling but isn't tested yet.
+- Mouse back/forward buttons.
+
+Original plan:
 - **Pinned tabs** (qutebrowser's `:tab-pin`, `Ctrl-p`):
   - Pinned tabs sit at the left and shrink to favicon + number.
   - `tab-close` and `tab-only` skip them unless given `--force`; `tab-move` can't push an unpinned tab in among them.

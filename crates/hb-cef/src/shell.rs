@@ -25,6 +25,8 @@ pub struct Tab {
     pub view: BrowserView,
     pub url: String,
     pub title: String,
+    /// PNG data URL of the site icon.
+    pub favicon: Option<String>,
     pub progress: Option<f64>,
     pub load_error: bool,
     /// Error to draw into Chromium's error document once it commits.
@@ -37,6 +39,7 @@ impl Tab {
             view,
             url: String::new(),
             title: String::new(),
+            favicon: None,
             progress: None,
             load_error: false,
             pending_error: None,
@@ -362,6 +365,16 @@ pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
     }) else {
         return;
     };
+    // `tabs.pinned.frozen`: a pinned tab keeps its page; :open goes to a new tab.
+    let frozen = with(|s| {
+        s.tabs.is_pinned(s.tabs.current_index()) && s.engine.settings().bool("tabs.pinned.frozen")
+    })
+    .unwrap_or(false);
+    let target = if target == OpenTarget::Current && frozen {
+        OpenTarget::Tab
+    } else {
+        target
+    };
     match target {
         OpenTarget::Current => {
             if let Some(frame) = browser.and_then(|b| b.main_frame()) {
@@ -388,10 +401,12 @@ pub fn current_session() -> hb_storage::Session {
             tabs: s
                 .tabs
                 .iter()
-                .filter(|t| !t.url.is_empty())
-                .map(|t| hb_storage::TabState {
+                .enumerate()
+                .filter(|(_, t)| !t.url.is_empty())
+                .map(|(i, t)| hb_storage::TabState {
                     url: t.url.clone(),
                     title: t.title.clone(),
+                    pinned: s.tabs.is_pinned(i),
                 })
                 .collect(),
         }],
@@ -554,19 +569,31 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
         scripts.push((frame, status_json));
     }
 
+    let settings = s.engine.settings();
+    let favicons = settings.str("tabs.favicons.show");
     let tabs: Vec<_> = s
         .tabs
         .iter()
-        .map(|t| {
+        .enumerate()
+        .map(|(i, t)| {
+            let pinned = s.tabs.is_pinned(i);
+            let show_icon = favicons == "always" || (favicons == "pinned" && pinned);
             json!({
                 "title": t.title,
                 "url": t.url,
                 "loading": t.progress.is_some(),
                 "error": t.load_error,
+                "pinned": pinned,
+                "favicon": if show_icon { t.favicon.as_deref() } else { None },
             })
         })
         .collect();
-    let tabbar_json = json!({ "tabs": tabs, "current": s.tabs.current_index() }).to_string();
+    let tabbar_json = json!({
+        "tabs": tabs,
+        "current": s.tabs.current_index(),
+        "shrink": settings.bool("tabs.pinned.shrink"),
+    })
+    .to_string();
     let mut title = None;
     if s.tabbar_ready
         && tabbar_json != s.last_tabbar

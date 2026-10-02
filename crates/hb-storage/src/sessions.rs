@@ -22,6 +22,9 @@ pub struct TabState {
     pub url: String,
     #[serde(default)]
     pub title: String,
+    /// Absent in sessions saved before pinned tabs existed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
 }
 
 pub struct Sessions {
@@ -118,10 +121,12 @@ mod tests {
                     TabState {
                         url: "https://a.org/".into(),
                         title: "A".into(),
+                        pinned: true,
                     },
                     TabState {
                         url: "https://b.org/".into(),
                         title: String::new(),
+                        pinned: false,
                     },
                 ],
             }],
@@ -134,6 +139,13 @@ mod tests {
         sessions.delete("work").unwrap();
         assert!(sessions.load("work").unwrap_err().contains("not found"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn loads_sessions_saved_before_pinning_existed() {
+        let old = "[[windows]]\nactive = 0\n[[windows.tabs]]\nurl = \"https://a.org/\"\n";
+        let session: Session = toml::from_str(old).unwrap();
+        assert!(!session.windows[0].tabs[0].pinned);
     }
 
     #[test]

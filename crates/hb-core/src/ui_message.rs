@@ -8,6 +8,12 @@ use serde::Deserialize;
 pub enum UiMessage {
     /// A click on a tab in the tab bar.
     SelectTab { index: usize },
+    /// A middle-click on a tab.
+    CloseTab { index: usize },
+    /// The mouse wheel over the tab bar.
+    CycleTab { forward: bool },
+    /// A tab dragged to another position.
+    MoveTab { from: usize, to: usize },
 }
 
 /// Pages allowed to send messages, by `hb://ui/` path.
@@ -17,6 +23,23 @@ pub const UI_PREFIX: &str = "hb://ui/";
 #[serde(deny_unknown_fields)]
 struct TabIndex {
     index: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Wheel {
+    forward: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Move {
+    from: usize,
+    to: usize,
+}
+
+fn payload<T: serde::de::DeserializeOwned>(name: &str, json: &str) -> Result<T, String> {
+    serde_json::from_str(json).map_err(|e| format!("{name}: {e}"))
 }
 
 /// `hb://host/path?query#frag` → `(host, path)`; `None` for other schemes
@@ -32,16 +55,27 @@ pub fn split_url(url: &str) -> Option<(&str, &str)> {
 }
 
 /// Validate a message from the page at `url`.
-pub fn parse(url: &str, name: &str, payload: &str) -> Result<UiMessage, String> {
+pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
     let page = url
         .strip_prefix(UI_PREFIX)
         .ok_or_else(|| format!("{url} may not send UI messages"))?;
     let page = page.split(['?', '#']).next().unwrap_or_default();
     match (page, name) {
         ("tabbar.html", "select-tab") => {
-            let TabIndex { index } =
-                serde_json::from_str(payload).map_err(|e| format!("select-tab: {e}"))?;
+            let TabIndex { index } = payload(name, json)?;
             Ok(UiMessage::SelectTab { index })
+        }
+        ("tabbar.html", "close-tab") => {
+            let TabIndex { index } = payload(name, json)?;
+            Ok(UiMessage::CloseTab { index })
+        }
+        ("tabbar.html", "cycle-tab") => {
+            let Wheel { forward } = payload(name, json)?;
+            Ok(UiMessage::CycleTab { forward })
+        }
+        ("tabbar.html", "move-tab") => {
+            let Move { from, to } = payload(name, json)?;
+            Ok(UiMessage::MoveTab { from, to })
         }
         _ => Err(format!("{page} may not send {name:?}")),
     }
@@ -61,6 +95,25 @@ mod tests {
             parse("hb://ui/tabbar.html#x", "select-tab", r#"{"index": 0}"#),
             Ok(UiMessage::SelectTab { index: 0 })
         );
+    }
+
+    #[test]
+    fn tab_bar_mouse_messages() {
+        let tabbar = "hb://ui/tabbar.html";
+        assert_eq!(
+            parse(tabbar, "close-tab", r#"{"index": 1}"#),
+            Ok(UiMessage::CloseTab { index: 1 })
+        );
+        assert_eq!(
+            parse(tabbar, "cycle-tab", r#"{"forward": false}"#),
+            Ok(UiMessage::CycleTab { forward: false })
+        );
+        assert_eq!(
+            parse(tabbar, "move-tab", r#"{"from": 0, "to": 3}"#),
+            Ok(UiMessage::MoveTab { from: 0, to: 3 })
+        );
+        assert!(parse(tabbar, "move-tab", r#"{"from": 0}"#).is_err());
+        assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());
     }
 
     #[test]

@@ -134,7 +134,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `d`, `Ctrl-w` | `tab-close` |
 | `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |
 | `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |
-| `co` | `tab-only` |
+| `co` | `tab-only` (keeps pinned tabs; `:tab-only --force` closes them too) |
+| `Ctrl-p` | `tab-pin`: pin or unpin the tab (a count picks one, e.g. `3 Ctrl-p`) |
 | `f` / `F` / `;b` | Hint elements; click / open in a new tab / open in a background tab |
 | `;y` / `;h` / `;t` | Hint a link to yank / an element to hover / an input to focus |
 | `;i` / `;I` | Hint an image; open it here / in a new tab |
@@ -152,6 +153,10 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `Ctrl-v` | Passthrough mode (leave with `Shift-Escape`) |
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
+
+Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shrink`), and survive `d` and `co` unless you add `--force`. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
+
+The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close, scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
 
 Links that open new windows (`target=_blank`, `window.open`) open as tabs next to the current one, keeping `window.opener`. Closing the last tab is ignored, like qutebrowser.
 

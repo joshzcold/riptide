@@ -6,6 +6,7 @@ mod clipboard;
 mod dialogs;
 mod downloads;
 mod eval;
+mod favicons;
 mod hints;
 mod permissions;
 mod prompts;
