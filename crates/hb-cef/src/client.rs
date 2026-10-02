@@ -11,6 +11,13 @@ type OsEvent = sys::XEvent;
 #[cfg(windows)]
 type OsEvent = sys::MSG;
 
+// `cef_event_flags_t` values. The generated enum is `u32` on Linux and macOS
+// but `i32` on Windows, so plain constants keep the bit tests portable.
+const EVENTFLAG_SHIFT_DOWN: u32 = 1 << 1;
+const EVENTFLAG_CONTROL_DOWN: u32 = 1 << 2;
+const EVENTFLAG_ALT_DOWN: u32 = 1 << 3;
+const EVENTFLAG_COMMAND_DOWN: u32 = 1 << 7;
+
 /// Which part of the window a browser belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -126,17 +133,16 @@ fn handle_key_event(event: &KeyEvent) -> bool {
     if event.type_ != KeyEventType::RAWKEYDOWN && event.type_ != KeyEventType::KEYDOWN {
         return false;
     }
-    let flags = event.modifiers;
-    let has = |flag: sys::cef_event_flags_t| flags & flag.0 != 0;
+    let has = |flag: u32| event.modifiers & flag != 0;
     let raw = RawKey {
         windows_key_code: event.windows_key_code,
         character: event.character,
         unmodified_character: event.unmodified_character,
         mods: Modifiers {
-            ctrl: has(sys::cef_event_flags_t::EVENTFLAG_CONTROL_DOWN),
-            alt: has(sys::cef_event_flags_t::EVENTFLAG_ALT_DOWN),
-            shift: has(sys::cef_event_flags_t::EVENTFLAG_SHIFT_DOWN),
-            meta: has(sys::cef_event_flags_t::EVENTFLAG_COMMAND_DOWN),
+            ctrl: has(EVENTFLAG_CONTROL_DOWN),
+            alt: has(EVENTFLAG_ALT_DOWN),
+            shift: has(EVENTFLAG_SHIFT_DOWN),
+            meta: has(EVENTFLAG_COMMAND_DOWN),
         },
     };
     let Some(key) = vk::translate(raw) else {
