@@ -1,0 +1,453 @@
+//! Typed settings with qutebrowser-style dotted names. Values arrive as JSON
+//! from TOML, Lua or `:set`, so validation lives in one place.
+
+use std::collections::{BTreeMap, HashMap};
+use std::fmt;
+
+use serde_json::Value as Json;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Value {
+    Bool(bool),
+    Int(i64),
+    Str(String),
+    List(Vec<String>),
+    Map(BTreeMap<String, String>),
+}
+
+impl Value {
+    pub fn to_json(&self) -> Json {
+        match self {
+            Value::Bool(b) => Json::Bool(*b),
+            Value::Int(i) => Json::from(*i),
+            Value::Str(s) => Json::String(s.clone()),
+            Value::List(l) => Json::from(l.clone()),
+            Value::Map(m) => Json::Object(
+                m.iter()
+                    .map(|(k, v)| (k.clone(), Json::String(v.clone())))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Int(i) => write!(f, "{i}"),
+            Value::Str(s) => f.write_str(s),
+            other => write!(f, "{}", other.to_json()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Kind {
+    Bool,
+    Int { min: i64, max: i64 },
+    Str,
+    Enum(&'static [&'static str]),
+    List,
+    Map,
+}
+
+type Validator = fn(&Value) -> Result<(), String>;
+
+pub struct SettingDef {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub kind: Kind,
+    default: fn() -> Value,
+    validate: Option<Validator>,
+}
+
+impl SettingDef {
+    pub fn default_value(&self) -> Value {
+        (self.default)()
+    }
+
+    /// Convert and validate a JSON value (from TOML, Lua or `:set`).
+    pub fn from_json(&self, json: &Json) -> Result<Value, String> {
+        let expected = |what: &str| format!("{}: expected {what}, got {json}", self.name);
+        let value = match self.kind {
+            Kind::Bool => Value::Bool(json.as_bool().ok_or_else(|| expected("true or false"))?),
+            Kind::Int { min, max } => {
+                let i = json.as_i64().ok_or_else(|| expected("an integer"))?;
+                if !(min..=max).contains(&i) {
+                    return Err(format!("{}: {i} is outside {min}..={max}", self.name));
+                }
+                Value::Int(i)
+            }
+            Kind::Str => Value::Str(
+                json.as_str()
+                    .ok_or_else(|| expected("a string"))?
+                    .to_string(),
+            ),
+            Kind::Enum(options) => {
+                let s = json.as_str().ok_or_else(|| expected("a string"))?;
+                if !options.contains(&s) {
+                    return Err(format!(
+                        "{}: {s:?} is not one of {}",
+                        self.name,
+                        options.join(", ")
+                    ));
+                }
+                Value::Str(s.to_string())
+            }
+            Kind::List => {
+                let items = json
+                    .as_array()
+                    .ok_or_else(|| expected("a list of strings"))?;
+                let items = items
+                    .iter()
+                    .map(|i| {
+                        i.as_str()
+                            .map(String::from)
+                            .ok_or_else(|| expected("a list of strings"))
+                    })
+                    .collect::<Result<_, _>>()?;
+                Value::List(items)
+            }
+            Kind::Map => {
+                let map = json
+                    .as_object()
+                    .ok_or_else(|| expected("a table of strings"))?;
+                let map = map
+                    .iter()
+                    .map(|(k, v)| {
+                        v.as_str()
+                            .map(|v| (k.clone(), v.to_string()))
+                            .ok_or_else(|| expected("a table of strings"))
+                    })
+                    .collect::<Result<_, _>>()?;
+                Value::Map(map)
+            }
+        };
+        if let Some(validate) = self.validate {
+            validate(&value).map_err(|e| format!("{}: {e}", self.name))?;
+        }
+        Ok(value)
+    }
+
+    /// Parse `:set` text: plain words for scalars, JSON for lists and tables.
+    pub fn parse(&self, text: &str) -> Result<Value, String> {
+        let text = text.trim();
+        let json = match self.kind {
+            Kind::Bool => match text {
+                "true" | "yes" | "on" | "1" => Json::Bool(true),
+                "false" | "no" | "off" | "0" => Json::Bool(false),
+                _ => {
+                    return Err(format!(
+                        "{}: expected true or false, got {text:?}",
+                        self.name
+                    ));
+                }
+            },
+            Kind::Int { .. } => Json::from(
+                text.parse::<i64>()
+                    .map_err(|_| format!("{}: expected an integer, got {text:?}", self.name))?,
+            ),
+            Kind::Str | Kind::Enum(_) => Json::String(text.to_string()),
+            Kind::List | Kind::Map => serde_json::from_str(text)
+                .map_err(|e| format!("{}: expected JSON ({e})", self.name))?,
+        };
+        self.from_json(&json)
+    }
+}
+
+fn hint_chars(value: &Value) -> Result<(), String> {
+    let Value::Str(s) = value else { return Ok(()) };
+    let mut chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+    chars.sort_unstable();
+    chars.dedup();
+    if len < 2 || chars.len() != len {
+        return Err("needs at least two distinct characters".into());
+    }
+    Ok(())
+}
+
+fn search_engines(value: &Value) -> Result<(), String> {
+    let Value::Map(map) = value else {
+        return Ok(());
+    };
+    if !map.contains_key("DEFAULT") {
+        return Err("needs a DEFAULT entry".into());
+    }
+    match map.iter().find(|(_, url)| !url.contains("{}")) {
+        Some((name, _)) => Err(format!("engine {name:?} needs a {{}} placeholder")),
+        None => Ok(()),
+    }
+}
+
+const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
+
+macro_rules! def {
+    ($name:literal, $kind:expr, $default:expr, $desc:literal $(, $validate:expr)?) => {
+        SettingDef {
+            name: $name,
+            description: $desc,
+            kind: $kind,
+            default: || $default,
+            validate: def!(@validate $($validate)?),
+        }
+    };
+    (@validate) => { None };
+    (@validate $v:expr) => { Some($v) };
+}
+
+fn s(text: &str) -> Value {
+    Value::Str(text.to_string())
+}
+
+fn map(pairs: &[(&str, &str)]) -> Value {
+    Value::Map(
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
+    )
+}
+
+pub static SETTINGS: &[SettingDef] = &[
+    def!(
+        "aliases",
+        Kind::Map,
+        map(&[("q", "quit"), ("qa", "quit"), ("wq", "quit")]),
+        "Command aliases: name → command"
+    ),
+    def!(
+        "hints.chars",
+        Kind::Str,
+        s(crate::hints::DEFAULT_HINT_CHARS),
+        "Characters used for hint labels",
+        hint_chars
+    ),
+    def!(
+        "hints.uppercase",
+        Kind::Bool,
+        Value::Bool(false),
+        "Show hint labels in upper case"
+    ),
+    def!(
+        "input.forward_unbound_keys",
+        Kind::Enum(&["all", "auto", "none"]),
+        s("auto"),
+        "Pass unbound keys to the page in normal mode (auto: all but plain letters and digits)"
+    ),
+    def!(
+        "input.insert_mode.auto_enter",
+        Kind::Bool,
+        Value::Bool(true),
+        "Enter insert mode when an editable element gets focus"
+    ),
+    def!(
+        "input.insert_mode.auto_leave",
+        Kind::Bool,
+        Value::Bool(true),
+        "Leave insert mode when focus leaves an editable element"
+    ),
+    def!(
+        "input.insert_mode.leave_on_load",
+        Kind::Bool,
+        Value::Bool(true),
+        "Leave insert mode when a new page starts loading"
+    ),
+    def!(
+        "messages.timeout",
+        Kind::Int {
+            min: 0,
+            max: 3_600_000
+        },
+        Value::Int(3000),
+        "Milliseconds before a status bar message clears (0 keeps it)"
+    ),
+    def!(
+        "tabs.last_close",
+        Kind::Enum(&["ignore", "blank", "startpage", "default-page", "close"]),
+        s("ignore"),
+        "What closing the last tab does"
+    ),
+    def!(
+        "tabs.mode_on_change",
+        Kind::Enum(&["normal", "persist"]),
+        s("normal"),
+        "Mode after switching tabs: back to normal, or keep insert/passthrough"
+    ),
+    def!(
+        "tabs.new_position.related",
+        Kind::Enum(POSITIONS),
+        s("next"),
+        "Where tabs opened from a page go (popups, hints)"
+    ),
+    def!(
+        "tabs.new_position.unrelated",
+        Kind::Enum(POSITIONS),
+        s("last"),
+        "Where other new tabs go (:open -t)"
+    ),
+    def!(
+        "url.default_page",
+        Kind::Str,
+        s(crate::url::DEFAULT_START_PAGE),
+        "Page for :open without a URL"
+    ),
+    def!(
+        "url.searchengines",
+        Kind::Map,
+        map(&[("DEFAULT", crate::url::DEFAULT_SEARCH_ENGINE)]),
+        "Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT",
+        search_engines
+    ),
+    def!(
+        "url.start_pages",
+        Kind::List,
+        Value::List(vec![crate::url::DEFAULT_START_PAGE.to_string()]),
+        "Pages opened at startup when no URL is given"
+    ),
+];
+
+pub fn find(name: &str) -> Option<&'static SettingDef> {
+    SETTINGS.iter().find(|d| d.name == name)
+}
+
+/// Current values, starting from the defaults.
+#[derive(Clone, Debug)]
+pub struct Settings {
+    values: HashMap<&'static str, Value>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            values: SETTINGS
+                .iter()
+                .map(|d| (d.name, d.default_value()))
+                .collect(),
+        }
+    }
+}
+
+impl Settings {
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.values.get(name)
+    }
+
+    /// Store an already validated value.
+    pub fn set(&mut self, name: &str, value: Value) -> Result<(), String> {
+        let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
+        self.values.insert(def.name, value);
+        Ok(())
+    }
+
+    pub fn bool(&self, name: &str) -> bool {
+        matches!(self.get(name), Some(Value::Bool(true)))
+    }
+
+    pub fn int(&self, name: &str) -> i64 {
+        match self.get(name) {
+            Some(Value::Int(i)) => *i,
+            _ => 0,
+        }
+    }
+
+    pub fn str(&self, name: &str) -> &str {
+        match self.get(name) {
+            Some(Value::Str(s)) => s,
+            _ => "",
+        }
+    }
+
+    pub fn list(&self, name: &str) -> &[String] {
+        match self.get(name) {
+            Some(Value::List(l)) => l,
+            _ => &[],
+        }
+    }
+
+    pub fn map(&self, name: &str) -> Option<&BTreeMap<String, String>> {
+        match self.get(name) {
+            Some(Value::Map(m)) => Some(m),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn defaults_pass_their_own_validation() {
+        for def in SETTINGS {
+            let value = def.default_value();
+            assert_eq!(def.from_json(&value.to_json()), Ok(value), "{}", def.name);
+        }
+    }
+
+    #[test]
+    fn names_are_sorted_and_unique() {
+        let names: Vec<_> = SETTINGS.iter().map(|d| d.name).collect();
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(names, sorted);
+    }
+
+    #[test]
+    fn parses_set_text() {
+        let def = find("hints.uppercase").unwrap();
+        assert_eq!(def.parse("yes"), Ok(Value::Bool(true)));
+        assert!(def.parse("maybe").is_err());
+        let def = find("messages.timeout").unwrap();
+        assert_eq!(def.parse("500"), Ok(Value::Int(500)));
+        assert!(def.parse("-1").is_err());
+        let def = find("url.start_pages").unwrap();
+        assert_eq!(
+            def.parse(r#"["a", "b"]"#),
+            Ok(Value::List(vec!["a".into(), "b".into()]))
+        );
+        assert!(def.parse("a, b").is_err());
+    }
+
+    #[test]
+    fn validates() {
+        assert!(
+            find("hints.chars")
+                .unwrap()
+                .from_json(&json!("aa"))
+                .is_err()
+        );
+        assert!(find("hints.chars").unwrap().from_json(&json!("a")).is_err());
+        assert!(
+            find("tabs.last_close")
+                .unwrap()
+                .from_json(&json!("explode"))
+                .is_err()
+        );
+        let engines = find("url.searchengines").unwrap();
+        assert!(
+            engines
+                .from_json(&json!({"g": "https://g.co/?q={}"}))
+                .is_err()
+        );
+        assert!(
+            engines
+                .from_json(&json!({"DEFAULT": "https://x.org/"}))
+                .is_err()
+        );
+        assert!(
+            engines
+                .from_json(&json!({"DEFAULT": "https://x.org/?q={}"}))
+                .is_ok()
+        );
+        assert!(
+            find("hints.uppercase")
+                .unwrap()
+                .from_json(&json!("true"))
+                .is_err()
+        );
+    }
+}

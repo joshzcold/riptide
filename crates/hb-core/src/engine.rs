@@ -2,10 +2,12 @@ use serde::Serialize;
 
 use crate::cmdline::{History, LineEditor};
 use crate::command::{self, COMMANDS, Command};
-use crate::hints::{DEFAULT_HINT_CHARS, HintInput, HintItem, HintRequest, HintSession, HintTarget};
+use crate::config::ConfigOp;
+use crate::hints::{HintInput, HintItem, HintRequest, HintSession, HintTarget};
 use crate::key::{Key, KeyCode, format_sequence};
 use crate::keymap::{Keymap, Lookup};
 use crate::mode::Mode;
+use crate::settings::{self, Settings, Value};
 
 /// Something the browser layer has to act on.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,7 +34,12 @@ pub enum Effect {
         url: Option<String>,
         target: HintTarget,
     },
+    /// A `:set`/`:bind`/`:unbind` succeeded; the host persists it.
+    ConfigChanged(ConfigOp),
 }
+
+/// Aliases may refer to other aliases, but not endlessly.
+const MAX_ALIAS_DEPTH: usize = 10;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct KeyOutcome {
@@ -63,6 +70,7 @@ pub struct CommandLineView {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Completion {
+    pub category: &'static str,
     pub name: &'static str,
     pub description: &'static str,
 }
@@ -79,6 +87,7 @@ pub struct StatusView {
 /// The modal key-handling state machine. It has no knowledge of CEF.
 pub struct Engine {
     keymap: Keymap,
+    settings: Settings,
     mode: Mode,
     pending: Vec<Key>,
     count: Option<u32>,
@@ -96,6 +105,7 @@ impl Engine {
     pub fn new(keymap: Keymap) -> Self {
         Self {
             keymap,
+            settings: Settings::default(),
             mode: Mode::Normal,
             pending: Vec::new(),
             count: None,
@@ -107,6 +117,39 @@ impl Engine {
             clipboard: None,
             hints: None,
             dirty: true,
+        }
+    }
+
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    /// Back to the built-in settings and bindings, before re-reading config.
+    pub fn reset_config(&mut self) {
+        self.keymap = Keymap::defaults();
+        self.settings = Settings::default();
+    }
+
+    /// Apply a change from a config file. Values must already be validated.
+    pub fn apply_config(&mut self, op: &ConfigOp) -> Result<(), String> {
+        match op {
+            ConfigOp::Set { name, value } => self.settings.set(name, value.clone()),
+            ConfigOp::Bind {
+                mode,
+                keys,
+                command,
+            } => {
+                self.check_command(command)
+                    .map_err(|e| format!("{keys}: {e}"))?;
+                self.keymap
+                    .bind(*mode, keys, command)
+                    .map_err(|e| e.to_string())
+            }
+            ConfigOp::Unbind { mode, keys } => self
+                .keymap
+                .unbind(*mode, keys)
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
         }
     }
 
@@ -144,6 +187,20 @@ impl Engine {
         let Some(typed) = self.cmdline.text().strip_prefix(':') else {
             return Vec::new();
         };
+        if let Some(partial) = typed.strip_prefix("set ").map(str::trim_start) {
+            if partial.contains(char::is_whitespace) {
+                return Vec::new();
+            }
+            return settings::SETTINGS
+                .iter()
+                .filter(|d| d.name.starts_with(partial))
+                .map(|d| Completion {
+                    category: "Settings",
+                    name: d.name,
+                    description: d.description,
+                })
+                .collect();
+        }
         if typed.contains(char::is_whitespace) {
             return Vec::new();
         }
@@ -151,6 +208,7 @@ impl Engine {
             .iter()
             .filter(|c| !c.hidden && c.name.starts_with(typed))
             .map(|c| Completion {
+                category: "Commands",
                 name: c.name,
                 description: c.description,
             })
@@ -169,7 +227,7 @@ impl Engine {
             self.show_message(Level::Info, "No elements found");
             return effects;
         }
-        let session = HintSession::new(request, items, DEFAULT_HINT_CHARS);
+        let session = HintSession::new(request, items, self.settings.str("hints.chars"));
         effects.push(Effect::ShowHints {
             labels: session.labels.clone(),
         });
@@ -208,8 +266,12 @@ impl Engine {
     pub fn focus_changed(&mut self, editable: bool) -> Vec<Effect> {
         let mut effects = Vec::new();
         match (editable, self.mode) {
-            (true, Mode::Normal) => self.set_mode(Mode::Insert, &mut effects),
-            (false, Mode::Insert) => self.set_mode(Mode::Normal, &mut effects),
+            (true, Mode::Normal) if self.settings.bool("input.insert_mode.auto_enter") => {
+                self.set_mode(Mode::Insert, &mut effects)
+            }
+            (false, Mode::Insert) if self.settings.bool("input.insert_mode.auto_leave") => {
+                self.set_mode(Mode::Normal, &mut effects)
+            }
             _ => {}
         }
         effects
@@ -219,7 +281,11 @@ impl Engine {
     /// `tabs.mode_on_change = normal`.
     pub fn tab_switched(&mut self) -> Vec<Effect> {
         let mut effects = Vec::new();
-        if matches!(self.mode, Mode::Insert | Mode::Passthrough | Mode::Hint) {
+        let persist = self.settings.str("tabs.mode_on_change") == "persist";
+        // Hints belong to the old tab's page, so they always end.
+        if self.mode == Mode::Hint
+            || (!persist && matches!(self.mode, Mode::Insert | Mode::Passthrough))
+        {
             self.set_mode(Mode::Normal, &mut effects);
         }
         effects
@@ -230,7 +296,9 @@ impl Engine {
         if self.message.take().is_some() {
             self.dirty = true;
         }
-        if matches!(self.mode, Mode::Insert | Mode::Hint) {
+        let leave_insert =
+            self.mode == Mode::Insert && self.settings.bool("input.insert_mode.leave_on_load");
+        if leave_insert || self.mode == Mode::Hint {
             self.set_mode(Mode::Normal, &mut effects);
         }
         effects
@@ -248,8 +316,25 @@ impl Engine {
     /// Run a command string such as `scroll down ;; reload`. Variables are
     /// filled in after splitting on `;;`, so their contents cannot add commands.
     pub fn execute_str(&mut self, line: &str, count: Option<u32>) -> Vec<Effect> {
+        self.execute_line(line, count, 0)
+    }
+
+    fn execute_line(&mut self, line: &str, count: Option<u32>, depth: usize) -> Vec<Effect> {
         let mut effects = Vec::new();
         for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {
+            // Aliases are the user's own commands, so they may contain `;;`;
+            // expand them before variables are filled in.
+            if let Some(expanded) = self.expand_alias(piece) {
+                if depth >= MAX_ALIAS_DEPTH {
+                    self.show_message(
+                        Level::Error,
+                        "Alias expansion is too deep (recursive alias?)",
+                    );
+                    break;
+                }
+                effects.extend(self.execute_line(&expanded, count, depth + 1));
+                continue;
+            }
             let result = self
                 .substitute(piece)
                 .and_then(|piece| command::parse(&piece).map_err(|e| e.to_string()));
@@ -262,6 +347,13 @@ impl Engine {
             }
         }
         effects
+    }
+
+    fn expand_alias(&self, piece: &str) -> Option<String> {
+        let piece = piece.trim_start_matches(':');
+        let (name, rest) = piece.split_once(char::is_whitespace).unwrap_or((piece, ""));
+        let target = self.settings.map("aliases")?.get(name)?;
+        Some(format!("{target} {rest}").trim().to_string())
     }
 
     fn substitute(&self, piece: &str) -> Result<String, String> {
@@ -305,8 +397,13 @@ impl Engine {
                 let had_prefix = self.pending.len() > 1 || self.count.is_some();
                 self.pending.clear();
                 self.count = None;
+                let forward = match self.settings.str("input.forward_unbound_keys") {
+                    "all" => true,
+                    "none" => false,
+                    _ => is_forwardable(key),
+                };
                 KeyOutcome {
-                    consumed: had_prefix || !is_forwardable(key),
+                    consumed: had_prefix || !forward,
                     effects: Vec::new(),
                 }
             }
@@ -430,6 +527,21 @@ impl Engine {
                     self.set_mode(Mode::Normal, effects);
                 }
             }
+            Command::Set { name, value } => self.set_command(name, value, effects),
+            Command::Bind {
+                mode,
+                keys,
+                command,
+            } => self.bind_command(mode, keys, command, effects),
+            Command::Unbind { mode, keys } => match self.keymap.unbind(mode, &keys) {
+                Ok(true) => effects.push(Effect::ConfigChanged(ConfigOp::Unbind { mode, keys })),
+                Ok(false) => {
+                    self.show_message(Level::Error, format!("{keys} is not bound in {mode} mode"));
+                }
+                Err(e) => {
+                    self.show_message(Level::Error, e.to_string());
+                }
+            },
             Command::ClearKeychain => {
                 self.pending.clear();
                 self.count = None;
@@ -437,6 +549,111 @@ impl Engine {
             }
             command => effects.push(Effect::Run { command, count }),
         }
+    }
+
+    fn set_command(
+        &mut self,
+        name: Option<String>,
+        value: Option<String>,
+        effects: &mut Vec<Effect>,
+    ) {
+        let Some(name) = name else {
+            self.show_message(
+                Level::Error,
+                "Usage: :set <option> [value]  (:set <option>! toggles)",
+            );
+            return;
+        };
+        let (name, toggle) = match (name.strip_suffix('!'), name.strip_suffix('?')) {
+            (Some(n), _) => (n.to_string(), true),
+            (_, Some(n)) => (n.to_string(), false),
+            _ => (name, false),
+        };
+        let Some(def) = settings::find(&name) else {
+            self.show_message(Level::Error, format!("No option {name:?}"));
+            return;
+        };
+        let value = match (toggle, value) {
+            (true, _) => match self.settings.get(&name) {
+                Some(Value::Bool(b)) => Ok(Value::Bool(!b)),
+                _ => Err(format!("{name} is not a true/false option")),
+            },
+            (false, Some(text)) => def.parse(&text),
+            (false, None) => {
+                let current = self
+                    .settings
+                    .get(&name)
+                    .map(ToString::to_string)
+                    .unwrap_or_default();
+                self.show_message(Level::Info, format!("{name} = {current}"));
+                return;
+            }
+        };
+        match value {
+            Ok(value) => {
+                let _ = self.settings.set(&name, value.clone());
+                effects.push(Effect::ConfigChanged(ConfigOp::Set { name, value }));
+                self.dirty = true;
+            }
+            Err(e) => {
+                self.show_message(Level::Error, e);
+            }
+        }
+    }
+
+    fn bind_command(
+        &mut self,
+        mode: Mode,
+        keys: Option<String>,
+        command: Option<String>,
+        effects: &mut Vec<Effect>,
+    ) {
+        let Some(keys) = keys else {
+            self.show_message(Level::Error, "Usage: :bind [--mode m] <keys> [command]");
+            return;
+        };
+        let seq = match crate::key::Key::parse_sequence(&keys) {
+            Ok(seq) => seq,
+            Err(e) => {
+                self.show_message(Level::Error, e.to_string());
+                return;
+            }
+        };
+        let Some(command) = command else {
+            let text = match self.keymap.lookup(mode, &seq) {
+                Lookup::Exact(cmd) => format!("{keys} is bound to '{cmd}' in {mode} mode"),
+                _ => format!("{keys} is unbound in {mode} mode"),
+            };
+            self.show_message(Level::Info, text);
+            return;
+        };
+        if let Err(e) = self.check_command(&command) {
+            self.show_message(Level::Error, e);
+            return;
+        }
+        match self.keymap.bind(mode, &keys, &command) {
+            Ok(()) => effects.push(Effect::ConfigChanged(ConfigOp::Bind {
+                mode,
+                keys,
+                command,
+            })),
+            Err(e) => {
+                self.show_message(Level::Error, e.to_string());
+            }
+        }
+    }
+
+    /// Reject bindings to unknown commands up front instead of at key press.
+    pub fn check_command(&self, line: &str) -> Result<(), String> {
+        for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {
+            if self.expand_alias(piece).is_some() {
+                continue;
+            }
+            if let Err(e @ command::CommandError::Unknown(_)) = command::parse(piece) {
+                return Err(e.to_string());
+            }
+        }
+        Ok(())
     }
 
     fn set_mode(&mut self, mode: Mode, effects: &mut Vec<Effect>) {
@@ -482,6 +699,7 @@ mod tests {
     use super::*;
     use crate::command::{Direction, OpenTarget, TabTarget};
     use crate::hints::{HintItem, HintRequest, HintTarget};
+    use crate::settings::Value;
 
     fn engine() -> Engine {
         Engine::new(Keymap::defaults())
@@ -652,6 +870,26 @@ mod tests {
         press(&mut e, ":back<Return>");
         press(&mut e, ":<Up>");
         assert_eq!(e.status().command_line.unwrap().text, ":back");
+    }
+
+    #[test]
+    fn set_completes_setting_names() {
+        let mut e = engine();
+        press(&mut e, ":set tabs.new");
+        let names: Vec<_> = e
+            .completions()
+            .iter()
+            .map(|c| (c.category, c.name))
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                ("Settings", "tabs.new_position.related"),
+                ("Settings", "tabs.new_position.unrelated")
+            ]
+        );
+        press(&mut e, "_position.related ");
+        assert!(e.completions().is_empty());
     }
 
     #[test]
@@ -841,6 +1079,136 @@ mod tests {
         e.set_clipboard_reader(|| Some("  ".into()));
         assert!(runs(&press(&mut e, "pp")).is_empty());
         assert_eq!(e.status().message.unwrap().text, "Clipboard is empty");
+    }
+
+    fn config_changes(outcomes: &[KeyOutcome]) -> Vec<ConfigOp> {
+        all_effects(outcomes)
+            .into_iter()
+            .filter_map(|e| match e {
+                Effect::ConfigChanged(op) => Some(op),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn set_shows_changes_and_toggles() {
+        let mut e = engine();
+        let out = press(&mut e, ":set hints.chars qwer<Return>");
+        assert_eq!(
+            config_changes(&out),
+            vec![ConfigOp::Set {
+                name: "hints.chars".into(),
+                value: Value::Str("qwer".into())
+            }]
+        );
+        assert_eq!(e.settings().str("hints.chars"), "qwer");
+        press(&mut e, ":set hints.uppercase!<Return>");
+        assert!(e.settings().bool("hints.uppercase"));
+        press(&mut e, ":set hints.chars<Return>");
+        assert_eq!(e.status().message.unwrap().text, "hints.chars = qwer");
+        press(&mut e, ":set hints.chars x<Return>");
+        assert!(e.status().message.unwrap().text.contains("two distinct"));
+        press(&mut e, ":set nope 1<Return>");
+        assert_eq!(e.status().message.unwrap().text, "No option \"nope\"");
+    }
+
+    #[test]
+    fn bind_and_unbind_commands() {
+        let mut e = engine();
+        let out = press(&mut e, ":bind X reload<Return>");
+        assert_eq!(config_changes(&out).len(), 1);
+        assert_eq!(
+            runs(&press(&mut e, "X")),
+            vec![(Command::Reload { force: false }, None)]
+        );
+        press(&mut e, ":bind X frobnicate<Return>");
+        assert!(e.status().message.unwrap().text.contains("no such command"));
+        press(&mut e, ":bind X<Return>");
+        assert_eq!(
+            e.status().message.unwrap().text,
+            "X is bound to 'reload' in normal mode"
+        );
+        let out = press(&mut e, ":unbind X<Return>");
+        assert_eq!(
+            config_changes(&out),
+            vec![ConfigOp::Unbind {
+                mode: Mode::Normal,
+                keys: "X".into()
+            }]
+        );
+        press(&mut e, ":unbind X<Return>");
+        assert_eq!(
+            e.status().message.unwrap().text,
+            "X is not bound in normal mode"
+        );
+    }
+
+    #[test]
+    fn aliases_expand_and_stop_recursing() {
+        let mut e = engine();
+        assert_eq!(
+            runs(&press(&mut e, ":q<Return>")),
+            vec![(Command::Quit, None)]
+        );
+        let aliases = Value::Map(
+            [
+                ("br".to_string(), "back ;; reload".to_string()),
+                ("loop".to_string(), "loop".to_string()),
+            ]
+            .into(),
+        );
+        e.apply_config(&ConfigOp::Set {
+            name: "aliases".into(),
+            value: aliases,
+        })
+        .unwrap();
+        assert_eq!(
+            runs(&press(&mut e, ":br<Return>")),
+            vec![
+                (Command::Back, None),
+                (Command::Reload { force: false }, None)
+            ]
+        );
+        assert!(runs(&press(&mut e, ":loop<Return>")).is_empty());
+        assert!(e.status().message.unwrap().text.contains("too deep"));
+    }
+
+    #[test]
+    fn input_settings() {
+        let mut e = engine();
+        e.apply_config(&ConfigOp::Set {
+            name: "input.forward_unbound_keys".into(),
+            value: Value::Str("all".into()),
+        })
+        .unwrap();
+        assert!(!press(&mut e, "x")[0].consumed);
+        e.apply_config(&ConfigOp::Set {
+            name: "input.insert_mode.auto_enter".into(),
+            value: Value::Bool(false),
+        })
+        .unwrap();
+        e.focus_changed(true);
+        assert_eq!(e.mode(), Mode::Normal);
+        e.reset_config();
+        assert!(press(&mut e, "x")[0].consumed);
+    }
+
+    #[test]
+    fn hint_chars_setting_is_used() {
+        let mut e = engine();
+        e.apply_config(&ConfigOp::Set {
+            name: "hints.chars".into(),
+            value: Value::Str("xy".into()),
+        })
+        .unwrap();
+        let effects = e.start_hints(hint_request(HintTarget::Normal, false, None), items(2));
+        assert_eq!(
+            effects[0],
+            Effect::ShowHints {
+                labels: vec!["x".into(), "y".into()]
+            }
+        );
     }
 
     #[test]

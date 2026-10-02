@@ -221,9 +221,23 @@ Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserVi
 
 Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: iframes aren't hinted; a page can interfere with hints on its own page by redefining `window.__hbHints`; labels for elements that move after the hints are drawn don't follow them.
 
-### M5 — Config
+### M5 — Config ✅ done 2026-10-02
 - `config.toml` (settings, bindings, aliases, per-domain overrides); `:set`, `:bind`, live reload.
 - qutebrowser-compatible setting names where they make sense.
+
+Notes:
+- **Settings registry:** `hb_core::settings`. 15 typed settings with validation; each one has a real effect. Values from TOML, Lua and `:set` all pass through JSON, so validation lives in one place.
+- **Sources** (`hb-config`): `autoconfig.toml`, then `config.toml`, then `config.lua`. Each becomes a list of `ConfigOp`s the engine applies.
+  - `:set`/`:bind`/`:unbind` persist to `autoconfig.toml`, never to the user's own files. They warn when a config file overrides the value at startup.
+  - Bindings to unknown commands are rejected at load time.
+- **Lua:** `mlua` with vendored Lua 5.4, so it builds on all three platforms with no system Lua. It provides the `c` proxy, `hb.*` and a config-dir `require` searcher. Errors read `file:line: message`, and changes made before an error still apply. `--lua-types` emits lua-language-server definitions generated from the registry. The checked-in `docs/lua/hb.meta.lua` and `docs/settings.md` are tested for staleness.
+- **Paths:** XDG on Linux. On macOS, `~/.config` for config and Application Support for data. On Windows, `%APPDATA%` for config and `%LOCALAPPDATA%` for data. `XDG_*` is honoured everywhere, and `--basedir` overrides all. Unit tests cover all three platforms' rules, but macOS and Windows builds have not been run yet.
+
+Gaps:
+- Per-domain settings (with M8).
+- Watching config files for changes (`:config-source` reloads by hand).
+- `:config-edit`.
+- Importing qutebrowser's `config.py`.
 
 ### M6 — Storage
 - History, bookmarks, quickmarks, sessions.
@@ -244,6 +258,15 @@ Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::lab
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
+
+### M12 — Lua scripting
+Builds on the M5 Lua config API.
+- Bind keys to Lua functions: `hb.bind("<Ctrl-g>", function() ... end)`.
+- Lua-defined commands: `hb.command("name", fn)`, with completion.
+- Event hooks: `hb.on("load_finished", fn)`, `hb.on("tab_opened", fn)`, mode changes.
+- A small runtime API: current tab URL and title, open URLs, run commands, show messages.
+- Userscripts written in Lua, alongside qutebrowser-compatible external userscripts (M9).
+- Decide on a sandbox for third-party scripts (e.g. no `io`/`os` unless allowed). The user's own `config.lua` stays fully trusted.
 
 ### M11 — Widevine DRM (opt-in)
 Depends on M5 (settings) and the M8 component review.
@@ -302,7 +325,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 
 ## Open questions
 
-1. **Config language:** TOML only, or add Lua (`mlua`) for a programmable `config.py`-equivalent?
+1. ~~**Config language**~~: decided in M5. Both are supported: TOML for declarative config, Lua 5.4 for programmable config (M12 extends it to scripting).
 2. **Platform priority:** Linux-only until M10, or keep macOS/Windows building in CI from the start?
 3. **UI overlay tech:** plain HTML/CSS/vanilla TS, or a small framework?
 4. **qutebrowser compatibility depth:** import qutebrowser `config.py` bindings, quickmarks, and bookmarks?

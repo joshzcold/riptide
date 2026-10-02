@@ -1,0 +1,35 @@
+# Example config.toml for hackers-browser.
+# Copy to the config directory (run `hackers-browser --paths` to find it).
+# Every key is a setting name, as listed in `:set` completion and the README.
+
+hints.chars = "asdfghjkl"
+hints.uppercase = false
+
+messages.timeout = 3000             # milliseconds; 0 keeps messages up
+
+tabs.last_close = "ignore"          # ignore, blank, startpage, default-page, close
+tabs.new_position.related = "next"  # prev, next, first, last
+tabs.new_position.unrelated = "last"
+
+url.default_page = "https://start.duckduckgo.com/"
+url.start_pages = ["https://start.duckduckgo.com/"]
+
+# ":open w rust" searches Wikipedia; anything else uses DEFAULT.
+[url.searchengines]
+DEFAULT = "https://duckduckgo.com/?q={}"
+w = "https://en.wikipedia.org/w/index.php?search={}"
+gh = "https://github.com/search?q={}"
+
+[aliases]
+q = "quit"
+qa = "quit"
+wq = "quit"
+
+[bindings.normal]
+"<Ctrl-x>" = "tab-close"
+"gw" = "cmd-set-text -s :open w"
+# An empty command removes a default binding:
+# "d" = ""
+
+[bindings.insert]
+"<Ctrl-[>" = "mode-leave"

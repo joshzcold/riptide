@@ -84,7 +84,7 @@
       return JSON.stringify(elements.map((el) => ({ url: urlOf(el) })));
     },
 
-    show(texts) {
+    show(texts, uppercase) {
       clear();
       host = document.createElement("hb-hints");
       const root = host.attachShadow({ mode: "closed" });
@@ -98,6 +98,7 @@
         label.style.left = `${Math.max(0, rect.left)}px`;
         label.style.top = `${Math.max(0, rect.top)}px`;
         label.textContent = text;
+        if (uppercase) label.style.textTransform = "uppercase";
         root.append(label);
         return { text, label };
       });

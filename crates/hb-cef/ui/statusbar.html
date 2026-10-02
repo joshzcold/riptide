@@ -41,6 +41,8 @@
   #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
   #url { overflow: hidden; text-overflow: ellipsis; }
+  /* Messages and the command line get priority over a long URL. */
+  #bar.busy #right { max-width: 40%; }
   #url.https { color: var(--https); }
   #url.http { color: var(--http); }
   #url.error { color: var(--error-fg); }
@@ -65,6 +67,7 @@
     const bar = $("bar");
     const left = $("left");
     bar.className = state.mode;
+    if (state.command_line || state.message) bar.classList.add("busy");
     if (state.command_line) {
       renderCommandLine(left, state.command_line);
     } else if (state.message) {

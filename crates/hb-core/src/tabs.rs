@@ -1,8 +1,12 @@
 /// Where a new tab goes, like qutebrowser's `tabs.new_position.*`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Position {
+    /// Right before the current tab.
+    Prev,
     /// Right after the current tab (popups, hints).
     Next,
+    /// At the start.
+    First,
     /// At the end (`:open -t`).
     Last,
     /// At an index (clamped), e.g. where `undo` found the closed tab.
@@ -24,6 +28,18 @@ impl<T> Default for TabList<T> {
             tabs: Vec::new(),
             current: 0,
             previous: None,
+        }
+    }
+}
+
+impl Position {
+    /// Parse a `tabs.new_position.*` value.
+    pub fn from_setting(value: &str) -> Self {
+        match value {
+            "prev" => Position::Prev,
+            "first" => Position::First,
+            "last" => Position::Last,
+            _ => Position::Next,
         }
     }
 }
@@ -69,7 +85,9 @@ impl<T> TabList<T> {
     pub fn insert(&mut self, tab: T, position: Position, focus: bool) -> usize {
         let index = match position {
             _ if self.tabs.is_empty() => 0,
+            Position::Prev => self.current,
             Position::Next => self.current + 1,
+            Position::First => 0,
             Position::Last => self.tabs.len(),
             Position::At(i) => i.min(self.tabs.len()),
         };
@@ -197,6 +215,19 @@ mod tests {
         assert_eq!(tabs.previous(), Some(1));
         tabs.insert("y", Position::At(99), false);
         assert_eq!(tabs.get(3), Some(&"y"));
+    }
+
+    #[test]
+    fn prev_and_first_positions() {
+        let mut tabs = list(&["a", "b"]);
+        tabs.focus(1);
+        tabs.insert("p", Position::Prev, false);
+        assert_eq!(names(&tabs), ["a", "p", "b"]);
+        assert_eq!(tabs.current(), Some(&"b"));
+        tabs.insert("f", Position::First, true);
+        assert_eq!(names(&tabs), ["f", "a", "p", "b"]);
+        assert_eq!(tabs.current_index(), 0);
+        assert_eq!(tabs.previous(), Some(3));
     }
 
     #[test]

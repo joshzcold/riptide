@@ -13,8 +13,9 @@ pub const STATUSBAR_HEIGHT: i32 = 20;
 pub const TABBAR_HEIGHT: i32 = 20;
 const CHROME_BACKGROUND: u32 = 0xFF00_0000;
 
-pub fn create(start_url: String) {
-    let mut delegate = HbWindowDelegate::new(start_url);
+/// Open the main window with one tab per URL, or `url.start_pages` if none.
+pub fn create(urls: Vec<String>) {
+    let mut delegate = HbWindowDelegate::new(urls);
     window_create_top_level(Some(&mut delegate));
 }
 
@@ -41,7 +42,7 @@ pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
 
 wrap_window_delegate! {
     struct HbWindowDelegate {
-        start_url: String,
+        urls: Vec<String>,
     }
 
     impl ViewDelegate {
@@ -103,7 +104,18 @@ wrap_window_delegate! {
             });
 
             window.show();
-            tabs::open(&self.start_url, Position::Last, true);
+            let urls = shell::with(|s| {
+                if self.urls.is_empty() {
+                    s.engine.settings().list("url.start_pages").to_vec()
+                } else {
+                    self.urls.iter().map(|u| s.fuzzy_url(u)).collect()
+                }
+            })
+            .unwrap_or_default();
+            let urls = if urls.is_empty() { vec!["about:blank".to_string()] } else { urls };
+            for (i, url) in urls.iter().enumerate() {
+                tabs::open(url, Position::Last, i == 0);
+            }
         }
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
@@ -188,7 +200,8 @@ wrap_browser_view_delegate! {
         ) -> ::std::os::raw::c_int {
             let Some(popup) = popup_browser_view else { return 0 };
             let background = shell::with(|s| std::mem::take(&mut s.popup_in_background)).unwrap_or(false);
-            tabs::add_view(popup.clone(), Position::Next, !background);
+            let position = shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next);
+            tabs::add_view(popup.clone(), position, !background);
             1
         }
     }

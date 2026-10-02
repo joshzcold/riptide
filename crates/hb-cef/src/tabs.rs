@@ -122,12 +122,12 @@ fn switch_to(index: usize, force: bool) {
     shell::apply(effects);
 }
 
-/// Close a tab. The last tab stays open, like qutebrowser's `tabs.last_close = ignore`.
+/// Close a tab. Closing the last one follows `tabs.last_close`.
 pub fn close(index: usize) {
+    if shell::with(|s| s.tabs.len() <= 1).unwrap_or(true) {
+        return last_close();
+    }
     let Some(Some((tab, was_current))) = shell::with(|s| {
-        if s.tabs.len() <= 1 {
-            return None;
-        }
         let was_current = index == s.tabs.current_index();
         let tab = s.tabs.remove(index)?;
         if !tab.url.is_empty() {
@@ -160,6 +160,45 @@ wrap_task! {
             close(self.index);
             shell::refresh_ui();
         }
+    }
+}
+
+fn last_close() {
+    let Some((action, url, window, browser)) = shell::with(|s| {
+        let settings = s.engine.settings();
+        let url = match settings.str("tabs.last_close") {
+            "blank" => Some("about:blank".to_string()),
+            "startpage" => Some(
+                settings
+                    .list("url.start_pages")
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| s.default_page()),
+            ),
+            "default-page" => Some(s.default_page()),
+            _ => None,
+        };
+        (
+            settings.str("tabs.last_close").to_string(),
+            url,
+            s.window.clone(),
+            s.current_browser(),
+        )
+    }) else {
+        return;
+    };
+    match (action.as_str(), url, browser) {
+        ("close", _, _) => {
+            if let Some(window) = window {
+                window.close();
+            }
+        }
+        (_, Some(url), Some(browser)) => {
+            if let Some(frame) = browser.main_frame() {
+                frame.load_url(Some(&CefString::from(url.as_str())));
+            }
+        }
+        _ => {}
     }
 }
 

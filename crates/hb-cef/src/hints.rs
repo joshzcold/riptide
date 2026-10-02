@@ -70,8 +70,14 @@ fn call(method: &str, arg: &str) {
     }
 }
 
+fn related_position() -> Position {
+    shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next)
+}
+
 pub fn show(labels: &[String]) {
-    call("show", &serde_json::to_string(labels).unwrap_or_default());
+    let upper = shell::with(|s| s.engine.settings().bool("hints.uppercase")).unwrap_or(false);
+    let labels = serde_json::to_string(labels).unwrap_or_default();
+    call("show", &format!("{labels}, {upper}"));
 }
 
 pub fn filter(typed: &str) {
@@ -87,8 +93,8 @@ pub fn follow(index: usize, url: Option<String>, target: HintTarget) {
         return;
     };
     match (target, url) {
-        (HintTarget::Tab, Some(url)) => tabs::open(&url, Position::Next, true),
-        (HintTarget::TabBg, Some(url)) => tabs::open(&url, Position::Next, false),
+        (HintTarget::Tab, Some(url)) => tabs::open(&url, related_position(), true),
+        (HintTarget::TabBg, Some(url)) => tabs::open(&url, related_position(), false),
         (HintTarget::Current, Some(url)) => {
             if let Some(frame) = browser.main_frame() {
                 frame.load_url(Some(&CefString::from(url.as_str())));

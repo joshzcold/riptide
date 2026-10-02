@@ -3,11 +3,13 @@
 
 pub mod cmdline;
 pub mod command;
+pub mod config;
 pub mod engine;
 pub mod hints;
 pub mod key;
 pub mod keymap;
 pub mod mode;
+pub mod settings;
 pub mod tabs;
 pub mod url;
 pub mod vk;

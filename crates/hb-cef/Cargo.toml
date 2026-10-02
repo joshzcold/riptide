@@ -11,9 +11,9 @@ sandbox = ["cef/sandbox"]
 
 [dependencies]
 hb-core.workspace = true
+hb-config.workspace = true
 cef.workspace = true
 arboard.workspace = true
-directories.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0, 3 and 4: core modes, tabs and hints). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0, 3, 4 and 5: core modes, tabs, hints and config). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
 
 ## Building
 
@@ -36,6 +36,41 @@ cargo build && ./target/debug/hackers-browser
 
 Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `target/` instead.
 </details>
+
+## Configuration
+
+Run `hackers-browser --paths` to see where config and data live. All config files are optional and load in this order (later wins):
+
+| File | Purpose |
+|---|---|
+| `autoconfig.toml` | Written by `:set`, `:bind` and `:unbind`. Don't edit it by hand. |
+| `config.toml` | Declarative settings and bindings. See [docs/config.example.toml](docs/config.example.toml). |
+| `config.lua` | The same, as a Lua 5.4 program. See [docs/config.example.lua](docs/config.example.lua). |
+
+| Platform | Config directory | Data directory (profile, cookies, cache) |
+|---|---|---|
+| Linux | `$XDG_CONFIG_HOME/hackers-browser`, default `~/.config/hackers-browser` | `$XDG_DATA_HOME/hackers-browser`, default `~/.local/share/hackers-browser` |
+| macOS | `~/.config/hackers-browser` (like Neovim, WezTerm, Zed) | `~/Library/Application Support/hackers-browser` |
+| Windows | `%APPDATA%\hackers-browser\config` | `%LOCALAPPDATA%\hackers-browser\data` |
+
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured on every platform. `--basedir DIR` puts everything under `DIR/config` and `DIR/data`, which is handy for testing or for a separate profile.
+
+Every setting is listed in [docs/settings.md](docs/settings.md), and the completion popup lists them as you type `:set `. In the browser:
+
+- `:set hints.chars asdf` changes a setting; `:set hints.uppercase!` toggles one; `:set hints.chars` shows the value.
+- `:bind <Ctrl-x> tab-close` adds a binding (`--mode insert` for other modes); `:bind <Ctrl-x>` shows one; `:unbind d` removes one.
+- `:config-source` reloads every file. Errors show in the status bar with `file:line`, and the rest of the file still applies.
+
+### Lua
+
+`config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `hb.set/get/bind/unbind`, `hb.platform` (`linux`, `macos`, `windows`), `hb.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
+
+For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
+
+```sh
+dir="$(hackers-browser --paths | sed -n 's/^config: //p')"
+mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
+```
 
 ## Key bindings
 
@@ -80,6 +115,7 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 | Crate | Purpose |
 |---|---|
 | `crates/hb-core` | Modes, key parsing, bindings, commands, command line, URL guessing. No CEF dependency; unit tested. |
+| `crates/hb-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, generated Lua types and settings docs. |
 | `crates/hb-cef` | CEF integration: window layout, handlers, renderer-process bindings, status bar and completion UI. |
 | `crates/hb` | The `hackers-browser` binary. |
 
@@ -87,7 +123,7 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 
 | Command | What it runs |
 |---|---|
-| `./task test` | Unit tests for `hb-core` (modes, keys, commands, URLs); no browser needed |
+| `./task test` | Unit tests for `hb-core` and `hb-config` (modes, keys, commands, settings, config files, paths for all three platforms); no browser needed |
 | `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
 | `./task lint` | `cargo fmt --check` and `clippy -D warnings` |
 | `./task check` | All of the above |

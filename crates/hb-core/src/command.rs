@@ -103,6 +103,21 @@ pub enum Command {
     Undo,
     Hint(HintRequest),
     Yank(YankWhat),
+    /// `:set [name[?|!]] [value]`
+    Set {
+        name: Option<String>,
+        value: Option<String>,
+    },
+    Bind {
+        mode: Mode,
+        keys: Option<String>,
+        command: Option<String>,
+    },
+    Unbind {
+        mode: Mode,
+        keys: String,
+    },
+    ConfigSource,
     Quit,
 }
 
@@ -167,6 +182,16 @@ pub const COMMANDS: &[CommandSpec] = &[
         "yank",
         "Copy the page's url, title or domain to the clipboard",
     ),
+    spec(
+        "set",
+        "Show or change an option: :set name [value], :set name! toggles",
+    ),
+    spec(
+        "bind",
+        "Show or set a key binding: :bind [--mode m] keys [command]",
+    ),
+    spec("unbind", "Remove a key binding: :unbind [--mode m] keys"),
+    spec("config-source", "Reload the configuration files"),
     spec("quit", "Quit the browser"),
     hidden("command-accept", "Execute the command line"),
     hidden(
@@ -348,7 +373,33 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             Some("domain") => YankWhat::Domain,
             Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
         }),
-        "quit" | "q" | "qa" | "wq" => Command::Quit,
+        "set" => {
+            let name = args.optional().map(String::from);
+            let value = args.rest();
+            Command::Set {
+                name,
+                value: (!value.is_empty()).then(|| value.to_string()),
+            }
+        }
+        "bind" => {
+            let mode = args.mode()?;
+            let keys = args.optional().map(String::from);
+            let command = args.rest();
+            Command::Bind {
+                mode,
+                keys,
+                command: (!command.is_empty()).then(|| command.to_string()),
+            }
+        }
+        "unbind" => {
+            let mode = args.mode()?;
+            Command::Unbind {
+                mode,
+                keys: args.required("keys")?.to_string(),
+            }
+        }
+        "config-source" => Command::ConfigSource,
+        "quit" => Command::Quit,
         name => match parse_readline(name) {
             Some(rl) => Command::Readline(rl),
             None => return Err(CommandError::Unknown(name.to_string())),
@@ -431,6 +482,15 @@ impl<'a> Args<'a> {
         token
             .parse::<f64>()
             .map_err(|_| self.error(format!("{name} must be a number, got {token:?}")))
+    }
+
+    /// An optional `--mode m` / `-m m` flag, defaulting to normal mode.
+    fn mode(&mut self) -> Result<Mode, CommandError> {
+        if self.flag(&["-m", "--mode"]).is_none() {
+            return Ok(Mode::Normal);
+        }
+        let name = self.required("mode")?;
+        name.parse::<Mode>().map_err(|e| self.error(e))
     }
 
     fn parse_last_int(&self, name: &str) -> Result<i64, CommandError> {
@@ -625,6 +685,43 @@ mod tests {
     }
 
     #[test]
+    fn parses_config_commands() {
+        assert_eq!(
+            parse("set url.start_pages [\"a\", \"b\"]").unwrap(),
+            Command::Set {
+                name: Some("url.start_pages".into()),
+                value: Some("[\"a\", \"b\"]".into())
+            }
+        );
+        assert_eq!(
+            parse("set").unwrap(),
+            Command::Set {
+                name: None,
+                value: None
+            }
+        );
+        assert_eq!(
+            parse("bind --mode insert <Ctrl-e> open-editor ;; x").unwrap(),
+            Command::Bind {
+                mode: Mode::Insert,
+                keys: Some("<Ctrl-e>".into()),
+                command: Some("open-editor ;; x".into())
+            }
+        );
+        assert_eq!(
+            parse("unbind d").unwrap(),
+            Command::Unbind {
+                mode: Mode::Normal,
+                keys: "d".into()
+            }
+        );
+        assert!(matches!(
+            parse("bind --mode sideways x quit"),
+            Err(CommandError::BadArgs { .. })
+        ));
+    }
+
+    #[test]
     fn chains_commands() {
         assert_eq!(
             parse_line("back ;; reload -f").unwrap(),
@@ -634,7 +731,13 @@ mod tests {
 
     #[test]
     fn every_spec_parses() {
-        let needs_args = ["scroll", "scroll-page", "mode-enter", "cmd-set-text"];
+        let needs_args = [
+            "scroll",
+            "scroll-page",
+            "mode-enter",
+            "cmd-set-text",
+            "unbind",
+        ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);
         }

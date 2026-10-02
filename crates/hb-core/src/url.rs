@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 pub const DEFAULT_SEARCH_ENGINE: &str = "https://duckduckgo.com/?q={}";
 pub const DEFAULT_START_PAGE: &str = "https://start.duckduckgo.com/";
 
@@ -14,8 +16,10 @@ const KNOWN_SCHEMES: &[&str] = &[
 ];
 
 /// Turn `:open` input into a URL: explicit URLs pass through, things that look
-/// like hosts get `https://`, and anything else becomes a search.
-pub fn fuzzy_url(input: &str, search_engine: &str) -> String {
+/// like hosts get `https://`, and anything else becomes a search. A first word
+/// naming an engine in `engines` (e.g. `g rust`) picks that engine; otherwise
+/// the `DEFAULT` entry is used.
+pub fn fuzzy_url(input: &str, engines: &BTreeMap<String, String>) -> String {
     let input = input.trim();
     if has_known_scheme(input) {
         return input.to_string();
@@ -24,7 +28,16 @@ pub fn fuzzy_url(input: &str, search_engine: &str) -> String {
         let scheme = if is_local(input) { "http" } else { "https" };
         return format!("{scheme}://{input}");
     }
-    search_engine.replace("{}", &encode_query(input))
+    let (engine, query) = match input.split_once(char::is_whitespace) {
+        Some((name, rest)) if name != "DEFAULT" && engines.contains_key(name) => {
+            (&engines[name], rest.trim())
+        }
+        _ => match engines.get("DEFAULT") {
+            Some(engine) => (engine, input),
+            None => return format!("https://{input}"),
+        },
+    };
+    engine.replace("{}", &encode_query(query))
 }
 
 fn has_known_scheme(input: &str) -> bool {
@@ -94,8 +107,29 @@ fn encode_query(query: &str) -> String {
 mod tests {
     use super::*;
 
+    fn engines() -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("DEFAULT".to_string(), DEFAULT_SEARCH_ENGINE.to_string()),
+            (
+                "w".to_string(),
+                "https://en.wikipedia.org/w/index.php?search={}".to_string(),
+            ),
+        ])
+    }
+
     fn fuzzy(input: &str) -> String {
-        fuzzy_url(input, DEFAULT_SEARCH_ENGINE)
+        fuzzy_url(input, &engines())
+    }
+
+    #[test]
+    fn engine_keywords() {
+        assert_eq!(
+            fuzzy("w rust lang"),
+            "https://en.wikipedia.org/w/index.php?search=rust+lang"
+        );
+        // A lone keyword is a search for that word, not an empty engine query.
+        assert_eq!(fuzzy("w"), "https://duckduckgo.com/?q=w");
+        assert_eq!(fuzzy("DEFAULT x"), "https://duckduckgo.com/?q=DEFAULT+x");
     }
 
     #[test]

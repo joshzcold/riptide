@@ -63,8 +63,12 @@ expect_title() {
 }
 
 echo "smoke-test on $DISPLAY"
-# A private data dir keeps the test away from the real profile.
-XDG_DATA_HOME=$work/data "$BIN" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+# A private basedir keeps the test away from the real config and profile.
+mkdir -p "$work/base/config"
+cat >"$work/base/config/config.lua" <<EOF
+hb.bind("X", "open -t file://$work/second.html")
+EOF
+"$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
@@ -133,6 +137,17 @@ expect_first_page
 step "u restores it"
 xdotool key u
 expect_title "second"
+
+step "a key bound in config.lua works"
+xdotool key d shift+x
+expect_title "second"
+
+step ":set persists to autoconfig.toml"
+xdotool key shift+semicolon
+xdotool type --delay 5 "set messages.timeout 5000"
+xdotool key Return
+sleep 0.5
+grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && pass || fail "autoconfig.toml not written"
 
 step ":quit with two tabs exits cleanly"
 xdotool key shift+semicolon q u i t Return

@@ -29,7 +29,7 @@
     white-space: pre;
   }
   .header { background: var(--header-bg); font-weight: bold; }
-  .name { width: 24ch; flex-shrink: 0; }
+  .name { width: 34ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
   .desc { color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
@@ -40,7 +40,7 @@
     const list = document.getElementById("list");
     const header = document.createElement("div");
     header.className = "header";
-    header.textContent = "Commands";
+    header.textContent = items.length ? items[0].category : "";
     const rows = items.map(({ name, description }) => {
       const row = document.createElement("div");
       row.className = "row";
