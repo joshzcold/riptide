@@ -85,6 +85,7 @@ pub struct Shell {
     pub hint_browser: Option<i32>,
     last_status: String,
     last_tabbar: String,
+    last_title: String,
     /// What the overlay shows (a prompt or completions), to skip redraws.
     last_overlay: String,
     last_overlay_rows: usize,
@@ -119,6 +120,7 @@ impl Shell {
             hint_browser: None,
             last_status: String::new(),
             last_tabbar: String::new(),
+            last_title: String::new(),
             last_overlay: String::new(),
             last_overlay_rows: 0,
             timed_message: 0,
@@ -611,20 +613,25 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
         "shrink": settings.bool("tabs.pinned.shrink"),
     })
     .to_string();
-    let mut title = None;
     if s.tabbar_ready
         && tabbar_json != s.last_tabbar
         && let Some(frame) = frame_of(&s.tabbar)
     {
         s.last_tabbar = tabbar_json.clone();
         scripts.push((frame, tabbar_json));
-        if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
-            let name = if tab.title.is_empty() {
-                &tab.url
-            } else {
-                &tab.title
-            };
-            title = Some((window, format!("{name} - hackers-browser")));
+    }
+    // Recomputed every time: `{mode}` changes without the tab bar changing.
+    let mut title = None;
+    if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
+        let text = hb_core::title::format(
+            s.engine.settings().str("window.title_format"),
+            &tab.title,
+            &tab.url,
+            s.engine.mode().name(),
+        );
+        if text != s.last_title {
+            s.last_title = text.clone();
+            title = Some((window, text));
         }
     }
 

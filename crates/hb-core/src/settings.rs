@@ -394,6 +394,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Value::List(vec![crate::url::DEFAULT_START_PAGE.to_string()]),
         "Pages opened at startup when no URL is given"
     ),
+    def!(
+        "window.title_format",
+        Kind::Str,
+        s("{current_title}{title_sep}hackers-browser"),
+        "Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode}"
+    ),
 ];
 
 pub fn find(name: &str) -> Option<&'static SettingDef> {

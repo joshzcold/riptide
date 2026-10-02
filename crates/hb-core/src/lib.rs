@@ -15,6 +15,7 @@ pub mod permissions;
 pub mod prompt;
 pub mod settings;
 pub mod tabs;
+pub mod title;
 pub mod ui_message;
 pub mod url;
 pub mod vk;
