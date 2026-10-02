@@ -1,0 +1,11 @@
+[package]
+name = "hb-adblock"
+description = "Ad and tracker blocking with Adblock Plus filter lists"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+adblock.workspace = true
+tracing.workspace = true

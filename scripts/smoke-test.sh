@@ -26,6 +26,7 @@ cleanup() {
     [[ -n ${SMOKE_LOG:-} && -f $work/browser.log ]] && cp "$work/browser.log" "$SMOKE_LOG"
     [[ -n $browser_pid ]] && kill "$browser_pid" 2>/dev/null || true
     [[ -n $xvfb_pid ]] && kill "$xvfb_pid" 2>/dev/null || true
+    [[ -n ${http_pid:-} ]] && kill "$http_pid" 2>/dev/null || true
     rm -rf "$work"
 }
 trap cleanup EXIT
@@ -71,13 +72,37 @@ cat >"$work/dialogs.html" <<'EOF'
 <a download="saved.txt" href="data:text/plain,hello">download</a>
 EOF
 
+# Content blocking only applies to http(s), so these pages get a local server.
+mkdir -p "$work/http/ads"
+cat >"$work/http/adblock.html" <<'EOF'
+<!doctype html><title>adblock</title>
+<script>let blocked = 'no', allowed = 'no';</script>
+<script src="ads/banner.js"></script>
+<script src="app.js"></script>
+<script>document.title = `ads b=${blocked} a=${allowed}`;</script>
+EOF
+echo "blocked = 'yes';" >"$work/http/ads/banner.js"
+echo "allowed = 'yes';" >"$work/http/app.js"
+printf '! test list\n/ads/banner.js\n' >"$work/filters.txt"
+
 Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
 xvfb_pid=$!
 for _ in $(seq 50); do [[ -s $work/display ]] && break; sleep 0.1; done
+
+python3 - "$work/http" "$work/port" 2>/dev/null <<'SERVER' &
+import functools, http.server, sys
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=sys.argv[1])
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+open(sys.argv[2], "w").write(str(server.server_port))
+server.serve_forever()
+SERVER
+http_pid=$!
+for _ in $(seq 50); do [[ -s $work/port ]] && break; sleep 0.1; done
+http="http://127.0.0.1:$(cat "$work/port")"
 export DISPLAY=":$(cat "$work/display")"
 
 failures=0
-step() { printf '  %-48s' "$1"; }
+step() { printf '  %-56s' "$1"; }
 pass() { echo "ok"; }
 fail() { echo "FAIL ($1)"; failures=$((failures + 1)); }
 
@@ -96,18 +121,22 @@ expect_title() {
 }
 
 # Waits (quietly) for the browser to reach a mode; the next check reports it.
+# An optional second argument overrides TIMEOUT.
 wait_mode() {
-    for _ in $(seq $((TIMEOUT * 10))); do
+    for _ in $(seq $((${2:-$TIMEOUT} * 10))); do
         [[ $(mode) == "$1" ]] && return 0
         sleep 0.1
     done
     return 1
 }
 
-# Runs a command through the command line.
+# Runs a command through the command line. ':' is retried, since a key sent
+# while a new tab settles can be lost (docs/PLAN.md, M14 gaps).
 run() {
-    xdotool key shift+semicolon
-    wait_mode command || true
+    for _ in 1 2 3; do
+        xdotool key shift+semicolon
+        wait_mode command 2 && break
+    done
     xdotool type --delay 5 "$1"
     xdotool key Return
 }
@@ -127,6 +156,7 @@ hb.bind("X", "open -t file://$work/second.html")
 c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
 c.window.title_format = "{mode}::{current_title}"
+c.content.blocking.adblock.lists = { "file://$work/filters.txt" }
 EOF
 HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
@@ -268,6 +298,13 @@ if (( code == 0 )); then expect_title "second"; else fail "second invocation exi
 step "web pages can't see or embed hb:// UI pages"
 run "open file://$work/isolation.html"
 expect_title "hb=undefined frame=empty"
+
+step ":adblock-update blocks requests from the filter list"
+run "adblock-update"
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/base/data/adblock/engine.dat ]] && break; sleep 0.1; done
+nap 0.5
+run "open $http/adblock.html"
+expect_title "ads b=no a=yes"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

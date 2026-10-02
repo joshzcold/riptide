@@ -108,6 +108,14 @@ Every setting is listed in [docs/settings.md](docs/settings.md), and the complet
 
 Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, so you can keep them in dotfiles or copy yours from `~/.config/qutebrowser/`. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
 
+### Content blocking
+
+Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (EasyList and EasyPrivacy by default; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup.
+
+- `content.blocking.enabled` turns blocking on or off.
+- `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
+- Top-level pages are never blocked, so a bad rule can't make a site unreachable. Cosmetic (element-hiding) rules aren't applied yet.
+
 ### Prompts, downloads and permissions
 
 Everything that needs an answer appears above the status bar, one at a time:

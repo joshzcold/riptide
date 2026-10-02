@@ -103,6 +103,19 @@ wrap_request_handler! {
             blocked.into()
         }
 
+        fn resource_request_handler(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _request: Option<&mut Request>,
+            _is_navigation: ::std::os::raw::c_int,
+            _is_download: ::std::os::raw::c_int,
+            _request_initiator: Option<&CefString>,
+            _disable_default_handling: Option<&mut ::std::os::raw::c_int>,
+        ) -> Option<ResourceRequestHandler> {
+            Some(HbResourceRequestHandler::new())
+        }
+
         fn auth_credentials(
             &self,
             browser: Option<&mut Browser>,
@@ -124,6 +137,35 @@ wrap_request_handler! {
             let mut task = AskCredentials::new(browser, message, RefCell::new(Some(callback)));
             post_task(ThreadId::UI, Some(&mut task));
             1
+        }
+    }
+}
+
+wrap_resource_request_handler! {
+    pub struct HbResourceRequestHandler {}
+
+    impl ResourceRequestHandler {
+        /// Runs on the IO thread for every request a tab makes.
+        fn on_before_resource_load(
+            &self,
+            browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            _callback: Option<&mut Callback>,
+        ) -> ReturnValue {
+            let (Some(browser), Some(request)) = (browser, request) else {
+                return ReturnValue::CONTINUE;
+            };
+            let url = CefString::from(&request.url()).to_string();
+            let page = browser
+                .main_frame()
+                .map(|f| CefString::from(&f.url()).to_string())
+                .unwrap_or_default();
+            if crate::adblock::should_block(&url, &page, request.resource_type()) {
+                ReturnValue::CANCEL
+            } else {
+                ReturnValue::CONTINUE
+            }
         }
     }
 }

@@ -49,7 +49,7 @@ tasks:
   test:
     desc: Unit tests (everything except the CEF layer)
     cmds:
-      - cargo test --no-fail-fast -p hb-core -p hb-config -p hb-storage
+      - cargo test --no-fail-fast -p hb-core -p hb-config -p hb-storage -p hb-adblock
 
   smoke:
     desc: Drive the real browser on a throwaway X display (needs Xvfb and xdotool)

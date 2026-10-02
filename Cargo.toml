@@ -10,11 +10,14 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/joshzcold/hackers-browser"
 
 [workspace.dependencies]
+hb-adblock = { path = "crates/hb-adblock" }
 hb-core = { path = "crates/hb-core" }
 hb-cef = { path = "crates/hb-cef" }
 hb-config = { path = "crates/hb-config" }
 hb-storage = { path = "crates/hb-storage" }
 cef = { version = "=154.3.0", default-features = false }
+# Without "single-thread" the engine is Send + Sync, for CEF's IO thread.
+adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 arboard = { version = "3.6", default-features = false }
 mlua = { version = "0.12", features = ["lua54", "vendored", "serialize"] }
 rusqlite = { version = "0.40", features = ["bundled"] }

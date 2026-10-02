@@ -234,6 +234,27 @@ pub static SETTINGS: &[SettingDef] = &[
         "How many history entries :open completion shows (0 turns history completion off)"
     ),
     def!(
+        "content.blocking.adblock.lists",
+        Kind::List,
+        Value::List(vec![
+            "https://easylist.to/easylist/easylist.txt".to_string(),
+            "https://easylist.to/easylist/easyprivacy.txt".to_string(),
+        ]),
+        "Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists)"
+    ),
+    def!(
+        "content.blocking.enabled",
+        Kind::Bool,
+        Value::Bool(true),
+        "Block ads and trackers with the filter lists from content.blocking.adblock.lists"
+    ),
+    def!(
+        "content.blocking.whitelist",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Sites where nothing is blocked, as host names; a host also covers its subdomains"
+    ),
+    def!(
         "content.desktop_capture",
         Kind::Enum(ASK),
         s("ask"),

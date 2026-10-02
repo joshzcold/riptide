@@ -182,6 +182,8 @@ pub enum Command {
     HistoryClear {
         force: bool,
     },
+    /// Download the filter lists and rebuild the content blocker.
+    AdblockUpdate,
     /// Download a URL, or the current page.
     Download {
         url: Option<String>,
@@ -308,6 +310,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "history-clear",
         "Delete all browsing history (needs --force)",
+    ),
+    spec(
+        "adblock-update",
+        "Download the filter lists in content.blocking.adblock.lists",
     ),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
@@ -593,6 +599,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "download-cancel" => Command::DownloadCancel,
         "download-open" => Command::DownloadOpen,
         "download-clear" => Command::DownloadClear,
+        "adblock-update" => Command::AdblockUpdate,
         "history-clear" => Command::HistoryClear {
             force: args.flag(&["-f", "--force"]).is_some(),
         },

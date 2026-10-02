@@ -84,7 +84,7 @@ jobs:
       - name: Build
         run: cargo build --workspace --locked
       - name: Unit tests
-        run: cargo test --locked --no-fail-fast -p hb-core -p hb-config -p hb-storage
+        run: cargo test --locked --no-fail-fast -p hb-core -p hb-config -p hb-storage -p hb-adblock
       - name: Run without CEF (--version, --paths)
         shell: bash
         run: |

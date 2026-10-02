@@ -226,6 +226,7 @@ pub fn load_config() -> Vec<String> {
         s.setting_sources = loaded.sources;
         s.config_files = loaded.files;
         storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
+        crate::adblock::sync_settings(s.engine.settings());
         errors
     })
     .unwrap_or_default();
@@ -242,7 +243,8 @@ fn persist(op: hb_core::config::ConfigOp) {
     }
     crate::help::refresh();
     with(|s| {
-        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"))
+        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
+        crate::adblock::sync_settings(s.engine.settings());
     });
     let result = with(|s| {
         let auto = s.autoconfig.as_mut()?;
@@ -295,6 +297,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::help::run_command(&command)
         || storage::run_command(&command)
         || crate::downloads::run_command(&command, count)
+        || crate::adblock::run_command(&command)
     {
         return;
     }

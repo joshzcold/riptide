@@ -1,6 +1,7 @@
 //! CEF integration for hackers-browser. Translates CEF callbacks into
 //! `hb-core` inputs and carries out the effects the engine returns.
 
+mod adblock;
 mod client;
 mod clipboard;
 mod dialogs;
@@ -87,6 +88,11 @@ wrap_browser_process_handler! {
             shell::install(shell::Shell::new(engine, startup.paths));
             scheme::install();
             errors.extend(shell::load_config());
+            if let Some((data_dir, lists)) = shell::with(|s| {
+                (s.paths.data_dir.clone(), s.engine.settings().list("content.blocking.adblock.lists").to_vec())
+            }) {
+                adblock::load(data_dir, lists);
+            }
             window::create(startup.urls, startup.commands);
             report_config_errors(&errors);
             remote::listen();
