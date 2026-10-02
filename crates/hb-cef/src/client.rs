@@ -5,6 +5,7 @@ use hb_core::vk::{self, RawKey};
 
 use crate::renderer::FOCUS_MESSAGE;
 use crate::shell;
+use crate::tabs;
 use crate::ui;
 
 #[cfg(target_os = "linux")]
@@ -14,6 +15,7 @@ type OsEvent = sys::XEvent;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Tab,
+    Tabbar,
     Statusbar,
     Completion,
 }
@@ -42,7 +44,7 @@ wrap_client! {
 
         fn on_process_message_received(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             _source_process: ProcessId,
             message: Option<&mut ProcessMessage>,
@@ -52,7 +54,11 @@ wrap_client! {
                 return 0;
             }
             let editable = message.argument_list().is_some_and(|args| args.bool(0) != 0);
-            if let Some(effects) = shell::with(|s| s.engine.focus_changed(editable)) {
+            // Background tabs can move focus too; only the visible one drives the mode.
+            let effects = shell::with_tab(browser, |s, _, current| {
+                if current { s.engine.focus_changed(editable) } else { Vec::new() }
+            });
+            if let Some(effects) = effects {
                 shell::apply(effects);
             }
             1
@@ -124,7 +130,7 @@ wrap_display_handler! {
     impl DisplayHandler {
         fn on_address_change(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             frame: Option<&mut Frame>,
             url: Option<&CefString>,
         ) {
@@ -135,24 +141,33 @@ wrap_display_handler! {
             if url.starts_with("chrome-error:") {
                 return;
             }
-            shell::with(|s| {
-                s.engine.set_url(&url);
-                s.url = url;
+            shell::with_tab(browser, |s, index, current| {
+                if current {
+                    s.engine.set_url(&url);
+                }
+                if let Some(tab) = s.tabs.get_mut(index) {
+                    tab.url = url;
+                }
             });
             shell::refresh_ui();
         }
 
-        fn on_title_change(&self, _browser: Option<&mut Browser>, title: Option<&CefString>) {
+        fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
-            if let Some(window) = shell::with(|s| s.window.clone()).flatten() {
-                window.set_title(Some(&CefString::from(format!("{title} - hackers-browser").as_str())));
-            }
+            shell::with_tab(browser, |s, index, _| {
+                if let Some(tab) = s.tabs.get_mut(index) {
+                    tab.title = title;
+                }
+            });
+            shell::refresh_ui();
         }
 
-        fn on_loading_progress_change(&self, _browser: Option<&mut Browser>, progress: f64) {
-            shell::with(|s| {
-                if s.progress.is_some() {
-                    s.progress = Some(progress);
+        fn on_loading_progress_change(&self, browser: Option<&mut Browser>, progress: f64) {
+            shell::with_tab(browser, |s, index, _| {
+                if let Some(tab) = s.tabs.get_mut(index)
+                    && tab.progress.is_some()
+                {
+                    tab.progress = Some(progress);
                 }
             });
             shell::refresh_ui();
@@ -168,7 +183,7 @@ wrap_load_handler! {
     impl LoadHandler {
         fn on_loading_state_change(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             is_loading: ::std::os::raw::c_int,
             _can_go_back: ::std::os::raw::c_int,
             _can_go_forward: ::std::os::raw::c_int,
@@ -176,22 +191,23 @@ wrap_load_handler! {
             if self.role != Role::Tab {
                 return;
             }
-            let effects = shell::with(|s| {
-                if is_loading != 0 {
-                    s.progress = Some(0.0);
-                    s.load_error = false;
-                    s.engine.load_started()
-                } else {
-                    s.progress = None;
-                    Vec::new()
+            let effects = shell::with_tab(browser, |s, index, current| {
+                let tab = s.tabs.get_mut(index)?;
+                if is_loading == 0 {
+                    tab.progress = None;
+                    return None;
                 }
-            });
+                tab.progress = Some(0.0);
+                tab.load_error = false;
+                current.then(|| s.engine.load_started())
+            })
+            .flatten();
             shell::apply(effects.unwrap_or_default());
         }
 
         fn on_load_end(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             frame: Option<&mut Frame>,
             _http_status_code: ::std::os::raw::c_int,
         ) {
@@ -200,11 +216,13 @@ wrap_load_handler! {
             };
             match self.role {
                 Role::Tab => {
-                    if let Some((url, error)) = shell::with(|s| s.pending_error.take()).flatten() {
+                    let error = shell::with_tab(browser, |s, index, _| s.tabs.get_mut(index)?.pending_error.take());
+                    if let Some((url, error)) = error.flatten() {
                         shell::exec_js(frame, &ui::error_page_js(&url, &error));
                     }
                     return;
                 }
+                Role::Tabbar => shell::with(|s| s.tabbar_ready = true),
                 Role::Statusbar => shell::with(|s| s.statusbar_ready = true),
                 Role::Completion => shell::with(|s| s.completion_ready = true),
             };
@@ -213,7 +231,7 @@ wrap_load_handler! {
 
         fn on_load_error(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             frame: Option<&mut Frame>,
             error_code: Errorcode,
             error_text: Option<&CefString>,
@@ -231,13 +249,17 @@ wrap_load_handler! {
             let failed_url = failed_url.map(CefString::to_string).unwrap_or_default();
             // Navigating to our own error page would add a history entry that
             // `back` returns to, so draw into Chromium's error document instead.
-            shell::with(|s| {
-                s.load_error = true;
-                s.engine.set_url(&failed_url);
-                s.engine
-                    .show_message(Level::Error, format!("Error loading {failed_url}: {error_text}"));
-                s.url = failed_url.clone();
-                s.pending_error = Some((failed_url, error_text));
+            shell::with_tab(browser, |s, index, current| {
+                if current {
+                    s.engine.set_url(&failed_url);
+                    s.engine
+                        .show_message(Level::Error, format!("Error loading {failed_url}: {error_text}"));
+                }
+                if let Some(tab) = s.tabs.get_mut(index) {
+                    tab.load_error = true;
+                    tab.url = failed_url.clone();
+                    tab.pending_error = Some((failed_url, error_text));
+                }
             });
             shell::refresh_ui();
         }
@@ -252,12 +274,12 @@ wrap_life_span_handler! {
     impl LifeSpanHandler {
         fn on_before_popup(
             &self,
-            browser: Option<&mut Browser>,
+            _browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             _popup_id: ::std::os::raw::c_int,
-            target_url: Option<&CefString>,
+            _target_url: Option<&CefString>,
             _target_frame_name: Option<&CefString>,
-            _target_disposition: WindowOpenDisposition,
+            target_disposition: WindowOpenDisposition,
             _user_gesture: ::std::os::raw::c_int,
             _popup_features: Option<&PopupFeatures>,
             _window_info: Option<&mut WindowInfo>,
@@ -266,14 +288,27 @@ wrap_life_span_handler! {
             _extra_info: Option<&mut Option<DictionaryValue>>,
             _no_javascript_access: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
-            // Until tabs exist (M3), popups open in the current tab.
-            if self.role == Role::Tab
-                && let (Some(browser), Some(url)) = (browser, target_url)
-                && let Some(frame) = browser.main_frame()
-            {
-                frame.load_url(Some(url));
+            if self.role != Role::Tab {
+                return 1;
             }
-            1
+            // CEF now creates the popup view; `on_popup_browser_view_created` adopts it as a tab.
+            let background = target_disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB;
+            shell::with(|s| s.popup_in_background = background);
+            0
+        }
+
+        fn do_close(&self, browser: Option<&mut Browser>) -> ::std::os::raw::c_int {
+            // A page calling `window.close()` should close its tab, not the window.
+            // Closing from inside this callback is unsafe, so post it.
+            let tab = shell::with_tab(browser, |s, index, _| (!s.window_closing && s.tabs.len() > 1).then_some(index));
+            match tab.flatten() {
+                Some(index) => {
+                    let mut task = tabs::CloseTab::new(index);
+                    post_task(ThreadId::UI, Some(&mut task));
+                    1
+                }
+                None => 0,
+            }
         }
 
         fn on_after_created(&self, _browser: Option<&mut Browser>) {

@@ -4,6 +4,7 @@
 mod client;
 mod renderer;
 mod shell;
+mod tabs;
 mod ui;
 mod window;
 

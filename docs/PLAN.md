@@ -120,7 +120,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 
 ### Navigation
 - [x] `o` / `go` open / edit current URL (current tab only)
-- [ ] `O` / `gO` (need tabs)
+- [x] `O` / `gO` open in a new tab
 - [x] `H` / `L` back/forward, `r` / `R` reload
 - [ ] `gu` / `gU` go up URL
 - [x] `hjkl`, `gg`, `G`, `0`, `$`, `Ctrl-d/u/f/b` scrolling with counts
@@ -129,8 +129,9 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Marks (`m` / `` ` ``) and quickmarks / bookmarks
 
 ### Tabs
-- [ ] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`
-- [ ] `:tab-move`, `:tab-pin`, `:tab-clone`, `:tab-give`, `:tab-take`
+- [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
+- [x] `:tab-move`, `:tab-only`, `:open -t/-b/-r`, popups as tabs (keeping `window.opener`)
+- [ ] `:tab-pin`, `:tab-clone`, `:tab-give`, `:tab-take`
 - [ ] Multiple windows
 
 ### Hints
@@ -206,8 +207,10 @@ M1 is essentially complete as a by-product (modes, key parser, scrolling, naviga
 - `:` command line, parser, chaining, history.
 - Fuzzy completion framework.
 
-### M3 — Tabs
+### M3 — Tabs ✅ done 2026-10-02
 - Multiple tabs in one window, tab bar, close/undo, tab commands.
+
+Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserView`s share a fill-layout panel, and only the current one is visible. Popups go through CEF's `on_popup_browser_view_created`, so `window.opener` survives. A page's `window.close()` closes only its tab. Gaps: undo restores the URL only (not back/forward history), closing a tab skips `beforeunload` prompts, and there is still a single window.
 
 ### M4 — Hints
 - JS hint engine, all hint targets, rapid mode.

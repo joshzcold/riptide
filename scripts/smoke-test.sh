@@ -36,6 +36,10 @@ f.addEventListener('input', report);
 </script>
 EOF
 
+cat >"$work/second.html" <<'EOF'
+<!doctype html><title>second</title>
+EOF
+
 Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
 xvfb_pid=$!
 for _ in $(seq 50); do [[ -s $work/display ]] && break; sleep 0.1; done
@@ -73,7 +77,7 @@ pass
 xdotool windowfocus --sync "$window"
 
 step "clicking a field enters insert mode"
-xdotool mousemove --window "$window" 50 20 click 1
+xdotool mousemove --window "$window" 50 40 click 1
 sleep 0.3
 xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc"
@@ -88,7 +92,36 @@ sleep 0.5
 title=$(xdotool getwindowname "$window")
 [[ $title =~ ^s=([0-9]+)\ k=3\  && ${BASH_REMATCH[1]} -gt 3000 ]] && pass || fail "title was '$title'"
 
-step ":quit exits cleanly"
+# Matches the first page's title whatever its scroll state.
+expect_first_page() {
+    local title=""
+    for _ in $(seq $((TIMEOUT * 10))); do
+        title=$(xdotool getwindowname "$window" 2>/dev/null || true)
+        [[ $title == s=*" - hackers-browser" ]] && { pass; return; }
+        sleep 0.1
+    done
+    fail "title was '$title'"
+}
+
+step ":open -t opens and focuses a new tab"
+xdotool key shift+semicolon
+xdotool type --delay 5 "open -t file://$work/second.html"
+xdotool key Return
+expect_title "second"
+
+step "K switches back to the first tab"
+xdotool key shift+k
+expect_first_page
+
+step "d closes the second tab"
+xdotool key shift+j d
+expect_first_page
+
+step "u restores it"
+xdotool key u
+expect_title "second"
+
+step ":quit with two tabs exits cleanly"
 xdotool key shift+semicolon q u i t Return
 code=""
 for _ in $(seq $((TIMEOUT * 10))); do

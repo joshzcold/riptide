@@ -2,6 +2,7 @@
 
 use cef::*;
 
+pub const TABBAR_HTML: &str = include_str!("../ui/tabbar.html");
 pub const STATUSBAR_HTML: &str = include_str!("../ui/statusbar.html");
 pub const COMPLETION_HTML: &str = include_str!("../ui/completion.html");
 

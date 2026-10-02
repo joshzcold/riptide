@@ -7,6 +7,7 @@ pub mod engine;
 pub mod key;
 pub mod keymap;
 pub mod mode;
+pub mod tabs;
 pub mod url;
 pub mod vk;
 

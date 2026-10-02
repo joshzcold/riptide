@@ -1,0 +1,188 @@
+//! Tab operations. Index bookkeeping lives in `hb_core::tabs::TabList`; this
+//! module keeps the CEF views in the content panel in step with it.
+
+use cef::*;
+use hb_core::Command;
+use hb_core::command::{TabMoveTarget, TabTarget};
+use hb_core::engine::Level;
+use hb_core::tabs::{Position, resolve_index};
+
+use crate::client::Role;
+use crate::shell::{self, Tab};
+use crate::window;
+
+const MAX_CLOSED_TABS: usize = 100;
+
+/// Carry out tab commands; returns false for commands that are not about tabs.
+pub fn run_command(command: &Command, count: Option<u32>) -> bool {
+    let n = i64::from(count.unwrap_or(1).max(1));
+    match command {
+        Command::TabNext => focus_offset(n),
+        Command::TabPrev => focus_offset(-n),
+        Command::TabFocus(target) => match (count, target) {
+            (Some(c), _) => focus_number(i64::from(c)),
+            (None, None) => focus_offset(1),
+            (None, Some(TabTarget::Number(k))) => focus_number(*k),
+            (None, Some(TabTarget::Last)) => match shell::with(|s| s.tabs.previous()).flatten() {
+                Some(index) => focus(index),
+                None => shell::show_message(Level::Error, "There is no previous tab"),
+            },
+        },
+        Command::TabClose => {
+            if let Some(index) = shell::with(|s| s.tabs.current_index()) {
+                close(index);
+            }
+        }
+        Command::TabOnly => {
+            let (current, len) =
+                shell::with(|s| (s.tabs.current_index(), s.tabs.len())).unwrap_or_default();
+            for index in (0..len).rev().filter(|&i| i != current) {
+                close(index);
+            }
+        }
+        Command::TabMove(target) => move_current(*target, count),
+        Command::Undo => match shell::with(|s| s.closed.pop()).flatten() {
+            Some((index, url)) => open(&url, Position::At(index), true),
+            None => shell::show_message(Level::Error, "No closed tabs to restore"),
+        },
+        _ => return false,
+    }
+    shell::refresh_ui();
+    true
+}
+
+/// Open `url` in a new tab.
+pub fn open(url: &str, position: Position, focus: bool) {
+    match window::create_browser_view(Role::Tab, url) {
+        Some(view) => add_view(view, position, focus),
+        None => shell::show_message(Level::Error, "Could not create a browser view"),
+    }
+}
+
+/// Adopt a browser view (new or a CEF popup) as a tab.
+pub fn add_view(view: BrowserView, position: Position, focus_tab: bool) {
+    let Some(content) = shell::with(|s| s.content.clone()).flatten() else {
+        return;
+    };
+    let mut child = View::from(&view);
+    child.set_visible(0);
+    content.add_child_view(Some(&mut child));
+    let Some(index) = shell::with(|s| s.tabs.insert(Tab::new(view), position, false)) else {
+        return;
+    };
+    let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
+    if focus_tab || first {
+        switch_to(index, true);
+    }
+}
+
+fn focus(index: usize) {
+    switch_to(index, false);
+}
+
+fn focus_offset(n: i64) {
+    if let Some(index) = shell::with(|s| s.tabs.offset(n)) {
+        focus(index);
+    }
+}
+
+fn focus_number(number: i64) {
+    let len = shell::with(|s| s.tabs.len()).unwrap_or(0);
+    match resolve_index(number, len) {
+        Some(index) => focus(index),
+        None => shell::show_message(Level::Error, format!("There's no tab with index {number}")),
+    }
+}
+
+/// Make `index` the visible, focused tab. `force` re-shows it even if it is already current.
+fn switch_to(index: usize, force: bool) {
+    let Some(Some((views, effects))) = shell::with(|s| {
+        if !s.tabs.focus(index) && !force {
+            return None;
+        }
+        let current = s.tabs.current()?;
+        let url = current.url.clone();
+        s.engine.set_url(&url);
+        let views: Vec<(BrowserView, bool)> = s
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.view.clone(), i == s.tabs.current_index()))
+            .collect();
+        Some((views, s.engine.tab_switched()))
+    }) else {
+        return;
+    };
+    for (view, visible) in &views {
+        View::from(view).set_visible((*visible).into());
+    }
+    if let Some((view, _)) = views.iter().find(|(_, visible)| *visible) {
+        View::from(view).request_focus();
+    }
+    shell::apply(effects);
+}
+
+/// Close a tab. The last tab stays open, like qutebrowser's `tabs.last_close = ignore`.
+pub fn close(index: usize) {
+    let Some(Some((tab, was_current))) = shell::with(|s| {
+        if s.tabs.len() <= 1 {
+            return None;
+        }
+        let was_current = index == s.tabs.current_index();
+        let tab = s.tabs.remove(index)?;
+        if !tab.url.is_empty() {
+            s.closed.push((index, tab.url.clone()));
+            if s.closed.len() > MAX_CLOSED_TABS {
+                s.closed.remove(0);
+            }
+        }
+        Some((tab, was_current))
+    }) else {
+        return;
+    };
+    if let Some(content) = shell::with(|s| s.content.clone()).flatten() {
+        content.remove_child_view(Some(&mut View::from(&tab.view)));
+    }
+    // Dropping the last reference closes the browser, which re-enters the shell.
+    drop(tab);
+    if was_current && let Some(index) = shell::with(|s| s.tabs.current_index()) {
+        switch_to(index, true);
+    }
+}
+
+wrap_task! {
+    pub struct CloseTab {
+        index: usize,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            close(self.index);
+            shell::refresh_ui();
+        }
+    }
+}
+
+fn move_current(target: Option<TabMoveTarget>, count: Option<u32>) {
+    shell::with(|s| {
+        let len = s.tabs.len();
+        let n = i64::from(count.unwrap_or(1).max(1));
+        let to = match target {
+            None => count
+                .and_then(|c| resolve_index(i64::from(c), len))
+                .unwrap_or(0),
+            Some(TabMoveTarget::Relative(d)) => s.tabs.offset(d * n),
+            Some(TabMoveTarget::Absolute(k)) => match resolve_index(k, len) {
+                Some(i) => i,
+                None => {
+                    s.engine
+                        .show_message(Level::Error, format!("There's no tab with index {k}"));
+                    return;
+                }
+            },
+            Some(TabMoveTarget::Start) => 0,
+            Some(TabMoveTarget::End) => len.saturating_sub(1),
+        };
+        s.tabs.move_current(to);
+    });
+}

@@ -172,6 +172,16 @@ impl Engine {
         effects
     }
 
+    /// Switching tabs drops back to normal mode, like qutebrowser's
+    /// `tabs.mode_on_change = normal`.
+    pub fn tab_switched(&mut self) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        if matches!(self.mode, Mode::Insert | Mode::Passthrough) {
+            self.set_mode(Mode::Normal, &mut effects);
+        }
+        effects
+    }
+
     pub fn load_started(&mut self) -> Vec<Effect> {
         let mut effects = Vec::new();
         if self.message.take().is_some() {
@@ -354,7 +364,7 @@ fn is_forwardable(key: Key) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::command::{Direction, OpenTarget};
+    use crate::command::{Direction, OpenTarget, TabTarget};
 
     fn engine() -> Engine {
         Engine::new(Keymap::defaults())
@@ -472,6 +482,7 @@ mod tests {
             vec![(
                 Command::Open {
                     target: OpenTarget::Current,
+                    related: false,
                     url: Some("example.com".into())
                 },
                 None
@@ -534,6 +545,40 @@ mod tests {
         assert_eq!(names, vec!["scroll", "scroll-page", "scroll-to-perc"]);
         press(&mut e, "oll ");
         assert!(e.completions().is_empty());
+    }
+
+    #[test]
+    fn tab_bindings() {
+        let mut e = engine();
+        assert_eq!(
+            runs(&press(&mut e, "<Alt-3>")),
+            vec![(Command::TabFocus(Some(TabTarget::Number(3))), None)]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "3J")),
+            vec![(Command::TabNext, Some(3))]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "<Ctrl-T>")),
+            vec![(Command::Undo, None)]
+        );
+        e.set_url("https://x.org/");
+        press(&mut e, "gO");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open -t -r https://x.org/"
+        );
+    }
+
+    #[test]
+    fn tab_switch_leaves_insert_mode() {
+        let mut e = engine();
+        press(&mut e, "i");
+        e.tab_switched();
+        assert_eq!(e.mode(), Mode::Normal);
+        press(&mut e, ":");
+        e.tab_switched();
+        assert_eq!(e.mode(), Mode::Command);
     }
 
     #[test]

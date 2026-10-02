@@ -34,10 +34,30 @@ pub enum Readline {
     Rubout,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabTarget {
+    /// 1-based; negative counts from the end.
+    Number(i64),
+    /// The previously focused tab.
+    Last,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabMoveTarget {
+    /// `+` or `-`, multiplied by the count.
+    Relative(i64),
+    /// 1-based; negative counts from the end.
+    Absolute(i64),
+    Start,
+    End,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Open {
         target: OpenTarget,
+        /// Position a new tab next to the current one rather than at the end.
+        related: bool,
         url: Option<String>,
     },
     Back,
@@ -66,6 +86,13 @@ pub enum Command {
     CommandHistoryNext,
     Readline(Readline),
     ClearKeychain,
+    TabClose,
+    TabNext,
+    TabPrev,
+    TabFocus(Option<TabTarget>),
+    TabMove(Option<TabMoveTarget>),
+    TabOnly,
+    Undo,
     Quit,
 }
 
@@ -112,6 +139,16 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("mode-enter", "Enter a key mode"),
     spec("mode-leave", "Leave the current mode"),
     spec("cmd-set-text", "Preset the command line text"),
+    spec("tab-close", "Close the current tab"),
+    spec("tab-next", "Switch to the next tab"),
+    spec("tab-prev", "Switch to the previous tab"),
+    spec("tab-focus", "Select a tab by number, or 'last'"),
+    spec(
+        "tab-move",
+        "Move the current tab: +, -, start, end or a number",
+    ),
+    spec("tab-only", "Close all tabs except the current one"),
+    spec("undo", "Re-open the last closed tab"),
     spec("quit", "Quit the browser"),
     hidden("command-accept", "Execute the command line"),
     hidden(
@@ -163,7 +200,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
     let cmd = match name {
         "open" => {
             let mut target = OpenTarget::Current;
+            let mut related = false;
             while let Some(flag) = args.flag(&[
+                "-r",
+                "--related",
                 "-t",
                 "--tab",
                 "-b",
@@ -174,6 +214,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 "--private",
             ]) {
                 target = match flag {
+                    "-r" | "--related" => {
+                        related = true;
+                        continue;
+                    }
                     "-t" | "--tab" => OpenTarget::Tab,
                     "-b" | "--bg" => OpenTarget::Background,
                     "-w" | "--window" => OpenTarget::Window,
@@ -183,6 +227,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             let url = args.rest();
             Command::Open {
                 target,
+                related,
                 url: (!url.is_empty()).then(|| url.to_string()),
             }
         }
@@ -238,6 +283,24 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "command-history-prev" => Command::CommandHistoryPrev,
         "command-history-next" => Command::CommandHistoryNext,
         "clear-keychain" => Command::ClearKeychain,
+        "tab-close" => Command::TabClose,
+        "tab-next" => Command::TabNext,
+        "tab-prev" => Command::TabPrev,
+        "tab-focus" => Command::TabFocus(match args.optional() {
+            None => None,
+            Some("last") => Some(TabTarget::Last),
+            Some(_) => Some(TabTarget::Number(args.parse_last_int("index")?)),
+        }),
+        "tab-move" => Command::TabMove(match args.optional() {
+            None => None,
+            Some("+") => Some(TabMoveTarget::Relative(1)),
+            Some("-") => Some(TabMoveTarget::Relative(-1)),
+            Some("start") => Some(TabMoveTarget::Start),
+            Some("end") => Some(TabMoveTarget::End),
+            Some(_) => Some(TabMoveTarget::Absolute(args.parse_last_int("index")?)),
+        }),
+        "tab-only" => Command::TabOnly,
+        "undo" => Command::Undo,
         "quit" | "q" | "qa" | "wq" => Command::Quit,
         name => match parse_readline(name) {
             Some(rl) => Command::Readline(rl),
@@ -323,6 +386,13 @@ impl<'a> Args<'a> {
             .map_err(|_| self.error(format!("{name} must be a number, got {token:?}")))
     }
 
+    fn parse_last_int(&self, name: &str) -> Result<i64, CommandError> {
+        let token = self.last.unwrap_or_default();
+        token
+            .parse::<i64>()
+            .map_err(|_| self.error(format!("{name} must be an integer, got {token:?}")))
+    }
+
     /// Take the remaining raw text, for commands like `open` whose last argument may contain spaces.
     fn rest(&mut self) -> &'a str {
         std::mem::take(&mut self.rest).trim()
@@ -346,6 +416,7 @@ mod tests {
             parse(":open -t rust lang book").unwrap(),
             Command::Open {
                 target: OpenTarget::Tab,
+                related: false,
                 url: Some("rust lang book".into())
             }
         );
@@ -353,6 +424,7 @@ mod tests {
             parse("open").unwrap(),
             Command::Open {
                 target: OpenTarget::Current,
+                related: false,
                 url: None
             }
         );
@@ -411,6 +483,47 @@ mod tests {
         ));
         assert!(matches!(
             parse("mode-enter sideways"),
+            Err(CommandError::BadArgs { .. })
+        ));
+    }
+
+    #[test]
+    fn parses_tab_commands() {
+        assert_eq!(
+            parse("open -t -r https://x.org").unwrap(),
+            Command::Open {
+                target: OpenTarget::Tab,
+                related: true,
+                url: Some("https://x.org".into())
+            }
+        );
+        assert_eq!(parse("tab-focus").unwrap(), Command::TabFocus(None));
+        assert_eq!(
+            parse("tab-focus -1").unwrap(),
+            Command::TabFocus(Some(TabTarget::Number(-1)))
+        );
+        assert_eq!(
+            parse("tab-focus last").unwrap(),
+            Command::TabFocus(Some(TabTarget::Last))
+        );
+        assert_eq!(
+            parse("tab-move +").unwrap(),
+            Command::TabMove(Some(TabMoveTarget::Relative(1)))
+        );
+        assert_eq!(
+            parse("tab-move 2").unwrap(),
+            Command::TabMove(Some(TabMoveTarget::Absolute(2)))
+        );
+        assert_eq!(
+            parse("tab-move end").unwrap(),
+            Command::TabMove(Some(TabMoveTarget::End))
+        );
+        assert!(matches!(
+            parse("tab-focus first"),
+            Err(CommandError::BadArgs { .. })
+        ));
+        assert!(matches!(
+            parse("tab-move 1.5"),
             Err(CommandError::BadArgs { .. })
         ));
     }

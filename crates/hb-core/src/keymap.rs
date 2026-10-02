@@ -28,6 +28,14 @@ impl Keymap {
             map.bind(Mode::Normal, keys, cmd)
                 .expect("valid default binding");
         }
+        for n in 1..=8 {
+            map.bind(
+                Mode::Normal,
+                &format!("<Alt-{n}>"),
+                &format!("tab-focus {n}"),
+            )
+            .expect("valid default binding");
+        }
         for (keys, cmd) in COMMAND_DEFAULTS {
             map.bind(Mode::Command, keys, cmd)
                 .expect("valid default binding");
@@ -102,6 +110,29 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("i", "mode-enter insert"),
     ("<Ctrl-v>", "mode-enter passthrough"),
     ("<Escape>", "clear-keychain"),
+    ("J", "tab-next"),
+    ("K", "tab-prev"),
+    ("gt", "tab-next"),
+    ("gT", "tab-prev"),
+    ("<Ctrl-PgDown>", "tab-next"),
+    ("<Ctrl-PgUp>", "tab-prev"),
+    ("<Alt-9>", "tab-focus -1"),
+    ("g0", "tab-focus 1"),
+    ("g^", "tab-focus 1"),
+    ("g$", "tab-focus -1"),
+    ("<Ctrl-Tab>", "tab-focus last"),
+    ("<Ctrl-^>", "tab-focus last"),
+    ("d", "tab-close"),
+    ("<Ctrl-w>", "tab-close"),
+    ("u", "undo"),
+    ("<Ctrl-Shift-t>", "undo"),
+    ("O", "cmd-set-text -s :open -t"),
+    ("gO", "cmd-set-text :open -t -r {url}"),
+    ("<Ctrl-t>", "open -t"),
+    ("gJ", "tab-move +"),
+    ("gK", "tab-move -"),
+    ("gm", "tab-move"),
+    ("co", "tab-only"),
     ("ZQ", "quit"),
     ("ZZ", "quit"),
     ("<Ctrl-q>", "quit"),

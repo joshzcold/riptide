@@ -6,9 +6,12 @@ use std::cell::RefCell;
 use cef::*;
 use hb_core::command::{Direction, OpenTarget};
 use hb_core::engine::{Completion, Level};
+use hb_core::tabs::{Position, TabList};
 use hb_core::url::{DEFAULT_SEARCH_ENGINE, DEFAULT_START_PAGE, fuzzy_url};
 use hb_core::{Command, Effect, Engine};
 use serde_json::json;
+
+use crate::tabs;
 
 const SCROLL_JS: &str = include_str!("../js/scroll.js");
 const SCROLL_STEP_PX: u32 = 40;
@@ -16,23 +19,55 @@ const COMPLETION_ROW_HEIGHT: i32 = 18;
 const COMPLETION_MAX_ROWS: usize = 12;
 const MESSAGE_TIMEOUT_MS: i64 = 3000;
 
-pub struct Shell {
-    pub engine: Engine,
-    pub window: Option<Window>,
-    pub tab: Option<BrowserView>,
-    pub statusbar: Option<BrowserView>,
-    pub completion: Option<BrowserView>,
-    pub overlay: Option<OverlayController>,
-    pub statusbar_ready: bool,
-    pub completion_ready: bool,
+pub struct Tab {
+    pub view: BrowserView,
     pub url: String,
+    pub title: String,
     pub progress: Option<f64>,
     pub load_error: bool,
     /// Error to draw into Chromium's error document once it commits.
     pub pending_error: Option<(String, String)>,
+}
+
+impl Tab {
+    pub fn new(view: BrowserView) -> Self {
+        Self {
+            view,
+            url: String::new(),
+            title: String::new(),
+            progress: None,
+            load_error: false,
+            pending_error: None,
+        }
+    }
+
+    pub fn browser(&self) -> Option<Browser> {
+        self.view.browser()
+    }
+}
+
+pub struct Shell {
+    pub engine: Engine,
+    pub window: Option<Window>,
+    pub content: Option<Panel>,
+    pub tabs: TabList<Tab>,
+    /// Closed tabs as (index, url), newest last, for `undo`.
+    pub closed: Vec<(usize, String)>,
+    pub tabbar: Option<BrowserView>,
+    pub statusbar: Option<BrowserView>,
+    pub completion: Option<BrowserView>,
+    pub overlay: Option<OverlayController>,
+    pub tabbar_ready: bool,
+    pub statusbar_ready: bool,
+    pub completion_ready: bool,
+    /// Set by `on_before_popup` for the popup view that CEF creates next.
+    pub popup_in_background: bool,
+    /// Set once the window starts closing, so tab closes go through CEF.
+    pub window_closing: bool,
     pub open_browsers: usize,
     pub suppress_char: bool,
     last_status: String,
+    last_tabbar: String,
     last_completion: Vec<Completion>,
     timed_message: u64,
 }
@@ -42,26 +77,35 @@ impl Shell {
         Self {
             engine,
             window: None,
-            tab: None,
+            content: None,
+            tabs: TabList::default(),
+            closed: Vec::new(),
+            tabbar: None,
             statusbar: None,
             completion: None,
             overlay: None,
+            tabbar_ready: false,
             statusbar_ready: false,
             completion_ready: false,
-            url: String::new(),
-            progress: None,
-            load_error: false,
-            pending_error: None,
+            popup_in_background: false,
+            window_closing: false,
             open_browsers: 0,
             suppress_char: false,
             last_status: String::new(),
+            last_tabbar: String::new(),
             last_completion: Vec::new(),
             timed_message: 0,
         }
     }
 
-    pub fn tab_browser(&self) -> Option<Browser> {
-        self.tab.as_ref()?.browser()
+    pub fn current_browser(&self) -> Option<Browser> {
+        self.tabs.current()?.browser()
+    }
+
+    pub fn tab_index(&self, browser: &Browser) -> Option<usize> {
+        let id = browser.identifier();
+        self.tabs
+            .position(|t| t.browser().is_some_and(|b| b.identifier() == id))
     }
 }
 
@@ -90,6 +134,24 @@ pub fn with<R>(f: impl FnOnce(&mut Shell) -> R) -> Option<R> {
     })
 }
 
+/// Run `f` against the tab that owns `browser`; the bool says whether it is current.
+pub fn with_tab<R>(
+    browser: Option<&mut Browser>,
+    f: impl FnOnce(&mut Shell, usize, bool) -> R,
+) -> Option<R> {
+    let browser = browser?;
+    with(|s| {
+        let index = s.tab_index(browser)?;
+        let current = index == s.tabs.current_index();
+        Some(f(s, index, current))
+    })
+    .flatten()
+}
+
+pub fn show_message(level: Level, text: impl Into<String>) {
+    with(|s| s.engine.show_message(level, text));
+}
+
 pub fn apply(effects: Vec<Effect>) {
     for effect in effects {
         match effect {
@@ -101,26 +163,43 @@ pub fn apply(effects: Vec<Effect>) {
 }
 
 fn run_command(command: Command, count: Option<u32>) {
-    let Some(browser) = with(|s| s.tab_browser()).flatten() else {
+    if tabs::run_command(&command, count) {
+        return;
+    }
+    let Some(browser) = with(|s| s.current_browser()).flatten() else {
         return;
     };
     let n = count.unwrap_or(1).max(1);
     match command {
-        Command::Open { target, url } => {
-            if target != OpenTarget::Current {
-                with(|s| {
-                    s.engine.show_message(
-                        Level::Warning,
-                        "Tabs and windows are not implemented yet; opening here",
-                    )
-                });
-            }
+        Command::Open {
+            target,
+            related,
+            url,
+        } => {
             let url = url.map_or_else(
                 || DEFAULT_START_PAGE.to_string(),
                 |u| fuzzy_url(&u, DEFAULT_SEARCH_ENGINE),
             );
-            if let Some(frame) = browser.main_frame() {
-                frame.load_url(Some(&CefString::from(url.as_str())));
+            let position = if related {
+                Position::Next
+            } else {
+                Position::Last
+            };
+            match target {
+                OpenTarget::Current => {
+                    if let Some(frame) = browser.main_frame() {
+                        frame.load_url(Some(&CefString::from(url.as_str())));
+                    }
+                }
+                OpenTarget::Tab => tabs::open(&url, position, true),
+                OpenTarget::Background => tabs::open(&url, position, false),
+                OpenTarget::Window | OpenTarget::Private => {
+                    show_message(
+                        Level::Warning,
+                        "Separate and private windows are not implemented yet; opened a tab",
+                    );
+                    tabs::open(&url, position, true);
+                }
             }
         }
         Command::Back if n == 1 => browser.go_back(),
@@ -191,25 +270,23 @@ pub fn exec_js(frame: &Frame, code: &str) {
 }
 
 struct UiUpdate {
-    statusbar: Option<Frame>,
-    status_json: Option<String>,
-    completion: Option<Frame>,
-    completion_json: Option<String>,
+    scripts: Vec<(Frame, String)>,
     overlay: Option<(OverlayController, Option<Rect>)>,
     expire_message: Option<u64>,
+    title: Option<(Window, String)>,
 }
 
-/// Push engine and page state to the status bar and completion overlay.
+/// Push engine and tab state to the tab bar, status bar and completion overlay.
 /// Unchanged state is skipped, so this is cheap to call after every event.
 pub fn refresh_ui() {
     let Some(update) = with(collect_ui_update) else {
         return;
     };
-    if let (Some(frame), Some(json)) = (update.statusbar, update.status_json) {
+    for (frame, json) in update.scripts {
         exec_js(&frame, &format!("hbRender({json})"));
     }
-    if let (Some(frame), Some(json)) = (update.completion, update.completion_json) {
-        exec_js(&frame, &format!("hbRender({json})"));
+    if let Some((window, title)) = update.title {
+        window.set_title(Some(&CefString::from(title.as_str())));
     }
     if let Some(generation) = update.expire_message {
         let mut task = ExpireMessage::new(generation);
@@ -242,31 +319,76 @@ pub fn position_overlay() {
 }
 
 fn collect_ui_update(s: &mut Shell) -> UiUpdate {
+    let mut scripts = Vec::new();
     let status = s.engine.status();
     let generation = s.engine.message_generation();
     let expire_message = (status.message.is_some() && generation != s.timed_message).then(|| {
         s.timed_message = generation;
         generation
     });
+
+    let current = s.tabs.current();
     let status_json = json!({
         "mode": status.mode,
         "command_line": status.command_line,
         "keystring": status.keystring,
         "message": status.message,
-        "url": s.url,
-        "progress": s.progress,
-        "load_error": s.load_error,
+        "url": current.map_or("", |t| t.url.as_str()),
+        "progress": current.and_then(|t| t.progress),
+        "load_error": current.is_some_and(|t| t.load_error),
+        "tab_index": s.tabs.current_index() + 1,
+        "tab_count": s.tabs.len(),
     })
     .to_string();
-    let status_changed = s.statusbar_ready && status_json != s.last_status;
-    if status_changed {
+    if s.statusbar_ready
+        && status_json != s.last_status
+        && let Some(frame) = frame_of(&s.statusbar)
+    {
         s.last_status = status_json.clone();
+        scripts.push((frame, status_json));
+    }
+
+    let tabs: Vec<_> = s
+        .tabs
+        .iter()
+        .map(|t| {
+            json!({
+                "title": t.title,
+                "url": t.url,
+                "loading": t.progress.is_some(),
+                "error": t.load_error,
+            })
+        })
+        .collect();
+    let tabbar_json = json!({ "tabs": tabs, "current": s.tabs.current_index() }).to_string();
+    let mut title = None;
+    if s.tabbar_ready
+        && tabbar_json != s.last_tabbar
+        && let Some(frame) = frame_of(&s.tabbar)
+    {
+        s.last_tabbar = tabbar_json.clone();
+        scripts.push((frame, tabbar_json));
+        if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
+            let name = if tab.title.is_empty() {
+                &tab.url
+            } else {
+                &tab.title
+            };
+            title = Some((window, format!("{name} - hackers-browser")));
+        }
     }
 
     let completions = s.engine.completions();
     let completion_changed = completions != s.last_completion;
-    let completion_json = (s.completion_ready && completion_changed)
-        .then(|| serde_json::to_string(&completions).unwrap_or_default());
+    if s.completion_ready
+        && completion_changed
+        && let Some(frame) = frame_of(&s.completion)
+    {
+        scripts.push((
+            frame,
+            serde_json::to_string(&completions).unwrap_or_default(),
+        ));
+    }
     let overlay = completion_changed
         .then(|| {
             let overlay = s.overlay.clone()?;
@@ -281,15 +403,10 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
     }
 
     UiUpdate {
-        statusbar: status_changed.then(|| frame_of(&s.statusbar)).flatten(),
-        status_json: status_changed.then_some(status_json),
-        completion: completion_json
-            .is_some()
-            .then(|| frame_of(&s.completion))
-            .flatten(),
-        completion_json,
+        scripts,
         overlay,
         expire_message,
+        title,
     }
 }
 

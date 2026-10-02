@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (Milestone 0). One tab, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0 and 3: core modes and tabs). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
 
 ## Building
 
@@ -48,13 +48,23 @@ Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `
 | `Ctrl-f` `Ctrl-b` | Full page down / up |
 | `H` / `L` | `back` / `forward` |
 | `r` / `R` | `reload` / `reload -f` |
-| `o` | `:open ` |
-| `go` | `:open {url}` (edit the current URL) |
+| `o` / `O` | `:open ` / `:open -t ` (new tab) |
+| `go` / `gO` | Edit the current URL, in this tab / a new tab |
+| `Ctrl-t` | `open -t` (start page in a new tab) |
+| `J` `K`, `gt` `gT` | `tab-next` / `tab-prev` |
+| `Alt-1`…`Alt-9`, `g0` `g$` | `tab-focus N` / first / last (a count also works, e.g. `3J`) |
+| `Ctrl-Tab`, `Ctrl-^` | `tab-focus last` (previously focused tab) |
+| `d`, `Ctrl-w` | `tab-close` |
+| `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |
+| `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |
+| `co` | `tab-only` |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |
 | `Ctrl-v` | Passthrough mode (leave with `Shift-Escape`) |
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
+
+Links that open new windows (`target=_blank`, `window.open`) open as tabs next to the current one, keeping `window.opener`. Closing the last tab is ignored, like qutebrowser.
 
 The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 

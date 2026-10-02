@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bar-bg: #555555;
+    --odd-bg: #808080;
+    --even-bg: #a9a9a9;
+    --fg: #ffffff;
+    --selected-bg: #000000;
+    --indicator-loading: #0000aa;
+    --indicator-done: #009900;
+    --indicator-error: #ff0000;
+    --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bar-bg);
+    color: var(--fg);
+    font: var(--font);
+    user-select: none;
+    cursor: default;
+  }
+  #tabs { display: flex; height: 100%; }
+  .tab {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px 0 0;
+    white-space: pre;
+    line-height: 1.5;
+  }
+  .tab:nth-child(odd) { background: var(--odd-bg); }
+  .tab:nth-child(even) { background: var(--even-bg); }
+  .tab.selected { background: var(--selected-bg); }
+  .indicator { width: 3px; align-self: stretch; flex-shrink: 0; }
+  .loading .indicator { background: var(--indicator-loading); }
+  .error .indicator { background: var(--indicator-error); }
+  .title { overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="tabs"></div>
+<script>
+  window.hbRender = ({ tabs, current }) => {
+    const bar = document.getElementById("tabs");
+    bar.replaceChildren(...tabs.map((tab, i) => {
+      const el = document.createElement("div");
+      el.className = "tab";
+      if (i === current) el.classList.add("selected");
+      if (tab.loading) el.classList.add("loading");
+      if (tab.error) el.classList.add("error");
+      const indicator = document.createElement("span");
+      indicator.className = "indicator";
+      const title = document.createElement("span");
+      title.className = "title";
+      title.textContent = `${i + 1}: ${tab.title || tab.url || "about:blank"}`;
+      el.title = tab.url;
+      el.append(indicator, title);
+      return el;
+    }));
+  };
+</script>
+</body>
+</html>
