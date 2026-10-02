@@ -58,10 +58,26 @@ pub fn classify(arg: &str, cwd: &Path) -> Item {
 }
 
 fn file_url(path: &Path) -> String {
+    file_url_from(&path.to_string_lossy(), cfg!(windows))
+}
+
+/// Windows paths lose `canonicalize`'s `\\?\` prefix and use forward slashes,
+/// so `C:\a b` becomes `file:///C:/a%20b`.
+fn file_url_from(path: &str, windows: bool) -> String {
+    let path = if windows {
+        path.strip_prefix(r"\\?\")
+            .unwrap_or(path)
+            .replace('\\', "/")
+    } else {
+        path.to_string()
+    };
     let mut url = String::from("file://");
-    for byte in path.to_string_lossy().bytes() {
+    if !path.starts_with('/') {
+        url.push('/');
+    }
+    for byte in path.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' => {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' | b':' => {
                 url.push(byte as char)
             }
             _ => url.push_str(&format!("%{byte:02X}")),
@@ -284,6 +300,15 @@ mod tests {
             "{url}"
         );
         std::fs::remove_dir_all(&cwd).unwrap();
+    }
+
+    #[test]
+    fn file_urls() {
+        assert_eq!(file_url_from("/a b/c#d", false), "file:///a%20b/c%23d");
+        assert_eq!(
+            file_url_from(r"\\?\C:\Users\me\page one.html", true),
+            "file:///C:/Users/me/page%20one.html"
+        );
     }
 
     #[test]
