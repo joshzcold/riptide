@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+use std::collections::VecDeque;
+
 use crate::cmdline::{History, LineEditor};
 use crate::command::{self, Command, FocusDirection};
 use crate::completion::{self, Completion, CompletionKind, CompletionView};
@@ -8,6 +10,7 @@ use crate::hints::{HintInput, HintItem, HintRequest, HintSession, HintTarget};
 use crate::key::{Key, KeyCode, format_sequence};
 use crate::keymap::{Keymap, Lookup};
 use crate::mode::Mode;
+use crate::prompt::{Prompt, PromptAnswer, PromptKind, PromptView};
 use crate::settings::{self, Settings, Value};
 
 /// Something the browser layer has to act on.
@@ -37,6 +40,11 @@ pub enum Effect {
     },
     /// A `:set`/`:bind`/`:unbind` succeeded; the host persists it.
     ConfigChanged(ConfigOp),
+    /// The user answered (or cancelled) the prompt with this id.
+    PromptAnswered {
+        id: u64,
+        answer: PromptAnswer,
+    },
 }
 
 /// Completion results for one command line text, plus Tab-cycling state.
@@ -103,6 +111,10 @@ pub struct Engine {
     completion_source: Option<completion::Source>,
     completion: Option<CompletionState>,
     hints: Option<HintSession>,
+    prompts: VecDeque<Prompt>,
+    prompt_editor: LineEditor,
+    /// The mode to return to once the prompt queue is empty.
+    mode_before_prompt: Mode,
     dirty: bool,
 }
 
@@ -123,6 +135,9 @@ impl Engine {
             completion_source: None,
             completion: None,
             hints: None,
+            prompts: VecDeque::new(),
+            prompt_editor: LineEditor::default(),
+            mode_before_prompt: Mode::Normal,
             dirty: true,
         }
     }
@@ -244,6 +259,99 @@ impl Engine {
         self.dirty = true;
     }
 
+    /// Queue a question; it shows once the ones before it are answered.
+    pub fn push_prompt(&mut self, prompt: Prompt) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        self.prompts.push_back(prompt);
+        self.dirty = true;
+        if self.prompts.len() == 1 {
+            self.activate_prompt(&mut effects);
+        }
+        effects
+    }
+
+    /// Withdraw a prompt that no longer applies (its tab closed or navigated).
+    pub fn cancel_prompt(&mut self, id: u64) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        let was_active = self.prompts.front().is_some_and(|p| p.id == id);
+        self.prompts.retain(|p| p.id != id);
+        self.dirty = true;
+        if was_active {
+            self.activate_prompt(&mut effects);
+        }
+        effects
+    }
+
+    pub fn prompt_view(&self) -> Option<PromptView> {
+        let prompt = self.prompts.front()?;
+        let (kind, input) = match &prompt.kind {
+            PromptKind::Text { masked: true, .. } => (
+                "text",
+                "*".repeat(self.prompt_editor.text().chars().count()),
+            ),
+            PromptKind::Text { .. } => ("text", self.prompt_editor.text().to_string()),
+            PromptKind::YesNo { .. } => ("yesno", String::new()),
+            PromptKind::Alert => ("alert", String::new()),
+        };
+        Some(PromptView {
+            title: prompt.title.clone(),
+            message: prompt.message.clone(),
+            kind,
+            input,
+            cursor: self.prompt_editor.cursor(),
+            hint: prompt.hint(),
+            queued: self.prompts.len() - 1,
+        })
+    }
+
+    /// Show the front of the queue, or go back to the earlier mode if empty.
+    fn activate_prompt(&mut self, effects: &mut Vec<Effect>) {
+        let Some(prompt) = self.prompts.front() else {
+            let mode = self.mode_before_prompt;
+            self.set_mode(mode, effects);
+            return;
+        };
+        let (mode, text) = match &prompt.kind {
+            PromptKind::Text { default, .. } => (Mode::Prompt, default.clone()),
+            _ => (Mode::YesNo, String::new()),
+        };
+        if !matches!(self.mode, Mode::Prompt | Mode::YesNo) {
+            self.mode_before_prompt = match self.mode {
+                Mode::Command | Mode::Hint => Mode::Normal,
+                other => other,
+            };
+        }
+        self.prompt_editor.set(&text);
+        self.set_mode(mode, effects);
+        self.dirty = true;
+    }
+
+    fn answer_prompt(&mut self, answer: PromptAnswer, effects: &mut Vec<Effect>) {
+        let Some(prompt) = self.prompts.pop_front() else {
+            return;
+        };
+        effects.push(Effect::PromptAnswered {
+            id: prompt.id,
+            answer,
+        });
+        self.activate_prompt(effects);
+    }
+
+    fn accept_prompt(&mut self, value: Option<bool>, save: bool, effects: &mut Vec<Effect>) {
+        let Some(prompt) = self.prompts.front() else {
+            return;
+        };
+        let answer = match prompt.kind {
+            PromptKind::Text { .. } => PromptAnswer::Text(self.prompt_editor.text().to_string()),
+            PromptKind::YesNo { default, .. } => match value.unwrap_or(default) {
+                true => PromptAnswer::Yes { remember: save },
+                false => PromptAnswer::No { remember: save },
+            },
+            PromptKind::Alert => PromptAnswer::Ok,
+        };
+        self.answer_prompt(answer, effects);
+    }
+
     /// Lets `{clipboard}` in commands read the system clipboard.
     pub fn set_clipboard_reader(&mut self, reader: impl Fn() -> Option<String> + 'static) {
         self.clipboard = Some(Box::new(reader));
@@ -339,6 +447,7 @@ impl Engine {
             Mode::Command => self.handle_command(key),
             Mode::Insert | Mode::Passthrough => self.handle_passthrough(key),
             Mode::Hint => self.handle_hint(key),
+            Mode::Prompt | Mode::YesNo => self.handle_prompt(key),
         }
     }
 
@@ -504,6 +613,21 @@ impl Engine {
         consumed(effects)
     }
 
+    /// Prompts swallow every key so nothing reaches the page meanwhile.
+    fn handle_prompt(&mut self, key: Key) -> KeyOutcome {
+        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+            let cmd = cmd.to_string();
+            return consumed(self.execute_str(&cmd, None));
+        }
+        if self.mode == Mode::Prompt
+            && let Some(c) = key.text()
+        {
+            self.prompt_editor.insert(c);
+            self.dirty = true;
+        }
+        consumed(Vec::new())
+    }
+
     fn handle_passthrough(&mut self, key: Key) -> KeyOutcome {
         match self.keymap.lookup(self.mode, &[key]) {
             Lookup::Exact(cmd) => {
@@ -517,7 +641,11 @@ impl Engine {
     fn execute(&mut self, cmd: Command, count: Option<u32>, effects: &mut Vec<Effect>) {
         match cmd {
             Command::ModeEnter(mode) => self.set_mode(mode, effects),
+            Command::ModeLeave if matches!(self.mode, Mode::Prompt | Mode::YesNo) => {
+                self.answer_prompt(PromptAnswer::Cancelled, effects)
+            }
             Command::ModeLeave => self.set_mode(Mode::Normal, effects),
+            Command::PromptAccept { value, save } => self.accept_prompt(value, save, effects),
             Command::CmdSetText { text, append_space } => {
                 let text = if append_space {
                     format!("{text} ")
@@ -547,6 +675,10 @@ impl Engine {
                     self.cmdline.set(&entry);
                     self.dirty = true;
                 }
+            }
+            Command::Readline(action) if self.mode == Mode::Prompt => {
+                self.prompt_editor.apply(action);
+                self.dirty = true;
             }
             Command::Readline(action) => {
                 self.cmdline.apply(action);
@@ -732,6 +864,7 @@ mod tests {
     use crate::command::{Direction, OpenTarget, TabTarget};
     use crate::completion::{Completion, CompletionKind};
     use crate::hints::{HintItem, HintRequest, HintTarget};
+    use crate::prompt::{Prompt, PromptAnswer, PromptKind, Remember};
     use crate::settings::Value;
 
     fn engine() -> Engine {
@@ -1315,6 +1448,136 @@ mod tests {
                 labels: vec!["x".into(), "y".into()]
             }
         );
+    }
+
+    fn prompt(id: u64, kind: PromptKind) -> Prompt {
+        Prompt {
+            id,
+            title: "t".into(),
+            message: "m".into(),
+            kind,
+        }
+    }
+
+    fn answers(outcomes: &[KeyOutcome]) -> Vec<(u64, PromptAnswer)> {
+        all_effects(outcomes)
+            .into_iter()
+            .filter_map(|e| match e {
+                Effect::PromptAnswered { id, answer } => Some((id, answer)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn text_prompt_edits_and_accepts() {
+        let mut e = engine();
+        press(&mut e, "i");
+        e.push_prompt(prompt(
+            1,
+            PromptKind::Text {
+                default: "/tmp/file".into(),
+                masked: false,
+            },
+        ));
+        assert_eq!(e.mode(), Mode::Prompt);
+        // Keys edit the answer; none reach the page.
+        let out = press(&mut e, "<Ctrl-w>x.txt");
+        assert!(out.iter().all(|o| o.consumed));
+        assert_eq!(e.prompt_view().unwrap().input, "/tmp/x.txt");
+        assert_eq!(
+            answers(&press(&mut e, "<Return>")),
+            vec![(1, PromptAnswer::Text("/tmp/x.txt".into()))]
+        );
+        // Back to the mode from before the prompt.
+        assert_eq!(e.mode(), Mode::Insert);
+    }
+
+    #[test]
+    fn password_prompts_are_masked() {
+        let mut e = engine();
+        e.push_prompt(prompt(
+            1,
+            PromptKind::Text {
+                default: String::new(),
+                masked: true,
+            },
+        ));
+        press(&mut e, "hunter2");
+        assert_eq!(e.prompt_view().unwrap().input, "*******");
+        assert_eq!(
+            answers(&press(&mut e, "<Return>")),
+            vec![(1, PromptAnswer::Text("hunter2".into()))]
+        );
+    }
+
+    #[test]
+    fn yes_no_keys() {
+        let mut e = engine();
+        for id in 1..=5 {
+            e.push_prompt(prompt(
+                id,
+                PromptKind::YesNo {
+                    default: false,
+                    remember: Remember::Session,
+                },
+            ));
+        }
+        assert_eq!(e.prompt_view().unwrap().queued, 4);
+        assert_eq!(
+            answers(&press(&mut e, "y")),
+            vec![(1, PromptAnswer::Yes { remember: false })]
+        );
+        assert_eq!(
+            answers(&press(&mut e, "N")),
+            vec![(2, PromptAnswer::No { remember: true })]
+        );
+        assert_eq!(
+            answers(&press(&mut e, "<Return>")),
+            vec![(3, PromptAnswer::No { remember: false })]
+        );
+        assert_eq!(
+            answers(&press(&mut e, "<Escape>")),
+            vec![(4, PromptAnswer::Cancelled)]
+        );
+        assert!(answers(&press(&mut e, "j")).is_empty());
+        assert_eq!(
+            answers(&press(&mut e, "A")),
+            vec![(5, PromptAnswer::Yes { remember: true })]
+        );
+        assert_eq!(e.mode(), Mode::Normal);
+    }
+
+    #[test]
+    fn cancelling_the_active_prompt_shows_the_next() {
+        let mut e = engine();
+        e.push_prompt(prompt(1, PromptKind::Alert));
+        e.push_prompt(prompt(
+            2,
+            PromptKind::Text {
+                default: "x".into(),
+                masked: false,
+            },
+        ));
+        assert_eq!(e.mode(), Mode::YesNo);
+        e.cancel_prompt(1);
+        assert_eq!(e.mode(), Mode::Prompt);
+        assert_eq!(e.prompt_view().unwrap().input, "x");
+        e.cancel_prompt(2);
+        assert_eq!(e.mode(), Mode::Normal);
+        assert!(e.prompt_view().is_none());
+    }
+
+    #[test]
+    fn prompts_interrupt_the_command_line() {
+        let mut e = engine();
+        press(&mut e, ":open x");
+        e.push_prompt(prompt(1, PromptKind::Alert));
+        assert_eq!(
+            answers(&press(&mut e, "<Return>")),
+            vec![(1, PromptAnswer::Ok)]
+        );
+        assert_eq!(e.mode(), Mode::Normal);
     }
 
     #[test]

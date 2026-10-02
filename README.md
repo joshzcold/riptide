@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0 and 3–6: core modes, tabs, hints, config and storage). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0 and 3–7: core modes, tabs, hints, config, storage, prompts and downloads). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
 
 ## Building
 
@@ -71,6 +71,33 @@ Every setting is listed in [docs/settings.md](docs/settings.md), and the complet
 | Sessions | `<data>/sessions/<name>.toml` | TOML |
 
 Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, so you can keep them in dotfiles or copy yours from `~/.config/qutebrowser/`. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
+
+### Prompts, downloads and permissions
+
+Everything that needs an answer appears above the status bar, one at a time:
+
+- JavaScript `alert`, `confirm`, `prompt` and leave-page warnings
+- HTTP logins (username, then a hidden password)
+- where to save a download
+- site permission requests (camera, microphone, location, notifications…)
+
+| Mode | Keys |
+|---|---|
+| prompt (text) | type, readline keys (`Ctrl-w` deletes one path component), `Return` accepts, `Escape` cancels |
+| yesno | `y` / `n`, `Return` (the default), `Escape` cancels |
+
+For permission prompts, `y` allows and `N` blocks. Chromium saves both per site; `n` and `Escape` mean "not now". Camera and microphone requests use `A`/`N` to remember the answer for the session. The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture` and `content.desktop_capture` settings (`ask`, `true` or `false`) answer without asking.
+
+Downloads go to `downloads.location.directory`, or the system Downloads folder if that's empty (on Linux, `XDG_DOWNLOAD_DIR` or `~/.config/user-dirs.dirs`). Server-suggested names are reduced to a plain file name, existing files get ` (1)` appended, and typing an existing path asks before overwriting. Set `downloads.location.prompt = false` to skip the question. The status bar shows `↓2 41%` while downloads run.
+
+| Command | |
+|---|---|
+| `:download [url]` | Download a URL, or the current page |
+| `;d` | Hint a link to download |
+| `:download-cancel`, `:download-open` | The newest running / finished download, or the one given as a count (`2:download-open`) |
+| `:download-clear` | Forget finished downloads |
+
+`:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
 
 ### Lua
 

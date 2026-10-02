@@ -11,15 +11,21 @@ pub enum Mode {
     Command,
     Passthrough,
     Hint,
+    /// Typing an answer to a prompt.
+    Prompt,
+    /// Answering a yes/no question.
+    YesNo,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 5] = [
+    pub const ALL: [Mode; 7] = [
         Mode::Normal,
         Mode::Insert,
         Mode::Command,
         Mode::Passthrough,
         Mode::Hint,
+        Mode::Prompt,
+        Mode::YesNo,
     ];
 
     pub fn name(self) -> &'static str {
@@ -29,6 +35,8 @@ impl Mode {
             Mode::Command => "command",
             Mode::Passthrough => "passthrough",
             Mode::Hint => "hint",
+            Mode::Prompt => "prompt",
+            Mode::YesNo => "yesno",
         }
     }
 }

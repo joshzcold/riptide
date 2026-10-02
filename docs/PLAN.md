@@ -137,7 +137,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
-- [ ] `;d` download (needs M7)
+- [x] `;d` download
 - [ ] Number hint mode, configurable chars (M5), hints inside iframes
 
 ### Command line
@@ -151,9 +151,11 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Content
 - [ ] Ad blocking (EasyList / uBlock lists) and host blocking
 - [ ] Per-domain settings (JS, cookies, images, notifications)
-- [ ] Downloads with status-bar progress and prompts
-- [ ] Permission prompts (geolocation, camera, notifications)
-- [ ] HTTP auth and JS dialogs in the prompt UI
+- [x] Downloads with status-bar progress and prompts
+- [x] Permission prompts (geolocation, camera, notifications)
+- [x] HTTP auth and JS dialogs in the prompt UI
+- [ ] Download bar listing each download; path completion in the save prompt
+- [ ] TLS certificate errors: Chromium blocks them; no "proceed anyway" prompt yet
 - [ ] Dark mode (Chromium `--force-dark-mode` / blink settings)
 - [ ] Widevine DRM, opt-in (M11)
 - [ ] Review of background Google service traffic (M8)
@@ -258,8 +260,25 @@ Gaps:
 - No crash-recovery autosave, no history page, no private browsing (history is always recorded).
 - No import of qutebrowser's `history.sqlite`.
 
-### M7 — Prompts, downloads, permissions
+### M7 — Prompts, downloads, permissions ✅ done 2026-10-02
 - Unified prompt UI; download manager; permission and auth dialogs.
+
+Notes:
+- **Prompts:** `hb_core::prompt` holds a queue answered one at a time in the new `prompt`/`yesno` modes, and `hb-cef/src/prompts.rs` connects each prompt to its CEF callback. JavaScript dialogs are withdrawn when their page navigates, and every prompt for a tab when the tab closes.
+- **Lessons learned:**
+  - Chromium ignores input to a page while it shows a JavaScript dialog, so prompt keys come through the status bar's browser, which gets focus for the duration.
+  - CEF calls `GetAuthCredentials` on the IO thread, so the prompt is posted to the UI thread.
+  - Chrome's own login prompt swallows HTTP auth unless `--disable-chrome-login-prompt` is set (cef#3603). CEF always runs Chrome's internals now, even for Alloy-style windows.
+  - Chromium saves permission answers per site in the profile. So `y`/`N` map to accept/deny (saved), `n` to dismiss (not saved), and a `content.*=false` setting to ignore, so changing the setting later still works. Camera and microphone requests go through a separate CEF API that isn't saved, so they keep a session memory (`A`/`N`).
+- **Downloads:** `hb_config::downloads` finds the platform Downloads folder (XDG on Linux), sanitises suggested names and picks unused names (unit tested).
+
+Gaps:
+- No per-download bar.
+- No path completion in the save prompt.
+- No command to reset per-site permissions (Chromium's saved answers).
+- Closing a tab with `d` skips leave-page warnings.
+- File-upload dialogs (`<input type=file>`) use CEF's default and are untested.
+- TLS errors have no override.
 
 ### M8 — Content blocking & privacy
 - adblock-rust via `OnBeforeResourceLoad`; filter-list updates (`:adblock-update`); per-domain settings; private windows.

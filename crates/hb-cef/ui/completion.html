@@ -35,15 +35,51 @@
   .row.selected .desc { color: var(--selected-fg); }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
   .desc { color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
+  .prompt-message {
+    padding: 0 4px;
+    line-height: var(--row-height);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: calc(var(--row-height) * 8);
+    overflow: hidden;
+  }
+  .prompt-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: #000; }
+  .prompt-hint { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); color: var(--desc-fg); }
+  .cursor { background: var(--fg); color: var(--bg); }
 </style>
 </head>
 <body>
 <div id="list"></div>
 <script>
-  // Rows are either {header} or {name, description, selected}.
-  window.hbRender = (rows) => {
+  function div(className, text) {
+    const el = document.createElement("div");
+    el.className = className;
+    if (text != null) el.textContent = text;
+    return el;
+  }
+
+  function renderPrompt(list, p) {
+    const title = p.queued ? `${p.title}  (${p.queued} more waiting)` : p.title;
+    const parts = [div("header", title), div("prompt-message", p.message)];
+    if (p.kind === "text") {
+      const input = div("prompt-input");
+      const chars = Array.from(p.input);
+      const caret = document.createElement("span");
+      caret.className = "cursor";
+      caret.textContent = chars[p.cursor] ?? " ";
+      input.append(chars.slice(0, p.cursor).join(""), caret, chars.slice(p.cursor + 1).join(""));
+      parts.push(input);
+    }
+    parts.push(div("prompt-hint", p.hint));
+    list.replaceChildren(...parts);
+  }
+
+  // Either {kind: "prompt", prompt} or {kind: "rows", rows}, where rows are
+  // {header} or {name, description, selected}.
+  window.hbRender = (payload) => {
     const list = document.getElementById("list");
-    list.replaceChildren(...rows.map((row) => {
+    if (payload.kind === "prompt") return renderPrompt(list, payload.prompt);
+    list.replaceChildren(...payload.rows.map((row) => {
       const el = document.createElement("div");
       if (row.header) {
         el.className = "header";

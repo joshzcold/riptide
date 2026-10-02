@@ -50,7 +50,7 @@
 </style>
 </head>
 <body>
-<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
+<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="downloads"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
 <script>
   const $ = (id) => document.getElementById(id);
 
@@ -79,6 +79,7 @@
       left.textContent = `-- ${state.mode.toUpperCase()} MODE --`;
     }
     $("keys").textContent = state.keystring;
+    $("downloads").textContent = state.downloads;
     const url = $("url");
     url.textContent = state.url;
     url.className = state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http";

@@ -10,6 +10,8 @@ pub mod hints;
 pub mod key;
 pub mod keymap;
 pub mod mode;
+pub mod permissions;
+pub mod prompt;
 pub mod settings;
 pub mod tabs;
 pub mod url;

@@ -50,18 +50,22 @@ impl LineEditor {
             }
             Readline::UnixLineDiscard => self.delete_range(0, self.cursor),
             Readline::KillLine => self.delete_range(self.cursor, self.len()),
-            Readline::Rubout => {
-                let chars: Vec<char> = self.text.chars().collect();
-                let mut start = self.cursor;
-                while start > 0 && chars[start - 1].is_whitespace() {
-                    start -= 1;
-                }
-                while start > 0 && !chars[start - 1].is_whitespace() {
-                    start -= 1;
-                }
-                self.delete_range(start, self.cursor);
-            }
+            Readline::Rubout => self.rubout(char::is_whitespace),
+            Readline::FilenameRubout => self.rubout(|c| c.is_whitespace() || c == '/' || c == '\\'),
         }
+    }
+
+    /// Delete separators before the cursor, then back to the next separator.
+    fn rubout(&mut self, is_separator: impl Fn(char) -> bool) {
+        let chars: Vec<char> = self.text.chars().collect();
+        let mut start = self.cursor;
+        while start > 0 && is_separator(chars[start - 1]) {
+            start -= 1;
+        }
+        while start > 0 && !is_separator(chars[start - 1]) {
+            start -= 1;
+        }
+        self.delete_range(start, self.cursor);
     }
 
     fn len(&self) -> usize {
@@ -169,6 +173,18 @@ mod tests {
         assert_eq!(e.text(), "open foo");
         e.apply(Readline::KillLine);
         assert_eq!(e.text(), "");
+    }
+
+    #[test]
+    fn filename_rubout_stops_at_separators() {
+        let mut e = editor("/home/me/file.txt");
+        e.apply(Readline::FilenameRubout);
+        assert_eq!(e.text(), "/home/me/");
+        e.apply(Readline::FilenameRubout);
+        assert_eq!(e.text(), "/home/");
+        let mut e = editor(r"C:\Users\me");
+        e.apply(Readline::FilenameRubout);
+        assert_eq!(e.text(), r"C:\Users\");
     }
 
     #[test]

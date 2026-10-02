@@ -19,6 +19,7 @@ const SCROLL_JS: &str = include_str!("../js/scroll.js");
 const SCROLL_STEP_PX: u32 = 40;
 const COMPLETION_ROW_HEIGHT: i32 = 18;
 const COMPLETION_MAX_ROWS: usize = 12;
+const OVERLAY_MAX_ROWS: usize = 14;
 
 pub struct Tab {
     pub view: BrowserView,
@@ -78,8 +79,9 @@ pub struct Shell {
     pub hint_browser: Option<i32>,
     last_status: String,
     last_tabbar: String,
-    last_completion: CompletionView,
-    last_completion_rows: usize,
+    /// What the overlay shows (a prompt or completions), to skip redraws.
+    last_overlay: String,
+    last_overlay_rows: usize,
     timed_message: u64,
 }
 
@@ -109,8 +111,8 @@ impl Shell {
             hint_browser: None,
             last_status: String::new(),
             last_tabbar: String::new(),
-            last_completion: CompletionView::default(),
-            last_completion_rows: 0,
+            last_overlay: String::new(),
+            last_overlay_rows: 0,
             timed_message: 0,
         }
     }
@@ -252,18 +254,26 @@ pub fn apply(effects: Vec<Effect>) {
                 if from == Mode::Hint {
                     hints::clear();
                 }
+                let prompting = |m: Mode| matches!(m, Mode::Prompt | Mode::YesNo);
+                if prompting(to) != prompting(from) {
+                    focus_for_prompt(prompting(to));
+                }
             }
             Effect::ShowHints { labels } => hints::show(&labels),
             Effect::FilterHints { typed } => hints::filter(&typed),
             Effect::FollowHint { index, url, target } => hints::follow(index, url, target),
             Effect::ConfigChanged(op) => persist(op),
+            Effect::PromptAnswered { id, answer } => crate::prompts::answered(id, answer),
         }
     }
     refresh_ui();
 }
 
 fn run_command(command: Command, count: Option<u32>) {
-    if tabs::run_command(&command, count) || storage::run_command(&command) {
+    if tabs::run_command(&command, count)
+        || storage::run_command(&command)
+        || crate::downloads::run_command(&command, count)
+    {
         return;
     }
     match command {
@@ -389,6 +399,29 @@ pub fn current_session() -> hb_storage::Session {
     .unwrap_or_default()
 }
 
+/// Chromium ignores input to a page while it shows a JavaScript dialog, so
+/// keys for prompts are taken from the status bar's browser instead.
+fn focus_for_prompt(prompting: bool) {
+    let Some((statusbar, tab)) = with(|s| {
+        (
+            s.statusbar.clone(),
+            s.tabs.current().map(|t| t.view.clone()),
+        )
+    }) else {
+        return;
+    };
+    if let Some(bar) = &statusbar {
+        let view = View::from(bar);
+        view.set_focusable(prompting.into());
+        if prompting {
+            view.request_focus();
+        }
+    }
+    if !prompting && let Some(tab) = &tab {
+        View::from(tab).request_focus();
+    }
+}
+
 fn yank(what: YankWhat) {
     let Some((url, title)) =
         with(|s| s.tabs.current().map(|t| (t.url.clone(), t.title.clone()))).flatten()
@@ -473,7 +506,7 @@ pub fn refresh_ui() {
 pub fn position_overlay() {
     let Some(Some((overlay, rows))) = with(|s| {
         let overlay = s.overlay.clone()?;
-        Some((overlay, s.last_completion_rows))
+        Some((overlay, s.last_overlay_rows))
     }) else {
         return;
     };
@@ -508,6 +541,7 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
         "url": current.map_or("", |t| t.url.as_str()),
         "progress": current.and_then(|t| t.progress),
         "load_error": current.is_some_and(|t| t.load_error),
+        "downloads": crate::downloads::summary(),
         "tab_index": s.tabs.current_index() + 1,
         "tab_count": s.tabs.len(),
     })
@@ -550,27 +584,36 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
         }
     }
 
-    let completions = s.engine.completions();
-    let completion_changed = completions != s.last_completion;
-    let rows = completion_rows(&completions);
+    // A prompt takes the overlay; otherwise it shows command completions.
+    let (payload, rows) = match s.engine.prompt_view() {
+        Some(prompt) => {
+            let rows = prompt_rows(s, &prompt);
+            (json!({ "kind": "prompt", "prompt": prompt }), rows)
+        }
+        None => {
+            let rows = completion_rows(&s.engine.completions());
+            let count = rows.len();
+            (json!({ "kind": "rows", "rows": rows }), count)
+        }
+    };
+    let payload = payload.to_string();
+    let overlay_changed = payload != s.last_overlay;
     if s.completion_ready
-        && completion_changed
+        && overlay_changed
         && let Some(frame) = frame_of(&s.completion)
     {
-        scripts.push((frame, serde_json::Value::Array(rows.clone()).to_string()));
+        scripts.push((frame, payload.clone()));
     }
-    let overlay = completion_changed
+    let overlay = overlay_changed
         .then(|| {
             let overlay = s.overlay.clone()?;
-            let bounds = (!rows.is_empty())
-                .then(|| completion_bounds(s, rows.len()))
-                .flatten();
+            let bounds = (rows > 0).then(|| completion_bounds(s, rows)).flatten();
             Some((overlay, bounds))
         })
         .flatten();
-    if s.completion_ready || completions.items.is_empty() {
-        s.last_completion = completions;
-        s.last_completion_rows = rows.len();
+    if s.completion_ready || rows == 0 {
+        s.last_overlay = payload;
+        s.last_overlay_rows = rows;
     }
 
     UiUpdate {
@@ -628,9 +671,27 @@ fn completion_rows(view: &CompletionView) -> Vec<serde_json::Value> {
     }
 }
 
+/// Overlay rows for a prompt: title, wrapped message, input or hint line.
+fn prompt_rows(s: &Shell, prompt: &hb_core::prompt::PromptView) -> usize {
+    const CHAR_WIDTH: i32 = 8;
+    const MAX_MESSAGE_ROWS: usize = 8;
+    let width = s
+        .statusbar
+        .as_ref()
+        .map_or(800, |v| View::from(v).bounds().width);
+    let per_line = (width / CHAR_WIDTH).max(20) as usize;
+    let message_rows: usize = prompt
+        .message
+        .lines()
+        .map(|line| line.chars().count().div_ceil(per_line).max(1))
+        .sum();
+    let input_row = usize::from(prompt.kind == "text");
+    1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + 1
+}
+
 fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     let bar = View::from(s.statusbar.as_ref()?).bounds();
-    let height = rows.min(COMPLETION_MAX_ROWS) as i32 * COMPLETION_ROW_HEIGHT;
+    let height = rows.min(OVERLAY_MAX_ROWS) as i32 * COMPLETION_ROW_HEIGHT;
     Some(Rect {
         x: bar.x,
         y: bar.y - height,

@@ -3,8 +3,12 @@
 
 mod client;
 mod clipboard;
+mod dialogs;
+mod downloads;
 mod eval;
 mod hints;
+mod permissions;
+mod prompts;
 mod renderer;
 mod shell;
 mod storage;
@@ -32,6 +36,19 @@ wrap_app! {
     }
 
     impl App {
+        fn on_before_command_line_processing(
+            &self,
+            process_type: Option<&CefString>,
+            command_line: Option<&mut CommandLine>,
+        ) {
+            // CEF runs Chrome underneath even for Alloy-style windows, and
+            // Chrome's own login prompt would swallow HTTP auth (cef#3603).
+            let browser_process = process_type.is_none_or(|t| t.to_string().is_empty());
+            if browser_process && let Some(command_line) = command_line {
+                command_line.append_switch(Some(&CefString::from("disable-chrome-login-prompt")));
+            }
+        }
+
         fn browser_process_handler(&self) -> Option<BrowserProcessHandler> {
             Some(HbBrowserProcessHandler::new(self.startup.clone()))
         }

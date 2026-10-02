@@ -182,6 +182,7 @@ fn search_engines(value: &Value) -> Result<(), String> {
 }
 
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
+const ASK: &[&str] = &["ask", "true", "false"];
 
 macro_rules! def {
     ($name:literal, $kind:expr, $default:expr, $desc:literal $(, $validate:expr)?) => {
@@ -231,6 +232,48 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         Value::Int(100),
         "How many history entries :open completion shows (0 turns history completion off)"
+    ),
+    def!(
+        "content.desktop_capture",
+        Kind::Enum(ASK),
+        s("ask"),
+        "Let sites capture your screen or desktop audio: ask, true or false"
+    ),
+    def!(
+        "content.geolocation",
+        Kind::Enum(ASK),
+        s("ask"),
+        "Let sites know your location: ask, true or false"
+    ),
+    def!(
+        "content.media.audio_capture",
+        Kind::Enum(ASK),
+        s("ask"),
+        "Let sites use your microphone: ask, true or false"
+    ),
+    def!(
+        "content.media.video_capture",
+        Kind::Enum(ASK),
+        s("ask"),
+        "Let sites use your camera: ask, true or false"
+    ),
+    def!(
+        "content.notifications.enabled",
+        Kind::Enum(ASK),
+        s("ask"),
+        "Let sites show notifications: ask, true or false"
+    ),
+    def!(
+        "downloads.location.directory",
+        Kind::Str,
+        s(""),
+        "Where downloads go; empty means the system Downloads folder"
+    ),
+    def!(
+        "downloads.location.prompt",
+        Kind::Bool,
+        Value::Bool(true),
+        "Ask where to save each download (false saves straight to the directory)"
     ),
     def!(
         "hints.chars",

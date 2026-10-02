@@ -40,6 +40,22 @@ wrap_client! {
             Some(HbLifeSpanHandler::new(self.role))
         }
 
+        fn jsdialog_handler(&self) -> Option<JsdialogHandler> {
+            (self.role == Role::Tab).then(crate::dialogs::HbJsdialogHandler::new)
+        }
+
+        fn request_handler(&self) -> Option<RequestHandler> {
+            (self.role == Role::Tab).then(crate::dialogs::HbRequestHandler::new)
+        }
+
+        fn download_handler(&self) -> Option<DownloadHandler> {
+            (self.role == Role::Tab).then(crate::downloads::HbDownloadHandler::new)
+        }
+
+        fn permission_handler(&self) -> Option<PermissionHandler> {
+            (self.role == Role::Tab).then(crate::permissions::HbPermissionHandler::new)
+        }
+
         fn on_process_message_received(
             &self,
             browser: Option<&mut Browser>,

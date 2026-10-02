@@ -41,6 +41,12 @@ cat >"$work/second.html" <<'EOF'
 <!doctype html><title>second</title>
 EOF
 
+cat >"$work/dialogs.html" <<'EOF'
+<!doctype html><title>dialogs</title>
+<button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
+<a download="saved.txt" href="data:text/plain,hello">download</a>
+EOF
+
 Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
 xvfb_pid=$!
 for _ in $(seq 50); do [[ -s $work/display ]] && break; sleep 0.1; done
@@ -67,6 +73,8 @@ echo "smoke-test on $DISPLAY"
 mkdir -p "$work/base/config"
 cat >"$work/base/config/config.lua" <<EOF
 hb.bind("X", "open -t file://$work/second.html")
+c.downloads.location.directory = "$work/dl"
+c.downloads.location.prompt = false
 EOF
 "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
@@ -174,6 +182,25 @@ expect_exit() {
     [[ $code == 0 ]] && pass || fail "exit code '${code:-still running}'"
 }
 
+step "a JavaScript confirm() is answered with y"
+xdotool key shift+semicolon
+xdotool type --delay 5 "open file://$work/dialogs.html"
+xdotool key Return
+expect_title "dialogs"
+xdotool key f
+sleep 0.5
+xdotool key a
+sleep 0.5
+xdotool key y
+expect_title "confirm true"
+
+step "downloads save to downloads.location.directory"
+xdotool key f
+sleep 0.5
+xdotool key s
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
+[[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
+
 step ":wq with several tabs saves and exits cleanly"
 xdotool key shift+semicolon
 xdotool type --delay 5 "set auto_save.session true"
@@ -184,7 +211,7 @@ expect_exit
 step "restarting restores the session"
 "$BIN" --basedir "$work/base" >>"$work/browser.log" 2>&1 &
 browser_pid=$!
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^second - hackers-browser$" | head -1 || true)
+window=$(timeout "$TIMEOUT" xdotool search --sync --name "^dialogs - hackers-browser$" | head -1 || true)
 [[ -n $window ]] && pass || fail "no restored window"
 
 step ":quit exits cleanly"

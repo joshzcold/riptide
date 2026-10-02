@@ -33,6 +33,8 @@ pub enum Readline {
     UnixLineDiscard,
     KillLine,
     Rubout,
+    /// Delete back to the previous path separator, for file prompts.
+    FilenameRubout,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,6 +127,11 @@ pub enum Command {
     },
     ConfigSource,
     CompletionFocus(FocusDirection),
+    /// Answer the active prompt; `value` is yes/no for y/n questions.
+    PromptAccept {
+        value: Option<bool>,
+        save: bool,
+    },
     QuickmarkAdd {
         url: String,
         name: String,
@@ -161,6 +168,16 @@ pub enum Command {
     HistoryClear {
         force: bool,
     },
+    /// Download a URL, or the current page.
+    Download {
+        url: Option<String>,
+    },
+    /// The count picks a download by number; default: the newest running one.
+    DownloadCancel,
+    /// Open a finished download with the system's default application.
+    DownloadOpen,
+    /// Forget finished, failed and cancelled downloads.
+    DownloadClear,
     Quit {
         /// Save the open tabs as the default session first.
         save: bool,
@@ -266,6 +283,13 @@ pub const COMMANDS: &[CommandSpec] = &[
         "history-clear",
         "Delete all browsing history (needs --force)",
     ),
+    spec("download", "Download a URL (default: the current page)"),
+    spec("download-cancel", "Cancel a download (count: its number)"),
+    spec(
+        "download-open",
+        "Open a finished download (count: its number)",
+    ),
+    spec("download-clear", "Remove finished downloads from the list"),
     spec(
         "quit",
         "Quit the browser; --save keeps the tabs as the default session",
@@ -274,6 +298,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "completion-item-focus",
         "Select the next or previous completion",
     ),
+    hidden("prompt-accept", "Answer the prompt: [--save] [yes|no]"),
     hidden("command-accept", "Execute the command line"),
     hidden(
         "command-history-prev",
@@ -302,6 +327,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Delete from the cursor to the end of the line",
     ),
     hidden("rl-rubout", "Delete the word before the cursor"),
+    hidden(
+        "rl-filename-rubout",
+        "Delete the path component before the cursor",
+    ),
 ];
 
 /// Parse a full command line, which may chain commands with `;;`.
@@ -518,6 +547,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 Command::SessionDelete { name }
             }
         }
+        "download" => Command::Download {
+            url: args.optional().map(String::from),
+        },
+        "download-cancel" => Command::DownloadCancel,
+        "download-open" => Command::DownloadOpen,
+        "download-clear" => Command::DownloadClear,
         "history-clear" => Command::HistoryClear {
             force: args.flag(&["-f", "--force"]).is_some(),
         },
@@ -526,6 +561,16 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             "prev" => FocusDirection::Prev,
             other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
         }),
+        "prompt-accept" => {
+            let save = args.flag(&["-s", "--save"]).is_some();
+            let value = match args.optional() {
+                None => None,
+                Some("yes") => Some(true),
+                Some("no") => Some(false),
+                Some(other) => return Err(args.error(format!("expected yes or no, got {other:?}"))),
+            };
+            Command::PromptAccept { value, save }
+        }
         "quit" => Command::Quit {
             save: args.flag(&["-s", "--save"]).is_some(),
         },
@@ -549,6 +594,7 @@ fn parse_readline(name: &str) -> Option<Readline> {
         "unix-line-discard" => Readline::UnixLineDiscard,
         "kill-line" => Readline::KillLine,
         "rubout" => Readline::Rubout,
+        "filename-rubout" => Readline::FilenameRubout,
         _ => return None,
     })
 }
@@ -956,6 +1002,7 @@ mod tests {
             "session-load",
             "session-delete",
             "completion-item-focus",
+            "prompt-accept",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

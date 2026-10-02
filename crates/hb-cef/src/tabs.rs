@@ -143,6 +143,9 @@ pub fn close(index: usize) {
     if let Some(content) = shell::with(|s| s.content.clone()).flatten() {
         content.remove_child_view(Some(&mut View::from(&tab.view)));
     }
+    if let Some(browser) = tab.browser() {
+        crate::prompts::withdraw_for_browser(browser.identifier(), None);
+    }
     // Dropping the last reference closes the browser, which re-enters the shell.
     drop(tab);
     if was_current && let Some(index) = shell::with(|s| s.tabs.current_index()) {

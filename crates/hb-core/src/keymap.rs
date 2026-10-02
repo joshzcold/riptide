@@ -42,6 +42,22 @@ impl Keymap {
         }
         map.bind(Mode::Hint, "<Escape>", "mode-leave")
             .expect("valid default binding");
+        // Prompts edit text like the command line, minus history and completion.
+        for (keys, cmd) in COMMAND_DEFAULTS
+            .iter()
+            .filter(|(_, c)| c.starts_with("rl-"))
+        {
+            map.bind(Mode::Prompt, keys, cmd)
+                .expect("valid default binding");
+        }
+        for (keys, cmd) in PROMPT_DEFAULTS {
+            map.bind(Mode::Prompt, keys, cmd)
+                .expect("valid default binding");
+        }
+        for (keys, cmd) in YESNO_DEFAULTS {
+            map.bind(Mode::YesNo, keys, cmd)
+                .expect("valid default binding");
+        }
         map.bind(Mode::Insert, "<Escape>", "mode-leave")
             .expect("valid default binding");
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
@@ -147,6 +163,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     (";r", "hint --rapid links tab-bg"),
     (";t", "hint inputs"),
     (";y", "hint links yank"),
+    (";d", "hint links download"),
     ("yy", "yank"),
     ("yt", "yank title"),
     ("yd", "yank domain"),
@@ -161,6 +178,21 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("ZQ", "quit"),
     ("ZZ", "quit --save"),
     ("<Ctrl-q>", "quit"),
+];
+
+const PROMPT_DEFAULTS: &[(&str, &str)] = &[
+    ("<Ctrl-w>", "rl-filename-rubout"),
+    ("<Return>", "prompt-accept"),
+    ("<Escape>", "mode-leave"),
+];
+
+const YESNO_DEFAULTS: &[(&str, &str)] = &[
+    ("y", "prompt-accept yes"),
+    ("n", "prompt-accept no"),
+    ("A", "prompt-accept --save yes"),
+    ("N", "prompt-accept --save no"),
+    ("<Return>", "prompt-accept"),
+    ("<Escape>", "mode-leave"),
 ];
 
 const COMMAND_DEFAULTS: &[(&str, &str)] = &[

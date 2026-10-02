@@ -101,6 +101,10 @@ pub fn follow(index: usize, url: Option<String>, target: HintTarget) {
             }
         }
         (HintTarget::Yank, Some(url)) => clipboard::yank(&url, "URL"),
+        (HintTarget::Download, Some(url)) => crate::downloads::start(&url),
+        (HintTarget::Download, None) => {
+            shell::show_message(Level::Error, "That element has no URL")
+        }
         (HintTarget::Yank, None) => shell::show_message(Level::Error, "That element has no URL"),
         (HintTarget::Hover, _) => mouse_at(&browser, index, false),
         // Elements without a URL (buttons, inputs) are clicked instead.

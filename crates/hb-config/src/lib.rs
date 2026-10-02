@@ -9,6 +9,7 @@
 
 pub mod autoconfig;
 pub mod cli;
+pub mod downloads;
 pub mod lua;
 pub mod lua_types;
 pub mod paths;

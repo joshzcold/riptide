@@ -29,6 +29,8 @@ pub enum HintTarget {
     Fill,
     /// Open its URL in the current tab.
     Current,
+    /// Download its URL.
+    Download,
 }
 
 macro_rules! names {
@@ -64,6 +66,7 @@ names!(HintTarget {
     Hover => "hover",
     Fill => "fill",
     Current => "current",
+    Download => "download",
 });
 
 /// A parsed `:hint` command.
