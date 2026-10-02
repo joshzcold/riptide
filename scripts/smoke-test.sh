@@ -89,8 +89,12 @@ fi
 pass
 xdotool windowfocus --sync "$window"
 
-step "clicking a field enters insert mode"
-xdotool mousemove --window "$window" 50 40 click 1
+# Focus the field through a hint (a real CEF click), which doesn't depend on
+# where the window lands on the display, unlike an xdotool click.
+step "focusing a field enters insert mode"
+xdotool key f
+sleep 0.5
+xdotool key a
 sleep 0.3
 xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc c=no"
