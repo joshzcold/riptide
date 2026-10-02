@@ -5,6 +5,11 @@ set -euo pipefail
 
 BIN=${BIN:-target/debug/hackers-browser}
 TIMEOUT=${TIMEOUT:-15}
+# CI runners are slower, especially on the first page load; scale the pauses
+# that give the browser time to react to keys.
+SLOW=${SLOW:-${CI:+3}}
+SLOW=${SLOW:-1}
+nap() { sleep "$(awk "BEGIN { print $1 * $SLOW }")"; }
 
 for tool in Xvfb xdotool; do
     command -v "$tool" >/dev/null || { echo "smoke-test: $tool is required" >&2; exit 1; }
@@ -39,6 +44,21 @@ EOF
 
 cat >"$work/second.html" <<'EOF'
 <!doctype html><title>second</title>
+EOF
+
+cat >"$work/isolation.html" <<'EOF'
+<!doctype html><title>isolation</title>
+<iframe id="f" src="hb://ui/statusbar.html"></iframe>
+<script>
+setTimeout(() => {
+  let frame;
+  try {
+    const d = document.getElementById('f').contentDocument;
+    frame = d && d.getElementById('bar') ? 'ui-loaded' : 'empty';
+  } catch (e) { frame = 'cross-origin'; }
+  document.title = `hb=${typeof window.hb} frame=${frame}`;
+}, 1000);
+</script>
 EOF
 
 cat >"$work/dialogs.html" <<'EOF'
@@ -88,14 +108,16 @@ if [[ -z $window ]]; then
 fi
 pass
 xdotool windowfocus --sync "$window"
+# Let the first page settle before the first keys (cold caches on CI).
+nap 1
 
 # Focus the field through a hint (a real CEF click), which doesn't depend on
 # where the window lands on the display, unlike an xdotool click.
 step "focusing a field enters insert mode"
 xdotool key f
-sleep 0.5
+nap 0.5
 xdotool key a
-sleep 0.3
+nap 0.3
 xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc c=no"
 
@@ -105,7 +127,7 @@ expect_title "s=200 k=3 v=abc c=no"
 
 step "G scrolls to the bottom without page keys"
 xdotool key shift+g
-sleep 0.5
+nap 0.5
 title=$(xdotool getwindowname "$window")
 [[ $title =~ ^s=([0-9]+)\ k=3\  && ${BASH_REMATCH[1]} -gt 3000 ]] && pass || fail "title was '$title'"
 
@@ -122,7 +144,7 @@ expect_first_page() {
 
 step "f + label clicks the button for real"
 xdotool key f
-sleep 0.5
+nap 0.5
 xdotool key s
 title=""
 for _ in $(seq $((TIMEOUT * 10))); do
@@ -158,7 +180,7 @@ step ":set persists to autoconfig.toml"
 xdotool key shift+semicolon
 xdotool type --delay 5 "set messages.timeout 5000"
 xdotool key Return
-sleep 0.5
+nap 0.5
 grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && pass || fail "autoconfig.toml not written"
 
 step ":open completes from history with Tab"
@@ -168,7 +190,7 @@ xdotool key Return
 expect_title "about:blank"
 xdotool key shift+semicolon
 xdotool type --delay 5 "open secon"
-sleep 0.3
+nap 0.3
 xdotool key Tab Return
 expect_title "second"
 
@@ -186,21 +208,27 @@ expect_exit() {
     [[ $code == 0 ]] && pass || fail "exit code '${code:-still running}'"
 }
 
+step "web pages can't see or embed hb:// UI pages"
+xdotool key shift+semicolon
+xdotool type --delay 5 "open file://$work/isolation.html"
+xdotool key Return
+expect_title "hb=undefined frame=empty"
+
 step "a JavaScript confirm() is answered with y"
 xdotool key shift+semicolon
 xdotool type --delay 5 "open file://$work/dialogs.html"
 xdotool key Return
 expect_title "dialogs"
 xdotool key f
-sleep 0.5
+nap 0.5
 xdotool key a
-sleep 0.5
+nap 0.5
 xdotool key y
 expect_title "confirm true"
 
 step "downloads save to downloads.location.directory"
 xdotool key f
-sleep 0.5
+nap 0.5
 xdotool key s
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
 [[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
