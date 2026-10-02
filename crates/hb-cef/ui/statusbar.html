@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #000000;
+    --fg: #ffffff;
+    --insert-bg: #006400;
+    --passthrough-bg: #00008b;
+    --error-bg: #ff0000;
+    --warning-bg: #ff8c00;
+    --https: #00ff00;
+    --http: #ffffff;
+    --error-fg: #ffa500;
+    --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font: var(--font);
+    user-select: none;
+    cursor: default;
+  }
+  #bar {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 4px;
+    white-space: pre;
+    gap: 1ch;
+  }
+  #bar.insert { background: var(--insert-bg); }
+  #bar.passthrough { background: var(--passthrough-bg); }
+  #bar.msg-error { background: var(--error-bg); }
+  #bar.msg-warning { background: var(--warning-bg); }
+  #left, #right { line-height: 1.5; }
+  #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
+  #url { overflow: hidden; text-overflow: ellipsis; }
+  #url.https { color: var(--https); }
+  #url.http { color: var(--http); }
+  #url.error { color: var(--error-fg); }
+  .cursor { background: var(--fg); color: var(--bg); }
+</style>
+</head>
+<body>
+<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="url"></span><span id="progress"></span></span></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function renderCommandLine(el, { text, cursor }) {
+    const chars = Array.from(text);
+    el.textContent = chars.slice(0, cursor).join("");
+    const caret = document.createElement("span");
+    caret.className = "cursor";
+    caret.textContent = chars[cursor] ?? " ";
+    el.append(caret, chars.slice(cursor + 1).join(""));
+  }
+
+  window.hbRender = (state) => {
+    const bar = $("bar");
+    const left = $("left");
+    bar.className = state.mode;
+    if (state.command_line) {
+      renderCommandLine(left, state.command_line);
+    } else if (state.message) {
+      bar.classList.add(`msg-${state.message.level}`);
+      left.textContent = state.message.text;
+    } else if (state.mode === "normal") {
+      left.textContent = "";
+    } else {
+      left.textContent = `-- ${state.mode.toUpperCase()} MODE --`;
+    }
+    $("keys").textContent = state.keystring;
+    const url = $("url");
+    url.textContent = state.url;
+    url.className = state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http";
+    $("progress").textContent = state.progress == null ? "" : `[${Math.round(state.progress * 100)}%]`;
+  };
+</script>
+</body>
+</html>

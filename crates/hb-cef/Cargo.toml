@@ -1,0 +1,18 @@
+[package]
+name = "hb-cef"
+description = "CEF integration: windows, tabs, handlers, renderer bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+sandbox = ["cef/sandbox"]
+
+[dependencies]
+hb-core.workspace = true
+cef.workspace = true
+directories.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

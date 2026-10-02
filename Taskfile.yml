@@ -1,0 +1,82 @@
+# https://taskfile.dev
+version: '3'
+
+vars:
+  # Read from Cargo.lock so the downloaded CEF always matches the pinned `cef` crate.
+  CEF_CRATE_VERSION:
+    sh: awk '/^name = "cef"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock
+  CEF_BUILD:
+    sh: echo "{{.CEF_CRATE_VERSION}}" | cut -d+ -f2
+  CEF_RS_DIR: target/cef-rs-{{.CEF_CRATE_VERSION}}
+
+env:
+  CEF_PATH:
+    sh: echo "${CEF_PATH:-$HOME/.local/share/cef}"
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - "{{.TASK_EXE}} --list"
+
+  setup:
+    desc: Download the CEF binaries that match the pinned cef crate into $CEF_PATH
+    status:
+      - grep -q "cef_binary_{{.CEF_BUILD}}+" "$CEF_PATH/archive.json"
+    cmds:
+      - rm -rf "{{.CEF_RS_DIR}}"
+      - git clone --depth 1 --branch "cef-v{{.CEF_CRATE_VERSION}}" https://github.com/tauri-apps/cef-rs "{{.CEF_RS_DIR}}"
+      - cd "{{.CEF_RS_DIR}}" && cargo run -q -p export-cef-dir -- --force "$CEF_PATH"
+
+  build:
+    desc: Debug build
+    deps: [setup]
+    cmds:
+      - cargo build
+
+  release:
+    desc: Optimized build
+    deps: [setup]
+    cmds:
+      - cargo build --release
+
+  run:
+    desc: 'Run the browser; pass a URL after --, e.g. task run -- example.com'
+    deps: [setup]
+    cmds:
+      - cargo run --bin hackers-browser -- {{.CLI_ARGS}}
+
+  test:
+    desc: Unit tests (CEF-free core)
+    cmds:
+      - cargo test -p hb-core
+
+  smoke:
+    desc: Drive the real browser on a throwaway X display (needs Xvfb and xdotool)
+    deps: [build]
+    cmds:
+      - ./scripts/smoke-test.sh
+
+  fmt:
+    desc: Format the code
+    cmds:
+      - cargo fmt
+
+  lint:
+    desc: Check formatting and run clippy
+    deps: [setup]
+    cmds:
+      - cargo fmt --check
+      - cargo clippy --all-targets -- -D warnings
+
+  check:
+    desc: Everything CI would run - lint, unit tests, smoke test
+    cmds:
+      - task: lint
+      - task: test
+      - task: smoke
+
+  clean:
+    desc: Remove build output (keeps the shared CEF binaries)
+    cmds:
+      - cargo clean
