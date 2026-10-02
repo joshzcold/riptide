@@ -136,6 +136,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
 - [ ] Favicons in the tab bar and completion (M14)
 - [ ] Multiple windows
+- [ ] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Today there is one window-wide mode, which `normal` resets and `persist` carries over.
 
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
@@ -247,7 +248,7 @@ Notes:
 - **Paths:** XDG on Linux. On macOS, `~/.config` for config and Application Support for data. On Windows, `%APPDATA%` for config and `%LOCALAPPDATA%` for data. `XDG_*` is honoured everywhere, and `--basedir` overrides all. Unit tests cover all three platforms' rules, but macOS and Windows builds have not been run yet.
 
 Gaps:
-- Per-domain settings (with M8).
+- Per-domain settings (with M8). Answering a permission prompt with "always" should save a per-domain setting to `autoconfig.toml`, as qutebrowser does, which also fixes camera and microphone answers being forgotten.
 - Watching config files for changes (`:config-source` reloads by hand).
 - `:config-edit`.
 - Importing qutebrowser's `config.py`.
@@ -284,6 +285,7 @@ Gaps:
 - No per-download bar.
 - No path completion in the save prompt.
 - No command to reset per-site permissions (Chromium's saved answers).
+- Camera and microphone answers are forgotten on restart, so video-call sites ask every session.
 - Closing a tab with `d` skips leave-page warnings.
 - File-upload dialogs (`<input type=file>`) use CEF's default and are untested.
 - TLS errors have no override.
