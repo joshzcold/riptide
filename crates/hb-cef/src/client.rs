@@ -379,8 +379,16 @@ wrap_life_span_handler! {
             }
         }
 
-        fn on_after_created(&self, _browser: Option<&mut Browser>) {
+        fn on_after_created(&self, browser: Option<&mut Browser>) {
             shell::with(|s| s.open_browsers += 1);
+            // Focus asked for before the browser existed doesn't always reach
+            // it, which drops the first keys typed into a new tab.
+            let view = shell::with_tab(browser, |s, _, current| current.then(|| s.tabs.current().map(|t| t.view.clone())));
+            if let Some(Some(Some(view))) = view
+                && !shell::with(|s| matches!(s.engine.mode(), hb_core::Mode::Prompt | hb_core::Mode::YesNo)).unwrap_or(false)
+            {
+                View::from(&view).request_focus();
+            }
         }
 
         fn on_before_close(&self, _browser: Option<&mut Browser>) {
