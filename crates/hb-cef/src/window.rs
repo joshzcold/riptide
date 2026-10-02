@@ -15,8 +15,9 @@ pub const TABBAR_HEIGHT: i32 = 20;
 const CHROME_BACKGROUND: u32 = 0xFF00_0000;
 
 /// Open the main window with one tab per URL, or `url.start_pages` if none.
-pub fn create(urls: Vec<String>) {
-    let mut delegate = HbWindowDelegate::new(urls);
+/// `commands` (from the command line) run once the tabs are open.
+pub fn create(urls: Vec<String>, commands: Vec<String>) {
+    let mut delegate = HbWindowDelegate::new(urls, commands);
     window_create_top_level(Some(&mut delegate));
 }
 
@@ -44,6 +45,7 @@ pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
 wrap_window_delegate! {
     struct HbWindowDelegate {
         urls: Vec<String>,
+        commands: Vec<String>,
     }
 
     impl ViewDelegate {
@@ -107,24 +109,21 @@ wrap_window_delegate! {
             window.show();
             let restore = self.urls.is_empty()
                 && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
-            if restore {
-                match storage::load_session(DEFAULT_SESSION) {
-                    Ok(session) => return tabs::restore(&session),
-                    Err(e) => tracing::info!("no session to restore: {e}"),
-                }
+            let restored = restore
+                && match storage::load_session(DEFAULT_SESSION) {
+                    Ok(session) => {
+                        tabs::restore(&session);
+                        true
+                    }
+                    Err(e) => {
+                        tracing::info!("no session to restore: {e}");
+                        false
+                    }
+                };
+            if !restored {
+                open_start_tabs(&self.urls);
             }
-            let urls = shell::with(|s| {
-                if self.urls.is_empty() {
-                    s.engine.settings().list("url.start_pages").to_vec()
-                } else {
-                    self.urls.iter().map(|u| s.fuzzy_url(u)).collect()
-                }
-            })
-            .unwrap_or_default();
-            let urls = if urls.is_empty() { vec!["about:blank".to_string()] } else { urls };
-            for (i, url) in urls.iter().enumerate() {
-                tabs::open(url, Position::Last, i == 0);
-            }
+            crate::remote::run_commands(&self.commands);
         }
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
@@ -220,6 +219,26 @@ wrap_browser_view_delegate! {
             tabs::add_view(popup.clone(), position, !background);
             1
         }
+    }
+}
+
+/// One tab per command-line URL, or `url.start_pages` if there were none.
+fn open_start_tabs(urls: &[String]) {
+    let urls = shell::with(|s| {
+        if urls.is_empty() {
+            s.engine.settings().list("url.start_pages").to_vec()
+        } else {
+            urls.iter().map(|u| s.fuzzy_url(u)).collect()
+        }
+    })
+    .unwrap_or_default();
+    let urls = if urls.is_empty() {
+        vec!["about:blank".to_string()]
+    } else {
+        urls
+    };
+    for (i, url) in urls.iter().enumerate() {
+        tabs::open(url, Position::Last, i == 0);
     }
 }
 

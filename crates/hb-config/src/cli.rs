@@ -8,6 +8,8 @@ pub struct Cli {
     pub basedir: Option<PathBuf>,
     pub print_paths: bool,
     pub lua_types: bool,
+    /// Where URLs open: tab, tab-bg, window or current.
+    pub target: Option<String>,
     pub help: bool,
     pub version: bool,
     pub urls: Vec<String>,
@@ -20,6 +22,10 @@ Options:
   --basedir DIR   Keep config in DIR/config and browser data in DIR/data
   --paths         Print the config and data directories, then exit
   --lua-types     Print lua-language-server definitions for config.lua
+  --target WHERE  Open URLs in a running browser as: tab, tab-bg, window, current
+
+Arguments starting with ':' run as commands, e.g. hackers-browser ':open -t x'.
+If the browser is already running for this profile, the arguments go to it.
   -h, --help      Show this help
   -V, --version   Show the version
 
@@ -37,6 +43,15 @@ impl Cli {
                 }
                 "--paths" => cli.print_paths = true,
                 "--lua-types" => cli.lua_types = true,
+                "--target" => {
+                    let target = args
+                        .next()
+                        .ok_or("--target needs tab, tab-bg, window or current")?;
+                    if !matches!(target.as_str(), "tab" | "tab-bg" | "window" | "current") {
+                        return Err(format!("--target: unknown target {target:?}"));
+                    }
+                    cli.target = Some(target);
+                }
                 "-h" | "--help" => cli.help = true,
                 "-V" | "--version" => cli.version = true,
                 _ => match arg.strip_prefix("--basedir=") {

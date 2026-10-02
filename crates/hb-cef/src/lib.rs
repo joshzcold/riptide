@@ -11,6 +11,7 @@ mod help;
 mod hints;
 mod permissions;
 mod prompts;
+mod remote;
 mod renderer;
 mod scheme;
 mod shell;
@@ -31,6 +32,7 @@ use hb_core::{Engine, Keymap};
 struct Startup {
     paths: Paths,
     urls: Vec<String>,
+    commands: Vec<String>,
 }
 
 wrap_app! {
@@ -83,8 +85,9 @@ wrap_browser_process_handler! {
             shell::install(shell::Shell::new(engine, startup.paths));
             scheme::install();
             errors.extend(shell::load_config());
-            window::create(startup.urls);
+            window::create(startup.urls, startup.commands);
             report_config_errors(&errors);
+            remote::listen();
         }
     }
 }
@@ -175,6 +178,17 @@ pub fn run() -> i32 {
     let Some(Ok((cli, paths))) = early else {
         return 1;
     };
+    if let Some(code) = remote::hand_off(&paths, &cli) {
+        return code;
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let (mut urls, mut commands) = (Vec::new(), Vec::new());
+    for arg in &cli.urls {
+        match hb_config::remote::classify(arg, &cwd) {
+            hb_config::remote::Item::Url(url) => urls.push(url),
+            hb_config::remote::Item::Command(command) => commands.push(command),
+        }
+    }
     let profile = paths.data_dir.join("default");
     if let Err(e) = std::fs::create_dir_all(&profile) {
         eprintln!("hackers-browser: cannot create {}: {e}", profile.display());
@@ -192,7 +206,8 @@ pub fn run() -> i32 {
     };
     let mut app = HbApp::new(Some(Startup {
         paths,
-        urls: cli.urls,
+        urls,
+        commands,
     }));
     if initialize(
         Some(args.as_main_args()),
@@ -206,5 +221,6 @@ pub fn run() -> i32 {
     }
     run_message_loop();
     shutdown();
+    remote::cleanup();
     0
 }

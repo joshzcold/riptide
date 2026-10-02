@@ -322,6 +322,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Milliseconds before a status bar message clears (0 keeps it)"
     ),
     def!(
+        "new_instance_open_target",
+        Kind::Enum(&["tab", "tab-bg", "window"]),
+        s("tab"),
+        "Where URLs from a second hackers-browser invocation open"
+    ),
+    def!(
         "tabs.favicons.show",
         Kind::Enum(&["always", "never", "pinned"]),
         s("always"),

@@ -23,6 +23,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `input.insert_mode.auto_leave` | boolean | `true` | Leave insert mode when focus leaves an editable element |
 | `input.insert_mode.leave_on_load` | boolean | `true` | Leave insert mode when a new page starts loading |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
+| `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second hackers-browser invocation open |
 | `tabs.favicons.show` | always \| never \| pinned | `always` | Show site icons in the tab bar: always, never, or only on pinned tabs |
 | `tabs.last_close` | ignore \| blank \| startpage \| default-page \| close | `ignore` | What closing the last tab does |
 | `tabs.mode_on_change` | normal \| persist | `normal` | Mode after switching tabs: back to normal, or keep insert/passthrough |

@@ -99,6 +99,18 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 
 `:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
 
+### From the terminal
+
+While the browser is running, `hackers-browser` hands its arguments to that instance (per profile, so `--basedir` instances stay separate) and exits:
+
+```sh
+hackers-browser https://example.com        # opens per new_instance_open_target (default: new tab)
+hackers-browser --target tab-bg notes.html # relative files become file:// URLs
+hackers-browser ':tab-focus 1' ':reload'   # arguments starting with ':' run as commands
+```
+
+The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/hackers-browser/` (or the data directory), inside a `0700` directory and with `0600` permissions, so only your user can send commands. On Windows each start is a new instance for now.
+
 ### Internal pages
 
 The tab bar, status bar and overlay are HTML pages served from the browser itself at `hb://ui/…`. Web pages can't link to, frame or redirect to `hb://` addresses, and only `hb://ui/` pages get the `hb.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
@@ -171,7 +183,7 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 | Crate | Purpose |
 |---|---|
 | `crates/hb-core` | Modes, key parsing, bindings, commands, command line, URL guessing. No CEF dependency; unit tested. |
-| `crates/hb-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, generated Lua types and settings docs. |
+| `crates/hb-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, generated Lua types and settings docs. |
 | `crates/hb-storage` | History (SQLite), quickmarks and bookmarks (qutebrowser formats), sessions (TOML). |
 | `crates/hb-cef` | CEF integration: window layout, handlers, renderer-process bindings, status bar and completion UI. |
 | `crates/hb` | The `hackers-browser` binary. |
@@ -186,6 +198,10 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 | `./task check` | All of the above |
 
 The smoke test uses a temporary profile, so it never touches your browsing data.
+
+### Testing by hand
+
+The [local-testing skill](.claude/skills/local-testing/SKILL.md) describes how to drive the browser on a separate Xvfb display with a scratch `--basedir`, without touching a browser you're running yourself.
 
 ### CI
 

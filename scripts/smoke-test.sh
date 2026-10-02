@@ -228,6 +228,11 @@ xdotool type --delay 5 "help :open"
 xdotool key Return
 expect_title "hackers-browser help"
 
+step "a second invocation hands its arguments to this browser"
+code=0
+"$BIN" --basedir "$work/base" "file://$work/second.html" ":tab-focus -1" || code=$?
+if (( code == 0 )); then expect_title "second"; else fail "second invocation exited with $code"; fi
+
 step "web pages can't see or embed hb:// UI pages"
 xdotool key shift+semicolon
 xdotool type --delay 5 "open file://$work/isolation.html"

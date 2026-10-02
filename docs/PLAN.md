@@ -364,7 +364,23 @@ Original plan:
   - Setting `tabs.favicons.show` (`always`, `never`, `pinned`).
   - Fetching icons is a network request the page asked for anyway, so it adds no new tracking. Size and format are capped, and only images are accepted.
 
-### M15 — Commands from the terminal (single instance + IPC)
+### M15 — Commands from the terminal (single instance + IPC) ✅ done 2026-10-02 (Unix)
+
+Result:
+- **Code:** `hb_config::remote` (protocol, socket paths, client, server, argument handling; unit tested over a real socket) and `hb-cef/src/remote.rs`.
+- **Startup:** before CEF starts, the browser tries the profile's socket. If an instance answers, it hands over its arguments (URLs per `new_instance_open_target` or `--target`, `:commands` run in order) and exits. Otherwise it binds the socket and serves it once CEF is up, posting each request to the UI thread and raising the window. A first instance also runs `:commands` given on its command line.
+- **Security:**
+  - Socket in a `0700` directory, mode `0600`, one per data directory.
+  - A stale socket from a crash is replaced; a live one is never taken over.
+  - Requests are versioned JSON lines, capped at 1 MB.
+- **Tests:** a smoke step sends a URL and a command from a second invocation.
+
+Not done:
+- Windows named pipes (each start is a new instance there).
+- Errors from remote commands aren't sent back to the caller (it's one-way, as in qutebrowser).
+- Chromium exits on SIGTERM without our cleanup, leaving a stale socket that the next start replaces.
+
+Original plan:
 - **Behaviour:** `hackers-browser example.com` or `hackers-browser ':open -t example.com' ':tab-focus 1'`, run while the browser is already open, sends the URLs and commands to that instance and exits, like qutebrowser.
   - A URL opens per `new_instance_open_target` (`tab`, `tab-bg`, `window`).
   - An argument starting with `:` runs as a command.
