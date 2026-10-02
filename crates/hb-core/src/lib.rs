@@ -3,6 +3,7 @@
 
 pub mod cmdline;
 pub mod command;
+pub mod completion;
 pub mod config;
 pub mod engine;
 pub mod hints;

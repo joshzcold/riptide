@@ -7,6 +7,7 @@ mod eval;
 mod hints;
 mod renderer;
 mod shell;
+mod storage;
 mod tabs;
 mod ui;
 mod window;
@@ -51,8 +52,10 @@ wrap_browser_process_handler! {
             let Some(startup) = self.startup.clone() else { return };
             let mut engine = Engine::new(Keymap::defaults());
             engine.set_clipboard_reader(clipboard::read);
+            engine.set_completion_source(storage::complete);
+            let mut errors = storage::open(&startup.paths);
             shell::install(shell::Shell::new(engine, startup.paths));
-            let errors = shell::load_config();
+            errors.extend(shell::load_config());
             window::create(startup.urls);
             report_config_errors(&errors);
         }

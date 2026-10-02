@@ -214,8 +214,23 @@ pub static SETTINGS: &[SettingDef] = &[
     def!(
         "aliases",
         Kind::Map,
-        map(&[("q", "quit"), ("qa", "quit"), ("wq", "quit")]),
+        map(&[("q", "quit"), ("qa", "quit"), ("wq", "quit --save")]),
         "Command aliases: name → command"
+    ),
+    def!(
+        "auto_save.session",
+        Kind::Bool,
+        Value::Bool(false),
+        "Save the open tabs as the 'default' session on quit, and restore them at startup"
+    ),
+    def!(
+        "completion.web_history.max_items",
+        Kind::Int {
+            min: 0,
+            max: 10_000
+        },
+        Value::Int(100),
+        "How many history entries :open completion shows (0 turns history completion off)"
     ),
     def!(
         "hints.chars",

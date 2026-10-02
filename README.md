@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0, 3, 4 and 5: core modes, tabs, hints and config). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
+**Status:** early prototype (milestones 0 and 3–6: core modes, tabs, hints, config and storage). One window, Linux/X11 only, Chromium sandbox disabled. Not ready for daily browsing.
 
 ## Building
 
@@ -61,6 +61,17 @@ Every setting is listed in [docs/settings.md](docs/settings.md), and the complet
 - `:bind <Ctrl-x> tab-close` adds a binding (`--mode insert` for other modes); `:bind <Ctrl-x>` shows one; `:unbind d` removes one.
 - `:config-source` reloads every file. Errors show in the status bar with `file:line`, and the rest of the file still applies.
 
+### Browsing data
+
+| What | Where | Format |
+|---|---|---|
+| History | `<data>/history.sqlite` | SQLite; `:history-clear --force` empties it |
+| Quickmarks | `<config>/quickmarks` | qutebrowser's: one `name url` per line |
+| Bookmarks | `<config>/bookmarks/urls` | qutebrowser's: one `url title` per line |
+| Sessions | `<data>/sessions/<name>.toml` | TOML |
+
+Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, so you can keep them in dotfiles or copy yours from `~/.config/qutebrowser/`. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
+
 ### Lua
 
 `config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `hb.set/get/bind/unbind`, `hb.platform` (`linux`, `macos`, `windows`), `hb.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
@@ -100,6 +111,11 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `;r` | Rapid hinting: open several links in background tabs (leave with `Escape`) |
 | `yy` / `yt` / `yd` | Yank the URL / title / domain |
 | `pp` / `PP` | Open the clipboard contents here / in a new tab |
+| `m` | Quickmark this page (type a name, then `Return`) |
+| `b` / `B` | Open a quickmark here / in a new tab |
+| `M` | Bookmark this page |
+| `gb` / `gB` | Open a bookmark here / in a new tab |
+| `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |
 | `Ctrl-v` | Passthrough mode (leave with `Shift-Escape`) |
@@ -107,6 +123,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
 Links that open new windows (`target=_blank`, `window.open`) open as tabs next to the current one, keeping `window.opener`. Closing the last tab is ignored, like qutebrowser.
+
+In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from quickmarks, bookmarks and history (every typed word must match, in any order). `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
 The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 
@@ -116,6 +134,7 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 |---|---|
 | `crates/hb-core` | Modes, key parsing, bindings, commands, command line, URL guessing. No CEF dependency; unit tested. |
 | `crates/hb-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, generated Lua types and settings docs. |
+| `crates/hb-storage` | History (SQLite), quickmarks and bookmarks (qutebrowser formats), sessions (TOML). |
 | `crates/hb-cef` | CEF integration: window layout, handlers, renderer-process bindings, status bar and completion UI. |
 | `crates/hb` | The `hackers-browser` binary. |
 
@@ -123,7 +142,7 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 
 | Command | What it runs |
 |---|---|
-| `./task test` | Unit tests for `hb-core` and `hb-config` (modes, keys, commands, settings, config files, paths for all three platforms); no browser needed |
+| `./task test` | Unit tests for `hb-core`, `hb-config` and `hb-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
 | `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
 | `./task lint` | `cargo fmt --check` and `clippy -D warnings` |
 | `./task check` | All of the above |

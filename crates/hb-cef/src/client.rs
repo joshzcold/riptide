@@ -4,7 +4,7 @@ use hb_core::engine::Level;
 use hb_core::vk::{self, RawKey};
 
 use crate::renderer::{EVAL_RESULT_MESSAGE, FOCUS_MESSAGE};
-use crate::{eval, shell, tabs, ui};
+use crate::{eval, shell, storage, tabs, ui};
 
 #[cfg(target_os = "linux")]
 type OsEvent = sys::XEvent;
@@ -159,11 +159,14 @@ wrap_display_handler! {
 
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
-            shell::with_tab(browser, |s, index, _| {
-                if let Some(tab) = s.tabs.get_mut(index) {
-                    tab.title = title;
-                }
+            let url = shell::with_tab(browser, |s, index, _| {
+                let tab = s.tabs.get_mut(index)?;
+                tab.title = title.clone();
+                Some(tab.url.clone())
             });
+            if let Some(Some(url)) = url {
+                storage::set_title(&url, &title);
+            }
             shell::refresh_ui();
         }
 
@@ -221,9 +224,17 @@ wrap_load_handler! {
             };
             match self.role {
                 Role::Tab => {
-                    let error = shell::with_tab(browser, |s, index, _| s.tabs.get_mut(index)?.pending_error.take());
-                    if let Some((url, error)) = error.flatten() {
+                    let done = shell::with_tab(browser, |s, index, _| {
+                        let tab = s.tabs.get_mut(index)?;
+                        let visit = (!tab.load_error).then(|| (tab.url.clone(), tab.title.clone()));
+                        Some((tab.pending_error.take(), visit))
+                    });
+                    let Some(Some((error, visit))) = done else { return };
+                    if let Some((url, error)) = error {
                         shell::exec_js(frame, &ui::error_page_js(&url, &error));
+                    }
+                    if let Some((url, title)) = visit {
+                        storage::record_visit(&url, &title);
                     }
                     return;
                 }

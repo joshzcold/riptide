@@ -6,6 +6,7 @@ use hb_core::tabs::Position;
 
 use crate::client::{HbClient, Role};
 use crate::shell;
+use crate::storage::{self, DEFAULT_SESSION};
 use crate::tabs;
 use crate::ui;
 
@@ -104,6 +105,14 @@ wrap_window_delegate! {
             });
 
             window.show();
+            let restore = self.urls.is_empty()
+                && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
+            if restore {
+                match storage::load_session(DEFAULT_SESSION) {
+                    Ok(session) => return tabs::restore(&session),
+                    Err(e) => tracing::info!("no session to restore: {e}"),
+                }
+            }
             let urls = shell::with(|s| {
                 if self.urls.is_empty() {
                     s.engine.settings().list("url.start_pages").to_vec()
@@ -139,11 +148,18 @@ wrap_window_delegate! {
         fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
             // Let every page run its unload handlers; CEF closes the window
             // once all of them agree.
-            let hosts: Vec<BrowserHost> = shell::with(|s| {
+            // CEF may ask again while pages unload; save the session only the first time.
+            let save = shell::with(|s| {
+                let first = !s.window_closing;
                 s.window_closing = true;
-                s.tabs.iter().filter_map(|t| t.browser()?.host()).collect()
+                first && (s.save_session_on_quit || s.engine.settings().bool("auto_save.session"))
             })
-            .unwrap_or_default();
+            .unwrap_or(false);
+            if save && let Err(e) = storage::save_session(DEFAULT_SESSION) {
+                tracing::warn!("could not save session: {e}");
+            }
+            let hosts: Vec<BrowserHost> = shell::with(|s| s.tabs.iter().filter_map(|t| t.browser()?.host()).collect())
+                .unwrap_or_default();
             let closable = hosts.iter().map(|h| h.try_close_browser()).filter(|&ok| ok == 0).count() == 0;
             closable.into()
         }

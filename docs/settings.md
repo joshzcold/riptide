@@ -6,7 +6,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `aliases` | table<string, string> | `{"q":"quit","qa":"quit","wq":"quit"}` | Command aliases: name → command |
+| `aliases` | table<string, string> | `{"q":"quit","qa":"quit","wq":"quit --save"}` | Command aliases: name → command |
+| `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
+| `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |
 | `hints.uppercase` | boolean | `false` | Show hint labels in upper case |
 | `input.forward_unbound_keys` | all \| auto \| none | `auto` | Pass unbound keys to the page in normal mode (auto: all but plain letters and digits) |

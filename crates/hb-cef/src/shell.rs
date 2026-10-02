@@ -6,13 +6,14 @@ use std::cell::RefCell;
 use cef::*;
 use hb_config::{AutoConfig, Paths};
 use hb_core::command::{Direction, OpenTarget, YankWhat};
-use hb_core::engine::{Completion, Level};
+use hb_core::completion::CompletionView;
+use hb_core::engine::Level;
 use hb_core::tabs::{Position, TabList};
 use hb_core::url::fuzzy_url;
 use hb_core::{Command, Effect, Engine, Mode};
 use serde_json::json;
 
-use crate::{clipboard, hints, tabs};
+use crate::{clipboard, hints, storage, tabs};
 
 const SCROLL_JS: &str = include_str!("../js/scroll.js");
 const SCROLL_STEP_PX: u32 = 40;
@@ -69,13 +70,16 @@ pub struct Shell {
     pub popup_in_background: bool,
     /// Set once the window starts closing, so tab closes go through CEF.
     pub window_closing: bool,
+    /// Set by `:quit --save`; `auto_save.session` has the same effect.
+    pub save_session_on_quit: bool,
     pub open_browsers: usize,
     pub suppress_char: bool,
     /// Browser id of the tab currently showing hint labels.
     pub hint_browser: Option<i32>,
     last_status: String,
     last_tabbar: String,
-    last_completion: Vec<Completion>,
+    last_completion: CompletionView,
+    last_completion_rows: usize,
     timed_message: u64,
 }
 
@@ -99,12 +103,14 @@ impl Shell {
             completion_ready: false,
             popup_in_background: false,
             window_closing: false,
+            save_session_on_quit: false,
             open_browsers: 0,
             suppress_char: false,
             hint_browser: None,
             last_status: String::new(),
             last_tabbar: String::new(),
-            last_completion: Vec::new(),
+            last_completion: CompletionView::default(),
+            last_completion_rows: 0,
             timed_message: 0,
         }
     }
@@ -205,12 +211,16 @@ pub fn load_config() -> Vec<String> {
         }
         s.autoconfig = Some(loaded.autoconfig);
         s.overridden = loaded.overridden;
+        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
         errors
     })
     .unwrap_or_default()
 }
 
 fn persist(op: hb_core::config::ConfigOp) {
+    with(|s| {
+        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"))
+    });
     let result = with(|s| {
         let auto = s.autoconfig.as_mut()?;
         auto.record(&op);
@@ -253,7 +263,7 @@ pub fn apply(effects: Vec<Effect>) {
 }
 
 fn run_command(command: Command, count: Option<u32>) {
-    if tabs::run_command(&command, count) {
+    if tabs::run_command(&command, count) || storage::run_command(&command) {
         return;
     }
     match command {
@@ -280,30 +290,7 @@ fn run_command(command: Command, count: Option<u32>) {
             target,
             related,
             url,
-        } => {
-            let Some((url, position)) = with(|s| {
-                let url = url.map_or_else(|| s.default_page(), |u| s.fuzzy_url(&u));
-                (url, s.new_tab_position(related))
-            }) else {
-                return;
-            };
-            match target {
-                OpenTarget::Current => {
-                    if let Some(frame) = browser.main_frame() {
-                        frame.load_url(Some(&CefString::from(url.as_str())));
-                    }
-                }
-                OpenTarget::Tab => tabs::open(&url, position, true),
-                OpenTarget::Background => tabs::open(&url, position, false),
-                OpenTarget::Window | OpenTarget::Private => {
-                    show_message(
-                        Level::Warning,
-                        "Separate and private windows are not implemented yet; opened a tab",
-                    );
-                    tabs::open(&url, position, true);
-                }
-            }
-        }
+        } => open(target, related, url),
         Command::Back if n == 1 => browser.go_back(),
         Command::Back => run_js(&browser, &format!("history.go(-{n})")),
         Command::Forward if n == 1 => browser.go_forward(),
@@ -340,8 +327,13 @@ fn run_command(command: Command, count: Option<u32>) {
             };
             scroll(&browser, "perc", &x, &y);
         }
-        Command::Quit => {
-            if let Some(window) = with(|s| s.window.clone()).flatten() {
+        Command::Quit { save } => {
+            if let Some(window) = with(|s| {
+                s.save_session_on_quit |= save;
+                s.window.clone()
+            })
+            .flatten()
+            {
                 window.close();
             }
         }
@@ -350,6 +342,51 @@ fn run_command(command: Command, count: Option<u32>) {
             "command reached the browser layer but is handled by the engine"
         ),
     }
+}
+
+/// `:open` and everything that behaves like it (quickmarks, bookmarks).
+pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
+    let Some((url, position, browser)) = with(|s| {
+        let url = url.map_or_else(|| s.default_page(), |u| s.fuzzy_url(&u));
+        (url, s.new_tab_position(related), s.current_browser())
+    }) else {
+        return;
+    };
+    match target {
+        OpenTarget::Current => {
+            if let Some(frame) = browser.and_then(|b| b.main_frame()) {
+                frame.load_url(Some(&CefString::from(url.as_str())));
+            }
+        }
+        OpenTarget::Tab => tabs::open(&url, position, true),
+        OpenTarget::Background => tabs::open(&url, position, false),
+        OpenTarget::Window | OpenTarget::Private => {
+            show_message(
+                Level::Warning,
+                "Separate and private windows are not implemented yet; opened a tab",
+            );
+            tabs::open(&url, position, true);
+        }
+    }
+}
+
+/// The open tabs, for `:session-save` and saving on quit.
+pub fn current_session() -> hb_storage::Session {
+    with(|s| hb_storage::Session {
+        windows: vec![hb_storage::WindowState {
+            active: s.tabs.current_index(),
+            tabs: s
+                .tabs
+                .iter()
+                .filter(|t| !t.url.is_empty())
+                .map(|t| hb_storage::TabState {
+                    url: t.url.clone(),
+                    title: t.title.clone(),
+                })
+                .collect(),
+        }],
+    })
+    .unwrap_or_default()
 }
 
 fn yank(what: YankWhat) {
@@ -436,7 +473,7 @@ pub fn refresh_ui() {
 pub fn position_overlay() {
     let Some(Some((overlay, rows))) = with(|s| {
         let overlay = s.overlay.clone()?;
-        Some((overlay, s.last_completion.len()))
+        Some((overlay, s.last_completion_rows))
     }) else {
         return;
     };
@@ -515,26 +552,25 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
 
     let completions = s.engine.completions();
     let completion_changed = completions != s.last_completion;
+    let rows = completion_rows(&completions);
     if s.completion_ready
         && completion_changed
         && let Some(frame) = frame_of(&s.completion)
     {
-        scripts.push((
-            frame,
-            serde_json::to_string(&completions).unwrap_or_default(),
-        ));
+        scripts.push((frame, serde_json::Value::Array(rows.clone()).to_string()));
     }
     let overlay = completion_changed
         .then(|| {
             let overlay = s.overlay.clone()?;
-            let bounds = (!completions.is_empty())
-                .then(|| completion_bounds(s, completions.len()))
+            let bounds = (!rows.is_empty())
+                .then(|| completion_bounds(s, rows.len()))
                 .flatten();
             Some((overlay, bounds))
         })
         .flatten();
-    if s.completion_ready || completions.is_empty() {
+    if s.completion_ready || completions.items.is_empty() {
         s.last_completion = completions;
+        s.last_completion_rows = rows.len();
     }
 
     UiUpdate {
@@ -558,9 +594,43 @@ wrap_task! {
     }
 }
 
+/// The rows to draw: category headers and items, scrolled so the selected
+/// item is visible, at most `COMPLETION_MAX_ROWS` in total.
+fn completion_rows(view: &CompletionView) -> Vec<serde_json::Value> {
+    let items = &view.items;
+    let mut start = view
+        .selected
+        .map_or(0, |i| i.saturating_sub(COMPLETION_MAX_ROWS / 2));
+    loop {
+        let mut rows = Vec::new();
+        let mut category = "";
+        for (i, item) in items.iter().enumerate().skip(start) {
+            let header = item.category != category || rows.is_empty();
+            if rows.len() + usize::from(header) + 1 > COMPLETION_MAX_ROWS {
+                break;
+            }
+            if header {
+                category = item.category;
+                rows.push(json!({ "header": item.category }));
+            }
+            rows.push(json!({
+                "name": item.name,
+                "description": item.description,
+                "selected": view.selected == Some(i),
+            }));
+        }
+        // Many headers can push the selection out of view; start at it then.
+        let shown = rows.iter().any(|r| r["selected"] == true);
+        match view.selected {
+            Some(i) if !shown && start != i => start = i,
+            _ => return rows,
+        }
+    }
+}
+
 fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     let bar = View::from(s.statusbar.as_ref()?).bounds();
-    let height = (rows.min(COMPLETION_MAX_ROWS) as i32 + 1) * COMPLETION_ROW_HEIGHT;
+    let height = rows.min(COMPLETION_MAX_ROWS) as i32 * COMPLETION_ROW_HEIGHT;
     Some(Rect {
         x: bar.x,
         y: bar.y - height,

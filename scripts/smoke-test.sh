@@ -47,7 +47,7 @@ for _ in $(seq 50); do [[ -s $work/display ]] && break; sleep 0.1; done
 export DISPLAY=":$(cat "$work/display")"
 
 failures=0
-step() { printf '  %-44s' "$1"; }
+step() { printf '  %-48s' "$1"; }
 pass() { echo "ok"; }
 fail() { echo "FAIL ($1)"; failures=$((failures + 1)); }
 
@@ -149,18 +149,48 @@ xdotool key Return
 sleep 0.5
 grep -q '"messages.timeout" = 5000' "$work/base/config/autoconfig.toml" 2>/dev/null && pass || fail "autoconfig.toml not written"
 
-step ":quit with two tabs exits cleanly"
+step ":open completes from history with Tab"
+xdotool key shift+semicolon
+xdotool type --delay 5 "open -t about:blank"
+xdotool key Return
+expect_title "about:blank"
+xdotool key shift+semicolon
+xdotool type --delay 5 "open secon"
+sleep 0.3
+xdotool key Tab Return
+expect_title "second"
+
+# Waits for the browser to exit and checks the exit code.
+expect_exit() {
+    local code=""
+    for _ in $(seq $((TIMEOUT * 10))); do
+        if ! kill -0 "$browser_pid" 2>/dev/null; then
+            wait "$browser_pid" && code=0 || code=$?
+            break
+        fi
+        sleep 0.1
+    done
+    browser_pid=""
+    [[ $code == 0 ]] && pass || fail "exit code '${code:-still running}'"
+}
+
+step ":wq with several tabs saves and exits cleanly"
+xdotool key shift+semicolon
+xdotool type --delay 5 "set auto_save.session true"
+xdotool key Return
+xdotool key shift+semicolon w q Return
+expect_exit
+
+step "restarting restores the session"
+"$BIN" --basedir "$work/base" >>"$work/browser.log" 2>&1 &
+browser_pid=$!
+window=$(timeout "$TIMEOUT" xdotool search --sync --name "^second - hackers-browser$" | head -1 || true)
+[[ -n $window ]] && pass || fail "no restored window"
+
+step ":quit exits cleanly"
+[[ -n $window ]] && xdotool windowfocus --sync "$window"
 xdotool key shift+semicolon q u i t Return
-code=""
-for _ in $(seq $((TIMEOUT * 10))); do
-    if ! kill -0 "$browser_pid" 2>/dev/null; then
-        wait "$browser_pid" && code=0 || code=$?
-        break
-    fi
-    sleep 0.1
-done
-browser_pid=""
-[[ $code == 0 ]] && pass || fail "exit code '${code:-still running}'"
+expect_exit
 
 if (( failures > 0 )); then
     echo "smoke-test: $failures check(s) failed; browser log:" >&2

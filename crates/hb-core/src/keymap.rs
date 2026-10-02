@@ -152,14 +152,22 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("yd", "yank domain"),
     ("pp", "open -- {clipboard}"),
     ("PP", "open -t -- {clipboard}"),
+    ("m", "cmd-set-text -s :quickmark-add {url}"),
+    ("b", "cmd-set-text -s :quickmark-load"),
+    ("B", "cmd-set-text -s :quickmark-load -t"),
+    ("M", "bookmark-add"),
+    ("gb", "cmd-set-text -s :bookmark-load"),
+    ("gB", "cmd-set-text -s :bookmark-load -t"),
     ("ZQ", "quit"),
-    ("ZZ", "quit"),
+    ("ZZ", "quit --save"),
     ("<Ctrl-q>", "quit"),
 ];
 
 const COMMAND_DEFAULTS: &[(&str, &str)] = &[
     ("<Escape>", "mode-leave"),
     ("<Return>", "command-accept"),
+    ("<Tab>", "completion-item-focus next"),
+    ("<Shift-Tab>", "completion-item-focus prev"),
     ("<Up>", "command-history-prev"),
     ("<Down>", "command-history-next"),
     ("<Ctrl-p>", "command-history-prev"),

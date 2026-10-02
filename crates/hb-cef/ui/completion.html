@@ -8,6 +8,8 @@
     --fg: #ffffff;
     --header-bg: #000000;
     --desc-fg: #c0c0c0;
+    --selected-bg: #e8c000;
+    --selected-fg: #000000;
     --row-height: 18px;
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
@@ -29,31 +31,35 @@
     white-space: pre;
   }
   .header { background: var(--header-bg); font-weight: bold; }
-  .name { width: 34ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
+  .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
+  .row.selected .desc { color: var(--selected-fg); }
+  .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
   .desc { color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
 </style>
 </head>
 <body>
 <div id="list"></div>
 <script>
-  window.hbRender = (items) => {
+  // Rows are either {header} or {name, description, selected}.
+  window.hbRender = (rows) => {
     const list = document.getElementById("list");
-    const header = document.createElement("div");
-    header.className = "header";
-    header.textContent = items.length ? items[0].category : "";
-    const rows = items.map(({ name, description }) => {
-      const row = document.createElement("div");
-      row.className = "row";
-      const n = document.createElement("span");
-      n.className = "name";
-      n.textContent = name;
-      const d = document.createElement("span");
-      d.className = "desc";
-      d.textContent = description;
-      row.append(n, d);
-      return row;
-    });
-    list.replaceChildren(header, ...rows);
+    list.replaceChildren(...rows.map((row) => {
+      const el = document.createElement("div");
+      if (row.header) {
+        el.className = "header";
+        el.textContent = row.header;
+        return el;
+      }
+      el.className = row.selected ? "row selected" : "row";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = row.name;
+      const desc = document.createElement("span");
+      desc.className = "desc";
+      desc.textContent = row.description;
+      el.append(name, desc);
+      return el;
+    }));
   };
 </script>
 </body>

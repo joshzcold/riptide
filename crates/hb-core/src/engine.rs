@@ -1,7 +1,8 @@
 use serde::Serialize;
 
 use crate::cmdline::{History, LineEditor};
-use crate::command::{self, COMMANDS, Command};
+use crate::command::{self, Command, FocusDirection};
+use crate::completion::{self, Completion, CompletionKind, CompletionView};
 use crate::config::ConfigOp;
 use crate::hints::{HintInput, HintItem, HintRequest, HintSession, HintTarget};
 use crate::key::{Key, KeyCode, format_sequence};
@@ -38,6 +39,15 @@ pub enum Effect {
     ConfigChanged(ConfigOp),
 }
 
+/// Completion results for one command line text, plus Tab-cycling state.
+struct CompletionState {
+    /// The text the items were computed for.
+    base: String,
+    /// The text after inserting the selected item, so cycling doesn't re-query.
+    inserted: Option<String>,
+    view: CompletionView,
+}
+
 /// Aliases may refer to other aliases, but not endlessly.
 const MAX_ALIAS_DEPTH: usize = 10;
 
@@ -68,13 +78,6 @@ pub struct CommandLineView {
     pub cursor: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Completion {
-    pub category: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
-}
-
 /// Everything the status bar needs to draw itself.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct StatusView {
@@ -97,6 +100,8 @@ pub struct Engine {
     message_generation: u64,
     url: String,
     clipboard: Option<Box<dyn Fn() -> Option<String>>>,
+    completion_source: Option<completion::Source>,
+    completion: Option<CompletionState>,
     hints: Option<HintSession>,
     dirty: bool,
 }
@@ -115,6 +120,8 @@ impl Engine {
             message_generation: 0,
             url: String::new(),
             clipboard: None,
+            completion_source: None,
+            completion: None,
             hints: None,
             dirty: true,
         }
@@ -179,40 +186,62 @@ impl Engine {
         }
     }
 
-    /// Command-name completion while the first word is being typed.
-    pub fn completions(&self) -> Vec<Completion> {
+    /// Completions for the command line, recomputed only when the text changes.
+    pub fn completions(&mut self) -> CompletionView {
         if self.mode != Mode::Command {
-            return Vec::new();
+            self.completion = None;
+            return CompletionView::default();
         }
-        let Some(typed) = self.cmdline.text().strip_prefix(':') else {
-            return Vec::new();
+        let text = self.cmdline.text();
+        let fresh = match &self.completion {
+            Some(state) => state.base != text && state.inserted.as_deref() != Some(text),
+            None => true,
         };
-        if let Some(partial) = typed.strip_prefix("set ").map(str::trim_start) {
-            if partial.contains(char::is_whitespace) {
-                return Vec::new();
-            }
-            return settings::SETTINGS
-                .iter()
-                .filter(|d| d.name.starts_with(partial))
-                .map(|d| Completion {
-                    category: "Settings",
-                    name: d.name,
-                    description: d.description,
-                })
-                .collect();
+        if fresh {
+            let items = completion::compute(text, self.completion_source.as_ref());
+            self.completion = Some(CompletionState {
+                base: text.to_string(),
+                inserted: None,
+                view: CompletionView {
+                    items,
+                    selected: None,
+                },
+            });
         }
-        if typed.contains(char::is_whitespace) {
-            return Vec::new();
+        self.completion
+            .as_ref()
+            .map(|s| s.view.clone())
+            .unwrap_or_default()
+    }
+
+    /// Lets `:open`, `:quickmark-load` and friends complete from storage.
+    pub fn set_completion_source(
+        &mut self,
+        source: impl Fn(CompletionKind, &str) -> Vec<Completion> + 'static,
+    ) {
+        self.completion_source = Some(Box::new(source));
+    }
+
+    fn focus_completion(&mut self, forward: bool) {
+        self.completions();
+        let Some(state) = self.completion.as_mut() else {
+            return;
+        };
+        let len = state.view.items.len();
+        if len == 0 {
+            return;
         }
-        COMMANDS
-            .iter()
-            .filter(|c| !c.hidden && c.name.starts_with(typed))
-            .map(|c| Completion {
-                category: "Commands",
-                name: c.name,
-                description: c.description,
-            })
-            .collect()
+        let next = match (state.view.selected, forward) {
+            (None, true) => 0,
+            (None, false) => len - 1,
+            (Some(i), true) => (i + 1) % len,
+            (Some(i), false) => (i + len - 1) % len,
+        };
+        state.view.selected = Some(next);
+        let text = completion::insert(&state.base, &state.view.items[next]);
+        state.inserted = Some(text.clone());
+        self.cmdline.set(&text);
+        self.dirty = true;
     }
 
     /// Lets `{clipboard}` in commands read the system clipboard.
@@ -542,6 +571,9 @@ impl Engine {
                     self.show_message(Level::Error, e.to_string());
                 }
             },
+            Command::CompletionFocus(direction) => {
+                self.focus_completion(direction == FocusDirection::Next)
+            }
             Command::ClearKeychain => {
                 self.pending.clear();
                 self.count = None;
@@ -698,6 +730,7 @@ fn is_forwardable(key: Key) -> bool {
 mod tests {
     use super::*;
     use crate::command::{Direction, OpenTarget, TabTarget};
+    use crate::completion::{Completion, CompletionKind};
     use crate::hints::{HintItem, HintRequest, HintTarget};
     use crate::settings::Value;
 
@@ -876,10 +909,11 @@ mod tests {
     fn set_completes_setting_names() {
         let mut e = engine();
         press(&mut e, ":set tabs.new");
-        let names: Vec<_> = e
-            .completions()
+        let view = e.completions();
+        let names: Vec<_> = view
+            .items
             .iter()
-            .map(|c| (c.category, c.name))
+            .map(|c| (c.category, c.name.as_str()))
             .collect();
         assert_eq!(
             names,
@@ -889,17 +923,89 @@ mod tests {
             ]
         );
         press(&mut e, "_position.related ");
-        assert!(e.completions().is_empty());
+        assert!(e.completions().items.is_empty());
+    }
+
+    #[test]
+    fn tab_cycles_completions_and_inserts_them() {
+        let mut e = engine();
+        e.set_completion_source(|kind, pattern| {
+            assert_eq!(kind, CompletionKind::Url);
+            ["https://a.org/", "https://b.org/"]
+                .iter()
+                .filter(|u| u.contains(pattern))
+                .map(|u| Completion {
+                    category: "History",
+                    name: u.to_string(),
+                    description: String::new(),
+                })
+                .collect()
+        });
+        press(&mut e, "O");
+        assert_eq!(e.completions().items.len(), 2);
+        press(&mut e, "<Tab>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open -t https://a.org/"
+        );
+        assert_eq!(e.completions().selected, Some(0));
+        // The list stays put while cycling, even though the text changed.
+        press(&mut e, "<Tab>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open -t https://b.org/"
+        );
+        press(&mut e, "<Shift-Tab>");
+        assert_eq!(e.completions().selected, Some(0));
+        // Typing starts a new query from the edited text.
+        press(&mut e, "<Ctrl-u>:open b");
+        let view = e.completions();
+        assert_eq!(view.items.len(), 1);
+        assert_eq!(view.selected, None);
+    }
+
+    #[test]
+    fn storage_bindings() {
+        let mut e = engine();
+        e.set_url("https://x.org/");
+        press(&mut e, "m");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":quickmark-add https://x.org/ "
+        );
+        press(&mut e, "<Escape>");
+        assert_eq!(
+            runs(&press(&mut e, "M")),
+            vec![(
+                Command::BookmarkAdd {
+                    url: None,
+                    title: None
+                },
+                None
+            )]
+        );
+        press(&mut e, "B");
+        assert_eq!(e.status().command_line.unwrap().text, ":quickmark-load -t ");
+        press(&mut e, "<Escape>");
+        assert_eq!(
+            runs(&press(&mut e, ":wq<Return>")),
+            vec![(Command::Quit { save: true }, None)]
+        );
     }
 
     #[test]
     fn completion_filters_by_prefix() {
         let mut e = engine();
         press(&mut e, ":scr");
-        let names: Vec<_> = e.completions().iter().map(|c| c.name).collect();
+        let names: Vec<_> = e
+            .completions()
+            .items
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
         assert_eq!(names, vec!["scroll", "scroll-page", "scroll-to-perc"]);
         press(&mut e, "oll ");
-        assert!(e.completions().is_empty());
+        assert!(e.completions().items.is_empty());
     }
 
     #[test]
@@ -1149,7 +1255,7 @@ mod tests {
         let mut e = engine();
         assert_eq!(
             runs(&press(&mut e, ":q<Return>")),
-            vec![(Command::Quit, None)]
+            vec![(Command::Quit { save: false }, None)]
         );
         let aliases = Value::Map(
             [

@@ -47,9 +47,9 @@ tasks:
       - cargo run --bin hackers-browser -- {{.CLI_ARGS}}
 
   test:
-    desc: Unit tests (CEF-free core and config)
+    desc: Unit tests (everything except the CEF layer)
     cmds:
-      - cargo test -p hb-core -p hb-config
+      - cargo test -p hb-core -p hb-config -p hb-storage
 
   smoke:
     desc: Drive the real browser on a throwaway X display (needs Xvfb and xdotool)

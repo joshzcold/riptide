@@ -150,6 +150,21 @@ pub fn close(index: usize) {
     }
 }
 
+/// Replace the open tabs with a session's (only its first window, for now).
+pub fn restore(session: &hb_storage::Session) {
+    let Some(window) = session.windows.first().filter(|w| !w.tabs.is_empty()) else {
+        return shell::show_message(Level::Error, "That session has no tabs");
+    };
+    let old = shell::with(|s| s.tabs.len()).unwrap_or(0);
+    for tab in &window.tabs {
+        open(&tab.url, Position::Last, false);
+    }
+    for _ in 0..old {
+        close(0);
+    }
+    switch_to(window.active.min(window.tabs.len() - 1), true);
+}
+
 wrap_task! {
     pub struct CloseTab {
         index: usize,

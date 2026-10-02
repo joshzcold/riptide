@@ -60,6 +60,12 @@ pub enum YankWhat {
     Domain,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FocusDirection {
+    Next,
+    Prev,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Open {
@@ -118,7 +124,47 @@ pub enum Command {
         keys: String,
     },
     ConfigSource,
-    Quit,
+    CompletionFocus(FocusDirection),
+    QuickmarkAdd {
+        url: String,
+        name: String,
+    },
+    QuickmarkLoad {
+        target: OpenTarget,
+        name: String,
+    },
+    /// Without a name, deletes the current page's quickmark.
+    QuickmarkDel {
+        name: Option<String>,
+    },
+    /// Defaults to the current page's URL and title.
+    BookmarkAdd {
+        url: Option<String>,
+        title: Option<String>,
+    },
+    BookmarkLoad {
+        target: OpenTarget,
+        url: String,
+    },
+    BookmarkDel {
+        url: Option<String>,
+    },
+    SessionSave {
+        name: Option<String>,
+    },
+    SessionLoad {
+        name: String,
+    },
+    SessionDelete {
+        name: String,
+    },
+    HistoryClear {
+        force: bool,
+    },
+    Quit {
+        /// Save the open tabs as the default session first.
+        save: bool,
+    },
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -192,7 +238,42 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("unbind", "Remove a key binding: :unbind [--mode m] keys"),
     spec("config-source", "Reload the configuration files"),
-    spec("quit", "Quit the browser"),
+    spec(
+        "quickmark-add",
+        "Save a quickmark: :quickmark-add <url> <name>",
+    ),
+    spec(
+        "quickmark-load",
+        "Open a quickmark: :quickmark-load [-t|-b] <name>",
+    ),
+    spec(
+        "quickmark-del",
+        "Delete a quickmark (default: the current page's)",
+    ),
+    spec("bookmark-add", "Bookmark a URL (default: the current page)"),
+    spec(
+        "bookmark-load",
+        "Open a bookmark: :bookmark-load [-t|-b] <url>",
+    ),
+    spec(
+        "bookmark-del",
+        "Delete a bookmark (default: the current page)",
+    ),
+    spec("session-save", "Save the open tabs: :session-save [name]"),
+    spec("session-load", "Replace the open tabs with a saved session"),
+    spec("session-delete", "Delete a saved session"),
+    spec(
+        "history-clear",
+        "Delete all browsing history (needs --force)",
+    ),
+    spec(
+        "quit",
+        "Quit the browser; --save keeps the tabs as the default session",
+    ),
+    hidden(
+        "completion-item-focus",
+        "Select the next or previous completion",
+    ),
     hidden("command-accept", "Execute the command line"),
     hidden(
         "command-history-prev",
@@ -242,33 +323,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
     let mut args = Args::new(name, rest);
     let cmd = match name {
         "open" => {
-            let mut target = OpenTarget::Current;
-            let mut related = false;
-            while let Some(flag) = args.flag(&[
-                "--",
-                "-r",
-                "--related",
-                "-t",
-                "--tab",
-                "-b",
-                "--bg",
-                "-w",
-                "--window",
-                "-p",
-                "--private",
-            ]) {
-                target = match flag {
-                    "--" => break,
-                    "-r" | "--related" => {
-                        related = true;
-                        continue;
-                    }
-                    "-t" | "--tab" => OpenTarget::Tab,
-                    "-b" | "--bg" => OpenTarget::Background,
-                    "-w" | "--window" => OpenTarget::Window,
-                    _ => OpenTarget::Private,
-                };
-            }
+            let (target, related) = args.open_target();
             let url = args.rest();
             Command::Open {
                 target,
@@ -399,7 +454,81 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "config-source" => Command::ConfigSource,
-        "quit" => Command::Quit,
+        "quickmark-add" => {
+            let url = args.required("url")?.to_string();
+            let name = args.rest();
+            if name.is_empty() {
+                return Err(args.error("missing argument: name"));
+            }
+            Command::QuickmarkAdd {
+                url,
+                name: name.to_string(),
+            }
+        }
+        "quickmark-load" => {
+            let (target, _) = args.open_target();
+            let name = args.rest();
+            if name.is_empty() {
+                return Err(args.error("missing argument: name"));
+            }
+            Command::QuickmarkLoad {
+                target,
+                name: name.to_string(),
+            }
+        }
+        "quickmark-del" => {
+            let name = args.rest();
+            Command::QuickmarkDel {
+                name: (!name.is_empty()).then(|| name.to_string()),
+            }
+        }
+        "bookmark-add" => {
+            let url = args.optional().map(String::from);
+            let title = args.rest();
+            Command::BookmarkAdd {
+                url,
+                title: (!title.is_empty()).then(|| title.to_string()),
+            }
+        }
+        "bookmark-load" => {
+            let (target, _) = args.open_target();
+            Command::BookmarkLoad {
+                target,
+                url: args.required("url")?.to_string(),
+            }
+        }
+        "bookmark-del" => Command::BookmarkDel {
+            url: args.optional().map(String::from),
+        },
+        "session-save" => {
+            let name = args.rest();
+            Command::SessionSave {
+                name: (!name.is_empty()).then(|| name.to_string()),
+            }
+        }
+        which @ ("session-load" | "session-delete") => {
+            let name = args.rest();
+            if name.is_empty() {
+                return Err(args.error("missing argument: name"));
+            }
+            let name = name.to_string();
+            if which == "session-load" {
+                Command::SessionLoad { name }
+            } else {
+                Command::SessionDelete { name }
+            }
+        }
+        "history-clear" => Command::HistoryClear {
+            force: args.flag(&["-f", "--force"]).is_some(),
+        },
+        "completion-item-focus" => Command::CompletionFocus(match args.required("direction")? {
+            "next" => FocusDirection::Next,
+            "prev" => FocusDirection::Prev,
+            other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
+        }),
+        "quit" => Command::Quit {
+            save: args.flag(&["-s", "--save"]).is_some(),
+        },
         name => match parse_readline(name) {
             Some(rl) => Command::Readline(rl),
             None => return Err(CommandError::Unknown(name.to_string())),
@@ -482,6 +611,35 @@ impl<'a> Args<'a> {
         token
             .parse::<f64>()
             .map_err(|_| self.error(format!("{name} must be a number, got {token:?}")))
+    }
+
+    /// `-t`/`-b`/`-w`/`-p`/`-r` flags, ending at `--`. Returns the target and `related`.
+    fn open_target(&mut self) -> (OpenTarget, bool) {
+        let mut target = OpenTarget::Current;
+        let mut related = false;
+        while let Some(flag) = self.flag(&[
+            "--",
+            "-r",
+            "--related",
+            "-t",
+            "--tab",
+            "-b",
+            "--bg",
+            "-w",
+            "--window",
+            "-p",
+            "--private",
+        ]) {
+            match flag {
+                "--" => break,
+                "-r" | "--related" => related = true,
+                "-t" | "--tab" => target = OpenTarget::Tab,
+                "-b" | "--bg" => target = OpenTarget::Background,
+                "-w" | "--window" => target = OpenTarget::Window,
+                _ => target = OpenTarget::Private,
+            }
+        }
+        (target, related)
     }
 
     /// An optional `--mode m` / `-m m` flag, defaulting to normal mode.
@@ -722,6 +880,61 @@ mod tests {
     }
 
     #[test]
+    fn parses_storage_commands() {
+        assert_eq!(
+            parse("quickmark-add https://x.org/ my site").unwrap(),
+            Command::QuickmarkAdd {
+                url: "https://x.org/".into(),
+                name: "my site".into()
+            }
+        );
+        assert_eq!(
+            parse("quickmark-load -t my site").unwrap(),
+            Command::QuickmarkLoad {
+                target: OpenTarget::Tab,
+                name: "my site".into()
+            }
+        );
+        assert_eq!(
+            parse("bookmark-add").unwrap(),
+            Command::BookmarkAdd {
+                url: None,
+                title: None
+            }
+        );
+        assert_eq!(
+            parse("bookmark-add https://x.org/ The X").unwrap(),
+            Command::BookmarkAdd {
+                url: Some("https://x.org/".into()),
+                title: Some("The X".into())
+            }
+        );
+        assert_eq!(
+            parse("session-save").unwrap(),
+            Command::SessionSave { name: None }
+        );
+        assert_eq!(
+            parse("session-load work").unwrap(),
+            Command::SessionLoad {
+                name: "work".into()
+            }
+        );
+        assert_eq!(parse("quit --save").unwrap(), Command::Quit { save: true });
+        assert_eq!(
+            parse("history-clear").unwrap(),
+            Command::HistoryClear { force: false }
+        );
+        assert!(matches!(
+            parse("quickmark-add https://x.org/"),
+            Err(CommandError::BadArgs { .. })
+        ));
+        assert!(matches!(
+            parse("completion-item-focus up"),
+            Err(CommandError::BadArgs { .. })
+        ));
+    }
+
+    #[test]
     fn chains_commands() {
         assert_eq!(
             parse_line("back ;; reload -f").unwrap(),
@@ -737,6 +950,12 @@ mod tests {
             "mode-enter",
             "cmd-set-text",
             "unbind",
+            "quickmark-add",
+            "quickmark-load",
+            "bookmark-load",
+            "session-load",
+            "session-delete",
+            "completion-item-focus",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

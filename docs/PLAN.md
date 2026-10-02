@@ -126,7 +126,8 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `hjkl`, `gg`, `G`, `0`, `$`, `Ctrl-d/u/f/b` scrolling with counts
 - [ ] `/`, `?`, `n`, `N` search
 - [ ] `[[` / `]]` prev/next page navigation
-- [ ] Marks (`m` / `` ` ``) and quickmarks / bookmarks
+- [x] Quickmarks / bookmarks (`m`, `b`, `B`, `M`, `gb`, `gB`)
+- [ ] Marks (`` ` ``-style in-page marks; `m` is the quickmark key, as in qutebrowser)
 
 ### Tabs
 - [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
@@ -164,8 +165,10 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] `:open-editor` (edit text field in `$EDITOR`)
 
 ### Session / state
-- [ ] Sessions (save / load / autosave)
-- [ ] History with completion
+- [x] Sessions (save / load / `auto_save.session`, `:wq`)
+- [x] History with completion (`:open` + `Tab`)
+- [x] Quickmarks and bookmarks in qutebrowser's file formats
+- [ ] Crash-recovery autosave, history page (`qute://history`-like), importing qutebrowser's history.sqlite
 - [ ] Private windows (separate `CefRequestContext`)
 
 ---
@@ -239,8 +242,21 @@ Gaps:
 - `:config-edit`.
 - Importing qutebrowser's `config.py`.
 
-### M6 — Storage
+### M6 — Storage ✅ done 2026-10-02
 - History, bookmarks, quickmarks, sessions.
+
+Notes:
+- **`hb-storage`:**
+  - History is SQLite, with a per-visit table and a per-URL table for completion, like qutebrowser.
+  - Quickmarks and bookmarks use qutebrowser's text formats, so you can import by copying the files. If an existing file can't be read, the browser treats it as read-only, so it's never overwritten with an empty list.
+  - Sessions are TOML, with names restricted to safe file names.
+- **Completion:** `hb_core::completion` decides what to offer, and the browser layer supplies the quickmark, bookmark, history and session sources. `Tab`/`Shift-Tab` cycle without re-querying, and the popup shows category headers and scrolls to the selection.
+- **Settings:** `auto_save.session` and `completion.web_history.max_items`.
+
+Gaps:
+- Sessions restore only each tab's current page; CEF has no API to rebuild back/forward history.
+- No crash-recovery autosave, no history page, no private browsing (history is always recorded).
+- No import of qutebrowser's `history.sqlite`.
 
 ### M7 — Prompts, downloads, permissions
 - Unified prompt UI; download manager; permission and auth dialogs.
