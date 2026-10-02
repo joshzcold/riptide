@@ -1,0 +1,2 @@
+# Keep LF everywhere so generated files compare equal on every platform.
+* text=auto eol=lf

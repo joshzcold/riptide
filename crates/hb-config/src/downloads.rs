@@ -108,6 +108,8 @@ mod tests {
         move |k| vars.get(k).cloned()
     }
 
+    // Unix-style absolute paths aren't absolute on Windows.
+    #[cfg(not(windows))]
     #[test]
     fn platform_download_dirs() {
         let e = env(&[
@@ -131,6 +133,8 @@ mod tests {
         assert_eq!(system_dir(Platform::Linux, &env(&[])), None);
     }
 
+    // Unix-style absolute paths aren't absolute on Windows.
+    #[cfg(not(windows))]
     #[test]
     fn reads_xdg_user_dirs() {
         let home = Path::new("/home/u");

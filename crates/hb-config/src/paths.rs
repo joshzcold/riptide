@@ -142,6 +142,8 @@ mod tests {
         PathBuf::from(s)
     }
 
+    // Unix-style absolute paths aren't absolute on Windows.
+    #[cfg(not(windows))]
     #[test]
     fn linux_defaults_and_xdg() {
         let paths = resolve(Platform::Linux, &[("HOME", "/home/u")]).unwrap();
@@ -160,6 +162,8 @@ mod tests {
         assert_eq!(paths.data_dir, p("/dat/hackers-browser"));
     }
 
+    // Unix-style absolute paths aren't absolute on Windows.
+    #[cfg(not(windows))]
     #[test]
     fn relative_xdg_values_are_ignored() {
         let paths = resolve(
@@ -170,6 +174,8 @@ mod tests {
         assert_eq!(paths.config_dir, p("/home/u/.config/hackers-browser"));
     }
 
+    // Unix-style absolute paths aren't absolute on Windows.
+    #[cfg(not(windows))]
     #[test]
     fn macos_uses_dotconfig_and_application_support() {
         let paths = resolve(Platform::MacOs, &[("HOME", "/Users/u")]).unwrap();

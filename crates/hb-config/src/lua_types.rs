@@ -152,7 +152,10 @@ mod tests {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, &generated).unwrap();
         }
-        let current = std::fs::read_to_string(&path).unwrap_or_default();
+        // Git may check files out with CRLF line endings on Windows.
+        let current = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert!(
             current == generated,
             "docs/lua/hb.meta.lua is stale; run UPDATE_LUA_TYPES=1 cargo test -p hb-config"
@@ -200,7 +203,10 @@ mod docs_tests {
         if std::env::var_os("UPDATE_LUA_TYPES").is_some() {
             std::fs::write(&path, &generated).unwrap();
         }
-        let current = std::fs::read_to_string(&path).unwrap_or_default();
+        // Git may check files out with CRLF line endings on Windows.
+        let current = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
         assert!(
             current == generated,
             "docs/settings.md is stale; run UPDATE_LUA_TYPES=1 cargo test -p hb-config"
