@@ -62,6 +62,7 @@
       title.textContent = `${i + 1}: ${tab.title || tab.url || "about:blank"}`;
       el.title = tab.url;
       el.append(indicator, title);
+      el.addEventListener("click", () => hb.send("select-tab", JSON.stringify({ index: i })));
       return el;
     }));
   };

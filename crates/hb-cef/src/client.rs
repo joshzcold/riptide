@@ -3,7 +3,7 @@ use hb_core::Modifiers;
 use hb_core::engine::Level;
 use hb_core::vk::{self, RawKey};
 
-use crate::renderer::{EVAL_RESULT_MESSAGE, FOCUS_MESSAGE};
+use crate::renderer::{EVAL_RESULT_MESSAGE, FOCUS_MESSAGE, UI_MESSAGE};
 use crate::{eval, shell, storage, tabs, ui};
 
 #[cfg(target_os = "linux")]
@@ -68,7 +68,7 @@ wrap_client! {
         fn on_process_message_received(
             &self,
             browser: Option<&mut Browser>,
-            _frame: Option<&mut Frame>,
+            frame: Option<&mut Frame>,
             _source_process: ProcessId,
             message: Option<&mut ProcessMessage>,
         ) -> ::std::os::raw::c_int {
@@ -77,6 +77,21 @@ wrap_client! {
             if name == EVAL_RESULT_MESSAGE {
                 if let Some(args) = message.argument_list() {
                     eval::complete(args.int(0), args.bool(1) != 0, CefString::from(&args.string(2)).to_string());
+                }
+                return 1;
+            }
+            if name == UI_MESSAGE {
+                // Trust the browser process's view of the frame, not the page.
+                let url = frame.map(|f| CefString::from(&f.url()).to_string()).unwrap_or_default();
+                if self.role != Role::Tab
+                    && let Some(args) = message.argument_list()
+                {
+                    let name = CefString::from(&args.string(0)).to_string();
+                    let payload = CefString::from(&args.string(1)).to_string();
+                    match hb_core::ui_message::parse(&url, &name, &payload) {
+                        Ok(message) => crate::ui::handle_message(message),
+                        Err(e) => tracing::warn!("rejected UI message: {e}"),
+                    }
                 }
                 return 1;
             }

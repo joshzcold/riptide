@@ -80,6 +80,15 @@ fn focus(index: usize) {
     switch_to(index, false);
 }
 
+/// A tab picked with the mouse. Always re-focuses the page, since the click
+/// moved keyboard focus to the tab bar.
+pub fn select(index: usize) {
+    if shell::with(|s| index < s.tabs.len()).unwrap_or(false) {
+        switch_to(index, true);
+        shell::refresh_ui();
+    }
+}
+
 fn focus_offset(n: i64) {
     if let Some(index) = shell::with(|s| s.tabs.offset(n)) {
         focus(index);

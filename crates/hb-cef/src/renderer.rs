@@ -8,11 +8,39 @@ pub const FOCUS_MESSAGE: &str = "hb.focus";
 pub const EVAL_MESSAGE: &str = "hb.eval";
 /// Renderer → browser: id, success flag, and the string result or error message.
 pub const EVAL_RESULT_MESSAGE: &str = "hb.eval-result";
+/// Renderer → browser, from `hb://ui/` pages only: message name and JSON payload.
+pub const UI_MESSAGE: &str = "hb.ui";
 
 wrap_render_process_handler! {
     pub struct HbRenderProcessHandler {}
 
     impl RenderProcessHandler {
+        /// Give the browser's own UI pages (and only those) `hb.send(name, json)`.
+        fn on_context_created(
+            &self,
+            _browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            context: Option<&mut V8Context>,
+        ) {
+            let (Some(frame), Some(context)) = (frame, context) else { return };
+            let url = CefString::from(&frame.url()).to_string();
+            if !url.starts_with(hb_core::ui_message::UI_PREFIX) {
+                return;
+            }
+            let Some(global) = context.global() else { return };
+            let Some(mut hb) = v8_value_create_object(None, None) else { return };
+            let mut handler = HbSendHandler::new();
+            let Some(mut send) = v8_value_create_function(Some(&CefString::from("send")), Some(&mut handler)) else {
+                return;
+            };
+            let fixed = V8Propertyattribute::from(
+                sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_READONLY
+                    | sys::cef_v8_propertyattribute_t::V8_PROPERTY_ATTRIBUTE_DONTDELETE,
+            );
+            hb.set_value_bykey(Some(&CefString::from("send")), Some(&mut send), fixed);
+            global.set_value_bykey(Some(&CefString::from("hb")), Some(&mut hb), fixed);
+        }
+
         fn on_focused_node_changed(
             &self,
             browser: Option<&mut Browser>,
@@ -47,6 +75,45 @@ wrap_render_process_handler! {
             let code = CefString::from(&args.string(1));
             let result = eval(frame, &code);
             send_result(frame, id, result);
+            1
+        }
+    }
+}
+
+wrap_v8_handler! {
+    struct HbSendHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let text = |i: usize| {
+                arguments?
+                    .get(i)?
+                    .as_ref()
+                    .filter(|v| v.is_string() != 0)
+                    .map(|v| CefString::from(&v.string_value()))
+            };
+            let (Some(name), Some(payload)) = (text(0), text(1)) else {
+                if let Some(exception) = exception {
+                    *exception = CefString::from("hb.send(name, json) takes two strings");
+                }
+                return 1;
+            };
+            let frame = v8_context_get_current_context().and_then(|c| c.frame());
+            let message = process_message_create(Some(&CefString::from(UI_MESSAGE)));
+            if let (Some(frame), Some(mut message)) = (frame, message) {
+                if let Some(args) = message.argument_list() {
+                    args.set_string(0, Some(&name));
+                    args.set_string(1, Some(&payload));
+                }
+                frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
+            }
             1
         }
     }

@@ -84,6 +84,25 @@ wrap_request_handler! {
     pub struct HbRequestHandler {}
 
     impl RequestHandler {
+        /// Tabs may show hb:// pages the user opened (e.g. help), but never the
+        /// UI pages, and never because a site redirected there.
+        fn on_before_browse(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            _user_gesture: ::std::os::raw::c_int,
+            is_redirect: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int {
+            let url = request.map(|r| CefString::from(&r.url()).to_string()).unwrap_or_default();
+            let blocked = url.starts_with(hb_core::ui_message::UI_PREFIX)
+                || (is_redirect != 0 && url.starts_with("hb://"));
+            if blocked {
+                tracing::warn!("blocked navigation to {url}");
+            }
+            blocked.into()
+        }
+
         fn auth_credentials(
             &self,
             browser: Option<&mut Browser>,

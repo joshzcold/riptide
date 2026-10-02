@@ -1,15 +1,20 @@
 //! Internal pages that make up the browser chrome.
 
-use cef::*;
+use hb_core::ui_message::UiMessage;
 
 pub const TABBAR_HTML: &str = include_str!("../ui/tabbar.html");
 pub const STATUSBAR_HTML: &str = include_str!("../ui/statusbar.html");
 pub const COMPLETION_HTML: &str = include_str!("../ui/completion.html");
 
-pub fn data_uri(html: &str) -> String {
-    let encoded = CefString::from(&base64_encode(Some(html.as_bytes())));
-    let encoded = CefString::from(&uriencode(Some(&encoded), 0)).to_string();
-    format!("data:text/html;base64,{encoded}")
+pub const TABBAR_URL: &str = "hb://ui/tabbar.html";
+pub const STATUSBAR_URL: &str = "hb://ui/statusbar.html";
+pub const COMPLETION_URL: &str = "hb://ui/completion.html";
+
+/// Act on a validated message from a UI page.
+pub fn handle_message(message: UiMessage) {
+    match message {
+        UiMessage::SelectTab { index } => crate::tabs::select(index),
+    }
 }
 
 /// JavaScript that replaces the current document with an error description.

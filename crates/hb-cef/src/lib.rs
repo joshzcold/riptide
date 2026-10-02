@@ -10,6 +10,7 @@ mod hints;
 mod permissions;
 mod prompts;
 mod renderer;
+mod scheme;
 mod shell;
 mod storage;
 mod tabs;
@@ -36,6 +37,12 @@ wrap_app! {
     }
 
     impl App {
+        fn on_register_custom_schemes(&self, registrar: Option<&mut SchemeRegistrar>) {
+            if let Some(registrar) = registrar {
+                scheme::register(registrar);
+            }
+        }
+
         fn on_before_command_line_processing(
             &self,
             process_type: Option<&CefString>,
@@ -72,6 +79,7 @@ wrap_browser_process_handler! {
             engine.set_completion_source(storage::complete);
             let mut errors = storage::open(&startup.paths);
             shell::install(shell::Shell::new(engine, startup.paths));
+            scheme::install();
             errors.extend(shell::load_config());
             window::create(startup.urls);
             report_config_errors(&errors);

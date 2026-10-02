@@ -311,7 +311,20 @@ Builds on the M5 Lua config API.
 - Userscripts written in Lua, alongside qutebrowser-compatible external userscripts (M9).
 - Decide on a sandbox for third-party scripts (e.g. no `io`/`os` unless allowed). The user's own `config.lua` stays fully trusted.
 
-### M13 — Internal pages and a UI channel (foundation for M14 and M16)
+### M13 — Internal pages and a UI channel (foundation for M14 and M16) ✅ done 2026-10-02
+
+Result:
+- **Scheme:** `hb://` is registered as standard + secure + display-isolated and served from embedded files by `hb-cef/src/scheme.rs`. Responses carry a strict CSP (inline code only, no network), `nosniff` and `no-store`.
+- **UI pages:** the tab bar, status bar and overlay moved from `data:` URLs to `hb://ui/…`.
+- **Channel:** `hb.send(name, json)` exists only in `hb://ui/` frames. The browser re-checks the sending frame's URL itself, and `hb_core::ui_message` validates each message against a per-page allowlist (unit tested).
+- **First message:** clicking a tab in the tab bar selects it.
+- **Isolation, as verified:**
+  - Web pages see no `window.hb`.
+  - An `hb://` iframe stays empty, and an `hb://` link does nothing; Chromium's display isolation refuses both.
+  - `:open hb://ui/…` and redirects to `hb://` are blocked by `OnBeforeBrowse`.
+  - A smoke test covers the first two.
+
+Original plan:
 - **`hb://` scheme:** register it with `CefSchemeRegistrar::AddCustomScheme` and serve it from embedded files through a `CefSchemeHandlerFactory`. Move the tab bar, status bar and overlay pages off `data:` URLs onto `hb://ui/...`.
 - **UI → Rust messages:** in the renderer's `OnContextCreated`, add a `window.hb.send(name, json)` function **only for frames whose URL is `hb://`**. Web pages never see it.
   - The browser process accepts these messages only from our UI browsers, and still validates every field. This is the reverse of the eval channel, needed for clicks in the tab bar and for links on the help page.

@@ -99,6 +99,10 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 
 `:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
 
+### Internal pages
+
+The tab bar, status bar and overlay are HTML pages served from the browser itself at `hb://ui/…`. Web pages can't link to, frame or redirect to `hb://` addresses, and only `hb://ui/` pages get the `hb.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
+
 ### Lua
 
 `config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `hb.set/get/bind/unbind`, `hb.platform` (`linux`, `macos`, `windows`), `hb.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.

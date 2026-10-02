@@ -58,10 +58,10 @@ wrap_window_delegate! {
         fn on_window_created(&self, window: Option<&mut Window>) {
             let Some(window) = window else { return };
             let (Some(tabbar), Some(content), Some(statusbar), Some(completion)) = (
-                create_browser_view(Role::Tabbar, &ui::data_uri(ui::TABBAR_HTML)),
+                create_browser_view(Role::Tabbar, ui::TABBAR_URL),
                 panel_create(None),
-                create_browser_view(Role::Statusbar, &ui::data_uri(ui::STATUSBAR_HTML)),
-                create_browser_view(Role::Completion, &ui::data_uri(ui::COMPLETION_HTML)),
+                create_browser_view(Role::Statusbar, ui::STATUSBAR_URL),
+                create_browser_view(Role::Completion, ui::COMPLETION_URL),
             ) else {
                 tracing::error!("failed to create window views");
                 return;
