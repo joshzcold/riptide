@@ -57,6 +57,17 @@ fn is_valid_scheme(s: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
+/// The host name of a URL, without user info or port; empty if it has none.
+pub fn host(url: &str) -> &str {
+    let Some((_, rest)) = url.split_once("://") else {
+        return "";
+    };
+    let authority = host_of(rest);
+    authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host)
+}
+
 fn host_of(input: &str) -> &str {
     let end = input.find(['/', '?', '#']).unwrap_or(input.len());
     let authority = &input[..end];
@@ -106,6 +117,17 @@ fn encode_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hosts() {
+        assert_eq!(
+            host("https://user:pw@www.example.com:8443/a?b#c"),
+            "www.example.com"
+        );
+        assert_eq!(host("http://localhost/"), "localhost");
+        assert_eq!(host("about:blank"), "");
+        assert_eq!(host("file:///tmp/x"), "");
+    }
 
     fn engines() -> BTreeMap<String, String> {
         BTreeMap::from([

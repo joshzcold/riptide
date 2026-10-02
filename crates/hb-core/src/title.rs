@@ -5,10 +5,7 @@
 /// there is a title to separate.
 pub fn format(template: &str, title: &str, url: &str, mode: &str) -> String {
     let current = if title.is_empty() { url } else { title };
-    let host = url
-        .split_once("://")
-        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or_default())
-        .unwrap_or_default();
+    let host = crate::url::host(url);
     let sep = if current.is_empty() { "" } else { " - " };
     template
         .replace("{current_title}", current)
@@ -46,7 +43,7 @@ mod tests {
                 "https://x.org:8080/p?q",
                 "insert"
             ),
-            "insert|x.org:8080|https://x.org:8080/p?q"
+            "insert|x.org|https://x.org:8080/p?q"
         );
         assert_eq!(format("{host}", "", "about:blank", "normal"), "");
     }
