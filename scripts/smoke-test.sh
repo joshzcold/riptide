@@ -103,6 +103,10 @@ cat >"$work/scheme.html" <<'EOF'
 <script>const q = matchMedia('(prefers-color-scheme: dark)'); const r = () => { document.title = 'dark=' + q.matches; }; r(); q.addEventListener('change', r);</script>
 EOF
 
+cat >"$work/private.html" <<'EOF'
+<!doctype html><title>private</title>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -549,6 +553,51 @@ step "downloads save to downloads.location.directory"
 hint s
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
 [[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
+
+step ":open -w opens a window that takes keys, :close closes it"
+run "open -w file://$work/nav1.html"
+second=$(timeout "$TIMEOUT" xdotool search --sync --name '^normal::nav1$' | grep -v "^$window$" | head -1 || true)
+if [[ -z $second ]]; then
+    fail "no second window"
+else
+    xdotool windowfocus --sync "$second"
+    nap 0.3
+    xdotool key bracketright bracketright
+    for _ in $(seq $((TIMEOUT * 10))); do [[ $(xdotool getwindowname "$second") == *::nav2 ]] && break; sleep 0.1; done
+    keys_went=$(xdotool getwindowname "$second")
+    first_page=$(page_title)
+    run "close"
+    for _ in $(seq $((TIMEOUT * 10))); do xdotool getwindowname "$second" >/dev/null 2>&1 || break; sleep 0.1; done
+    if [[ $keys_went != *::nav2 ]]; then
+        fail "keys didn't reach the second window ('$keys_went')"
+    elif [[ $first_page == nav2 ]]; then
+        fail "the first window followed the link too"
+    elif xdotool getwindowname "$second" >/dev/null 2>&1; then
+        fail ":close left the window open"
+    else
+        pass
+    fi
+    xdotool windowfocus --sync "$window"
+fi
+
+step ":open -p opens a private window that keeps no history"
+run "open -p file://$work/private.html"
+private=$(timeout "$TIMEOUT" xdotool search --sync --name '^normal::private$' | head -1 || true)
+if [[ -z $private ]]; then
+    fail "no private window"
+else
+    xdotool windowfocus --sync "$private"
+    nap 0.5
+    run "close"
+    for _ in $(seq $((TIMEOUT * 10))); do xdotool getwindowname "$private" >/dev/null 2>&1 || break; sleep 0.1; done
+    xdotool windowfocus --sync "$window"
+    nap 0.3
+    if python3 -c "import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); sys.exit(any('private.html' in r[0] for r in c.execute('select url from visits')))" "$work/base/data/history.sqlite"; then
+        pass
+    else
+        fail "the private page is in history"
+    fi
+fi
 
 step ":wq with several tabs saves and exits cleanly"
 run "set auto_save.session true"

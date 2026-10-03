@@ -265,6 +265,8 @@ pub enum Command {
     OpenEditor,
     /// Read the Greasemonkey scripts again.
     GreasemonkeyReload,
+    /// Close the current window.
+    Close,
     /// Go up the URL, to the previous/next page, or change the number in it.
     Navigate {
         to: NavigateTo,
@@ -467,6 +469,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "greasemonkey-reload",
         "Read the scripts in the greasemonkey directories again",
+    ),
+    spec(
+        "close",
+        "Close the current window (:quit closes all of them)",
     ),
     spec(
         "navigate",
@@ -841,6 +847,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
+        "close" => Command::Close,
         "navigate" => {
             let to = match args.required("where")? {
                 "up" => NavigateTo::Up,

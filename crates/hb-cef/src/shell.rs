@@ -54,16 +54,12 @@ impl Tab {
     }
 }
 
-pub struct Shell {
-    pub engine: Engine,
-    pub paths: Paths,
-    /// Where `:set`/`:bind`/`:unbind` are persisted; set once config loads.
-    pub autoconfig: Option<AutoConfig>,
-    /// Settings the user's config files set, which beat `:set` at startup.
-    pub overridden: std::collections::BTreeSet<String>,
-    /// Which file set each setting, and the files read, for the help page.
-    pub setting_sources: std::collections::BTreeMap<String, String>,
-    pub config_files: Vec<std::path::PathBuf>,
+/// One browser window: its views, tabs and what was last drawn in it.
+pub struct WindowState {
+    /// Stable across other windows opening and closing.
+    pub id: u32,
+    /// Private windows keep nothing: an in-memory profile, no history, no session.
+    pub private: bool,
     pub window: Option<Window>,
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
@@ -76,34 +72,21 @@ pub struct Shell {
     pub tabbar_ready: bool,
     pub statusbar_ready: bool,
     pub completion_ready: bool,
-    /// Set by `on_before_popup` for the popup view that CEF creates next.
-    pub popup_in_background: bool,
     /// Set once the window starts closing, so tab closes go through CEF.
     pub window_closing: bool,
-    /// Set by `:quit --save`; `auto_save.session` has the same effect.
-    pub save_session_on_quit: bool,
-    pub open_browsers: usize,
-    pub suppress_char: bool,
-    /// Browser id of the tab currently showing hint labels.
-    pub hint_browser: Option<i32>,
     last_status: String,
     last_tabbar: String,
     last_title: String,
     /// What the overlay shows (a prompt or completions), to skip redraws.
     last_overlay: String,
     last_overlay_rows: usize,
-    timed_message: u64,
 }
 
-impl Shell {
-    pub fn new(engine: Engine, paths: Paths) -> Self {
+impl WindowState {
+    pub fn new(id: u32, private: bool) -> Self {
         Self {
-            engine,
-            paths,
-            autoconfig: None,
-            overridden: Default::default(),
-            setting_sources: Default::default(),
-            config_files: Vec::new(),
+            id,
+            private,
             window: None,
             content: None,
             tabs: TabList::default(),
@@ -115,19 +98,128 @@ impl Shell {
             tabbar_ready: false,
             statusbar_ready: false,
             completion_ready: false,
-            popup_in_background: false,
             window_closing: false,
-            save_session_on_quit: false,
-            open_browsers: 0,
-            suppress_char: false,
-            hint_browser: None,
             last_status: String::new(),
             last_tabbar: String::new(),
             last_title: String::new(),
             last_overlay: String::new(),
             last_overlay_rows: 0,
+        }
+    }
+}
+
+pub struct Shell {
+    pub engine: Engine,
+    pub paths: Paths,
+    /// Where `:set`/`:bind`/`:unbind` are persisted; set once config loads.
+    pub autoconfig: Option<AutoConfig>,
+    /// Settings the user's config files set, which beat `:set` at startup.
+    pub overridden: std::collections::BTreeSet<String>,
+    /// Which file set each setting, and the files read, for the help page.
+    pub setting_sources: std::collections::BTreeMap<String, String>,
+    pub config_files: Vec<std::path::PathBuf>,
+    /// Never empty. `Shell` derefs to the active one, which gets the keys.
+    pub windows: Vec<WindowState>,
+    pub active: usize,
+    next_window_id: u32,
+    /// The in-memory profile private windows share, created on first use.
+    pub private_context: Option<RequestContext>,
+    /// Set by `on_before_popup` for the popup view that CEF creates next.
+    pub popup_in_background: bool,
+    /// Set by `:quit --save`; `auto_save.session` has the same effect.
+    pub save_session_on_quit: bool,
+    /// `:quit` is closing every window; it saved the session itself.
+    pub quitting: bool,
+    pub open_browsers: usize,
+    pub suppress_char: bool,
+    /// Browser id of the tab currently showing hint labels.
+    pub hint_browser: Option<i32>,
+    timed_message: u64,
+}
+
+impl std::ops::Deref for Shell {
+    type Target = WindowState;
+
+    fn deref(&self) -> &WindowState {
+        &self.windows[self.active]
+    }
+}
+
+impl std::ops::DerefMut for Shell {
+    fn deref_mut(&mut self) -> &mut WindowState {
+        &mut self.windows[self.active]
+    }
+}
+
+impl Shell {
+    pub fn new(engine: Engine, paths: Paths) -> Self {
+        Self {
+            engine,
+            paths,
+            autoconfig: None,
+            overridden: Default::default(),
+            setting_sources: Default::default(),
+            config_files: Vec::new(),
+            windows: vec![WindowState::new(0, false)],
+            active: 0,
+            next_window_id: 1,
+            private_context: None,
+            popup_in_background: false,
+            save_session_on_quit: false,
+            quitting: false,
+            open_browsers: 0,
+            suppress_char: false,
+            hint_browser: None,
             timed_message: 0,
         }
+    }
+
+    /// A slot for a window about to be created. The first window reuses the
+    /// slot that exists from the start.
+    pub fn new_window(&mut self, private: bool) -> u32 {
+        if self.windows.len() == 1
+            && self.windows[0].window.is_none()
+            && !self.windows[0].window_closing
+        {
+            self.windows[0].private = private;
+            return self.windows[0].id;
+        }
+        let id = self.next_window_id;
+        self.next_window_id += 1;
+        self.windows.push(WindowState::new(id, private));
+        id
+    }
+
+    pub fn window_index(&self, id: u32) -> Option<usize> {
+        self.windows.iter().position(|w| w.id == id)
+    }
+
+    /// The window and tab index showing `browser`.
+    pub fn find_browser(&self, browser: &Browser) -> Option<(usize, usize)> {
+        let id = browser.identifier();
+        self.windows.iter().enumerate().find_map(|(w, state)| {
+            state
+                .tabs
+                .position(|t| t.browser().is_some_and(|b| b.identifier() == id))
+                .map(|t| (w, t))
+        })
+    }
+
+    /// The window a UI or tab browser belongs to, by browser id.
+    pub fn window_of_browser(&self, id: i32) -> Option<usize> {
+        let is = |view: &Option<BrowserView>| {
+            view.as_ref()
+                .and_then(|v| v.browser())
+                .is_some_and(|b| b.identifier() == id)
+        };
+        self.windows.iter().position(|w| {
+            is(&w.tabbar)
+                || is(&w.statusbar)
+                || is(&w.completion)
+                || w.tabs
+                    .iter()
+                    .any(|t| t.browser().is_some_and(|b| b.identifier() == id))
+        })
     }
 
     /// Turn `:open` text into a URL using the configured search engines.
@@ -158,12 +250,6 @@ impl Shell {
     pub fn current_browser(&self) -> Option<Browser> {
         self.tabs.current()?.browser()
     }
-
-    pub fn tab_index(&self, browser: &Browser) -> Option<usize> {
-        let id = browser.identifier();
-        self.tabs
-            .position(|t| t.browser().is_some_and(|b| b.identifier() == id))
-    }
 }
 
 thread_local! {
@@ -191,18 +277,49 @@ pub fn with<R>(f: impl FnOnce(&mut Shell) -> R) -> Option<R> {
     })
 }
 
-/// Run `f` against the tab that owns `browser`; the bool says whether it is current.
+/// Run `f` against the tab that owns `browser`, in whichever window it is;
+/// inside `f` that window is the shell's. The bool says whether the tab is
+/// the current one of the active window.
 pub fn with_tab<R>(
     browser: Option<&mut Browser>,
     f: impl FnOnce(&mut Shell, usize, bool) -> R,
 ) -> Option<R> {
     let browser = browser?;
     with(|s| {
-        let index = s.tab_index(browser)?;
-        let current = index == s.tabs.current_index();
-        Some(f(s, index, current))
+        let (window, index) = s.find_browser(browser)?;
+        let active = s.active;
+        let current = window == active && index == s.windows[window].tabs.current_index();
+        s.active = window;
+        let result = f(s, index, current);
+        s.active = active.min(s.windows.len() - 1);
+        Some(result)
     })
     .flatten()
+}
+
+/// Make the window that shows browser `id` (a tab or one of its bars) the
+/// active one, e.g. because a key arrived there.
+pub fn activate_browser(id: i32) {
+    let changed = with(|s| {
+        let window = s.window_of_browser(id)?;
+        (window != s.active).then(|| s.active = window)
+    })
+    .flatten();
+    if changed.is_some() {
+        refresh_ui();
+    }
+}
+
+/// Make window `id` the active one.
+pub fn activate_window(id: u32) {
+    let changed = with(|s| {
+        let window = s.window_index(id)?;
+        (window != s.active).then(|| s.active = window)
+    })
+    .flatten();
+    if changed.is_some() {
+        refresh_ui();
+    }
 }
 
 pub fn show_message(level: Level, text: impl Into<String>) {
@@ -408,13 +525,24 @@ fn run_command(command: Command, count: Option<u32>) {
             };
             scroll(&browser, "perc", &x, &y);
         }
+        Command::Close => {
+            if let Some(window) = with(|s| s.window.clone()).flatten() {
+                window.close();
+            }
+        }
         Command::Quit { save } => {
-            if let Some(window) = with(|s| {
-                s.save_session_on_quit |= save;
-                s.window.clone()
+            let save = with(|s| {
+                s.quitting = true;
+                save || s.save_session_on_quit || s.engine.settings().bool("auto_save.session")
             })
-            .flatten()
-            {
+            .unwrap_or(false);
+            if save && let Err(e) = storage::save_session(crate::storage::DEFAULT_SESSION) {
+                tracing::warn!("could not save session: {e}");
+            }
+            let windows: Vec<Window> =
+                with(|s| s.windows.iter().filter_map(|w| w.window.clone()).collect())
+                    .unwrap_or_default();
+            for window in windows {
                 window.close();
             }
         }
@@ -451,33 +579,39 @@ pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
         }
         OpenTarget::Tab => tabs::open(&url, position, true),
         OpenTarget::Background => tabs::open(&url, position, false),
-        OpenTarget::Window | OpenTarget::Private => {
-            show_message(
-                Level::Warning,
-                "Separate and private windows are not implemented yet; opened a tab",
-            );
-            tabs::open(&url, position, true);
-        }
+        OpenTarget::Window => crate::window::create(vec![url], Vec::new(), false),
+        OpenTarget::Private => crate::window::create(vec![url], Vec::new(), true),
     }
 }
 
-/// The open tabs, for `:session-save` and saving on quit.
+/// The open tabs of every window except private ones, for `:session-save`
+/// and saving on quit. The active window comes first.
 pub fn current_session() -> hb_storage::Session {
-    with(|s| hb_storage::Session {
-        windows: vec![hb_storage::WindowState {
-            active: s.tabs.current_index(),
-            tabs: s
-                .tabs
-                .iter()
-                .enumerate()
-                .filter(|(_, t)| !t.url.is_empty())
-                .map(|(i, t)| hb_storage::TabState {
-                    url: t.url.clone(),
-                    title: t.title.clone(),
-                    pinned: s.tabs.is_pinned(i),
+    with(|s| {
+        let mut order: Vec<usize> = (0..s.windows.len()).collect();
+        order.sort_by_key(|&i| i != s.active);
+        hb_storage::Session {
+            windows: order
+                .into_iter()
+                .map(|i| &s.windows[i])
+                .filter(|w| !w.private && w.window.is_some())
+                .map(|w| hb_storage::WindowState {
+                    active: w.tabs.current_index(),
+                    tabs: w
+                        .tabs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, t)| !t.url.is_empty())
+                        .map(|(i, t)| hb_storage::TabState {
+                            url: t.url.clone(),
+                            title: t.title.clone(),
+                            pinned: w.tabs.is_pinned(i),
+                        })
+                        .collect(),
                 })
+                .filter(|w| !w.tabs.is_empty())
                 .collect(),
-        }],
+        }
     })
     .unwrap_or_default()
 }
@@ -562,9 +696,24 @@ struct UiUpdate {
 /// Push engine and tab state to the tab bar, status bar and completion overlay.
 /// Unchanged state is skipped, so this is cheap to call after every event.
 pub fn refresh_ui() {
-    let Some(update) = with(collect_ui_update) else {
+    let Some(updates) = with(|s| {
+        let focused = s.active;
+        let mut updates = Vec::new();
+        for i in 0..s.windows.len() {
+            s.active = i;
+            updates.push(collect_ui_update(s, i == focused));
+        }
+        s.active = focused;
+        updates
+    }) else {
         return;
     };
+    for update in updates {
+        apply_ui_update(update);
+    }
+}
+
+fn apply_ui_update(update: UiUpdate) {
     for (frame, json) in update.scripts {
         exec_js(&frame, &format!("hbRender({json})"));
     }
@@ -601,9 +750,17 @@ pub fn position_overlay() {
     }
 }
 
-fn collect_ui_update(s: &mut Shell) -> UiUpdate {
+/// What to redraw in the active window. Only the `focused` one (the window
+/// keys go to) shows the mode, command line, messages and overlay.
+fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let mut scripts = Vec::new();
-    let status = s.engine.status();
+    let mut status = s.engine.status();
+    if !focused {
+        status.mode = Mode::Normal;
+        status.command_line = None;
+        status.message = None;
+        status.keystring.clear();
+    }
     let generation = s.engine.message_generation();
     let timeout = s.engine.settings().int("messages.timeout");
     // Start the timer only once the message is on screen, so errors raised
@@ -628,6 +785,7 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
         "downloads": crate::downloads::summary(),
         "tab_index": s.tabs.current_index() + 1,
         "tab_count": s.tabs.len(),
+        "private": s.private,
     })
     .to_string();
     if s.statusbar_ready
@@ -677,7 +835,7 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
             s.engine.settings().str("window.title_format"),
             &tab.title,
             &tab.url,
-            s.engine.mode().name(),
+            status.mode.name(),
         );
         if text != s.last_title {
             s.last_title = text.clone();
@@ -686,16 +844,22 @@ fn collect_ui_update(s: &mut Shell) -> UiUpdate {
     }
 
     // A prompt takes the overlay; otherwise it shows command completions.
-    let (payload, rows) = match s.engine.prompt_view() {
+    let prompt = if focused {
+        s.engine.prompt_view()
+    } else {
+        None
+    };
+    let (payload, rows) = match prompt {
         Some(prompt) => {
             let rows = prompt_rows(s, &prompt);
             (json!({ "kind": "prompt", "prompt": prompt }), rows)
         }
-        None => {
+        None if focused => {
             let rows = completion_rows(&s.engine.completions());
             let count = rows.len();
             (json!({ "kind": "rows", "rows": rows }), count)
         }
+        None => (json!({ "kind": "rows", "rows": [] }), 0),
     };
     let payload = payload.to_string();
     let overlay_changed = payload != s.last_overlay;

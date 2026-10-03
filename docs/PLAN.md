@@ -135,7 +135,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] `:tab-pin` and pinned tabs (M14), `:tab-clone`, `:tab-give`, `:tab-take`
 - [ ] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
 - [ ] Favicons in the tab bar and completion (M14)
-- [ ] Multiple windows
+- [x] Multiple windows (2026-10-02)
 - [x] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Each tab stores the mode it was left in; with `restore`, switching back brings insert or passthrough mode back (2026-10-02). Hints, the caret and the like end on any switch; the command line and prompts stay.
 
 ### Hints
@@ -180,7 +180,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] History with completion (`:open` + `Tab`)
 - [x] Quickmarks and bookmarks in qutebrowser's file formats
 - [ ] Crash-recovery autosave, history page (`qute://history`-like), importing qutebrowser's history.sqlite
-- [ ] Private windows (separate `CefRequestContext`)
+- [x] Private windows (separate `CefRequestContext`) (2026-10-02)
 
 ---
 
@@ -307,7 +307,18 @@ Gaps:
   - Gaps:
     - Chromium also remembers `y` per site for permission prompts, and that memory wins over a later per-site `false`.
     - There are no per-site JavaScript, cookie or image settings yet.
-- Remaining: private windows (needs multiple windows first).
+- ✅ **Multiple and private windows** (2026-10-02):
+  - `shell::WindowState` holds a window's views, tabs, closed-tab list and redraw caches. `Shell` keeps a never-empty list and derefs to the active one, so the single-window code kept working.
+  - `with_tab` finds a browser in any window and makes that window the shell's for the closure. A key or a tab-bar click makes its window active, as does `on_window_activation_changed`.
+  - `refresh_ui` redraws every window. Only the active one shows the mode, command line, messages and overlay.
+  - `:open -w` and `-p` open windows, `:close` closes the current one, and `:quit` saves the session once and closes all. Sessions keep every non-private window, active first, and restore opens the others.
+  - Private windows share one `CefRequestContext` created with an empty cache path (in memory). Popups inherit it. History isn't recorded, and the status bar is gray.
+  - Smoke steps cover a second window taking keys (`]]` there doesn't affect the first), `:close`, and a private page staying out of history.
+  - Gaps:
+    - `:tab-give`/`:tab-take` and moving tabs between windows.
+    - Each window opens at 1280×800 at the origin, and window geometry isn't saved.
+    - The `{private}` title field.
+    - Downloads from private windows still go to the downloads directory and list.
 - ✅ **Background Google traffic reviewed** (2026-10-02). Method: a fresh profile on `about:blank` for 90 s with `--log-net-log`. Each request was mapped to its Chromium source through its traffic-annotation hash (`hash(id) = fold(c, h*31 + c) mod 138003713` over `tools/traffic_annotation/summary/annotations.xml`). Results are in the README's "Network traffic" table. Before: 8 Google hosts and 122 MB downloaded. After: CRLSets, subresource filter rules, network time and one `ListAccounts`, 5.8 MB.
   - Changes are in `hb-cef/src/privacy.rs`: `component_updates.component_updates_enabled = false` (Chromium still updates the components it exempts as security data, as with the `ComponentUpdatesEnabled` policy), spell-check dictionaries off, sign-in off, Chrome's default search engine off, and `--disable-features=AimEnabled,PreconnectToSearch,SearchEnginePreconnect2`, merged with any `--disable-features` the user passes.
   - Prefs are written into `Local State` and `Default/Preferences` before CEF starts, because these services start within 100 ms. `CefPreferenceManager::SetPreference` from `on_context_initialized` is too late. Through cef-rs it also fails silently unless the `error` out-string is non-empty, since an empty `CefString` is passed as NULL.

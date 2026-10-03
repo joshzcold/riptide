@@ -115,7 +115,7 @@ wrap_browser_process_handler! {
             }) {
                 adblock::load(data_dir, lists);
             }
-            window::create(startup.urls, startup.commands);
+            window::create(startup.urls, startup.commands, false);
             report_config_errors(&errors);
             if let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) {
                 help::note_upgrade(&data_dir);

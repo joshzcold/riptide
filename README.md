@@ -4,7 +4,7 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype (milestones 0 and 3–7: core modes, tabs, hints, config, storage, prompts and downloads). One window, Linux/X11 only. Not ready for daily browsing.
+**Status:** early prototype. It has modes, tabs, windows (including private ones), hints, config, storage, prompts and downloads, content blocking, search, marks, macros, caret mode and userscripts; see the plan for what's done. Linux/X11 only. Not ready for daily browsing.
 
 ## Building
 
@@ -271,6 +271,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `Ctrl-v` | Passthrough mode (leave with `Shift-Escape`) |
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
+
+`:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
 
 With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab while typing in insert mode, and you're back in insert mode when you return. The default `normal` leaves insert mode on every switch, and `persist` keeps the current mode.
 

@@ -10,6 +10,7 @@
     --passthrough-bg: #00008b;
     --error-bg: #ff0000;
     --warning-bg: #ff8c00;
+    --private-bg: #666666;
     --https: #00ff00;
     --http: #ffffff;
     --error-fg: #ffa500;
@@ -33,6 +34,7 @@
     white-space: pre;
     gap: 1ch;
   }
+  #bar.private { background: var(--private-bg); }
   #bar.insert { background: var(--insert-bg); }
   #bar.passthrough { background: var(--passthrough-bg); }
   #bar.msg-error { background: var(--error-bg); }
@@ -67,6 +69,7 @@
     const bar = $("bar");
     const left = $("left");
     bar.className = state.mode;
+    if (state.private) bar.classList.add("private");
     if (state.command_line || state.message) bar.classList.add("busy");
     if (state.command_line) {
       renderCommandLine(left, state.command_line);

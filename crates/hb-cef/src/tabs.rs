@@ -221,10 +221,28 @@ pub fn close(index: usize) {
 }
 
 /// Replace the open tabs with a session's (only its first window, for now).
+/// Replace this window's tabs with the session's first window, and open
+/// its other windows.
 pub fn restore(session: &hb_storage::Session) {
     let Some(window) = session.windows.first().filter(|w| !w.tabs.is_empty()) else {
         return shell::show_message(Level::Error, "That session has no tabs");
     };
+    restore_window(window);
+    for other in session
+        .windows
+        .iter()
+        .skip(1)
+        .filter(|w| !w.tabs.is_empty())
+    {
+        crate::window::create_from_session(other.clone());
+    }
+}
+
+/// Replace the active window's tabs with a saved window's.
+pub fn restore_window(window: &hb_storage::WindowState) {
+    if window.tabs.is_empty() {
+        return;
+    }
     let old = shell::with(|s| s.tabs.len()).unwrap_or(0);
     for tab in &window.tabs {
         open(&tab.url, Position::Last, false);

@@ -96,6 +96,10 @@ wrap_client! {
                 if self.role != Role::Tab
                     && let Some(args) = message.argument_list()
                 {
+                    // A click in a window's tab bar is about that window.
+                    if let Some(browser) = &browser {
+                        shell::activate_browser(browser.identifier());
+                    }
                     let name = CefString::from(&args.string(0)).to_string();
                     let payload = CefString::from(&args.string(1)).to_string();
                     match hb_core::ui_message::parse(&url, &name, &payload) {
@@ -131,22 +135,29 @@ wrap_keyboard_handler! {
         #[cfg(not(target_os = "macos"))]
         fn on_pre_key_event(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
             _os_event: Option<&mut OsEvent>,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
+            // Keys go to the window they were typed in.
+            if let Some(browser) = browser {
+                shell::activate_browser(browser.identifier());
+            }
             event.is_some_and(|e| route_key_event(self.role, e)).into()
         }
 
         #[cfg(target_os = "macos")]
         fn on_pre_key_event(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
             _os_event: *mut u8,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
+            if let Some(browser) = browser {
+                shell::activate_browser(browser.identifier());
+            }
             event.is_some_and(|e| route_key_event(self.role, e)).into()
         }
     }
@@ -365,8 +376,10 @@ wrap_load_handler! {
                 Role::Tab => {
                     let browser_ref = browser.as_deref().cloned();
                     let done = shell::with_tab(browser, |s, index, _| {
+                        let private = s.private;
                         let tab = s.tabs.get_mut(index)?;
-                        let visit = (!tab.load_error).then(|| (tab.url.clone(), tab.title.clone()));
+                        // Private windows leave no history.
+                        let visit = (!tab.load_error && !private).then(|| (tab.url.clone(), tab.title.clone()));
                         Some((tab.pending_error.take(), visit))
                     });
                     let Some(Some((error, visit))) = done else { return };

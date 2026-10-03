@@ -14,11 +14,46 @@ pub const STATUSBAR_HEIGHT: i32 = 20;
 pub const TABBAR_HEIGHT: i32 = 20;
 const CHROME_BACKGROUND: u32 = 0xFF00_0000;
 
-/// Open the main window with one tab per URL, or `url.start_pages` if none.
-/// `commands` (from the command line) run once the tabs are open.
-pub fn create(urls: Vec<String>, commands: Vec<String>) {
-    let mut delegate = HbWindowDelegate::new(urls, commands);
+/// Open a window with one tab per URL, or `url.start_pages` if none.
+/// `commands` (from the command line) run once the tabs are open. The first
+/// window may restore the saved session instead.
+pub fn create(urls: Vec<String>, commands: Vec<String>, private: bool) {
+    open(urls, commands, private, None);
+}
+
+/// A window for one window of a saved session.
+pub fn create_from_session(window: hb_storage::WindowState) {
+    open(Vec::new(), Vec::new(), false, Some(window));
+}
+
+fn open(
+    urls: Vec<String>,
+    commands: Vec<String>,
+    private: bool,
+    session: Option<hb_storage::WindowState>,
+) {
+    let Some(id) = shell::with(|s| s.new_window(private)) else {
+        return;
+    };
+    let mut delegate = HbWindowDelegate::new(id, urls, commands, session);
     window_create_top_level(Some(&mut delegate));
+}
+
+/// The request context for new tabs in the active window: the shared
+/// in-memory one for private windows, the profile's otherwise.
+pub fn request_context() -> Option<RequestContext> {
+    shell::with(|s| {
+        if !s.private {
+            return None;
+        }
+        if s.private_context.is_none() {
+            // An empty cache path keeps everything in memory.
+            s.private_context =
+                request_context_create_context(Some(&RequestContextSettings::default()), None);
+        }
+        s.private_context.clone()
+    })
+    .flatten()
 }
 
 pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
@@ -35,20 +70,23 @@ pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
     let mut extra_info = (role == Role::Tab)
         .then(crate::greasemonkey::extra_info)
         .flatten();
+    let mut context = (role == Role::Tab).then(request_context).flatten();
     browser_view_create(
         Some(&mut client),
         Some(&CefString::from(url)),
         Some(&settings),
         extra_info.as_mut(),
-        None,
+        context.as_mut(),
         Some(&mut delegate),
     )
 }
 
 wrap_window_delegate! {
     struct HbWindowDelegate {
+        id: u32,
         urls: Vec<String>,
         commands: Vec<String>,
+        session: Option<hb_storage::WindowState>,
     }
 
     impl ViewDelegate {
@@ -100,68 +138,100 @@ wrap_window_delegate! {
                 overlay.set_visible(0);
             }
 
-            shell::with(|s| {
+            let id = self.id;
+            let first = shell::with(|s| {
+                let Some(index) = s.window_index(id) else { return false };
+                s.active = index;
                 s.window = Some(window.clone());
                 s.content = Some(content.clone());
                 s.tabbar = Some(tabbar.clone());
                 s.statusbar = Some(statusbar.clone());
                 s.completion = Some(completion.clone());
                 s.overlay = overlay;
-            });
+                s.windows.len() == 1
+            })
+            .unwrap_or(false);
 
             window.show();
-            let restore = self.urls.is_empty()
-                && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
-            let restored = restore
-                && match storage::load_session(DEFAULT_SESSION) {
-                    Ok(session) => {
-                        tabs::restore(&session);
-                        true
-                    }
-                    Err(e) => {
-                        tracing::info!("no session to restore: {e}");
-                        false
-                    }
-                };
-            if !restored {
-                open_start_tabs(&self.urls);
+            if let Some(session) = &self.session {
+                tabs::restore_window(session);
+            } else {
+                let restore = first
+                    && self.urls.is_empty()
+                    && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
+                let restored = restore
+                    && match storage::load_session(DEFAULT_SESSION) {
+                        Ok(session) => {
+                            tabs::restore(&session);
+                            true
+                        }
+                        Err(e) => {
+                            tracing::info!("no session to restore: {e}");
+                            false
+                        }
+                    };
+                if !restored {
+                    open_start_tabs(&self.urls);
+                }
             }
             crate::remote::run_commands(&self.commands);
+        }
+
+        fn on_window_activation_changed(&self, _window: Option<&mut Window>, active: ::std::os::raw::c_int) {
+            if active != 0 {
+                shell::activate_window(self.id);
+            }
         }
 
         fn on_window_destroyed(&self, _window: Option<&mut Window>) {
             // Dropping the last view reference closes its browser synchronously,
             // which re-enters the shell, so drop them outside the borrow.
-            let views = shell::with(|s| {
-                let tabs = std::mem::take(&mut s.tabs);
-                (
-                    tabs,
-                    s.overlay.take(),
-                    s.completion.take(),
-                    s.statusbar.take(),
-                    s.tabbar.take(),
-                    s.content.take(),
-                    s.window.take(),
-                )
-            });
-            drop(views);
+            let id = self.id;
+            let state = shell::with(|s| {
+                let index = s.window_index(id)?;
+                let state = if s.windows.len() > 1 {
+                    let state = s.windows.remove(index);
+                    if s.active >= index && s.active > 0 {
+                        s.active -= 1;
+                    }
+                    state
+                } else {
+                    // The shell always has a window; keep a closed placeholder.
+                    let mut placeholder = shell::WindowState::new(id, false);
+                    placeholder.window_closing = true;
+                    std::mem::replace(&mut s.windows[index], placeholder)
+                };
+                Some(state)
+            })
+            .flatten();
+            drop(state);
+            shell::refresh_ui();
         }
 
         fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
             // Let every page run its unload handlers; CEF closes the window
-            // once all of them agree.
-            // CEF may ask again while pages unload; save the session only the first time.
+            // once all of them agree. CEF may ask again while pages unload,
+            // so save the session only the first time, and only when the
+            // last window closes (`:quit` saves all windows itself).
+            let id = self.id;
             let save = shell::with(|s| {
-                let first = !s.window_closing;
-                s.window_closing = true;
-                first && (s.save_session_on_quit || s.engine.settings().bool("auto_save.session"))
+                let index = s.window_index(id)?;
+                let first = !s.windows[index].window_closing;
+                s.windows[index].window_closing = true;
+                let last = s.windows.iter().filter(|w| !w.window_closing).count() == 0;
+                Some(first && last && !s.quitting && s.engine.settings().bool("auto_save.session"))
             })
+            .flatten()
             .unwrap_or(false);
             if save && let Err(e) = storage::save_session(DEFAULT_SESSION) {
                 tracing::warn!("could not save session: {e}");
             }
-            let hosts: Vec<BrowserHost> = shell::with(|s| s.tabs.iter().filter_map(|t| t.browser()?.host()).collect())
-                .unwrap_or_default();
+            let hosts: Vec<BrowserHost> = shell::with(|s| {
+                let index = s.window_index(id)?;
+                Some(s.windows[index].tabs.iter().filter_map(|t| t.browser()?.host()).collect())
+            })
+            .flatten()
+            .unwrap_or_default();
             let closable = hosts.iter().map(|h| h.try_close_browser()).filter(|&ok| ok == 0).count() == 0;
             closable.into()
         }
@@ -212,11 +282,15 @@ wrap_browser_view_delegate! {
         // URL ourselves) keeps `window.opener`, which login flows rely on.
         fn on_popup_browser_view_created(
             &self,
-            _browser_view: Option<&mut BrowserView>,
+            browser_view: Option<&mut BrowserView>,
             popup_browser_view: Option<&mut BrowserView>,
             _is_devtools: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int {
             let Some(popup) = popup_browser_view else { return 0 };
+            // The popup becomes a tab in its opener's window.
+            if let Some(opener) = browser_view.and_then(|v| v.browser()) {
+                shell::activate_browser(opener.identifier());
+            }
             let background = shell::with(|s| std::mem::take(&mut s.popup_in_background)).unwrap_or(false);
             let position = shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next);
             tabs::add_view(popup.clone(), position, !background);
