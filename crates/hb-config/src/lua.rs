@@ -8,7 +8,15 @@
 //! hb.unbind("d")
 //! if hb.platform == "macos" then c.hints.uppercase = true end
 //! require("work")                          -- loads lua/work.lua from the config dir
+//!
+//! -- Scripting: the VM stays alive after the file runs.
+//! hb.bind("<Ctrl-g>", function() hb.message("on " .. hb.url()) end)
+//! hb.command("wiki", function(args) hb.open("https://en.wikipedia.org/wiki/" .. args, "tab") end)
+//! hb.on("load_finished", function(e) if e.url:find("example") then hb.run("zoom-in") end end)
 //! ```
+//!
+//! Callbacks don't touch the browser directly: they read a [`Context`]
+//! (URL, title, mode, count) and return [`Action`]s for the browser to carry out.
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -40,6 +48,149 @@ c = proxy("")
 struct State {
     ops: Vec<ConfigOp>,
     settings: Settings,
+    /// False while `config.lua` runs; afterwards `hb.set` becomes a `:set`.
+    loaded: bool,
+    context: Context,
+    actions: Vec<Action>,
+    next_callback: u32,
+    commands: Vec<(String, String)>,
+}
+
+/// What callbacks see of the browser.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Context {
+    pub url: String,
+    pub title: String,
+    pub mode: String,
+    pub count: Option<u32>,
+}
+
+/// What callbacks ask the browser to do, in order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Action {
+    /// A command line, e.g. `open -t x`.
+    Run(String),
+    Message {
+        error: bool,
+        text: String,
+    },
+}
+
+/// The Lua VM `config.lua` ran in, kept for its callbacks. It lives on the
+/// thread that loads the config (CEF's UI thread).
+struct Runtime {
+    lua: Lua,
+    state: Rc<RefCell<State>>,
+    config_dir: std::path::PathBuf,
+}
+
+thread_local! {
+    static RUNTIME: RefCell<Option<Runtime>> = const { RefCell::new(None) };
+}
+
+/// Forget the VM, e.g. because `config.lua` no longer exists.
+pub fn clear_runtime() {
+    RUNTIME.with(|r| *r.borrow_mut() = None);
+}
+
+/// Commands defined with `hb.command`, as `(name, description)`.
+pub fn user_commands() -> Vec<(String, String)> {
+    RUNTIME.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map(|rt| rt.state.borrow().commands.clone())
+            .unwrap_or_default()
+    })
+}
+
+/// Call a Lua function from the runtime's tables with `args`.
+fn invoke(
+    table: &str,
+    key: mlua::Value,
+    args: mlua::MultiValue,
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    RUNTIME.with(|r| {
+        let runtime = r.borrow();
+        let Some(rt) = runtime.as_ref() else {
+            return Err("config.lua isn't loaded".to_string());
+        };
+        rt.state.borrow_mut().context = context.clone();
+        let result = (|| -> mlua::Result<()> {
+            let hb: mlua::Table = rt.lua.globals().get("hb")?;
+            let table: mlua::Table = hb.get(table)?;
+            match table.get::<mlua::Value>(key)? {
+                mlua::Value::Function(f) => f.call::<()>(args),
+                mlua::Value::Table(hooks) => {
+                    for hook in hooks.sequence_values::<mlua::Function>() {
+                        hook?.call::<()>(args.clone())?;
+                    }
+                    Ok(())
+                }
+                _ => Ok(()),
+            }
+        })();
+        let actions = std::mem::take(&mut rt.state.borrow_mut().actions);
+        result
+            .map(|()| actions)
+            .map_err(|e| tidy_error(&e.to_string(), &rt.config_dir))
+    })
+}
+
+/// Run the function bound with `hb.bind(keys, function)`.
+pub fn call(callback: u32, context: &Context) -> Result<Vec<Action>, String> {
+    invoke(
+        "_callbacks",
+        mlua::Value::Integer(callback.into()),
+        mlua::MultiValue::new(),
+        context,
+    )
+}
+
+/// Run a command defined with `hb.command`; `args` is the rest of the line.
+pub fn run_command(name: &str, args: &str, context: &Context) -> Result<Vec<Action>, String> {
+    RUNTIME
+        .with(|r| -> mlua::Result<(mlua::Value, mlua::MultiValue)> {
+            let runtime = r.borrow();
+            let rt = runtime
+                .as_ref()
+                .ok_or_else(|| mlua::Error::runtime("config.lua isn't loaded"))?;
+            Ok((
+                mlua::Value::String(rt.lua.create_string(name)?),
+                mlua::MultiValue::from_vec(vec![mlua::Value::String(rt.lua.create_string(args)?)]),
+            ))
+        })
+        .map_err(|e| e.to_string())
+        .and_then(|(key, args)| invoke("_commands", key, args, context))
+}
+
+/// Call every `hb.on(event, fn)` hook with a table of `fields`.
+pub fn emit(
+    event: &str,
+    fields: &[(&str, &str)],
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    let prepared = RUNTIME.with(
+        |r| -> Option<mlua::Result<(mlua::Value, mlua::MultiValue)>> {
+            let runtime = r.borrow();
+            let rt = runtime.as_ref()?;
+            Some((|| {
+                let payload = rt.lua.create_table()?;
+                for (key, value) in fields {
+                    payload.set(*key, *value)?;
+                }
+                Ok((
+                    mlua::Value::String(rt.lua.create_string(event)?),
+                    mlua::MultiValue::from_vec(vec![mlua::Value::Table(payload)]),
+                ))
+            })())
+        },
+    );
+    match prepared {
+        None => Ok(Vec::new()),
+        Some(Err(e)) => Err(e.to_string()),
+        Some(Ok((key, args))) => invoke("_hooks", key, args, context),
+    }
 }
 
 /// Run a Lua config file. `settings` is the state so far, which `hb.get` reads.
@@ -52,6 +203,11 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
     let state = Rc::new(RefCell::new(State {
         ops: Vec::new(),
         settings,
+        loaded: false,
+        context: Context::default(),
+        actions: Vec::new(),
+        next_callback: 1,
+        commands: Vec::new(),
     }));
     let lua = Lua::new();
     let result = setup(&lua, paths, state.clone())
@@ -62,7 +218,19 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
                 .exec()
                 .map_err(|e| e.to_string())
         });
-    let ops = std::mem::take(&mut state.borrow_mut().ops);
+    let ops = {
+        let mut state = state.borrow_mut();
+        state.loaded = true;
+        state.actions.clear();
+        std::mem::take(&mut state.ops)
+    };
+    RUNTIME.with(|r| {
+        *r.borrow_mut() = Some(Runtime {
+            lua,
+            state,
+            config_dir: paths.config_dir.clone(),
+        })
+    });
     (ops, result.err().map(|e| tidy_error(&e, &paths.config_dir)))
 }
 
@@ -142,6 +310,18 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 let json: serde_json::Value = lua.from_value(value)?;
                 let value = def.from_json(&json).map_err(mlua::Error::runtime)?;
                 let mut state = s.borrow_mut();
+                if state.loaded {
+                    // From a callback: the same as typing :set.
+                    let pattern = pattern.map(|p| format!("-u {p} ")).unwrap_or_default();
+                    let text = match &value {
+                        settings::Value::Str(text) => text.clone(),
+                        other => other.to_json().to_string(),
+                    };
+                    state
+                        .actions
+                        .push(Action::Run(format!("set {pattern}{name} {text}")));
+                    return Ok(());
+                }
                 match pattern {
                     Some(pattern) => {
                         state
@@ -182,13 +362,35 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         lua.create_function(|_, name: String| Ok(settings::find(&name).is_some()))?,
     )?;
 
+    hb.set("_callbacks", lua.create_table()?)?;
+    hb.set("_commands", lua.create_table()?)?;
+    hb.set("_hooks", lua.create_table()?)?;
+
     let s = state.clone();
     hb.set(
         "bind",
         lua.create_function(
-            move |_, (keys, command, mode): (String, String, Option<String>)| {
+            move |lua, (keys, command, mode): (String, Value, Option<String>)| {
                 Key::parse_sequence(&keys).map_err(|e| mlua::Error::runtime(e.to_string()))?;
                 let mode = mode_arg(mode)?;
+                let command = match command {
+                    Value::String(text) => text.to_str()?.to_string(),
+                    Value::Function(f) => {
+                        let id = {
+                            let mut state = s.borrow_mut();
+                            state.next_callback += 1;
+                            state.next_callback - 1
+                        };
+                        let hb: mlua::Table = lua.globals().get("hb")?;
+                        hb.get::<mlua::Table>("_callbacks")?.set(id, f)?;
+                        format!("lua-call {id}")
+                    }
+                    _ => {
+                        return Err(mlua::Error::runtime(
+                            "hb.bind takes a command string or a function",
+                        ));
+                    }
+                };
                 s.borrow_mut().ops.push(ConfigOp::Bind {
                     mode,
                     keys,
@@ -197,6 +399,119 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 Ok(())
             },
         )?,
+    )?;
+
+    let s = state.clone();
+    hb.set(
+        "command",
+        lua.create_function(
+            move |lua, (name, f, description): (String, mlua::Function, Option<String>)| {
+                let valid = !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+                if !valid {
+                    return Err(mlua::Error::runtime(format!("bad command name {name:?}")));
+                }
+                if hb_core::command::COMMANDS.iter().any(|c| c.name == name) {
+                    return Err(mlua::Error::runtime(format!(
+                        ":{name} is a built-in command"
+                    )));
+                }
+                let hb: mlua::Table = lua.globals().get("hb")?;
+                hb.get::<mlua::Table>("_commands")?.set(name.clone(), f)?;
+                let mut state = s.borrow_mut();
+                state.commands.retain(|(n, _)| *n != name);
+                state.commands.push((
+                    name,
+                    description.unwrap_or_else(|| "Defined in config.lua".into()),
+                ));
+                Ok(())
+            },
+        )?,
+    )?;
+
+    hb.set(
+        "on",
+        lua.create_function(move |lua, (event, f): (String, mlua::Function)| {
+            const EVENTS: &[&str] = &["load_finished", "url_changed", "tab_opened", "mode_changed"];
+            if !EVENTS.contains(&event.as_str()) {
+                return Err(mlua::Error::runtime(format!(
+                    "unknown event {event:?}; events: {}",
+                    EVENTS.join(", ")
+                )));
+            }
+            let hb: mlua::Table = lua.globals().get("hb")?;
+            let hooks: mlua::Table = hb.get("_hooks")?;
+            let list = match hooks.get::<Option<mlua::Table>>(event.clone())? {
+                Some(list) => list,
+                None => {
+                    let list = lua.create_table()?;
+                    hooks.set(event, list.clone())?;
+                    list
+                }
+            };
+            list.push(f)
+        })?,
+    )?;
+
+    for (name, field) in [("url", 0), ("title", 1), ("mode", 2)] {
+        let s = state.clone();
+        hb.set(
+            name,
+            lua.create_function(move |_, ()| {
+                let state = s.borrow();
+                let c = &state.context;
+                Ok(match field {
+                    0 => c.url.clone(),
+                    1 => c.title.clone(),
+                    _ => c.mode.clone(),
+                })
+            })?,
+        )?;
+    }
+    let s = state.clone();
+    hb.set(
+        "count",
+        lua.create_function(move |_, ()| Ok(s.borrow().context.count))?,
+    )?;
+
+    let s = state.clone();
+    hb.set(
+        "run",
+        lua.create_function(move |_, line: String| {
+            s.borrow_mut().actions.push(Action::Run(line));
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    hb.set(
+        "open",
+        lua.create_function(move |_, (url, target): (String, Option<String>)| {
+            let flag = match target.as_deref() {
+                None | Some("current") => "",
+                Some("tab") => "-t ",
+                Some("tab-bg") => "-b ",
+                Some("window") => "-w ",
+                Some("private") => "-p ",
+                Some(other) => {
+                    return Err(mlua::Error::runtime(format!("unknown target {other:?}")));
+                }
+            };
+            s.borrow_mut()
+                .actions
+                .push(Action::Run(format!("open {flag}{url}")));
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    hb.set(
+        "message",
+        lua.create_function(move |_, (text, level): (String, Option<String>)| {
+            let error = level.as_deref() == Some("error");
+            s.borrow_mut().actions.push(Action::Message { error, text });
+            Ok(())
+        })?,
     )?;
 
     let s = state;
@@ -223,6 +538,84 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn callbacks_commands_and_hooks() {
+        let dir = std::env::temp_dir().join(format!("hb-lua-runtime-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+hb.bind("<Ctrl-g>", function() hb.message("on " .. hb.url() .. " x" .. tostring(hb.count())) end)
+hb.command("wiki", function(args) hb.open("https://en.wikipedia.org/wiki/" .. args, "tab") end, "Look it up")
+hb.on("load_finished", function(e) if e.url:find("example") then hb.run("zoom-in") end end)
+hb.command("boom", function() error("broken") end)
+hb.command("dark", function() hb.set("colors.webpage.preferred_color_scheme", "dark") end)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (ops, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        assert_eq!(
+            ops,
+            [ConfigOp::Bind {
+                mode: Mode::Normal,
+                keys: "<Ctrl-g>".into(),
+                command: "lua-call 1".into()
+            }]
+        );
+        let ctx = Context {
+            url: "https://example.com/".into(),
+            count: Some(3),
+            ..Context::default()
+        };
+        assert_eq!(
+            call(1, &ctx).unwrap(),
+            [Action::Message {
+                error: false,
+                text: "on https://example.com/ x3".into()
+            }]
+        );
+        assert_eq!(
+            run_command("wiki", "Rust", &ctx).unwrap(),
+            [Action::Run(
+                "open -t https://en.wikipedia.org/wiki/Rust".into()
+            )]
+        );
+        assert_eq!(
+            emit("load_finished", &[("url", "https://example.com/")], &ctx).unwrap(),
+            [Action::Run("zoom-in".into())]
+        );
+        assert!(
+            emit("load_finished", &[("url", "https://other.org/")], &ctx)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(emit("tab_opened", &[], &ctx).unwrap().is_empty());
+        assert!(
+            run_command("boom", "", &ctx)
+                .unwrap_err()
+                .contains("config.lua:5: broken")
+        );
+        assert_eq!(
+            run_command("dark", "", &ctx).unwrap(),
+            [Action::Run(
+                "set colors.webpage.preferred_color_scheme dark".into()
+            )]
+        );
+        assert_eq!(
+            user_commands()
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>(),
+            ["wiki", "boom", "dark"]
+        );
+        std::fs::write(dir.join("config.lua"), "hb.command('open', function() end)").unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert!(error.is_some_and(|e| e.contains("built-in")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn hb_set_takes_a_url_pattern() {

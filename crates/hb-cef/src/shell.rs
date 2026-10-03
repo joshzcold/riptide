@@ -337,8 +337,10 @@ pub fn load_config() -> Vec<String> {
 
 /// Put config that was already read into the engine.
 pub fn apply_config(loaded: hb_config::Loaded) -> Vec<String> {
+    let user_commands = hb_config::lua::user_commands();
     let errors = with(|s| {
         s.engine.reset_config();
+        s.engine.set_user_commands(user_commands);
         let mut errors = loaded.errors;
         for op in &loaded.ops {
             if let Err(e) = s.engine.apply_config(op) {
@@ -426,6 +428,7 @@ pub fn apply(effects: Vec<Effect>) {
             Effect::Run { command, count } => run_command(command, count),
             Effect::ModeChanged { from, to } => {
                 tracing::debug!(%from, %to, "mode changed");
+                crate::lua::emit("mode_changed", &[("from", from.name()), ("to", to.name())]);
                 if from == Mode::Hint {
                     hints::clear();
                 }
@@ -461,6 +464,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::greasemonkey::run_command(&command)
         || crate::search::run_command(&command, count)
         || crate::navigate::run_command(&command, count)
+        || crate::lua::run_command(&command, count)
     {
         return;
     }

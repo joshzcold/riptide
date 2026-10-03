@@ -215,6 +215,25 @@ The tab bar, status bar and overlay are HTML pages served from the browser itsel
 
 `config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `hb.set/get/bind/unbind`, `hb.platform` (`linux`, `macos`, `windows`), `hb.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
 
+The Lua VM stays alive after the file runs, so config can also script the browser:
+
+```lua
+-- A key bound to a function, with access to the page and the count.
+hb.bind("<Ctrl-g>", function() hb.message(hb.title() .. " — " .. hb.url()) end)
+
+-- A command, :wiki rust, with completion next to the built-in ones.
+hb.command("wiki", function(args)
+  hb.open("https://en.wikipedia.org/wiki/" .. args, "tab")
+end, "Search Wikipedia")
+
+-- Hooks: load_finished, url_changed, tab_opened (e.url), mode_changed (e.from, e.to).
+hb.on("load_finished", function(e)
+  if e.url:find("^https://news%.example%.com/") then hb.run("scroll-to-perc 0") end
+end)
+```
+
+In callbacks, `hb.url()`, `hb.title()`, `hb.mode()` and `hb.count()` describe the current page. `hb.run(line)`, `hb.open(url, target)`, `hb.message(text, level)` and `hb.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
+
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh

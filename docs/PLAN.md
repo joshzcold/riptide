@@ -379,8 +379,19 @@ Gaps:
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
 
-### M12 — Lua scripting
+### M12 — Lua scripting ✅ mostly done 2026-10-02
 Builds on the M5 Lua config API.
+
+Result:
+- The VM that ran `config.lua` is kept in a UI-thread `thread_local` (`hb_config::lua`, since `mlua::Lua` isn't `Send`). Callbacks get a `Context` (URL, title, mode, count) and return `Action`s (`Run(line)`, `Message`), which `hb-cef/src/lua.rs` carries out outside any shell borrow. A depth limit stops hooks that trigger each other.
+- `hb.bind(keys, function)` stores the function and binds `lua-call <id>`.
+- `hb.command(name, fn, description)` defines commands. The engine parses them as `Command::User`, accepts bindings to them and completes them next to built-ins; built-in names are refused.
+- `hb.on` supports `load_finished`, `url_changed`, `tab_opened` and `mode_changed`.
+- In callbacks, `hb.set` becomes a `:set`.
+- Unit tests in hb-config drive the VM without CEF (bindings, commands, hooks, errors with `config.lua:line`). A smoke step uses all three entry points.
+- Not done: a sandbox for third-party scripts (only the user's own config runs), Lua commands on the help page, a richer API (tabs list, settings watchers), and Lua userscripts.
+
+Original plan:
 - Bind keys to Lua functions: `hb.bind("<Ctrl-g>", function() ... end)`.
 - Lua-defined commands: `hb.command("name", fn)`, with completion.
 - Event hooks: `hb.on("load_finished", fn)`, `hb.on("tab_opened", fn)`, mode changes.

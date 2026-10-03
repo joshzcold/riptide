@@ -267,6 +267,15 @@ pub enum Command {
     GreasemonkeyReload,
     /// Close the current window.
     Close,
+    /// Run the Lua function bound with `hb.bind(keys, function)`.
+    LuaCall {
+        id: u32,
+    },
+    /// A command defined in `config.lua` with `hb.command`.
+    User {
+        name: String,
+        args: String,
+    },
     /// Go up the URL, to the previous/next page, or change the number in it.
     Navigate {
         to: NavigateTo,
@@ -474,6 +483,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "close",
         "Close the current window (:quit closes all of them)",
     ),
+    hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
         "Go up, prev, next, increment or decrement the URL: :navigate <where> [-t]",
@@ -848,6 +858,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
         "close" => Command::Close,
+        "lua-call" => Command::LuaCall {
+            id: args
+                .required("id")?
+                .parse()
+                .map_err(|_| args.error("lua-call takes a callback number".to_string()))?,
+        },
         "navigate" => {
             let to = match args.required("where")? {
                 "up" => NavigateTo::Up,
@@ -1403,6 +1419,7 @@ mod tests {
             "spell-replace",
             "spawn",
             "navigate",
+            "lua-call",
             "set-mark",
             "jump-mark",
         ];

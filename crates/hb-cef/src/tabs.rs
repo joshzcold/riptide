@@ -106,7 +106,10 @@ pub fn move_tab(from: usize, to: usize) {
 /// Open `url` in a new tab.
 pub fn open(url: &str, position: Position, focus: bool) {
     match window::create_browser_view(Role::Tab, url) {
-        Some(view) => add_view(view, position, focus),
+        Some(view) => {
+            add_view(view, position, focus);
+            crate::lua::emit("tab_opened", &[("url", url)]);
+        }
         None => shell::show_message(Level::Error, "Could not create a browser view"),
     }
 }

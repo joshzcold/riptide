@@ -107,6 +107,10 @@ cat >"$work/private.html" <<'EOF'
 <!doctype html><title>private</title>
 EOF
 
+cat >"$work/hook.html" <<'EOF'
+<!doctype html><title>hook</title>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -252,6 +256,11 @@ c.downloads.location.prompt = false
 c.window.title_format = "{mode}::{current_title}"
 c.content.blocking.adblock.lists = { "file://$work/filters.txt" }
 c.editor.command = { "$work/editor.sh", "{file}" }
+hb.command("second", function(args) hb.open("file://$work/second.html" .. args, "tab") end, "Open the second page")
+hb.bind("gS", function() hb.run("open file://$work/nav1.html") end)
+hb.on("load_finished", function(e)
+  if e.url:find("hook.html", 1, true) then hb.run("open file://$work/nav2.html") end
+end)
 EOF
 HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
@@ -540,6 +549,20 @@ run "open https://127.0.0.1:$(cat "$work/tls-port")/"
 wait_mode yesno || true
 xdotool key y
 expect_title "secret page"
+
+step "Lua: a command, a key bound to a function, and a hook"
+run "second"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
+command_page=$(page_title)
+nap 0.3
+xdotool key g shift+s
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav1 ]] && break; sleep 0.1; done
+key_page=$(page_title)
+run "open file://$work/hook.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; sleep 0.1; done
+hook_page=$(page_title)
+[[ $command_page == second && $key_page == nav1 && $hook_page == nav2 ]] && pass ||
+    fail ":second → '$command_page', gS → '$key_page', hook → '$hook_page'"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

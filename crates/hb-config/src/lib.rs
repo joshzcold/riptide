@@ -74,6 +74,8 @@ pub fn load(paths: &Paths) -> Loaded {
         let (more, error) = lua::run(&lua_path, paths, settings);
         ops.extend(more);
         errors.extend(error);
+    } else {
+        lua::clear_runtime();
     }
 
     let mut sources = BTreeMap::new();

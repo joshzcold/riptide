@@ -119,6 +119,8 @@ pub struct Engine {
     mode_before_prompt: Mode,
     dirty: bool,
     macros: Macros,
+    /// Commands defined in `config.lua`, as `(name, description)`.
+    user_commands: Vec<(String, String)>,
 }
 
 /// Keyboard macros (`q` / `@`).
@@ -163,6 +165,7 @@ impl Engine {
             mode_before_prompt: Mode::Normal,
             dirty: true,
             macros: Macros::default(),
+            user_commands: Vec::new(),
         }
     }
 
@@ -250,7 +253,23 @@ impl Engine {
             None => true,
         };
         if fresh {
-            let items = completion::compute(text, self.completion_source.as_ref());
+            let mut items = completion::compute(text, self.completion_source.as_ref());
+            // Commands from config.lua complete next to the built-in ones.
+            if let Some(typed) = text
+                .strip_prefix(':')
+                .filter(|t| !t.contains(char::is_whitespace))
+            {
+                items.extend(
+                    self.user_commands
+                        .iter()
+                        .filter(|(n, _)| n.starts_with(typed))
+                        .map(|(n, d)| completion::Completion {
+                            category: "Commands",
+                            name: n.clone(),
+                            description: d.clone(),
+                        }),
+                );
+            }
             self.completion = Some(CompletionState {
                 base: text.to_string(),
                 inserted: None,
@@ -540,7 +559,10 @@ impl Engine {
             }
             let result = self
                 .substitute(piece)
-                .and_then(|piece| command::parse(&piece).map_err(|e| e.to_string()));
+                .and_then(|piece| match self.user_command(&piece) {
+                    Some(command) => Ok(command),
+                    None => command::parse(&piece).map_err(|e| e.to_string()),
+                });
             match result {
                 Ok(cmd) => self.execute(cmd, count, &mut effects),
                 Err(e) => {
@@ -1063,7 +1085,7 @@ impl Engine {
     /// Reject bindings to unknown commands up front instead of at key press.
     pub fn check_command(&self, line: &str) -> Result<(), String> {
         for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {
-            if self.expand_alias(piece).is_some() {
+            if self.expand_alias(piece).is_some() || self.user_command(piece).is_some() {
                 continue;
             }
             if let Err(e @ command::CommandError::Unknown(_)) = command::parse(piece) {
@@ -1071,6 +1093,28 @@ impl Engine {
             }
         }
         Ok(())
+    }
+
+    /// Commands defined in `config.lua`; set before the config is applied.
+    pub fn set_user_commands(&mut self, commands: Vec<(String, String)>) {
+        self.user_commands = commands;
+    }
+
+    pub fn user_commands(&self) -> &[(String, String)] {
+        &self.user_commands
+    }
+
+    /// `piece` as a call to a command defined in `config.lua`.
+    fn user_command(&self, piece: &str) -> Option<Command> {
+        let piece = piece.trim().trim_start_matches(':');
+        let (name, args) = piece.split_once(char::is_whitespace).unwrap_or((piece, ""));
+        self.user_commands
+            .iter()
+            .any(|(n, _)| n == name)
+            .then(|| Command::User {
+                name: name.to_string(),
+                args: args.trim().to_string(),
+            })
     }
 
     fn set_mode(&mut self, mode: Mode, effects: &mut Vec<Effect>) {
@@ -1300,6 +1344,31 @@ mod tests {
         e.set_mode(Mode::Insert, &mut Vec::new());
         e.tab_switched(Some(Mode::Normal));
         assert_eq!(e.mode(), Mode::Insert, "persist keeps insert mode");
+    }
+
+    #[test]
+    fn user_commands_parse_bind_and_complete() {
+        let mut e = engine();
+        e.set_user_commands(vec![("wiki".into(), "Look it up".into())]);
+        assert_eq!(
+            runs(&[consumed(e.execute_str("wiki rust lang", None))]),
+            vec![(
+                Command::User {
+                    name: "wiki".into(),
+                    args: "rust lang".into()
+                },
+                None
+            )]
+        );
+        e.apply_config(&ConfigOp::Bind {
+            mode: Mode::Normal,
+            keys: "gw".into(),
+            command: "wiki x".into(),
+        })
+        .unwrap();
+        press(&mut e, ":wi");
+        assert!(e.completions().items.iter().any(|c| c.name == "wiki"));
+        assert!(e.check_command("nope").is_err());
     }
 
     #[test]

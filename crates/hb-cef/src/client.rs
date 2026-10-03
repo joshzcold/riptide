@@ -289,15 +289,16 @@ wrap_display_handler! {
             if url.starts_with("chrome-error:") {
                 return;
             }
-            shell::with_tab(browser, |s, index, current| {
+            let changed = shell::with_tab(browser, |s, index, current| {
                 if current {
                     s.engine.set_url(&url);
                 }
-                if let Some(tab) = s.tabs.get_mut(index) {
-                    tab.url = url;
-                }
+                s.tabs.get_mut(index).map(|tab| tab.url = url.clone())
             });
             shell::refresh_ui();
+            if changed.flatten().is_some() {
+                crate::lua::emit("url_changed", &[("url", &url)]);
+            }
         }
 
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
@@ -392,6 +393,8 @@ wrap_load_handler! {
                     if let Some(browser) = browser_ref {
                         crate::marks::loaded(&browser);
                     }
+                    let url = CefString::from(&frame.url()).to_string();
+                    crate::lua::emit("load_finished", &[("url", &url)]);
                     return;
                 }
                 Role::Tabbar => shell::with(|s| s.tabbar_ready = true),

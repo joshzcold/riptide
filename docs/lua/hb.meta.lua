@@ -26,9 +26,10 @@ function hb.set(name, value, pattern) end
 ---@return any
 function hb.get(name) end
 
----Bind keys (qutebrowser notation, e.g. "<Ctrl-x>" or "gg") to a command.
+---Bind keys (qutebrowser notation, e.g. "<Ctrl-x>" or "gg") to a command,
+---or to a Lua function that runs when they're pressed.
 ---@param keys string
----@param command string
+---@param command string|fun()
 ---@param mode? hb.Mode defaults to "normal"
 function hb.bind(keys, command, mode) end
 
@@ -36,6 +37,48 @@ function hb.bind(keys, command, mode) end
 ---@param keys string
 ---@param mode? hb.Mode defaults to "normal"
 function hb.unbind(keys, mode) end
+
+---Define a command, e.g. `:wiki rust`; `fn` gets the rest of the line.
+---@param name string letters, digits, `-` and `_`
+---@param fn fun(args: string)
+---@param description? string shown in completion
+function hb.command(name, fn, description) end
+
+---Run `fn` on an event: "load_finished" and "url_changed" (`e.url`),
+---"tab_opened" (`e.url`) or "mode_changed" (`e.from`, `e.to`).
+---@param event "load_finished"|"url_changed"|"tab_opened"|"mode_changed"
+---@param fn fun(e: table)
+function hb.on(event, fn) end
+
+---The current page's URL (in callbacks).
+---@return string
+function hb.url() end
+
+---The current page's title (in callbacks).
+---@return string
+function hb.title() end
+
+---The current mode, e.g. "normal" (in callbacks).
+---@return string
+function hb.mode() end
+
+---The count typed before the key, if any (in callbacks).
+---@return integer?
+function hb.count() end
+
+---Run a command line, e.g. `hb.run("tab-close")` (in callbacks).
+---@param line string
+function hb.run(line) end
+
+---Open a URL (in callbacks).
+---@param url string
+---@param target? "current"|"tab"|"tab-bg"|"window"|"private"
+function hb.open(url, target) end
+
+---Show a message in the status bar (in callbacks).
+---@param text string
+---@param level? "info"|"error"
+function hb.message(text, level) end
 
 ---@class hb.c
 ---@field aliases table<string, string> Command aliases: name → command

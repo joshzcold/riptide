@@ -12,6 +12,7 @@ mod favicons;
 mod greasemonkey;
 mod help;
 mod hints;
+mod lua;
 mod marks;
 mod navigate;
 mod permissions;
