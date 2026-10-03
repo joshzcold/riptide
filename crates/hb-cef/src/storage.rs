@@ -74,6 +74,9 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     if kind == CompletionKind::Spelling {
         return crate::spell::completions(pattern);
     }
+    if kind == CompletionKind::Tab {
+        return crate::tabs::completions(pattern);
+    }
     with(|s| {
         let mut items = Vec::new();
         if matches!(kind, CompletionKind::Url | CompletionKind::Quickmark) {

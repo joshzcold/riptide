@@ -269,6 +269,10 @@ pub enum Command {
     GreasemonkeyReload,
     /// Close the current window.
     Close,
+    /// Go to a tab in any window: `window/tab` (1-based) or text in its title or URL.
+    TabSelect {
+        target: String,
+    },
     /// Run the Lua function bound with `hb.bind(keys, function)`.
     LuaCall {
         id: u32,
@@ -484,6 +488,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "close",
         "Close the current window (:quit closes all of them)",
+    ),
+    spec(
+        "tab-select",
+        "Go to a tab in any window: :tab-select <window/tab | text> (T)",
     ),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
@@ -868,6 +876,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
         "close" => Command::Close,
+        "tab-select" => Command::TabSelect {
+            target: args.rest().to_string(),
+        },
         "lua-call" => Command::LuaCall {
             id: args
                 .required("id")?

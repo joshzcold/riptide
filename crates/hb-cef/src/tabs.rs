@@ -17,6 +17,7 @@ const MAX_CLOSED_TABS: usize = 100;
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     let n = i64::from(count.unwrap_or(1).max(1));
     match command {
+        Command::TabSelect { target } => select_tab(target),
         Command::TabNext => focus_offset(n),
         Command::TabPrev => focus_offset(-n),
         Command::TabFocus(target) => match (count, target) {
@@ -338,4 +339,111 @@ fn move_current(target: Option<TabMoveTarget>, count: Option<u32>) {
         };
         s.tabs.move_current(to);
     });
+}
+
+/// An open tab, for `:tab-select` completion: window and tab numbers
+/// (from 1), title and URL.
+pub struct OpenTab {
+    pub window: usize,
+    pub tab: usize,
+    pub title: String,
+    pub url: String,
+}
+
+thread_local! {
+    /// Taken on every redraw: completion runs inside the shell borrow and
+    /// can't look at the windows itself.
+    static OPEN_TABS: std::cell::RefCell<Vec<OpenTab>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn remember_open_tabs(s: &shell::Shell) {
+    let tabs = s
+        .windows
+        .iter()
+        .filter(|w| w.window.is_some())
+        .enumerate()
+        .flat_map(|(w, state)| {
+            state.tabs.iter().enumerate().map(move |(t, tab)| OpenTab {
+                window: w + 1,
+                tab: t + 1,
+                title: tab.title.clone(),
+                url: tab.url.clone(),
+            })
+        })
+        .collect();
+    OPEN_TABS.with(|o| *o.borrow_mut() = tabs);
+}
+
+/// Completions for `:tab-select`: every word typed must appear in the
+/// position, title or URL.
+pub fn completions(pattern: &str) -> Vec<hb_core::completion::Completion> {
+    let words: Vec<String> = pattern.split_whitespace().map(str::to_lowercase).collect();
+    OPEN_TABS.with(|o| {
+        o.borrow()
+            .iter()
+            .filter(|t| {
+                let hay = format!("{}/{} {} {}", t.window, t.tab, t.title, t.url).to_lowercase();
+                words.iter().all(|w| hay.contains(w.as_str()))
+            })
+            .map(|t| hb_core::completion::Completion {
+                category: "Tabs",
+                name: format!("{}/{}", t.window, t.tab),
+                description: if t.title.is_empty() {
+                    t.url.clone()
+                } else {
+                    format!("{} — {}", t.title, t.url)
+                },
+            })
+            .collect()
+    })
+}
+
+/// `:tab-select`: `window/tab` from completion, or the first tab whose title
+/// or URL contains every word of `target`.
+fn select_tab(target: &str) {
+    let found = OPEN_TABS.with(|o| {
+        let tabs = o.borrow();
+        let position = target.split_once('/').and_then(|(w, t)| {
+            Some((
+                w.trim().parse::<usize>().ok()?,
+                t.trim().parse::<usize>().ok()?,
+            ))
+        });
+        match position {
+            Some(position) => tabs
+                .iter()
+                .find(|t| (t.window, t.tab) == position)
+                .map(|t| (t.window, t.tab)),
+            None => {
+                let words: Vec<String> = target.split_whitespace().map(str::to_lowercase).collect();
+                tabs.iter()
+                    .find(|t| {
+                        let hay = format!("{} {}", t.title, t.url).to_lowercase();
+                        !words.is_empty() && words.iter().all(|w| hay.contains(w.as_str()))
+                    })
+                    .map(|t| (t.window, t.tab))
+            }
+        }
+    });
+    let Some((window, tab)) = found else {
+        return shell::show_message(Level::Error, format!("No tab matches {target:?}"));
+    };
+    // Window numbers count open windows only, like the completion.
+    let target_window = shell::with(|s| {
+        let index = s
+            .windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w.window.is_some())
+            .nth(window - 1)
+            .map(|(i, _)| i)?;
+        s.active = index;
+        s.window.clone()
+    })
+    .flatten();
+    if let Some(window) = target_window {
+        window.activate();
+    }
+    switch_to(tab - 1, true);
+    shell::refresh_ui();
 }

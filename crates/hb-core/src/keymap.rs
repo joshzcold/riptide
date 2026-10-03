@@ -198,6 +198,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("J", "tab-next"),
     ("K", "tab-prev"),
     ("gt", "tab-next"),
+    ("T", "cmd-set-text -s :tab-select"),
     ("gT", "tab-prev"),
     ("<Ctrl-PgDown>", "tab-next"),
     ("<Ctrl-PgUp>", "tab-prev"),

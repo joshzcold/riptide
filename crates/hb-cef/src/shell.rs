@@ -702,6 +702,7 @@ struct UiUpdate {
 /// Unchanged state is skipped, so this is cheap to call after every event.
 pub fn refresh_ui() {
     let Some(updates) = with(|s| {
+        crate::tabs::remember_open_tabs(s);
         let focused = s.active;
         let mut updates = Vec::new();
         for i in 0..s.windows.len() {

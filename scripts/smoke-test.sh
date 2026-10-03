@@ -577,6 +577,19 @@ hint s
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
 [[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
 
+step "T picks a tab by title from completion"
+run "open -t file://$work/search.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == search || $(page_title) == s=* ]] && break; sleep 0.1; done
+run "open -t about:blank"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == about:blank ]] && break; sleep 0.1; done
+xdotool key shift+t
+wait_mode command || true
+xdotool type --delay 10 "search"
+nap 0.3
+xdotool key Tab Return
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == search || $(page_title) == s=* ]] && break; sleep 0.1; done
+[[ $(page_title) == search || $(page_title) == s=* ]] && pass || fail "title was '$(name)'"
+
 step ":open -w opens a window that takes keys, :close closes it"
 run "open -w file://$work/nav1.html"
 second=$(timeout "$TIMEOUT" xdotool search --sync --name '^normal::nav1$' | grep -v "^$window$" | head -1 || true)
@@ -630,7 +643,7 @@ expect_exit
 step "restarting restores the session"
 "$BIN" --basedir "$work/base" >>"$work/browser.log" 2>&1 &
 browser_pid=$!
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::dialogs$" | head -1 || true)
+window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::search$" | head -1 || true)
 [[ -n $window ]] && pass || fail "no restored window"
 
 step ":quit exits cleanly"

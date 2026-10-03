@@ -145,7 +145,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Number hint mode, configurable chars (M5), hints inside iframes
 
 ### Command line
-- [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings); not yet open tabs
+- [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings, open tabs via `:tab-select`/`T`)
 - [x] Command chaining (`;;`), aliases, `:bind` / `:unbind`, `:set`
 
 ### Yank / paste

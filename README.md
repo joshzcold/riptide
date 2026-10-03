@@ -258,6 +258,7 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `J` `K`, `gt` `gT` | `tab-next` / `tab-prev` |
 | `Alt-1`…`Alt-9`, `g0` `g$` | `tab-focus N` / first / last (a count also works, e.g. `3J`) |
 | `Ctrl-Tab`, `Ctrl-^` | `tab-focus last` (previously focused tab) |
+| `T` | `:tab-select`: pick a tab in any window by title or URL, with completion |
 | `d`, `Ctrl-w` | `tab-close` |
 | `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |
 | `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |
