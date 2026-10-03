@@ -4,7 +4,17 @@ Modern browser with vim-like bindings using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-**Status:** early prototype. It has modes, tabs, windows (including private ones), hints, config, storage, prompts and downloads, content blocking, search, marks, macros, caret mode and userscripts; see the plan for what's done. Linux/X11 only. Not ready for daily browsing.
+**Status:** early prototype, Linux/X11 only, not ready for daily browsing. See the plan for what's done and what's missing.
+
+What works today:
+
+- **Keyboard first:** normal, insert, command, hint, caret and passthrough modes, with qutebrowser's bindings. Also counts, marks, macros, `/` search, `:navigate`, and a command line with history and completion.
+- **Tabs and windows:** pinned tabs, a tab bar that works with the mouse, favicons, `:tab-select`, moving tabs between windows, and private windows.
+- **Hints:** for links, inputs, images, yanking and downloads, including number hints and same-origin iframes.
+- **Privacy:** an Adblock Plus engine (EasyList and EasyPrivacy), Google background calls turned off, the Chromium sandbox where Linux allows it, and per-site permissions and certificate decisions.
+- **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
+- **qutebrowser compatibility:** quickmarks and bookmarks files, userscripts (`QUTE_*`), Greasemonkey scripts, `:open-editor`, and `:history-import`.
+- **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`hackers-browser ':open -t x'`).
 
 ## Building
 
@@ -213,6 +223,8 @@ The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/hackers-browser/` (or 
 ### Internal pages
 
 The tab bar, status bar and overlay are HTML pages served from the browser itself at `hb://ui/…`. Web pages can't link to, frame or redirect to `hb://` addresses, and only `hb://ui/` pages get the `hb.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
+
+Pages you can open: `hb://help/` (`:help`), `hb://history/` (`:history`), `hb://downloads/` (`:downloads`) and `hb://changelog/` (`:changelog`).
 
 ### Lua
 
