@@ -22,6 +22,7 @@ pub mod title;
 pub mod ui_message;
 pub mod url;
 pub mod vk;
+pub mod zoom;
 
 pub use command::Command;
 pub use engine::{Effect, Engine, KeyOutcome};

@@ -510,6 +510,12 @@ pub static SETTINGS: &[SettingDef] = &[
         s("{current_title}{title_sep}hackers-browser"),
         "Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode}"
     ),
+    def!(
+        "zoom.default",
+        Kind::Int { min: 25, max: 500 },
+        Value::Int(100),
+        "Zoom in percent for pages, and what :zoom without a value resets to"
+    ),
 ];
 
 pub fn find(name: &str) -> Option<&'static SettingDef> {

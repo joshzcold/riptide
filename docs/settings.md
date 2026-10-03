@@ -49,3 +49,4 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |
 | `window.title_format` | string | `{current_title}{title_sep}hackers-browser` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
+| `zoom.default` | integer | `100` | Zoom in percent for pages, and what :zoom without a value resets to |

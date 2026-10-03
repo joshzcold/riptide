@@ -301,6 +301,10 @@ wrap_display_handler! {
             }
         }
 
+        fn on_fullscreen_mode_change(&self, _browser: Option<&mut Browser>, fullscreen: ::std::os::raw::c_int) {
+            crate::view::page_fullscreen(fullscreen != 0);
+        }
+
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
             let url = shell::with_tab(browser, |s, index, _| {
@@ -393,6 +397,7 @@ wrap_load_handler! {
                     let url = CefString::from(&frame.url()).to_string();
                     if let Some(browser) = browser_ref {
                         crate::marks::loaded(&browser);
+                        crate::view::loaded(&browser);
                         crate::adblock::apply_cosmetic(&browser, &url);
                     }
                     crate::lua::emit("load_finished", &[("url", &url)]);

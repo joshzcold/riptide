@@ -33,6 +33,9 @@ pub struct Tab {
     pub pending_error: Option<(String, String)>,
     /// The mode this tab was in when the user last left it.
     pub mode: hb_core::Mode,
+    /// Page zoom in percent.
+    pub zoom: u32,
+    pub muted: bool,
 }
 
 impl Tab {
@@ -46,6 +49,8 @@ impl Tab {
             load_error: false,
             pending_error: None,
             mode: hb_core::Mode::Normal,
+            zoom: 100,
+            muted: false,
         }
     }
 
@@ -467,6 +472,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::search::run_command(&command, count)
         || crate::navigate::run_command(&command, count)
         || crate::lua::run_command(&command, count)
+        || crate::view::run_command(&command, count)
     {
         return;
     }
@@ -794,6 +800,8 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "tab_index": s.tabs.current_index() + 1,
         "tab_count": s.tabs.len(),
         "private": s.private,
+        "zoom": current.map_or(100, |t| t.zoom),
+        "muted": current.is_some_and(|t| t.muted),
     })
     .to_string();
     if s.statusbar_ready

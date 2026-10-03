@@ -83,6 +83,19 @@ impl Keymap {
             map.bind(Mode::Normal, keys, cmd)
                 .expect("valid default binding");
         }
+        for (keys, cmd) in [
+            ("+", "zoom-in"),
+            ("-", "zoom-out"),
+            ("=", "zoom"),
+            ("wi", "devtools"),
+            ("<F11>", "fullscreen"),
+            ("gf", "view-source"),
+            ("<Alt-m>", "tab-mute"),
+            (".", "repeat-command"),
+        ] {
+            map.bind(Mode::Normal, keys, cmd)
+                .expect("valid default binding");
+        }
         map.bind(Mode::Normal, "<Return>", "selection-follow")
             .expect("valid default binding");
         map.bind(Mode::Normal, "<Ctrl-Return>", "selection-follow -t")

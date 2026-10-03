@@ -287,6 +287,36 @@ pub enum Command {
     Downloads,
     /// Close the current window.
     Close,
+    /// Set the zoom to `percent`, or to `zoom.default` (or the count).
+    Zoom {
+        percent: Option<u32>,
+    },
+    /// Zoom in (or out) by the count's number of levels.
+    ZoomStep {
+        out: bool,
+    },
+    /// Open Chromium's developer tools for the current tab.
+    DevTools,
+    /// Print the page, or save it as a PDF.
+    Print {
+        pdf: Option<String>,
+    },
+    /// Toggle fullscreen for the window.
+    Fullscreen,
+    /// Show the page's source in a new tab.
+    ViewSource,
+    /// Evaluate JavaScript in the page and show the result.
+    JsEval {
+        code: String,
+    },
+    /// Open the start page in the current tab.
+    Home,
+    /// Mute or unmute the current tab.
+    TabMute,
+    /// Show the messages of this session.
+    Messages,
+    /// Run the last command again (`.`).
+    RepeatCommand,
     /// Follow the link around the selection (e.g. a search match) or the focused link.
     SelectionFollow {
         tab: bool,
@@ -554,6 +584,24 @@ pub const COMMANDS: &[CommandSpec] = &[
         "selection-follow",
         "Follow the link around the selection, e.g. after a search (Return; -t: new tab)",
     ),
+    spec(
+        "zoom",
+        "Set the zoom: :zoom [percent] (=; no value: zoom.default)",
+    ),
+    spec("zoom-in", "Zoom in a level (+; a count zooms further)"),
+    spec("zoom-out", "Zoom out a level (-)"),
+    spec("devtools", "Open the developer tools for this tab (wi)"),
+    spec("print", "Print the page, or save it: :print [--pdf file]"),
+    spec("fullscreen", "Toggle fullscreen (F11)"),
+    spec("view-source", "Show the page source in a new tab (gf)"),
+    spec(
+        "jseval",
+        "Evaluate a JavaScript expression in the page: :jseval <code>",
+    ),
+    spec("home", "Open the start page"),
+    spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
+    spec("messages", "Show this session's messages"),
+    spec("repeat-command", "Run the last command again (.)"),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
@@ -976,6 +1024,40 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "prompt-complete" => Command::PromptComplete,
         "downloads" => Command::Downloads,
         "close" => Command::Close,
+        "zoom" => Command::Zoom {
+            percent: match args.optional() {
+                None => None,
+                Some(p) => Some(
+                    p.trim_end_matches('%')
+                        .parse()
+                        .map_err(|_| args.error(format!("not a zoom level: {p:?}")))?,
+                ),
+            },
+        },
+        "zoom-in" => Command::ZoomStep { out: false },
+        "zoom-out" => Command::ZoomStep { out: true },
+        "devtools" => Command::DevTools,
+        "print" => Command::Print {
+            pdf: match args.flag(&["-p", "--pdf"]) {
+                Some(_) => Some(args.required("file")?.to_string()),
+                None => None,
+            },
+        },
+        "fullscreen" => Command::Fullscreen,
+        "view-source" => Command::ViewSource,
+        "jseval" => {
+            let code = args.rest();
+            if code.is_empty() {
+                return Err(args.error("missing argument: code".to_string()));
+            }
+            Command::JsEval {
+                code: code.to_string(),
+            }
+        }
+        "home" => Command::Home,
+        "tab-mute" => Command::TabMute,
+        "messages" => Command::Messages,
+        "repeat-command" => Command::RepeatCommand,
         "selection-follow" => Command::SelectionFollow {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
@@ -1555,6 +1637,7 @@ mod tests {
             "spell-replace",
             "spawn",
             "navigate",
+            "jseval",
             "tab-take",
             "lua-call",
             "set-mark",

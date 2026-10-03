@@ -666,6 +666,29 @@ hook_page=$(page_title)
 [[ $command_page == second && $key_page == nav1 && $hook_page == nav2 ]] && pass ||
     fail ":second → '$command_page', gS → '$key_page', hook → '$hook_page'"
 
+step "+ and . zoom in, = resets, :jseval runs in the page"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+nap 0.3
+xdotool key plus
+nap 0.2
+xdotool key period
+nap 0.3
+run "jseval document.title = 'z=' + Math.round(devicePixelRatio * 100)"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == z=* ]] && break; sleep 0.1; done
+zoomed=$(page_title)
+xdotool key equal
+nap 0.3
+run "jseval document.title = 'z=' + Math.round(devicePixelRatio * 100)"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == z=100 ]] && break; sleep 0.1; done
+reset=$(page_title)
+[[ $zoomed == z=125 && $reset == z=100 ]] && pass || fail "zoomed '$zoomed', reset '$reset'"
+
+step ":messages lists this session's messages"
+run "messages"
+expect_title "Messages"
+run "tab-close"
+
 step "hints reach into same-origin iframes"
 run "open file://$work/frames.html"
 expect_title "frames"

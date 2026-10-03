@@ -293,8 +293,11 @@ wrap_browser_view_delegate! {
             _browser_view: Option<&mut BrowserView>,
             _settings: Option<&BrowserSettings>,
             _client: Option<&mut Client>,
-            _is_devtools: ::std::os::raw::c_int,
+            is_devtools: ::std::os::raw::c_int,
         ) -> Option<BrowserViewDelegate> {
+            if is_devtools != 0 {
+                return Some(DevToolsViewDelegate::new());
+            }
             Some(HbBrowserViewDelegate::new(Role::Tab))
         }
 
@@ -304,9 +307,14 @@ wrap_browser_view_delegate! {
             &self,
             browser_view: Option<&mut BrowserView>,
             popup_browser_view: Option<&mut BrowserView>,
-            _is_devtools: ::std::os::raw::c_int,
+            is_devtools: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int {
             let Some(popup) = popup_browser_view else { return 0 };
+            if is_devtools != 0 {
+                let mut delegate = DevToolsWindowDelegate::new(popup.clone());
+                window_create_top_level(Some(&mut delegate));
+                return 1;
+            }
             // The popup becomes a tab in its opener's window.
             if let Some(opener) = browser_view.and_then(|v| v.browser()) {
                 shell::activate_browser(opener.identifier());
@@ -315,6 +323,57 @@ wrap_browser_view_delegate! {
             let position = shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next);
             tabs::add_view(popup.clone(), position, !background);
             1
+        }
+    }
+}
+
+// CEF only supports Chrome-style DevTools; an Alloy-style one aborts.
+wrap_window_delegate! {
+    struct DevToolsWindowDelegate {
+        view: BrowserView,
+    }
+
+    impl ViewDelegate {
+        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
+            Size { width: 1100, height: 750 }
+        }
+    }
+
+    impl PanelDelegate {}
+
+    impl WindowDelegate {
+        fn on_window_created(&self, window: Option<&mut Window>) {
+            let Some(window) = window else { return };
+            window.set_to_fill_layout();
+            window.add_child_view(Some(&mut View::from(&self.view)));
+            // Chrome-style windows ignore the preferred size.
+            window.center_window(Some(&Size { width: 1100, height: 750 }));
+            window.set_title(Some(&CefString::from("DevTools - hackers-browser")));
+            window.show();
+        }
+
+        fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            self.view
+                .browser()
+                .and_then(|b| b.host())
+                .is_none_or(|h| h.try_close_browser() != 0)
+                .into()
+        }
+
+        fn window_runtime_style(&self) -> RuntimeStyle {
+            RuntimeStyle::CHROME
+        }
+    }
+}
+
+wrap_browser_view_delegate! {
+    struct DevToolsViewDelegate {}
+
+    impl ViewDelegate {}
+
+    impl BrowserViewDelegate {
+        fn browser_runtime_style(&self) -> RuntimeStyle {
+            RuntimeStyle::CHROME
         }
     }
 }

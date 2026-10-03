@@ -42,6 +42,7 @@
   #left, #right { line-height: 1.5; }
   #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
+  #right > span:empty { display: none; }
   #url { overflow: hidden; text-overflow: ellipsis; }
   /* Messages and the command line get priority over a long URL. */
   #bar.busy #right { max-width: 40%; }
@@ -52,7 +53,7 @@
 </style>
 </head>
 <body>
-<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="downloads"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
+<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="downloads"></span><span id="muted"></span><span id="zoom"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
 <script>
   const $ = (id) => document.getElementById(id);
 
@@ -83,6 +84,8 @@
     }
     $("keys").textContent = state.keystring;
     $("downloads").textContent = state.downloads;
+    $("muted").textContent = state.muted ? "[muted]" : "";
+    $("zoom").textContent = state.zoom === 100 ? "" : `[${state.zoom}%]`;
     const url = $("url");
     url.textContent = state.url;
     url.className = state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http";

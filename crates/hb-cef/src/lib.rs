@@ -29,6 +29,7 @@ mod storage;
 mod tabs;
 mod tls;
 mod ui;
+mod view;
 mod window;
 
 use std::path::Path;

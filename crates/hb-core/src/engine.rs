@@ -124,6 +124,34 @@ pub struct Engine {
     macros: Macros,
     /// Commands defined in `config.lua`, as `(name, description)`.
     user_commands: Vec<(String, String)>,
+    /// Every message of this session, oldest first, for `:messages`.
+    message_log: VecDeque<LoggedMessage>,
+    /// What `.` runs: the last command line or normal-mode binding.
+    last_command: Option<(String, Option<u32>)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LoggedMessage {
+    /// Seconds since the Unix epoch.
+    pub time: u64,
+    pub level: Level,
+    pub text: String,
+}
+
+/// How many messages `:messages` keeps.
+const MESSAGE_LOG_LEN: usize = 1000;
+
+/// Commands `.` doesn't repeat: they only start something interactive.
+fn repeatable(line: &str) -> bool {
+    let name = line
+        .trim_start_matches(':')
+        .split_whitespace()
+        .next()
+        .unwrap_or("");
+    !matches!(
+        name,
+        "" | "repeat-command" | "mode-enter" | "mode-leave" | "set-cmd-text" | "cmd-set-text"
+    )
 }
 
 /// Keyboard macros (`q` / `@`).
@@ -172,6 +200,8 @@ impl Engine {
             mode_before_prompt: Mode::Normal,
             dirty: true,
             macros: Macros::default(),
+            message_log: VecDeque::new(),
+            last_command: None,
             user_commands: Vec::new(),
         }
     }
@@ -453,19 +483,29 @@ impl Engine {
     /// Returns an id for [`Engine::expire_message`], so a timer started for
     /// one message cannot clear a newer one.
     pub fn show_message(&mut self, level: Level, text: impl Into<String>) -> u64 {
+        let text = text.into();
         self.message_generation += 1;
-        self.messages.push((
-            self.message_generation,
-            Message {
-                level,
-                text: text.into(),
-            },
-        ));
+        if self.message_log.len() == MESSAGE_LOG_LEN {
+            self.message_log.pop_front();
+        }
+        self.message_log.push_back(LoggedMessage {
+            time: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs()),
+            level,
+            text: text.clone(),
+        });
+        self.messages
+            .push((self.message_generation, Message { level, text }));
         if self.messages.len() > MAX_MESSAGES {
             self.messages.remove(0);
         }
         self.dirty = true;
         self.message_generation
+    }
+
+    pub fn message_log(&self) -> Vec<LoggedMessage> {
+        self.message_log.iter().cloned().collect()
     }
 
     /// Messages still on screen besides the newest, oldest first.
@@ -661,6 +701,9 @@ impl Engine {
                 self.macros.binding_len =
                     self.pending.len() + count.map_or(0, |c| c.to_string().len());
                 self.pending.clear();
+                if mode == Mode::Normal && repeatable(&cmd) {
+                    self.last_command = Some((cmd.clone(), count));
+                }
                 consumed(self.execute_str(&cmd, count))
             }
             Lookup::Partial => consumed(Vec::new()),
@@ -1003,6 +1046,9 @@ impl Engine {
                     });
                 }
                 let line = text.strip_prefix(':').unwrap_or(&text);
+                if repeatable(line) {
+                    self.last_command = Some((line.to_string(), None));
+                }
                 effects.extend(self.execute_str(line, None));
             }
             Command::CommandHistoryPrev => {
@@ -1052,6 +1098,14 @@ impl Engine {
             Command::CompletionFocus(direction) => {
                 self.focus_completion(direction == FocusDirection::Next)
             }
+            Command::RepeatCommand => match self.last_command.clone() {
+                Some((line, last_count)) => {
+                    effects.extend(self.execute_str(&line, count.or(last_count)))
+                }
+                None => {
+                    self.show_message(Level::Error, "No command to repeat yet");
+                }
+            },
             Command::ClearKeychain => {
                 self.pending.clear();
                 self.count = None;
@@ -1939,6 +1993,44 @@ mod tests {
         e.set_clipboard_reader(|| Some("  ".into()));
         assert!(runs(&press(&mut e, "pp")).is_empty());
         assert_eq!(e.status().message.unwrap().text, "Clipboard is empty");
+    }
+
+    #[test]
+    fn dot_repeats_the_last_command() {
+        let mut e = engine();
+        assert!(runs(&press(&mut e, ".")).is_empty());
+        assert_eq!(e.status().message.unwrap().text, "No command to repeat yet");
+        assert_eq!(
+            runs(&press(&mut e, "3+")),
+            vec![(Command::ZoomStep { out: false }, Some(3))]
+        );
+        assert_eq!(
+            runs(&press(&mut e, ".")),
+            vec![(Command::ZoomStep { out: false }, Some(3))]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "2.")),
+            vec![(Command::ZoomStep { out: false }, Some(2))]
+        );
+        press(&mut e, ":reload<Return>");
+        press(&mut e, ":");
+        press(&mut e, "<Escape>");
+        assert_eq!(
+            runs(&press(&mut e, ".")),
+            vec![(Command::Reload { force: false }, None)]
+        );
+    }
+
+    #[test]
+    fn messages_are_logged_beyond_the_screen() {
+        let mut e = engine();
+        for i in 0..8 {
+            e.show_message(Level::Info, format!("m{i}"));
+        }
+        let log = e.message_log();
+        assert_eq!(log.len(), 8);
+        assert_eq!(log[0].text, "m0");
+        assert_eq!(log[7].text, "m7");
     }
 
     fn config_changes(outcomes: &[KeyOutcome]) -> Vec<ConfigOp> {
