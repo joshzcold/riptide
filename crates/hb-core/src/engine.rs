@@ -598,16 +598,35 @@ impl Engine {
     }
 
     fn handle_command(&mut self, key: Key) -> KeyOutcome {
-        if let Lookup::Exact(cmd) = self.keymap.lookup(Mode::Command, &[key]) {
+        let before = self.cmdline.text().to_string();
+        let mut effects = if let Lookup::Exact(cmd) = self.keymap.lookup(Mode::Command, &[key]) {
             let cmd = cmd.to_string();
-            return consumed(self.execute_str(&cmd, None));
+            self.execute_str(&cmd, None)
+        } else {
+            if let Some(c) = key.text() {
+                self.cmdline.insert(c);
+                self.history.reset();
+                self.dirty = true;
+            }
+            Vec::new()
+        };
+        // Search as you type.
+        if self.mode == Mode::Command
+            && self.settings.bool("search.incremental")
+            && self.cmdline.text() != before
+            && let Some((reverse, needle)) = search_text(self.cmdline.text())
+        {
+            let search = Command::Search {
+                text: needle.to_string(),
+                reverse,
+                incremental: true,
+            };
+            effects.push(Effect::Run {
+                command: search,
+                count: None,
+            });
         }
-        if let Some(c) = key.text() {
-            self.cmdline.insert(c);
-            self.history.reset();
-            self.dirty = true;
-        }
-        consumed(Vec::new())
+        consumed(effects)
     }
 
     fn handle_hint(&mut self, key: Key) -> KeyOutcome {
@@ -810,7 +829,24 @@ impl Engine {
             Command::ModeLeave if matches!(self.mode, Mode::Prompt | Mode::YesNo) => {
                 self.answer_prompt(PromptAnswer::Cancelled, effects)
             }
-            Command::ModeLeave => self.set_mode(Mode::Normal, effects),
+            Command::ModeLeave => {
+                // Escape from an incremental search takes its highlights away.
+                if self.mode == Mode::Command
+                    && search_text(self.cmdline.text()).is_some()
+                    && self.settings.bool("search.incremental")
+                {
+                    let clear = Command::Search {
+                        text: String::new(),
+                        reverse: false,
+                        incremental: true,
+                    };
+                    effects.push(Effect::Run {
+                        command: clear,
+                        count: None,
+                    });
+                }
+                self.set_mode(Mode::Normal, effects)
+            }
             Command::PromptAccept { value, save } => self.accept_prompt(value, save, effects),
             Command::CmdSetText { text, append_space } => {
                 let text = if append_space {
@@ -826,6 +862,17 @@ impl Engine {
                 let text = self.cmdline.text().to_string();
                 self.history.push(&text);
                 self.set_mode(Mode::Normal, effects);
+                if let Some((reverse, needle)) = search_text(&text) {
+                    let search = Command::Search {
+                        text: needle.to_string(),
+                        reverse,
+                        incremental: false,
+                    };
+                    return effects.push(Effect::Run {
+                        command: search,
+                        count: None,
+                    });
+                }
                 let line = text.strip_prefix(':').unwrap_or(&text);
                 effects.extend(self.execute_str(line, None));
             }
@@ -1024,6 +1071,15 @@ fn is_forwardable(key: Key) -> bool {
     !matches!(key.code, KeyCode::Char(c) if c.is_alphanumeric() && key.mods.is_empty())
 }
 
+/// A command line that is a search: `/text` (forward) or `?text` (backward).
+fn search_text(line: &str) -> Option<(bool, &str)> {
+    if let Some(text) = line.strip_prefix('/') {
+        Some((false, text))
+    } else {
+        line.strip_prefix('?').map(|text| (true, text))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1105,6 +1161,40 @@ mod tests {
         press(&mut e, "@d");
         let message = e.status().message.map(|m| m.text).unwrap_or_default();
         assert!(message.contains("too deeply"), "{message}");
+    }
+
+    #[test]
+    fn slash_searches_incrementally_and_on_return() {
+        let search = |text: &str, reverse, incremental| Command::Search {
+            text: text.into(),
+            reverse,
+            incremental,
+        };
+        let mut e = engine();
+        let typed = press(&mut e, "/ab");
+        assert_eq!(e.mode(), Mode::Command);
+        assert_eq!(
+            runs(&typed),
+            vec![
+                (search("a", false, true), None),
+                (search("ab", false, true), None)
+            ]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "<Return>")),
+            vec![(search("ab", false, false), None)]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "n")),
+            vec![(Command::SearchNext { prev: false }, None)]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "2N")),
+            vec![(Command::SearchNext { prev: true }, Some(2))]
+        );
+        let out = press(&mut e, "?x<Escape>");
+        assert_eq!(runs(&out).last(), Some(&(search("", false, true), None)));
+        assert_eq!(e.mode(), Mode::Normal);
     }
 
     #[test]

@@ -253,6 +253,17 @@ pub enum Command {
     OpenEditor,
     /// Read the Greasemonkey scripts again.
     GreasemonkeyReload,
+    /// Find `text` in the page (backwards with `reverse`); empty clears the search.
+    /// `incremental` searches update as the user types.
+    Search {
+        text: String,
+        reverse: bool,
+        incremental: bool,
+    },
+    /// Go to the next (or with `prev`, previous) match of the last search.
+    SearchNext {
+        prev: bool,
+    },
     /// Remember (`set`) or go back to the scroll position named `key`.
     /// Lowercase marks belong to the page, uppercase ones also remember the URL.
     Mark {
@@ -440,6 +451,12 @@ pub const COMMANDS: &[CommandSpec] = &[
         "greasemonkey-reload",
         "Read the scripts in the greasemonkey directories again",
     ),
+    spec(
+        "search",
+        "Find text in the page: :search [-r] [text] (no text clears it); / and ? type one",
+    ),
+    spec("search-next", "Go to the next match of the last search"),
+    spec("search-prev", "Go to the previous match of the last search"),
     spec(
         "set-mark",
         "Remember the scroll position as a mark: a-z for this page, A-Z with its URL",
@@ -798,6 +815,16 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
+        "search" => {
+            let reverse = args.flag(&["-r", "--reverse"]).is_some();
+            Command::Search {
+                text: args.rest().to_string(),
+                reverse,
+                incremental: false,
+            }
+        }
+        "search-next" => Command::SearchNext { prev: false },
+        "search-prev" => Command::SearchNext { prev: true },
         "selection-toggle" => Command::SelectionToggle {
             line: args.flag(&["-l", "--line"]).is_some(),
         },

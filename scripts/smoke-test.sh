@@ -83,6 +83,13 @@ cat >"$work/gm.html" <<'EOF'
 <script>document.title = 'start=' + (window.__gmStart || 'no');</script>
 EOF
 
+cat >"$work/search.html" <<'EOF'
+<!doctype html><title>search</title>
+<div style="height:2000px"></div><p>first needle</p>
+<div style="height:2000px"></div><p>second needle</p><div style="height:2000px"></div>
+<script>addEventListener('scroll', () => { document.title = 's=' + Math.round(scrollY); });</script>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -426,6 +433,25 @@ wait_mode normal || true
 step "Greasemonkey scripts run at document-start and -end"
 run "open file://$work/gm.html"
 expect_title "start=Start end=rgb(1, 2, 3)"
+
+step "/ finds text in the page, n goes to the next match"
+run "open file://$work/search.html"
+expect_title "search"
+xdotool key slash
+wait_mode command || true
+xdotool type --delay 20 needle
+xdotool key Return
+wait_mode normal || true
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) =~ ^s=([0-9]+)$ ]] && (( BASH_REMATCH[1] > 1000 )) && break; sleep 0.1; done
+first=$(page_title)
+xdotool key n
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) != "$first" ]] && break; sleep 0.1; done
+second=$(page_title)
+if [[ $first =~ ^s=([0-9]+)$ ]] && (( BASH_REMATCH[1] > 1000 )) && [[ $second =~ ^s=([0-9]+)$ ]] && (( BASH_REMATCH[1] > ${first#s=} )); then
+    pass
+else
+    fail "scroll went from '$first' to '$second'"
+fi
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

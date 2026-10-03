@@ -381,6 +381,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where URLs from a second hackers-browser invocation open"
     ),
     def!(
+        "search.ignore_case",
+        Kind::Enum(&["smart", "always", "never"]),
+        s("smart"),
+        "Case in searches: smart ignores it unless the text has a capital, always, or never"
+    ),
+    def!(
+        "search.incremental",
+        Kind::Bool,
+        Value::Bool(true),
+        "Search while typing after / or ?"
+    ),
+    def!(
         "spellcheck.languages",
         Kind::List,
         Value::List(Vec::new()),

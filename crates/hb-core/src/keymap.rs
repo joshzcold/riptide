@@ -70,6 +70,14 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Normal, "@", "macro-run")
             .expect("valid default binding");
+        map.bind(Mode::Normal, "/", "cmd-set-text /")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "?", "cmd-set-text ?")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "n", "search-next")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "N", "search-prev")
+            .expect("valid default binding");
         map.bind(Mode::Normal, "v", "mode-enter caret")
             .expect("valid default binding");
         map.bind(

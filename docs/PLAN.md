@@ -124,10 +124,10 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `H` / `L` back/forward, `r` / `R` reload
 - [ ] `gu` / `gU` go up URL
 - [x] `hjkl`, `gg`, `G`, `0`, `$`, `Ctrl-d/u/f/b` scrolling with counts
-- [ ] `/`, `?`, `n`, `N` search
+- [x] `/`, `?`, `n`, `N` search (M9)
 - [ ] `[[` / `]]` prev/next page navigation
 - [x] Quickmarks / bookmarks (`m`, `b`, `B`, `M`, `gb`, `gB`)
-- [ ] Marks (`` ` ``-style in-page marks; `m` is the quickmark key, as in qutebrowser)
+- [x] Marks (`` ` ``-style in-page marks; `m` is the quickmark key, as in qutebrowser) (M9)
 
 ### Tabs
 - [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
@@ -346,6 +346,13 @@ Gaps:
     - Only `GM_info`, `GM_addStyle` and `unsafeWindow` exist; no `GM_setValue` or `GM_xmlhttpRequest`.
     - Popups opened by pages don't get `extra_info`. They usually share their opener's renderer, which already has the scripts.
     - A tab that moves to a new renderer process after `:greasemonkey-reload` gets the older list until it's reopened.
+- ✅ **Page search** (2026-10-02):
+  - `/` and `?` put the prefix on the command line. The engine turns `/text` into `Command::Search` on `Return`, and into incremental searches while typing (`search.incremental`); Escape clears the highlights.
+  - `n`/`N` are `:search-next`/`:search-prev` and take a count.
+  - `hb-cef/src/search.rs` uses `BrowserHost::Find` and a `FindHandler`, which reports "Match i of n" or "not found".
+  - In this CEF build `find_next = false` never activates or scrolls to a match. Every call passes `true`; repeating the same text first calls `StopFinding(clear_selection)`, so it starts again from the top.
+  - `search.ignore_case` is `smart`, `always` or `never`. Chromium always wraps around.
+  - A smoke step checks that `/needle` scrolls to the first match and `n` to the second.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
