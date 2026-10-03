@@ -18,6 +18,9 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     let n = i64::from(count.unwrap_or(1).max(1));
     match command {
         Command::TabSelect { target } => select_tab(target),
+        Command::TabClone { background, window } => clone_tab(*background, *window),
+        Command::TabGive { window } => give_tab(*window),
+        Command::TabTake { target } => take_tab(target),
         Command::TabNext => focus_offset(n),
         Command::TabPrev => focus_offset(-n),
         Command::TabFocus(target) => match (count, target) {
@@ -445,5 +448,106 @@ fn select_tab(target: &str) {
         window.activate();
     }
     switch_to(tab - 1, true);
+    shell::refresh_ui();
+}
+
+/// The shell index of open window `number` (from 1, as in completion).
+fn open_window_index(s: &shell::Shell, number: usize) -> Option<usize> {
+    s.windows
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| w.window.is_some())
+        .nth(number.checked_sub(1)?)
+        .map(|(i, _)| i)
+}
+
+fn current_url() -> Option<(String, bool)> {
+    shell::with(|s| Some((s.tabs.current()?.url.clone(), s.private))).flatten()
+}
+
+/// Tabs can't carry their back/forward history to another view, so these
+/// reopen the page and close the original.
+fn clone_tab(background: bool, window: bool) {
+    let Some((url, private)) = current_url() else {
+        return;
+    };
+    if window {
+        crate::window::create(vec![url], Vec::new(), private);
+    } else {
+        open(&url, Position::Next, !background);
+    }
+}
+
+/// Close the current tab after it moved; a window left empty closes.
+fn close_moved(index: usize) {
+    let last = shell::with(|s| s.tabs.len() <= 1).unwrap_or(false);
+    if last {
+        if let Some(window) = shell::with(|s| s.window.clone()).flatten() {
+            window.close();
+        }
+    } else {
+        close(index);
+    }
+}
+
+fn give_tab(window: Option<usize>) {
+    let Some((url, private)) = current_url() else {
+        return;
+    };
+    let Some((index, source)) = shell::with(|s| (s.tabs.current_index(), s.active)) else {
+        return;
+    };
+    match window {
+        None => {
+            crate::window::create(vec![url], Vec::new(), private);
+            // The new window may have become the active one already.
+            shell::with(|s| s.active = source);
+        }
+        Some(number) => {
+            let target = shell::with(|s| open_window_index(s, number)).flatten();
+            let Some(target) = target.filter(|t| *t != source) else {
+                return shell::show_message(
+                    Level::Error,
+                    format!("There's no other window {number}"),
+                );
+            };
+            shell::with(|s| s.active = target);
+            open(&url, Position::Last, true);
+            if let Some(window) = shell::with(|s| s.window.clone()).flatten() {
+                window.activate();
+            }
+            shell::with(|s| s.active = source);
+        }
+    }
+    close_moved(index);
+    shell::refresh_ui();
+}
+
+fn take_tab(target: &str) {
+    let position = target.split_once('/').and_then(|(w, t)| {
+        Some((
+            w.trim().parse::<usize>().ok()?,
+            t.trim().parse::<usize>().ok()?,
+        ))
+    });
+    let Some((window, tab)) = position else {
+        return shell::show_message(Level::Error, "Usage: :tab-take <window/tab>, e.g. 2/1");
+    };
+    let found = shell::with(|s| {
+        let source = open_window_index(s, window)?;
+        let url = s.windows[source].tabs.get(tab.checked_sub(1)?)?.url.clone();
+        (source != s.active).then_some((source, url, s.active))
+    })
+    .flatten();
+    let Some((source, url, here)) = found else {
+        return shell::show_message(
+            Level::Error,
+            format!("There's no tab {target} in another window"),
+        );
+    };
+    open(&url, Position::Last, true);
+    shell::with(|s| s.active = source);
+    close_moved(tab - 1);
+    shell::with(|s| s.active = here.min(s.windows.len() - 1));
     shell::refresh_ui();
 }

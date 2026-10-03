@@ -259,6 +259,7 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `Alt-1`…`Alt-9`, `g0` `g$` | `tab-focus N` / first / last (a count also works, e.g. `3J`) |
 | `Ctrl-Tab`, `Ctrl-^` | `tab-focus last` (previously focused tab) |
 | `T` | `:tab-select`: pick a tab in any window by title or URL, with completion |
+| `:tab-clone [-b] [-w]`, `:tab-give [N]`, `:tab-take W/T` | Duplicate the tab (in the background / a new window), move it to window N or a new window, or bring a tab here from another window. Pages are reopened, so their back/forward history stays behind. |
 | `d`, `Ctrl-w` | `tab-close` |
 | `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |
 | `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |

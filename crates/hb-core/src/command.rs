@@ -273,6 +273,19 @@ pub enum Command {
     GreasemonkeyReload,
     /// Close the current window.
     Close,
+    /// Duplicate the current tab, in the background or a new window.
+    TabClone {
+        background: bool,
+        window: bool,
+    },
+    /// Move the current tab to window `window` (1-based), or to a new window.
+    TabGive {
+        window: Option<usize>,
+    },
+    /// Move tab `window/tab` from another window into this one.
+    TabTake {
+        target: String,
+    },
     /// Show the browsing history page, in a new tab with `tab`.
     History {
         tab: bool,
@@ -409,6 +422,18 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Move the current tab: +, -, start, end or a number",
     ),
     spec("tab-only", "Close all tabs except the current one"),
+    spec(
+        "tab-clone",
+        "Duplicate the current tab: :tab-clone [-b] [-w]",
+    ),
+    spec(
+        "tab-give",
+        "Move the current tab to window N, or to a new window: :tab-give [N]",
+    ),
+    spec(
+        "tab-take",
+        "Move a tab from another window here: :tab-take <window/tab>",
+    ),
     spec("undo", "Re-open the last closed tab"),
     spec(
         "hint",
@@ -702,6 +727,28 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }),
         "tab-only" => Command::TabOnly {
             force: args.flag(&["-f", "--force"]).is_some(),
+        },
+        "tab-clone" => {
+            let (mut background, mut window) = (false, false);
+            while let Some(flag) = args.flag(&["-b", "--bg", "-w", "--window"]) {
+                match flag {
+                    "-b" | "--bg" => background = true,
+                    _ => window = true,
+                }
+            }
+            Command::TabClone { background, window }
+        }
+        "tab-give" => Command::TabGive {
+            window: match args.optional() {
+                None => None,
+                Some(n) => Some(
+                    n.parse()
+                        .map_err(|_| args.error(format!("not a window number: {n:?}")))?,
+                ),
+            },
+        },
+        "tab-take" => Command::TabTake {
+            target: args.required("window/tab")?.to_string(),
         },
         "undo" => Command::Undo,
         "hint" => {
@@ -1463,6 +1510,7 @@ mod tests {
             "spell-replace",
             "spawn",
             "navigate",
+            "tab-take",
             "lua-call",
             "set-mark",
             "jump-mark",

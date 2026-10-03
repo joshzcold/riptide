@@ -133,7 +133,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
 - [x] `:tab-move`, `:tab-only`, `:open -t/-b/-r`, popups as tabs (keeping `window.opener`)
 - [x] `:tab-pin` and pinned tabs (M14)
-- [ ] `:tab-clone`, `:tab-give`, `:tab-take`
+- [x] `:tab-clone`, `:tab-give`, `:tab-take` (2026-10-02; the page is reopened, so its back/forward history doesn't move)
 - [x] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
 - [x] Favicons in the tab bar (M14); not yet in completion
 - [x] Multiple windows (2026-10-02)

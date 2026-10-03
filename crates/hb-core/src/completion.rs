@@ -105,7 +105,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
         "session-load" | "session-delete" | "session-save" => CompletionKind::Session,
         "spell-replace" => CompletionKind::Spelling,
-        "tab-select" => CompletionKind::Tab,
+        "tab-select" | "tab-take" => CompletionKind::Tab,
         _ => return Vec::new(),
     };
     source.map(|s| s(kind, parsed.pattern)).unwrap_or_default()
