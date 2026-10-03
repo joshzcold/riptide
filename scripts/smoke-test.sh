@@ -144,13 +144,15 @@ cat >"$work/http/geo.html" <<'EOF'
 <!doctype html><title>geo</title>
 <button onclick="navigator.geolocation.getCurrentPosition(() => { document.title = 'geo=ok'; }, (e) => { document.title = 'geo=' + (e.code === 1 ? 'denied' : 'allowed'); })">ask</button>
 EOF
-printf '! test list\n/ads/banner.js\n##.ad-banner\n127.0.0.1##.local-ad\n' >"$work/filters.txt"
+printf '! test list\n/ads/banner.js\n##.ad-banner\n##.late-ad\n127.0.0.1##.local-ad\n' >"$work/filters.txt"
 cat >"$work/http/cosmetic.html" <<'EOF'
 <!doctype html><title>cosmetic</title>
 <div class="ad-banner">ad</div><div class="local-ad">ad</div><div class="content">text</div>
 <script>
-const shown = (c) => getComputedStyle(document.querySelector('.' + c)).display;
-setInterval(() => { document.title = `banner=${shown('ad-banner')} local=${shown('local-ad')} content=${shown('content')}`; }, 200);
+// An ad that arrives after the page has loaded.
+setTimeout(() => { const ad = document.createElement('div'); ad.className = 'late-ad'; document.body.append(ad); }, 1000);
+const shown = (c) => { const el = document.querySelector('.' + c); return el ? getComputedStyle(el).display : 'missing'; };
+setInterval(() => { document.title = `banner=${shown('ad-banner')} local=${shown('local-ad')} content=${shown('content')} late=${shown('late-ad')}`; }, 200);
 </script>
 EOF
 
@@ -492,7 +494,7 @@ expect_title "ads b=no a=yes"
 
 step "element-hiding rules hide ads on the page"
 run "open $http/cosmetic.html"
-expect_title "banner=none local=none content=block"
+expect_title "banner=none local=none content=block late=none"
 
 step "an 'always' permission answer is saved for the site"
 run "open $http/geo.html"

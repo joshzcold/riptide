@@ -300,7 +300,8 @@ Gaps:
   - Settings: `content.blocking.enabled`, `content.blocking.adblock.lists` and `content.blocking.whitelist`, all with qutebrowser's names.
   - Top-level navigations are never blocked. The smoke test serves a page on 127.0.0.1 and checks that a listed script is cancelled while another loads.
   - ✅ Cosmetic filtering (2026-10-02): after `on_load_end` the main frame gets a `<style>` with `url_cosmetic_resources` hide selectors (one rule per selector, so an invalid one can't void the rest). Unless the site has `generichide`, it also gets `hidden_class_id_selectors` for the page's classes and ids. Covered by unit tests and a smoke step.
-  - Not done: re-checking content added after load (MutationObserver), subframes, procedural filters, scriptlets and `$redirect` resources, a blocked count in the status bar, automatic list updates, and qutebrowser's hosts-file method.
+  - Content added later is re-checked 2 s and 6 s after the load; the style skips rules it already has.
+  - Not done: continuous re-checking (a MutationObserver would need a page-to-browser channel for web pages), subframes, procedural filters, scriptlets and `$redirect` resources, a blocked count in the status bar, automatic list updates, and qutebrowser's hosts-file method.
 - ✅ **Per-domain settings** (2026-10-02):
   - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
   - `hb_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.

@@ -337,9 +337,35 @@ pub fn apply_cosmetic(browser: &Browser, url: &str) {
     let Some(blocker) = blocker_for(url) else {
         return;
     };
-    let cosmetic = blocker.cosmetic(url);
+    let cosmetic = Arc::new(blocker.cosmetic(url));
     inject_css(browser, &cosmetic.css);
     if !cosmetic.generic {
+        return;
+    }
+    hide_generic(browser, url, blocker.clone(), cosmetic.clone());
+    // Ads often arrive after the load; look again a little later.
+    for delay in [2000, 6000] {
+        let mut task = Recheck::new(
+            browser.clone(),
+            url.to_string(),
+            blocker.clone(),
+            cosmetic.clone(),
+        );
+        post_delayed_task(ThreadId::UI, Some(&mut task), delay);
+    }
+}
+
+fn hide_generic(
+    browser: &Browser,
+    url: &str,
+    blocker: Arc<Blocker>,
+    cosmetic: Arc<hb_adblock::Cosmetic>,
+) {
+    // Stop if the tab moved on to another page meanwhile.
+    let current = browser
+        .main_frame()
+        .map(|f| CefString::from(&f.url()).to_string());
+    if current.as_deref() != Some(url) {
         return;
     }
     let target = browser.clone();
@@ -357,16 +383,34 @@ pub fn apply_cosmetic(browser: &Browser, url: &str) {
     });
 }
 
+wrap_task! {
+    struct Recheck {
+        browser: Browser,
+        url: String,
+        blocker: Arc<Blocker>,
+        cosmetic: Arc<hb_adblock::Cosmetic>,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            hide_generic(&self.browser, &self.url, self.blocker.clone(), self.cosmetic.clone());
+        }
+    }
+}
+
 fn inject_css(browser: &Browser, css: &str) {
     if css.is_empty() {
         return;
     }
     let css = serde_json::to_string(css).unwrap_or_default();
+    // Rules already in the style are skipped, so re-checks don't pile up.
     let code = format!(
         "(() => {{ let s = document.getElementById('__hb_cosmetic'); \
          if (!s) {{ s = document.createElement('style'); s.id = '__hb_cosmetic'; \
          (document.head || document.documentElement).appendChild(s); }} \
-         s.textContent += {css}; return 'null'; }})()"
+         const have = new Set(s.textContent.split('\\n')); \
+         const add = {css}.split('\\n').filter((r) => r && !have.has(r)); \
+         if (add.length) s.textContent += add.join('\\n') + '\\n'; return 'null'; }})()"
     );
     eval::eval(browser, &code, |_| {});
 }
