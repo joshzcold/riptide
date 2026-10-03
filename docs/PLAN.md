@@ -142,7 +142,8 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
 - [x] `;d` download
-- [ ] Number hint mode, configurable chars (M5), hints inside iframes
+- [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02; cross-origin iframes are hinted as a whole)
+- [ ] Number hint mode
 
 ### Command line
 - [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings, open tabs via `:tab-select`/`T`)
@@ -235,7 +236,7 @@ Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserVi
 ### M4 — Hints ✅ done 2026-10-02
 - JS hint engine, all hint targets, rapid mode.
 
-Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: iframes aren't hinted; a page can interfere with hints on its own page by redefining `window.__hbHints`; labels for elements that move after the hints are drawn don't follow them.
+Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: cross-origin iframes are hinted only as a whole (same-origin ones are searched since 2026-10-02); a page can interfere with hints on its own page by redefining `window.__hbHints`; labels for elements that move after the hints are drawn don't follow them.
 
 ### M5 — Config ✅ done 2026-10-02
 - `config.toml` (settings, bindings, aliases, per-domain overrides); `:set`, `:bind`, live reload.

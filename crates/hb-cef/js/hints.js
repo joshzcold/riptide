@@ -39,35 +39,79 @@
     .matched { color: #008000; }
   `;
 
+  // Each hintable element with the iframes it sits in, outermost first:
+  // same-origin iframes are searched too, and their position offsets the
+  // element's box into the top page's coordinates.
   let elements = [];
   let host = null;
   let labels = [];
 
-  function visibleRect(el) {
+  function frameOffset(frames) {
+    let x = 0, y = 0;
+    for (const frame of frames) {
+      const r = frame.getBoundingClientRect();
+      x += r.left + frame.clientLeft;
+      y += r.top + frame.clientTop;
+    }
+    return { x, y };
+  }
+
+  // The element's first box that is visible in its own frame and on screen,
+  // in top-page viewport coordinates.
+  function visibleRect({ el, frames }) {
+    const win = el.ownerDocument.defaultView;
+    const { x, y } = frameOffset(frames);
     for (const r of el.getClientRects()) {
       if (r.width < 1 || r.height < 1) continue;
-      if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
-      return r;
+      if (r.bottom <= 0 || r.right <= 0 || r.top >= win.innerHeight || r.left >= win.innerWidth) continue;
+      const box = { left: r.left + x, top: r.top + y, width: r.width, height: r.height };
+      if (box.top + box.height <= 0 || box.left + box.width <= 0 || box.top >= innerHeight || box.left >= innerWidth) continue;
+      return box;
     }
     return null;
   }
 
   function isShown(el) {
-    const style = getComputedStyle(el);
+    const style = el.ownerDocument.defaultView.getComputedStyle(el);
     return style.visibility === "visible" && style.display !== "none";
   }
 
   function urlOf(el) {
     let raw = null;
-    if (el instanceof HTMLImageElement) raw = el.currentSrc || el.src;
+    if (el.tagName === "IMG") raw = el.currentSrc || el.src;
     else if (el.hasAttribute("href")) raw = el.getAttribute("href");
     if (!raw) return null;
     try {
-      const url = new URL(raw, document.baseURI);
+      const url = new URL(raw, el.ownerDocument.baseURI);
       return url.protocol === "javascript:" ? null : url.href;
     } catch {
       return null;
     }
+  }
+
+  // The document inside a same-origin frame; null for cross-origin ones.
+  function innerDocument(frame) {
+    try {
+      return frame.contentDocument;
+    } catch {
+      return null;
+    }
+  }
+
+  function gather(doc, frames, selector, out) {
+    for (const el of doc.querySelectorAll(selector)) {
+      // Same-origin frames are searched below instead of hinted themselves.
+      const searched = (el.tagName === "IFRAME" || el.tagName === "FRAME") && innerDocument(el);
+      const entry = { el, frames };
+      if (!searched && visibleRect(entry) && isShown(el)) out.push(entry);
+    }
+    for (const frame of doc.querySelectorAll("iframe, frame")) {
+      const inner = innerDocument(frame);
+      if (inner && visibleRect({ el: frame, frames }) && isShown(frame)) {
+        gather(inner, [...frames, frame], selector, out);
+      }
+    }
+    return out;
   }
 
   function clear() {
@@ -80,8 +124,8 @@
     collect(group) {
       clear();
       const selector = (SELECTORS[group] || SELECTORS.all).join(",");
-      elements = Array.from(document.querySelectorAll(selector)).filter((el) => visibleRect(el) && isShown(el));
-      return JSON.stringify(elements.map((el) => ({ url: urlOf(el) })));
+      elements = gather(document, [], selector, []);
+      return JSON.stringify(elements.map(({ el }) => ({ url: urlOf(el) })));
     },
 
     show(texts, uppercase) {
@@ -92,7 +136,7 @@
       style.textContent = STYLE;
       root.append(style);
       labels = texts.map((text, i) => {
-        const rect = visibleRect(elements[i]) || elements[i].getBoundingClientRect();
+        const rect = visibleRect(elements[i]) || elements[i].el.getBoundingClientRect();
         const label = document.createElement("span");
         label.className = "label";
         label.style.left = `${Math.max(0, rect.left)}px`;
@@ -126,8 +170,8 @@
 
     // Centre of the element's first visible box, in viewport CSS pixels.
     point(i) {
-      const el = elements[i];
-      const rect = el && el.isConnected ? visibleRect(el) || el.getBoundingClientRect() : null;
+      const entry = elements[i];
+      const rect = entry && entry.el.isConnected ? visibleRect(entry) || entry.el.getBoundingClientRect() : null;
       if (!rect) return JSON.stringify(null);
       const x = Math.min(Math.max(rect.left + rect.width / 2, 0), innerWidth - 1);
       const y = Math.min(Math.max(rect.top + rect.height / 2, 0), innerHeight - 1);

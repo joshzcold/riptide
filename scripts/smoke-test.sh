@@ -111,6 +111,12 @@ cat >"$work/hook.html" <<'EOF'
 <!doctype html><title>hook</title>
 EOF
 
+cat >"$work/frames.html" <<'EOF'
+<!doctype html><title>frames</title>
+<div style="height:120px"></div>
+<iframe style="width:400px;height:200px" srcdoc="<button style='margin:40px' onclick=&quot;parent.document.title = 'inner clicked ' + event.isTrusted&quot;>inside</button>"></iframe>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -593,6 +599,13 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; slee
 hook_page=$(page_title)
 [[ $command_page == second && $key_page == nav1 && $hook_page == nav2 ]] && pass ||
     fail ":second → '$command_page', gS → '$key_page', hook → '$hook_page'"
+
+step "hints reach into same-origin iframes"
+run "open file://$work/frames.html"
+expect_title "frames"
+nap 0.5
+hint a
+expect_title "inner clicked true"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"
