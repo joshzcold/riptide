@@ -26,6 +26,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("ui", "/statusbar.html") => embedded(ui::STATUSBAR_HTML),
         ("ui", "/completion.html") => embedded(ui::COMPLETION_HTML),
         ("help", "/") => Some((crate::help::page(), html)),
+        ("changelog", "/") => Some((crate::help::changelog_page(), html)),
         _ => None,
     }
 }

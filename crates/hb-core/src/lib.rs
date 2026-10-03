@@ -1,6 +1,7 @@
 //! Browser-independent logic for hackers-browser. Nothing here depends on CEF,
 //! so modes, key handling and command parsing are tested without a browser.
 
+pub mod changelog;
 pub mod cmdline;
 pub mod command;
 pub mod completion;

@@ -140,6 +140,10 @@ pub enum Command {
         topic: Option<String>,
     },
     Version,
+    /// Open the bundled changelog, in a new tab with `tab`.
+    Changelog {
+        tab: bool,
+    },
     CompletionFocus(FocusDirection),
     /// Answer the active prompt; `value` is yes/no for y/n questions.
     PromptAccept {
@@ -283,6 +287,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Show help: :help [-t] [:command | setting | section]",
     ),
     spec("version", "Show version, paths and loaded config files"),
+    spec(
+        "changelog",
+        "Show what changed in each version: :changelog [-t]",
+    ),
     spec(
         "quickmark-add",
         "Save a quickmark: :quickmark-add <url> <name>",
@@ -529,6 +537,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "version" => Command::Version,
+        "changelog" => Command::Changelog {
+            tab: args.flag(&["-t", "--tab"]).is_some(),
+        },
         "quickmark-add" => {
             let url = args.required("url")?.to_string();
             let name = args.rest();

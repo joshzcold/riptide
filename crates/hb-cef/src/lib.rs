@@ -95,6 +95,9 @@ wrap_browser_process_handler! {
             }
             window::create(startup.urls, startup.commands);
             report_config_errors(&errors);
+            if let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) {
+                help::note_upgrade(&data_dir);
+            }
             remote::listen();
         }
     }

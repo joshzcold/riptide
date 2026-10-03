@@ -12,12 +12,47 @@ use hb_core::engine::Level;
 use crate::shell;
 
 const TEMPLATE: &str = include_str!("../ui/help.html");
+const CHANGELOG_TEMPLATE: &str = include_str!("../ui/changelog.html");
+const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
 
 static PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
 
 pub fn page() -> Arc<[u8]> {
     let cached = PAGE.read().ok().and_then(|p| p.clone());
     cached.unwrap_or_else(|| Arc::from(TEMPLATE.as_bytes()))
+}
+
+/// `hb://changelog/`: the CHANGELOG.md this binary was built with.
+pub fn changelog_page() -> Arc<[u8]> {
+    static PAGE: std::sync::OnceLock<Arc<[u8]>> = std::sync::OnceLock::new();
+    PAGE.get_or_init(|| {
+        let body = hb_core::changelog::to_html(CHANGELOG);
+        Arc::from(
+            CHANGELOG_TEMPLATE
+                .replace("<!--HB_BODY-->", &body)
+                .into_bytes(),
+        )
+    })
+    .clone()
+}
+
+/// Tell the user once when the browser was updated since the last start.
+pub fn note_upgrade(data_dir: &std::path::Path) {
+    let path = data_dir.join("last-version");
+    let current = env!("CARGO_PKG_VERSION");
+    let last = std::fs::read_to_string(&path).ok();
+    if last.as_deref().map(str::trim) == Some(current) {
+        return;
+    }
+    if let Err(e) = std::fs::write(&path, current) {
+        tracing::warn!("can't write {}: {e}", path.display());
+    }
+    if last.is_some() {
+        shell::show_message(
+            Level::Info,
+            format!("Updated to {current}; :changelog for details"),
+        );
+    }
 }
 
 fn cef_version() -> String {
@@ -87,6 +122,15 @@ pub fn refresh() {
 
 pub fn run_command(command: &Command) -> bool {
     let (tab, topic) = match command {
+        Command::Changelog { tab } => {
+            let target = if *tab {
+                OpenTarget::Tab
+            } else {
+                OpenTarget::Current
+            };
+            shell::open(target, true, Some("hb://changelog/".to_string()));
+            return true;
+        }
         Command::Help { tab, topic } => (*tab, topic.as_deref()),
         Command::Version => (false, Some("version")),
         _ => return false,
