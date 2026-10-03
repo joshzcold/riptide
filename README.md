@@ -116,6 +116,12 @@ Ads and trackers are blocked at the network level with Adblock Plus filter lists
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
 - Top-level pages are never blocked, so a bad rule can't make a site unreachable. Cosmetic (element-hiding) rules aren't applied yet.
 
+### External programs and userscripts
+
+- `:spawn [-v] [-m] [-d] <cmd> [args]` runs a program, with arguments split like a shell would (no shell runs). `{url}` is the current page. `-v` reports success too, `-m` shows the program's output, and `-d` detaches. A non-zero exit is shown as an error. For example, `hb.bind(",m", "spawn -d mpv {url}")`.
+- `:spawn -u <name>` runs a **userscript**, compatible with qutebrowser's. It is looked up in `<config>/userscripts/`, then `<data>/userscripts/`, then `PATH`. It gets `QUTE_URL`, `QUTE_TITLE`, `QUTE_SELECTED_TEXT`, `QUTE_HTML`/`QUTE_TEXT` (files with the page's HTML and text), `QUTE_TAB_INDEX`, `QUTE_COUNT`, `QUTE_MODE`, `QUTE_CONFIG_DIR`, `QUTE_DATA_DIR`, `QUTE_DOWNLOAD_DIR` and `QUTE_VERSION`. Commands it writes to `QUTE_FIFO`, one per line, run when it exits.
+- `:open-editor`, or `Ctrl-e` in insert mode, edits the focused text field in `editor.command` (default `gvim -f {file} -c "normal {line}G{column0}l"`, as in qutebrowser). The text is written back when the editor exits successfully. For a terminal editor: `c.editor.command = { "foot", "nvim", "+call cursor({line}, {column})", "{file}" }`.
+
 ### Spell checking
 
 Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.languages = { "en-US", "de-DE" }` in `config.lua` or `:set spellcheck.languages '["en-US"]'`. Chromium downloads each dictionary once from Google (`redirector.gvt1.com`) and underlines mistakes as you type.

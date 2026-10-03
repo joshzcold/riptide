@@ -19,6 +19,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
+| `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |
 | `hints.uppercase` | boolean | `false` | Show hint labels in upper case |
 | `input.forward_unbound_keys` | all \| auto \| none | `auto` | Pass unbound keys to the page in normal mode (auto: all but plain letters and digits) |

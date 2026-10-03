@@ -66,6 +66,12 @@ setTimeout(() => {
 </script>
 EOF
 
+cat >"$work/editor.html" <<'EOF'
+<!doctype html><title>editor</title>
+<textarea id="t" style="position:fixed;top:0;left:0;width:300px;height:60px"></textarea>
+<script>t.addEventListener('input', () => { document.title = 'v=' + t.value; });</script>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -148,6 +154,19 @@ hint() {
     xdotool key "$1"
 }
 
+# A userscript and an "editor" for :spawn -u and :open-editor.
+mkdir -p "$work/base/config/userscripts"
+cat >"$work/base/config/userscripts/us" <<EOF
+#!/bin/sh
+printf '%s|%s' "\$QUTE_URL" "\$QUTE_MODE" >"$work/us.out"
+echo "open -t file://$work/second.html" >>"\$QUTE_FIFO"
+EOF
+cat >"$work/editor.sh" <<'EOF'
+#!/bin/sh
+printf 'edited text\n' >"$1"
+EOF
+chmod +x "$work/base/config/userscripts/us" "$work/editor.sh"
+
 echo "smoke-test on $DISPLAY"
 # A private basedir keeps the test away from the real config and profile.
 mkdir -p "$work/base/config"
@@ -157,6 +176,7 @@ c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
 c.window.title_format = "{mode}::{current_title}"
 c.content.blocking.adblock.lists = { "file://$work/filters.txt" }
+c.editor.command = { "$work/editor.sh", "{file}" }
 EOF
 HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
@@ -309,6 +329,29 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/base/data/adblock/engine.dat ]
 nap 0.5
 run "open $http/adblock.html"
 expect_title "ads b=no a=yes"
+
+step "a userscript gets QUTE_* and runs what it writes to QUTE_FIFO"
+run "spawn -u us"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
+us=$(cat "$work/us.out" 2>/dev/null || true)
+if [[ $(page_title) != second ]]; then
+    fail "the FIFO command didn't run; title was '$(name)'"
+elif [[ $us != "$http/adblock.html|command" ]]; then
+    fail "QUTE_URL|QUTE_MODE was '$us'"
+else
+    pass
+fi
+
+step "Ctrl-e edits a text field in editor.command"
+run "open file://$work/editor.html"
+expect_title "editor"
+hint a
+wait_mode insert || true
+xdotool type --delay 20 abc
+xdotool key ctrl+e
+expect_title "v=edited text"
+xdotool key Escape
+wait_mode normal || true
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

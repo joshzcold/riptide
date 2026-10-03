@@ -39,7 +39,7 @@ fn home() -> Option<PathBuf> {
     std::env::var_os(key).map(PathBuf::from)
 }
 
-fn download_dir() -> PathBuf {
+pub(crate) fn download_dir() -> PathBuf {
     let configured = shell::with(|s| {
         s.engine
             .settings()

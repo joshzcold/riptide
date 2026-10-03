@@ -170,10 +170,10 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18)
 
 ### Extensibility
-- [ ] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility)
+- [x] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility) (M9)
 - [ ] Greasemonkey-style injected JS
-- [ ] `:spawn` external commands
-- [ ] `:open-editor` (edit text field in `$EDITOR`)
+- [x] `:spawn` external commands (M9)
+- [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
 
 ### Session / state
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
@@ -309,6 +309,17 @@ Gaps:
 
 ### M9 — Power features
 - Caret mode, marks, macros, userscripts, greasemonkey, `:open-editor`, search engines.
+- ✅ **`:spawn`, userscripts and `:open-editor`** (2026-10-02):
+  - `hb_core::shell_words` splits arguments like a POSIX shell, with no shell involved.
+  - `hb_config::userscripts::resolve` searches config, then data, then `PATH`.
+  - `hb-cef/src/spawn.rs` runs programs on a worker thread and reports back through a UI task. Userscripts get qutebrowser's `QUTE_*` environment. `QUTE_HTML`, `QUTE_TEXT` and `QUTE_FIFO` live in a private 0700 temp directory that is removed afterwards.
+  - `editor.command` is validated to contain `{file}`. `js/editor.js` remembers the field and writes the text back with `input`/`change` events. It's bound to `Ctrl-e` in insert mode.
+  - Smoke steps cover a userscript (environment plus a FIFO command) and Ctrl-e with a scripted editor.
+  - Gaps:
+    - `QUTE_FIFO` is a regular file read when the script exits, not a live FIFO, so long-running scripts' commands are delayed until they exit.
+    - Not yet: `-o` (output in a tab), `QUTE_USER_AGENT`, hint-mode userscripts (`QUTE_MODE=hints`) and `:spawn` from hints.
+    - Password fields are skipped by `:open-editor`.
+    - The remote socket can run `:spawn`; it is limited to the same user (M15).
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.

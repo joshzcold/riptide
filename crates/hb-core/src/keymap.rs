@@ -60,6 +60,8 @@ impl Keymap {
         }
         map.bind(Mode::Insert, "<Escape>", "mode-leave")
             .expect("valid default binding");
+        map.bind(Mode::Insert, "<Ctrl-e>", "open-editor")
+            .expect("valid default binding");
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
             .expect("valid default binding");
         map

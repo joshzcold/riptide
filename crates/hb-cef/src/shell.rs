@@ -308,6 +308,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::downloads::run_command(&command, count)
         || crate::adblock::run_command(&command)
         || crate::spell::run_command(&command)
+        || crate::spawn::run_command(&command, count)
     {
         return;
     }

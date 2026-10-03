@@ -16,6 +16,7 @@ pub mod paths;
 pub mod remote;
 pub mod sandbox;
 pub mod toml_file;
+pub mod userscripts;
 
 use std::collections::{BTreeMap, BTreeSet};
 

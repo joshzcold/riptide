@@ -156,6 +156,27 @@ impl SettingDef {
     }
 }
 
+fn editor_command(value: &Value) -> Result<(), String> {
+    match value {
+        Value::List(argv) if argv.iter().any(|a| a.contains("{file}")) => Ok(()),
+        _ => Err("editor.command must contain {file}".into()),
+    }
+}
+
+/// `editor.command` with its fields filled in. `line` and `column` count from 1.
+pub fn editor_argv(template: &[String], file: &str, line: usize, column: usize) -> Vec<String> {
+    template
+        .iter()
+        .map(|arg| {
+            arg.replace("{file}", file)
+                .replace("{line0}", &line.saturating_sub(1).to_string())
+                .replace("{column0}", &column.saturating_sub(1).to_string())
+                .replace("{line}", &line.to_string())
+                .replace("{column}", &column.to_string())
+        })
+        .collect()
+}
+
 fn hint_chars(value: &Value) -> Result<(), String> {
     let Value::Str(s) = value else { return Ok(()) };
     let mut chars: Vec<char> = s.chars().collect();
@@ -295,6 +316,17 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Ask where to save each download (false saves straight to the directory)"
+    ),
+    def!(
+        "editor.command",
+        Kind::List,
+        Value::List(
+            ["gvim", "-f", "{file}", "-c", "normal {line}G{column0}l"]
+                .map(String::from)
+                .to_vec()
+        ),
+        "Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0}",
+        editor_command
     ),
     def!(
         "hints.chars",
@@ -498,6 +530,25 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn editor_fields() {
+        let template: Vec<String> = [
+            "vim",
+            "+call cursor({line}, {column})",
+            "{file}",
+            "{line0}:{column0}",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(
+            editor_argv(&template, "/tmp/x.txt", 3, 5),
+            ["vim", "+call cursor(3, 5)", "/tmp/x.txt", "2:4"]
+        );
+        let def = find("editor.command").unwrap();
+        assert!(def.from_json(&serde_json::json!(["vim"])).is_err());
+        assert!(def.from_json(&serde_json::json!(["vim", "{file}"])).is_ok());
+    }
     use serde_json::json;
 
     #[test]

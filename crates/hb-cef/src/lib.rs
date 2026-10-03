@@ -17,6 +17,7 @@ mod remote;
 mod renderer;
 mod scheme;
 mod shell;
+mod spawn;
 mod spell;
 mod storage;
 mod tabs;

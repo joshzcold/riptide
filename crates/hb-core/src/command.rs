@@ -188,6 +188,19 @@ pub enum Command {
     },
     /// Download the filter lists and rebuild the content blocker.
     AdblockUpdate,
+    /// Run an external program, or a userscript with `userscript`.
+    Spawn {
+        userscript: bool,
+        /// Report when the program exits successfully, too.
+        verbose: bool,
+        /// Show the program's output as messages.
+        output_messages: bool,
+        /// Don't wait for the program or report on it.
+        detach: bool,
+        argv: Vec<String>,
+    },
+    /// Edit the focused text field in an external editor.
+    OpenEditor,
     /// Offer replacements for the misspelled word at the cursor.
     SpellSuggest,
     SpellReplace {
@@ -341,6 +354,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "spell-add",
         "Add the word from the last :spell-suggest to your dictionary",
+    ),
+    spec(
+        "spawn",
+        "Run a program: :spawn [-u] [-v] [-m] [-d] <cmd> [args]; -u runs a userscript",
+    ),
+    spec(
+        "open-editor",
+        "Edit the focused text field in editor.command",
     ),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
@@ -630,6 +651,39 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "download-open" => Command::DownloadOpen,
         "download-clear" => Command::DownloadClear,
         "adblock-update" => Command::AdblockUpdate,
+        "spawn" => {
+            let (mut userscript, mut verbose, mut output_messages, mut detach) =
+                (false, false, false, false);
+            while let Some(flag) = args.flag(&[
+                "-u",
+                "--userscript",
+                "-v",
+                "--verbose",
+                "-m",
+                "--output-messages",
+                "-d",
+                "--detach",
+            ]) {
+                match flag {
+                    "-u" | "--userscript" => userscript = true,
+                    "-v" | "--verbose" => verbose = true,
+                    "-m" | "--output-messages" => output_messages = true,
+                    _ => detach = true,
+                }
+            }
+            let argv = crate::shell_words::split(args.rest()).map_err(|e| args.error(e))?;
+            if argv.is_empty() {
+                return Err(args.error("missing argument: command".to_string()));
+            }
+            Command::Spawn {
+                userscript,
+                verbose,
+                output_messages,
+                detach,
+                argv,
+            }
+        }
+        "open-editor" => Command::OpenEditor,
         "spell-suggest" => Command::SpellSuggest,
         "spell-replace" => Command::SpellReplace {
             word: args.required("word")?.to_string(),
@@ -1071,6 +1125,28 @@ mod tests {
     }
 
     #[test]
+    fn spawn_flags_and_words() {
+        assert_eq!(
+            parse("spawn -v -u password-fill --user 'a b'").unwrap(),
+            Command::Spawn {
+                userscript: true,
+                verbose: true,
+                output_messages: false,
+                detach: false,
+                argv: vec!["password-fill".into(), "--user".into(), "a b".into()],
+            }
+        );
+        let Command::Spawn { detach, argv, .. } = parse("spawn -d mpv https://x.org").unwrap()
+        else {
+            panic!()
+        };
+        assert!(detach);
+        assert_eq!(argv, ["mpv", "https://x.org"]);
+        assert!(parse("spawn -u").is_err());
+        assert!(parse("spawn 'unclosed").is_err());
+    }
+
+    #[test]
     fn every_spec_parses() {
         let needs_args = [
             "scroll",
@@ -1086,6 +1162,7 @@ mod tests {
             "completion-item-focus",
             "prompt-accept",
             "spell-replace",
+            "spawn",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);
