@@ -395,11 +395,17 @@ fn apply_chromium_settings() {
 }
 
 fn persist(op: hb_core::config::ConfigOp) {
-    if let hb_core::config::ConfigOp::Set { name, .. } = &op {
-        with(|s| {
-            s.setting_sources
-                .insert(name.clone(), ":set (autoconfig.toml)".to_string())
-        });
+    match &op {
+        hb_core::config::ConfigOp::Set { name, .. } => {
+            with(|s| {
+                s.setting_sources
+                    .insert(name.clone(), ":set (autoconfig.toml)".to_string())
+            });
+        }
+        hb_core::config::ConfigOp::Unset { name } => {
+            with(|s| s.setting_sources.remove(name));
+        }
+        _ => {}
     }
     crate::help::refresh();
     with(|s| {
@@ -473,6 +479,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::navigate::run_command(&command, count)
         || crate::lua::run_command(&command, count)
         || crate::view::run_command(&command, count)
+        || crate::actions::run_command(&command)
     {
         return;
     }
@@ -520,6 +527,10 @@ fn run_command(command: Command, count: Option<u32>) {
                 Direction::Bottom => return scroll(&browser, "perc", "null", "100"),
             };
             scroll(&browser, "by", &x.to_string(), &y.to_string());
+        }
+        Command::ScrollPx { x, y } => {
+            let n = i64::from(n);
+            scroll(&browser, "by", &(x * n).to_string(), &(y * n).to_string());
         }
         Command::ScrollPage { x, y } => {
             let n = f64::from(n);

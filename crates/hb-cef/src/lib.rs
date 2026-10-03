@@ -1,6 +1,7 @@
 //! CEF integration for hackers-browser. Translates CEF callbacks into
 //! `hb-core` inputs and carries out the effects the engine returns.
 
+mod actions;
 mod adblock;
 mod caret;
 mod client;

@@ -134,6 +134,13 @@ pub enum FocusDirection {
     Prev,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ElementFilter {
+    Id,
+    Css,
+    Focused,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
     Open {
@@ -317,6 +324,54 @@ pub enum Command {
     Messages,
     /// Run the last command again (`.`).
     RepeatCommand,
+    /// Scroll by pixels.
+    ScrollPx {
+        x: i64,
+        y: i64,
+    },
+    /// Run `command` after `ms` milliseconds.
+    Later {
+        ms: u64,
+        command: String,
+    },
+    /// Show a message, from a binding or script.
+    Message {
+        level: crate::engine::Level,
+        text: String,
+    },
+    ClearMessages,
+    /// Set a setting to the value after its current one in `values`, or
+    /// toggle a true/false setting.
+    ConfigCycle {
+        name: String,
+        values: Vec<String>,
+    },
+    /// Put a setting back to its default.
+    ConfigUnset {
+        name: String,
+    },
+    /// Type text into the focused field.
+    InsertText {
+        text: String,
+    },
+    /// Send keys to the page, or with `global` to the browser itself.
+    FakeKey {
+        keys: String,
+        global: bool,
+    },
+    /// Click an element chosen by id or CSS selector, or the focused one.
+    ClickElement {
+        filter: ElementFilter,
+        value: String,
+    },
+    /// Scroll to the element with this id or name.
+    ScrollToAnchor {
+        name: String,
+    },
+    /// Close every other window.
+    WindowOnly,
+    /// Do nothing; for unbinding a key without falling through to the page.
+    Nop,
     /// Follow the link around the selection (e.g. a search match) or the focused link.
     SelectionFollow {
         tab: bool,
@@ -602,6 +657,41 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
+    spec("scroll-px", "Scroll by pixels: :scroll-px <dx> <dy>"),
+    spec(
+        "cmd-later",
+        "Run a command later: :cmd-later <ms> <command>",
+    ),
+    spec("message-info", "Show a message: :message-info <text>"),
+    spec("message-warning", "Show a warning: :message-warning <text>"),
+    spec("message-error", "Show an error: :message-error <text>"),
+    spec("clear-messages", "Take the messages off the screen"),
+    spec(
+        "config-cycle",
+        "Cycle a setting: :config-cycle <option> [values…] (no values: toggle)",
+    ),
+    spec(
+        "config-unset",
+        "Put a setting back to its default: :config-unset <option>",
+    ),
+    spec(
+        "insert-text",
+        "Type text into the focused field: :insert-text <text>",
+    ),
+    spec(
+        "fake-key",
+        "Send keys to the page: :fake-key [-g] <keys> (-g: to the browser)",
+    ),
+    spec(
+        "click-element",
+        "Click an element: :click-element id|css|focused [value]",
+    ),
+    spec(
+        "scroll-to-anchor",
+        "Scroll to the element with this id or name",
+    ),
+    spec("window-only", "Close every other window"),
+    spec("nop", "Do nothing (to make a key do nothing)"),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
@@ -768,7 +858,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             Command::ModeEnter(mode)
         }
         "mode-leave" => Command::ModeLeave,
-        "cmd-set-text" => {
+        "cmd-set-text" | "set-cmd-text" => {
             let append_space = args.flag(&["-s", "--space"]).is_some();
             let text = args.rest();
             if text.is_empty() {
@@ -1058,6 +1148,105 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-mute" => Command::TabMute,
         "messages" => Command::Messages,
         "repeat-command" => Command::RepeatCommand,
+        "scroll-px" => {
+            let x = args.required("dx")?;
+            let y = args.required("dy")?;
+            let parse = |v: &str, name: &str| {
+                v.parse::<i64>()
+                    .map_err(|_| args.error(format!("{name} is not a number: {v:?}")))
+            };
+            Command::ScrollPx {
+                x: parse(x, "dx")?,
+                y: parse(y, "dy")?,
+            }
+        }
+        "cmd-later" | "later" => {
+            let ms = args.required("ms")?;
+            let ms = ms
+                .parse()
+                .map_err(|_| args.error(format!("not a number of milliseconds: {ms:?}")))?;
+            let command = args.rest();
+            if command.is_empty() {
+                return Err(args.error("missing argument: command"));
+            }
+            Command::Later {
+                ms,
+                command: command.to_string(),
+            }
+        }
+        "message-info" | "message-warning" | "message-error" => {
+            let text = args.rest();
+            if text.is_empty() {
+                return Err(args.error("missing argument: text"));
+            }
+            let level = match name {
+                "message-info" => crate::engine::Level::Info,
+                "message-warning" => crate::engine::Level::Warning,
+                _ => crate::engine::Level::Error,
+            };
+            Command::Message {
+                level,
+                text: text.to_string(),
+            }
+        }
+        "clear-messages" => Command::ClearMessages,
+        "config-cycle" => {
+            let name = args.required("option")?.to_string();
+            let mut values = Vec::new();
+            while let Some(v) = args.optional() {
+                values.push(v.to_string());
+            }
+            Command::ConfigCycle { name, values }
+        }
+        "config-unset" => Command::ConfigUnset {
+            name: args.required("option")?.to_string(),
+        },
+        "insert-text" => {
+            let text = args.rest();
+            if text.is_empty() {
+                return Err(args.error("missing argument: text"));
+            }
+            Command::InsertText {
+                text: text.to_string(),
+            }
+        }
+        "fake-key" => {
+            let global = args.flag(&["-g", "--global"]).is_some();
+            let keys = args.rest();
+            if keys.is_empty() {
+                return Err(args.error("missing argument: keys"));
+            }
+            crate::key::Key::parse_sequence(keys).map_err(|e| args.error(e.to_string()))?;
+            Command::FakeKey {
+                keys: keys.to_string(),
+                global,
+            }
+        }
+        "click-element" => {
+            let filter = match args.required("filter")? {
+                "id" => ElementFilter::Id,
+                "css" => ElementFilter::Css,
+                "focused" => ElementFilter::Focused,
+                other => {
+                    return Err(
+                        args.error(format!("unknown filter {other:?} (id, css or focused)"))
+                    );
+                }
+            };
+            let value = args.rest();
+            if value.is_empty() && filter != ElementFilter::Focused {
+                return Err(args.error("missing argument: value"));
+            }
+            Command::ClickElement {
+                filter,
+                value: value.to_string(),
+            }
+        }
+        "scroll-to-anchor" => Command::ScrollToAnchor {
+            name: args.required("name")?.to_string(),
+        },
+        "window-only" => Command::WindowOnly,
+        "nop" => Command::Nop,
         "selection-follow" => Command::SelectionFollow {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
@@ -1588,6 +1777,53 @@ mod tests {
     }
 
     #[test]
+    fn parses_page_and_script_commands() {
+        assert_eq!(
+            parse("zoom 150%").unwrap(),
+            Command::Zoom { percent: Some(150) }
+        );
+        assert_eq!(parse("zoom").unwrap(), Command::Zoom { percent: None });
+        assert!(parse("zoom big").is_err());
+        assert_eq!(
+            parse("print --pdf ~/page.pdf").unwrap(),
+            Command::Print {
+                pdf: Some("~/page.pdf".into())
+            }
+        );
+        assert_eq!(
+            parse("scroll-px 0 -40").unwrap(),
+            Command::ScrollPx { x: 0, y: -40 }
+        );
+        assert_eq!(
+            parse("cmd-later 500 open -t x").unwrap(),
+            Command::Later {
+                ms: 500,
+                command: "open -t x".into()
+            }
+        );
+        assert_eq!(
+            parse("fake-key -g <Escape>").unwrap(),
+            Command::FakeKey {
+                keys: "<Escape>".into(),
+                global: true
+            }
+        );
+        assert!(parse("fake-key <Nope>").is_err());
+        assert_eq!(
+            parse("click-element css a.next").unwrap(),
+            Command::ClickElement {
+                filter: ElementFilter::Css,
+                value: "a.next".into()
+            }
+        );
+        assert!(parse("click-element id").is_err());
+        assert_eq!(
+            parse("set-cmd-text -s :open").unwrap(),
+            parse("cmd-set-text -s :open").unwrap()
+        );
+    }
+
+    #[test]
     fn chains_commands() {
         assert_eq!(
             parse_line("back ;; reload -f").unwrap(),
@@ -1638,6 +1874,17 @@ mod tests {
             "spawn",
             "navigate",
             "jseval",
+            "cmd-later",
+            "scroll-px",
+            "config-unset",
+            "scroll-to-anchor",
+            "message-info",
+            "message-warning",
+            "message-error",
+            "config-cycle",
+            "insert-text",
+            "fake-key",
+            "click-element",
             "tab-take",
             "lua-call",
             "set-mark",

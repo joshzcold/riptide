@@ -245,6 +245,7 @@ impl Engine {
                 .unbind(*mode, keys)
                 .map(|_| ())
                 .map_err(|e| e.to_string()),
+            ConfigOp::Unset { name } => self.settings.unset(name),
         }
     }
 
@@ -1098,6 +1099,41 @@ impl Engine {
             Command::CompletionFocus(direction) => {
                 self.focus_completion(direction == FocusDirection::Next)
             }
+            Command::Message { level, text } => {
+                self.show_message(level, text);
+            }
+            Command::ClearMessages => {
+                if !std::mem::take(&mut self.messages).is_empty() {
+                    self.dirty = true;
+                }
+            }
+            Command::Nop => {}
+            Command::ConfigCycle { name, values } => {
+                let current = self.settings.get(&name).map(ToString::to_string);
+                if values.is_empty() {
+                    self.set_command(Some(format!("{name}!")), None, None, effects);
+                } else if values.len() == 1 {
+                    self.show_message(Level::Error, "config-cycle needs two or more values");
+                } else {
+                    let next = current
+                        .and_then(|c| values.iter().position(|v| *v == c))
+                        .map_or(0, |i| (i + 1) % values.len());
+                    self.set_command(Some(name), Some(values[next].clone()), None, effects);
+                }
+            }
+            Command::ConfigUnset { name } => match self.settings.unset(&name) {
+                Ok(()) => {
+                    let value = self.settings.get(&name).map(ToString::to_string);
+                    self.show_message(
+                        Level::Info,
+                        format!("{name} = {}", value.unwrap_or_default()),
+                    );
+                    effects.push(Effect::ConfigChanged(ConfigOp::Unset { name }));
+                }
+                Err(e) => {
+                    self.show_message(Level::Error, e);
+                }
+            },
             Command::RepeatCommand => match self.last_command.clone() {
                 Some((line, last_count)) => {
                     effects.extend(self.execute_str(&line, count.or(last_count)))
@@ -1810,7 +1846,16 @@ mod tests {
             .iter()
             .map(|c| c.name.clone())
             .collect();
-        assert_eq!(names, vec!["scroll", "scroll-page", "scroll-to-perc"]);
+        assert_eq!(
+            names,
+            vec![
+                "scroll",
+                "scroll-page",
+                "scroll-to-perc",
+                "scroll-px",
+                "scroll-to-anchor"
+            ]
+        );
         press(&mut e, "oll ");
         assert!(e.completions().items.is_empty());
     }
@@ -2019,6 +2064,41 @@ mod tests {
             runs(&press(&mut e, ".")),
             vec![(Command::Reload { force: false }, None)]
         );
+    }
+
+    #[test]
+    fn config_cycle_and_unset() {
+        let mut e = engine();
+        press(&mut e, ":config-cycle hints.mode number letter<Return>");
+        assert_eq!(e.settings().str("hints.mode"), "number");
+        press(&mut e, ":config-cycle hints.mode number letter<Return>");
+        assert_eq!(e.settings().str("hints.mode"), "letter");
+        let before = e.settings().bool("search.incremental");
+        press(&mut e, ":config-cycle search.incremental<Return>");
+        assert_eq!(e.settings().bool("search.incremental"), !before);
+        press(&mut e, ":set hints.chars qwer<Return>");
+        let out = press(&mut e, ":config-unset hints.chars<Return>");
+        assert_eq!(e.settings().str("hints.chars"), "asdfghjkl");
+        assert_eq!(
+            config_changes(&out),
+            vec![ConfigOp::Unset {
+                name: "hints.chars".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn message_commands_show_and_clear() {
+        let mut e = engine();
+        press(&mut e, ":message-warning careful<Return>");
+        let message = e.status().message.unwrap();
+        assert_eq!(
+            (message.level, message.text.as_str()),
+            (Level::Warning, "careful")
+        );
+        press(&mut e, ":clear-messages<Return>");
+        assert!(e.status().message.is_none());
+        assert_eq!(e.message_log().len(), 1);
     }
 
     #[test]

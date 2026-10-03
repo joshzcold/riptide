@@ -24,4 +24,8 @@ pub enum ConfigOp {
         mode: Mode,
         keys: String,
     },
+    /// Back to the default value.
+    Unset {
+        name: String,
+    },
 }

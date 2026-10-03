@@ -566,6 +566,11 @@ impl Settings {
     }
 
     /// Store an already validated value for URLs matching `pattern`.
+    pub fn unset(&mut self, name: &str) -> Result<(), String> {
+        let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
+        self.set(name, def.default_value())
+    }
+
     pub fn set_for(&mut self, pattern: &str, name: &str, value: Value) -> Result<(), String> {
         let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
         if !PER_DOMAIN.contains(&def.name) {

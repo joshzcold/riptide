@@ -689,6 +689,22 @@ run "messages"
 expect_title "Messages"
 run "tab-close"
 
+step ":cmd-later, :insert-text and :click-element"
+run "open file://$work/editor.html"
+expect_title "editor"
+run "cmd-later 1500 insert-text hi"
+run "jseval t.focus()"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == v=hi ]] && break; sleep 0.1; done
+inserted=$(page_title)
+xdotool key Escape
+wait_mode normal || true
+run "open file://$work/links.html"
+expect_title "links"
+run "click-element css a[href='#news']"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "clicked news" ]] && break; sleep 0.1; done
+clicked=$(page_title)
+[[ $inserted == v=hi && $clicked == "clicked news" ]] && pass || fail "inserted '$inserted', clicked '$clicked'"
+
 step "hints reach into same-origin iframes"
 run "open file://$work/frames.html"
 expect_title "frames"

@@ -84,6 +84,9 @@ impl AutoConfig {
                 command,
             } => self.binding(mode.name(), keys, command),
             ConfigOp::Unbind { mode, keys } => self.binding(mode.name(), keys, ""),
+            ConfigOp::Unset { name } => {
+                self.table.remove(name);
+            }
         }
     }
 
