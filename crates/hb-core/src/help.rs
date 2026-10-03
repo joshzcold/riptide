@@ -22,8 +22,8 @@ pub struct HelpData {
 
 #[derive(Debug, Serialize)]
 pub struct CommandHelp {
-    pub name: &'static str,
-    pub description: &'static str,
+    pub name: String,
+    pub description: String,
     /// Normal-mode keys whose binding starts with this command.
     pub keys: Vec<String>,
 }
@@ -80,27 +80,37 @@ fn command_name(binding: &str) -> &str {
         .unwrap_or(first)
 }
 
+/// `user_commands` are the ones `config.lua` defined, as `(name, description)`.
 pub fn build(
     keymap: &Keymap,
     settings: &Settings,
     sources: &HashMap<String, String>,
     info: Vec<(String, String)>,
+    user_commands: &[(String, String)],
 ) -> HelpData {
     let defaults = Keymap::defaults();
     let normal = keymap.bindings(Mode::Normal);
-    let commands = COMMANDS
+    let keys_for = |name: &str| -> Vec<String> {
+        normal
+            .iter()
+            .filter(|(_, cmd)| command_name(cmd) == name)
+            .map(|(keys, _)| keys.clone())
+            .collect()
+    };
+    let mut commands: Vec<CommandHelp> = COMMANDS
         .iter()
         .filter(|c| !c.hidden)
         .map(|c| CommandHelp {
-            name: c.name,
-            description: c.description,
-            keys: normal
-                .iter()
-                .filter(|(_, cmd)| command_name(cmd) == c.name)
-                .map(|(keys, _)| keys.clone())
-                .collect(),
+            name: c.name.to_string(),
+            description: c.description.to_string(),
+            keys: keys_for(c.name),
         })
         .collect();
+    commands.extend(user_commands.iter().map(|(name, description)| CommandHelp {
+        name: name.clone(),
+        description: format!("{description} (config.lua)"),
+        keys: keys_for(name),
+    }));
 
     let default_settings = Settings::default();
     let settings = SETTINGS
@@ -206,6 +216,7 @@ mod tests {
             &Settings::default(),
             &HashMap::new(),
             Vec::new(),
+            &[],
         );
         let visible = COMMANDS.iter().filter(|c| !c.hidden).count();
         assert_eq!(data.commands.len(), visible);
@@ -238,7 +249,18 @@ mod tests {
             .unwrap();
         settings.set("hints.uppercase", Value::Bool(true)).unwrap();
         let sources = HashMap::from([("hints.chars".to_string(), "config.lua".to_string())]);
-        let data = build(&keymap, &settings, &sources, Vec::new());
+        let data = build(
+            &keymap,
+            &settings,
+            &sources,
+            Vec::new(),
+            &[("wiki".into(), "Look it up".into())],
+        );
+        assert!(
+            data.commands
+                .iter()
+                .any(|c| c.name == "wiki" && c.description.contains("config.lua"))
+        );
 
         let normal = data.modes.iter().find(|m| m.name == "normal").unwrap();
         let changed: Vec<&str> = normal

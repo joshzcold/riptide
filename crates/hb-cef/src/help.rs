@@ -120,7 +120,13 @@ pub fn refresh() {
                 SANDBOX.get().cloned().unwrap_or_default(),
             ),
         ];
-        let data = hb_core::help::build(s.engine.keymap(), s.engine.settings(), &sources, info);
+        let data = hb_core::help::build(
+            s.engine.keymap(),
+            s.engine.settings(),
+            &sources,
+            info,
+            s.engine.user_commands(),
+        );
         // `</` would end the inline <script> early.
         let json = serde_json::to_string(&data)
             .unwrap_or_else(|_| "null".into())

@@ -391,7 +391,8 @@ Result:
 - `hb.on` supports `load_finished`, `url_changed`, `tab_opened` and `mode_changed`.
 - In callbacks, `hb.set` becomes a `:set`.
 - Unit tests in hb-config drive the VM without CEF (bindings, commands, hooks, errors with `config.lua:line`). A smoke step uses all three entry points.
-- Not done: a sandbox for third-party scripts (only the user's own config runs), Lua commands on the help page, a richer API (tabs list, settings watchers), and Lua userscripts.
+- Lua commands appear on the help page, after the built-in ones.
+- Not done: a sandbox for third-party scripts (only the user's own config runs), a richer API (tabs list, settings watchers), and Lua userscripts.
 
 Original plan:
 - Bind keys to Lua functions: `hb.bind("<Ctrl-g>", function() ... end)`.
@@ -494,7 +495,7 @@ Result:
 - **Commands:** `:help [-t] [topic]`, `:version` and `F1`. `--version` now prints the git commit and CEF/Chromium versions (from `hb-cef/build.rs`).
 - A smoke step opens `:help :open`.
 
-Not done: help for Lua-defined commands (M12).
+Done: Lua-defined commands are listed too (M12).
 
 Original plan:
 - **`:help [topic]`** opens `hb://help`, a set of pages generated from the live registries, so it is always current:
