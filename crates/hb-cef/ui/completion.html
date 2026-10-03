@@ -31,6 +31,9 @@
     white-space: pre;
   }
   .header { background: var(--header-bg); font-weight: bold; }
+  .message { background: #000000; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+  .message.error { background: #ff0000; }
+  .message.warning { background: #ff8c00; }
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
@@ -75,7 +78,8 @@
   }
 
   // Either {kind: "prompt", prompt} or {kind: "rows", rows}, where rows are
-  // {header} or {name, description, selected}.
+  // {header}, {name, description, selected}, or {message, level} for
+  // messages older than the one in the status bar.
   window.hbRender = (payload) => {
     const list = document.getElementById("list");
     if (payload.kind === "prompt") return renderPrompt(list, payload.prompt);
@@ -84,6 +88,11 @@
       if (row.header) {
         el.className = "header";
         el.textContent = row.header;
+        return el;
+      }
+      if (row.message !== undefined) {
+        el.className = `row message ${row.level}`;
+        el.textContent = row.message;
         return el;
       }
       el.className = row.selected ? "row selected" : "row";

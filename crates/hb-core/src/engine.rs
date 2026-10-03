@@ -106,7 +106,9 @@ pub struct Engine {
     count: Option<u32>,
     cmdline: LineEditor,
     history: History,
-    message: Option<Message>,
+    /// Messages on screen, newest last, each with the generation that
+    /// expires it.
+    messages: Vec<(u64, Message)>,
     message_generation: u64,
     url: String,
     clipboard: Option<Box<dyn Fn() -> Option<String>>>,
@@ -144,6 +146,9 @@ struct Macros {
 /// How deeply macros may run other macros.
 const MAX_MACRO_DEPTH: usize = 10;
 
+/// Messages shown at once: the newest in the status bar, the rest above it.
+const MAX_MESSAGES: usize = 5;
+
 impl Engine {
     pub fn new(keymap: Keymap) -> Self {
         Self {
@@ -154,7 +159,7 @@ impl Engine {
             count: None,
             cmdline: LineEditor::default(),
             history: History::default(),
-            message: None,
+            messages: Vec::new(),
             message_generation: 0,
             url: String::new(),
             clipboard: None,
@@ -240,7 +245,7 @@ impl Engine {
                 cursor: self.cmdline.cursor(),
             }),
             keystring,
-            message: self.message.clone(),
+            message: self.messages.last().map(|(_, m)| m.clone()),
         }
     }
 
@@ -448,13 +453,25 @@ impl Engine {
     /// Returns an id for [`Engine::expire_message`], so a timer started for
     /// one message cannot clear a newer one.
     pub fn show_message(&mut self, level: Level, text: impl Into<String>) -> u64 {
-        self.message = Some(Message {
-            level,
-            text: text.into(),
-        });
         self.message_generation += 1;
+        self.messages.push((
+            self.message_generation,
+            Message {
+                level,
+                text: text.into(),
+            },
+        ));
+        if self.messages.len() > MAX_MESSAGES {
+            self.messages.remove(0);
+        }
         self.dirty = true;
         self.message_generation
+    }
+
+    /// Messages still on screen besides the newest, oldest first.
+    pub fn earlier_messages(&self) -> Vec<Message> {
+        let n = self.messages.len().saturating_sub(1);
+        self.messages[..n].iter().map(|(_, m)| m.clone()).collect()
     }
 
     pub fn message_generation(&self) -> u64 {
@@ -462,7 +479,9 @@ impl Engine {
     }
 
     pub fn expire_message(&mut self, generation: u64) {
-        if generation == self.message_generation && self.message.take().is_some() {
+        let before = self.messages.len();
+        self.messages.retain(|(g, _)| *g != generation);
+        if self.messages.len() != before {
             self.dirty = true;
         }
     }
@@ -515,7 +534,7 @@ impl Engine {
 
     pub fn load_started(&mut self) -> Vec<Effect> {
         let mut effects = Vec::new();
-        if self.message.take().is_some() {
+        if !std::mem::take(&mut self.messages).is_empty() {
             self.dirty = true;
         }
         let leave_insert =
@@ -622,7 +641,7 @@ impl Engine {
     /// Normal and caret mode: counts, multi-key bindings, and what to do
     /// with keys nothing is bound to.
     fn handle_bound(&mut self, mode: Mode, key: Key) -> KeyOutcome {
-        if self.message.take().is_some() {
+        if !std::mem::take(&mut self.messages).is_empty() {
             self.dirty = true;
         }
         if self.pending.is_empty()
@@ -1406,6 +1425,30 @@ mod tests {
         press(&mut e, ":wi");
         assert!(e.completions().items.iter().any(|c| c.name == "wiki"));
         assert!(e.check_command("nope").is_err());
+    }
+
+    #[test]
+    fn messages_stack_and_expire_on_their_own() {
+        let mut e = engine();
+        let first = e.show_message(Level::Info, "first");
+        let second = e.show_message(Level::Error, "second");
+        assert_eq!(e.status().message.unwrap().text, "second");
+        assert_eq!(
+            e.earlier_messages()
+                .iter()
+                .map(|m| m.text.as_str())
+                .collect::<Vec<_>>(),
+            ["first"]
+        );
+        e.expire_message(second);
+        assert_eq!(e.status().message.unwrap().text, "first");
+        assert!(e.earlier_messages().is_empty());
+        e.expire_message(first);
+        assert!(e.status().message.is_none());
+        e.show_message(Level::Info, "a");
+        e.show_message(Level::Info, "b");
+        press(&mut e, "j");
+        assert!(e.status().message.is_none(), "a key clears them");
     }
 
     #[test]

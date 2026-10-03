@@ -861,7 +861,16 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             (json!({ "kind": "prompt", "prompt": prompt }), rows)
         }
         None if focused => {
-            let rows = completion_rows(&s.engine.completions());
+            let mut rows = completion_rows(&s.engine.completions());
+            // Without completions, show the messages the status bar replaced.
+            if rows.is_empty() && status.command_line.is_none() {
+                rows = s
+                    .engine
+                    .earlier_messages()
+                    .into_iter()
+                    .map(|m| json!({ "message": m.text, "level": m.level }))
+                    .collect();
+            }
             let count = rows.len();
             (json!({ "kind": "rows", "rows": rows }), count)
         }

@@ -583,7 +583,7 @@ Result:
   - The CDM is never updated afterwards (delete `<data>/WidevineCdm` to fetch it again).
   - Turning the setting off doesn't remove a downloaded CDM.
   - Protected playback against a real stream isn't verified.
-  - Startup messages share the one status-bar slot, so the "downloading" notice can be replaced by another.
+  - ~~Startup messages share the one status-bar slot.~~ Messages now stack: the newest is in the status bar and up to four older ones show above it, each expiring on its own.
   - The licensing review below is still open.
 
 Tested 2026-10-02 on CEF 154 / Linux with the stock (Spotify CDN) build and no code changes:
