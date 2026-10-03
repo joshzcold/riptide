@@ -1961,7 +1961,7 @@ mod tests {
                 id,
                 PromptKind::YesNo {
                     default: false,
-                    remember: Remember::Session,
+                    remember: Remember::Always,
                 },
             ));
         }

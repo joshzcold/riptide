@@ -60,7 +60,7 @@ fn resolve(
     let remember = if site {
         Remember::Site
     } else {
-        Remember::Session
+        Remember::Always
     };
     let kind = PromptKind::YesNo {
         default: false,

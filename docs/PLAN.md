@@ -158,7 +158,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Permission prompts (geolocation, camera, notifications)
 - [x] HTTP auth and JS dialogs in the prompt UI
 - [ ] Download bar listing each download; path completion in the save prompt
-- [ ] TLS certificate errors: Chromium blocks them; no "proceed anyway" prompt yet
+- [x] TLS certificate errors: `OnCertificateError` asks per `content.tls.certificate_errors` (`ask`/`block`/`load-insecurely`, per-site). `A`/`N` save the answer for the origin. A smoke step uses a self-signed HTTPS server (2026-10-02).
 - [x] Dark mode: `colors.webpage.preferred_color_scheme` (live, `SetChromeColorScheme`) and `colors.webpage.darkmode.enabled` (startup `--blink-settings=forceDarkModeEnabled=true`)
 - [ ] Widevine DRM, opt-in (M11)
 - [x] Review of background Google service traffic (M8; one `ListAccounts` call left)

@@ -133,7 +133,8 @@ pub enum Decision {
     Ask(String),
 }
 
-/// Answers given with `A`/`N`, per origin and feature, for this session.
+/// Answers given with `A`/`N` this session, per origin and feature (they are
+/// also saved as per-site settings).
 #[derive(Default)]
 pub struct Remembered {
     answers: HashMap<(String, u32), bool>,

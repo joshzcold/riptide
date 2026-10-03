@@ -26,6 +26,7 @@ mod spawn;
 mod spell;
 mod storage;
 mod tabs;
+mod tls;
 mod ui;
 mod window;
 

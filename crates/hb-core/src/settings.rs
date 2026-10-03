@@ -318,6 +318,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites show notifications: ask, true or false"
     ),
     def!(
+        "content.tls.certificate_errors",
+        Kind::Enum(&["ask", "block", "load-insecurely"]),
+        s("ask"),
+        "Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely"
+    ),
+    def!(
         "downloads.location.directory",
         Kind::Str,
         s(""),
@@ -498,6 +504,7 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.media.audio_capture",
     "content.media.video_capture",
     "content.notifications.enabled",
+    "content.tls.certificate_errors",
 ];
 
 #[derive(Clone, Debug)]

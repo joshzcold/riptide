@@ -19,6 +19,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.media.audio_capture` | ask \| true \| false | `ask` | Let sites use your microphone: ask, true or false |
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
+| `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |

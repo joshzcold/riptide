@@ -27,6 +27,7 @@ cleanup() {
     [[ -n $browser_pid ]] && kill "$browser_pid" 2>/dev/null || true
     [[ -n $xvfb_pid ]] && kill "$xvfb_pid" 2>/dev/null || true
     [[ -n ${http_pid:-} ]] && kill "$http_pid" 2>/dev/null || true
+    [[ -n ${tls_pid:-} ]] && kill "$tls_pid" 2>/dev/null || true
     rm -rf "$work"
 }
 trap cleanup EXIT
@@ -138,6 +139,25 @@ server.serve_forever()
 SERVER
 http_pid=$!
 for _ in $(seq 50); do [[ -s $work/port ]] && break; sleep 0.1; done
+
+# An HTTPS server with a self-signed certificate, for the certificate prompt.
+mkdir -p "$work/tls"
+printf '<!doctype html><title>secret page</title>' >"$work/tls/index.html"
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$work/tls/key.pem" -out "$work/tls/cert.pem" \
+    -days 2 -subj "/CN=localhost" 2>/dev/null
+python3 - "$work/tls" "$work/tls-port" 2>/dev/null <<'SERVER' &
+import functools, http.server, ssl, sys
+d = sys.argv[1]
+handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=d)
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(d + "/cert.pem", d + "/key.pem")
+server.socket = ctx.wrap_socket(server.socket, server_side=True)
+open(sys.argv[2], "w").write(str(server.server_port))
+server.serve_forever()
+SERVER
+tls_pid=$!
+for _ in $(seq 50); do [[ -s $work/tls-port ]] && break; sleep 0.1; done
 http="http://127.0.0.1:$(cat "$work/port")"
 export DISPLAY=":$(cat "$work/display")"
 
@@ -510,6 +530,12 @@ dark=$(page_title)
 run "set colors.webpage.preferred_color_scheme light"
 expect_title "dark=false"
 [[ $dark == dark=true ]] || fail "dark gave '$dark'"
+
+step "an untrusted certificate asks before loading"
+run "open https://127.0.0.1:$(cat "$work/tls-port")/"
+wait_mode yesno || true
+xdotool key y
+expect_title "secret page"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

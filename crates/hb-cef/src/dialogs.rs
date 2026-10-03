@@ -116,6 +116,20 @@ wrap_request_handler! {
             Some(HbResourceRequestHandler::new())
         }
 
+        fn on_certificate_error(
+            &self,
+            browser: Option<&mut Browser>,
+            cert_error: Errorcode,
+            request_url: Option<&CefString>,
+            _ssl_info: Option<&mut Sslinfo>,
+            callback: Option<&mut Callback>,
+        ) -> ::std::os::raw::c_int {
+            let Some(callback) = callback.map(|c| c.clone()) else { return 0 };
+            let url = string(request_url);
+            let code = cert_error.get_raw();
+            crate::tls::certificate_error(browser.map(|b| b.identifier()), code, &url, callback).into()
+        }
+
         fn auth_credentials(
             &self,
             browser: Option<&mut Browser>,

@@ -18,9 +18,10 @@ pub enum PromptKind {
 pub enum Remember {
     /// A one-off question (`confirm()`, overwrite a file).
     Never,
-    /// `A`/`N` keep the answer for this session.
-    Session,
-    /// Chromium saves allow/block per site; `n` only means "not now".
+    /// `y`/`n` answer once; `A`/`N` save the answer for the site.
+    Always,
+    /// Chromium remembers `y` per site itself; `A`/`N` also save the answer
+    /// for the site, and `n` only means "not now".
     Site,
 }
 
@@ -68,11 +69,12 @@ impl Prompt {
                 let default = if default { "yes" } else { "no" };
                 match remember {
                     Remember::Never => format!("y: yes, n: no, Return: {default}, Escape: cancel"),
-                    Remember::Session => format!(
-                        "y: yes, n: no, A: always, N: never (this session), Return: {default}, Escape: cancel"
+                    Remember::Always => format!(
+                        "y: yes, n: no, A: always, N: never (saved for this site), Return: {default}, Escape: cancel"
                     ),
                     Remember::Site => {
-                        "y: allow (saved for this site), n: not now, N: block (saved), Escape: not now".to_string()
+                        "y: allow, A: always allow, n: not now, N: always block (saved for this site), Escape: not now"
+                            .to_string()
                     }
                 }
             }
