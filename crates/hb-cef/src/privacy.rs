@@ -48,13 +48,10 @@ fn profile_prefs() -> Vec<(&'static str, Value)> {
 
 /// Adds our features to any `--disable-features` the user passed.
 pub fn append_switches(command_line: &mut CommandLine) {
-    let name = CefString::from("disable-features");
-    let given = CefStringUtf16::from(&command_line.switch_value(Some(&name))).to_string();
-    let mut features: Vec<&str> = given.split(',').filter(|f| !f.is_empty()).collect();
-    features.extend(DISABLED_FEATURES);
-    command_line.append_switch_with_value(
-        Some(&name),
-        Some(&CefString::from(features.join(",").as_str())),
+    crate::append_to_list_switch(
+        command_line,
+        "disable-features",
+        &DISABLED_FEATURES.join(","),
     );
 }
 

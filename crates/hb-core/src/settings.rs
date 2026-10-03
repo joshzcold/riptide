@@ -246,6 +246,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Save the open tabs as the 'default' session on quit, and restore them at startup"
     ),
     def!(
+        "colors.webpage.darkmode.enabled",
+        Kind::Bool,
+        Value::Bool(false),
+        "Render light pages dark with Chromium's automatic dark mode (takes effect after a restart)"
+    ),
+    def!(
+        "colors.webpage.preferred_color_scheme",
+        Kind::Enum(&["auto", "light", "dark"]),
+        s("auto"),
+        "The color scheme pages see in prefers-color-scheme: auto follows the system"
+    ),
+    def!(
         "completion.web_history.max_items",
         Kind::Int {
             min: 0,

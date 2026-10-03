@@ -42,6 +42,10 @@ struct Startup {
     paths: Paths,
     urls: Vec<String>,
     commands: Vec<String>,
+    /// The config, read before CEF starts so startup-only settings can
+    /// become Chromium switches; taken once CEF is up.
+    config: std::sync::Arc<std::sync::Mutex<Option<hb_config::Loaded>>>,
+    dark_mode: bool,
 }
 
 wrap_app! {
@@ -67,6 +71,9 @@ wrap_app! {
             if browser_process && let Some(command_line) = command_line {
                 command_line.append_switch(Some(&CefString::from("disable-chrome-login-prompt")));
                 privacy::append_switches(command_line);
+                if self.startup.as_ref().is_some_and(|s| s.dark_mode) {
+                    append_to_list_switch(command_line, "blink-settings", "forceDarkModeEnabled=true");
+                }
             }
         }
 
@@ -94,7 +101,11 @@ wrap_browser_process_handler! {
             let mut errors = storage::open(&startup.paths);
             shell::install(shell::Shell::new(engine, startup.paths));
             scheme::install();
-            errors.extend(shell::load_config());
+            let loaded = startup.config.lock().ok().and_then(|mut c| c.take());
+            errors.extend(match loaded {
+                Some(loaded) => shell::apply_config(loaded),
+                None => shell::load_config(),
+            });
             errors.extend(greasemonkey::load().1);
             if let Some((data_dir, lists)) = shell::with(|s| {
                 (s.paths.data_dir.clone(), s.engine.settings().list("content.blocking.adblock.lists").to_vec())
@@ -120,6 +131,27 @@ pub(crate) fn report_config_errors(errors: &[String]) {
             format!("Config: {first} (and {} more; see the log)", rest.len()),
         ),
     }
+}
+
+/// A setting's value from config read before the engine exists.
+fn startup_bool(loaded: &hb_config::Loaded, name: &str) -> bool {
+    let mut engine = Engine::new(Keymap::defaults());
+    for op in &loaded.ops {
+        let _ = engine.apply_config(op);
+    }
+    engine.settings().bool(name)
+}
+
+/// Add `value` to a comma-separated switch, keeping what the user passed.
+pub(crate) fn append_to_list_switch(command_line: &mut CommandLine, name: &str, value: &str) {
+    let name = CefString::from(name);
+    let given = CefStringUtf16::from(&command_line.switch_value(Some(&name))).to_string();
+    let joined = if given.is_empty() {
+        value.to_string()
+    } else {
+        format!("{given},{value}")
+    };
+    command_line.append_switch_with_value(Some(&name), Some(&CefString::from(joined.as_str())));
 }
 
 fn path_string(path: &Path) -> CefString {
@@ -236,10 +268,14 @@ pub fn run() -> i32 {
         log_file: path_string(&paths.data_dir.join("cef.log")),
         ..Default::default()
     };
+    let loaded = hb_config::load(&paths);
+    let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");
     let mut app = HbApp::new(Some(Startup {
         paths,
         urls,
         commands,
+        config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
+        dark_mode,
     }));
     if initialize(
         Some(args.as_main_args()),

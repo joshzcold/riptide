@@ -97,6 +97,11 @@ cat >"$work/nav2.html" <<'EOF'
 <!doctype html><title>nav2</title><link rel="prev" href="nav1.html">
 EOF
 
+cat >"$work/scheme.html" <<'EOF'
+<!doctype html><title>scheme</title>
+<script>const q = matchMedia('(prefers-color-scheme: dark)'); const r = () => { document.title = 'dark=' + q.matches; }; r(); q.addEventListener('change', r);</script>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -474,6 +479,16 @@ xdotool key ctrl+a
 for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; sleep 0.1; done
 incremented=$(page_title)
 [[ $next == nav2 && $prev == nav1 && $incremented == nav2 ]] && pass || fail "]] → '$next', [[ → '$prev', Ctrl-a → '$incremented'"
+
+step "colors.webpage.preferred_color_scheme applies live"
+run "open file://$work/scheme.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == dark=* ]] && break; sleep 0.1; done
+run "set colors.webpage.preferred_color_scheme dark"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == dark=true ]] && break; sleep 0.1; done
+dark=$(page_title)
+run "set colors.webpage.preferred_color_scheme light"
+expect_title "dark=false"
+[[ $dark == dark=true ]] || fail "dark gave '$dark'"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

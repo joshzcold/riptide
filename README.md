@@ -108,6 +108,11 @@ Every setting is listed in [docs/settings.md](docs/settings.md), and the complet
 
 Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, so you can keep them in dotfiles or copy yours from `~/.config/qutebrowser/`. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
 
+### Dark mode
+
+- `colors.webpage.preferred_color_scheme` (`auto`, `light` or `dark`) is what pages see in `prefers-color-scheme`. It applies immediately.
+- `colors.webpage.darkmode.enabled = true` renders light pages dark with Chromium's automatic dark mode. It takes effect after a restart: it's a Chromium switch, so `config.toml`/`config.lua` are read before Chromium starts.
+
 ### Content blocking
 
 Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (EasyList and EasyPrivacy by default; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup.

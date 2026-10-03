@@ -159,7 +159,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] HTTP auth and JS dialogs in the prompt UI
 - [ ] Download bar listing each download; path completion in the save prompt
 - [ ] TLS certificate errors: Chromium blocks them; no "proceed anyway" prompt yet
-- [ ] Dark mode (Chromium `--force-dark-mode` / blink settings)
+- [x] Dark mode: `colors.webpage.preferred_color_scheme` (live, `SetChromeColorScheme`) and `colors.webpage.darkmode.enabled` (startup `--blink-settings=forceDarkModeEnabled=true`)
 - [ ] Widevine DRM, opt-in (M11)
 - [x] Review of background Google service traffic (M8; one `ListAccounts` call left)
 

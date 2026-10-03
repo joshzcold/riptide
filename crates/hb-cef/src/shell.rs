@@ -212,7 +212,11 @@ pub fn load_config() -> Vec<String> {
         return Vec::new();
     };
     // Runs Lua, but never calls into CEF, so it is safe outside the borrow.
-    let loaded = hb_config::load(&paths);
+    apply_config(hb_config::load(&paths))
+}
+
+/// Put config that was already read into the engine.
+pub fn apply_config(loaded: hb_config::Loaded) -> Vec<String> {
     let errors = with(|s| {
         s.engine.reset_config();
         let mut errors = loaded.errors;
@@ -231,14 +235,33 @@ pub fn load_config() -> Vec<String> {
     })
     .unwrap_or_default();
     crate::help::refresh();
-    apply_spellcheck();
+    apply_chromium_settings();
     errors
 }
 
 /// Outside the shell borrow: setting Chromium preferences can call back into us.
-fn apply_spellcheck() {
-    if let Some(languages) = with(|s| s.engine.settings().list("spellcheck.languages").to_vec()) {
-        crate::spell::apply(languages);
+fn apply_chromium_settings() {
+    let Some((languages, scheme)) = with(|s| {
+        let settings = s.engine.settings();
+        (
+            settings.list("spellcheck.languages").to_vec(),
+            settings
+                .str("colors.webpage.preferred_color_scheme")
+                .to_string(),
+        )
+    }) else {
+        return;
+    };
+    crate::spell::apply(languages);
+    let variant = match scheme.as_str() {
+        "light" => ColorVariant::LIGHT,
+        "dark" => ColorVariant::DARK,
+        _ => ColorVariant::SYSTEM,
+    };
+    if let Some(context) = request_context_get_global_context()
+        && context.chrome_color_scheme_mode() != variant
+    {
+        context.set_chrome_color_scheme(variant, 0);
     }
 }
 
@@ -254,7 +277,7 @@ fn persist(op: hb_core::config::ConfigOp) {
         storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
         crate::adblock::sync_settings(s.engine.settings());
     });
-    apply_spellcheck();
+    apply_chromium_settings();
     let result = with(|s| {
         let auto = s.autoconfig.as_mut()?;
         auto.record(&op);
