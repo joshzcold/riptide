@@ -8,7 +8,7 @@
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use cef::*;
 use hb_core::Command;
@@ -24,6 +24,7 @@ enum Then {
         program: String,
         verbose: bool,
         output_messages: bool,
+        output_tab: bool,
         fifo: Option<PathBuf>,
     },
     /// Write the edited file back into text field `id` of browser `browser`.
@@ -49,12 +50,14 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             userscript,
             verbose,
             output_messages,
+            output,
             detach,
             argv,
         } => {
             let flags = Flags {
                 verbose: *verbose,
                 output_messages: *output_messages,
+                output_tab: *output,
                 detach: *detach,
             };
             if *userscript {
@@ -73,6 +76,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
 struct Flags {
     verbose: bool,
     output_messages: bool,
+    output_tab: bool,
     detach: bool,
 }
 
@@ -201,6 +205,7 @@ fn start(
             program: program.clone(),
             verbose: flags.verbose,
             output_messages: flags.output_messages,
+            output_tab: flags.output_tab,
             fifo,
         },
         temp_dir,
@@ -234,8 +239,14 @@ fn finished(then: Then, done: Finished) {
             program,
             verbose,
             output_messages,
+            output_tab,
             fifo,
-        } => report(&program, verbose, output_messages, fifo.as_deref(), &done),
+        } => {
+            if output_tab {
+                show_output(&program, &done);
+            }
+            report(&program, verbose, output_messages, fifo.as_deref(), &done)
+        }
         Then::Edit { browser, id, file } => edited(browser, id, &file, &done),
     }
     if let Some(dir) = &done.temp_dir {
@@ -418,4 +429,57 @@ wrap_task! {
             }
         }
     }
+}
+
+/// `hb://process/`: the output of the last `:spawn -o`.
+static OUTPUT_PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
+
+pub fn output_page() -> Arc<[u8]> {
+    OUTPUT_PAGE
+        .read()
+        .ok()
+        .and_then(|p| p.clone())
+        .unwrap_or_else(|| {
+            Arc::from(&b"<!doctype html><title>Process output</title><p>Nothing has run yet."[..])
+        })
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+fn show_output(program: &str, done: &Finished) {
+    let name = Path::new(program)
+        .file_name()
+        .map_or(program.to_string(), |n| n.to_string_lossy().into_owned());
+    let status = match &done.status {
+        Ok(Some(code)) => format!("exited with status {code}"),
+        Ok(None) => "was killed by a signal".to_string(),
+        Err(e) => format!("couldn't run: {e}"),
+    };
+    let stderr = if done.stderr.is_empty() {
+        String::new()
+    } else {
+        format!("<h2>stderr</h2><pre>{}</pre>", escape(&done.stderr))
+    };
+    let html = format!(
+        "<!doctype html><html><head><meta charset=utf-8><title>{name} output</title><style>\
+         :root {{ color-scheme: light dark; }} body {{ margin: 1.5rem; font: 14px/1.5 system-ui, sans-serif; }} \
+         pre {{ font: 13px/1.4 \"DejaVu Sans Mono\", monospace; white-space: pre-wrap; }} \
+         .status {{ color: gray; }}</style></head><body><h1>{name}</h1><p class=status>{status}</p>\
+         <pre>{}</pre>{stderr}</body></html>",
+        escape(&done.stdout),
+        name = escape(&name),
+        status = escape(&status),
+    );
+    if let Ok(mut page) = OUTPUT_PAGE.write() {
+        *page = Some(Arc::from(html.into_bytes()));
+    }
+    shell::open(
+        hb_core::command::OpenTarget::Tab,
+        true,
+        Some("hb://process/".to_string()),
+    );
 }

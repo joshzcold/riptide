@@ -289,6 +289,7 @@ const CARET_DEFAULTS: &[(&str, &str)] = &[
     ("V", "selection-toggle --line"),
     ("o", "selection-reverse"),
     ("y", "yank selection"),
+    ("Y", "yank -s selection"),
     ("<Return>", "yank selection"),
     ("<Escape>", "mode-leave"),
 ];

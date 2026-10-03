@@ -525,6 +525,11 @@ else
     pass
 fi
 
+step ":spawn -o shows the output in a new tab"
+run "spawn -o echo hello from spawn"
+expect_title "echo output"
+run "tab-close"
+
 step "Ctrl-e edits a text field in editor.command"
 run "open file://$work/editor.html"
 expect_title "editor"

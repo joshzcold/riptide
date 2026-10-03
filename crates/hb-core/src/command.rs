@@ -263,6 +263,8 @@ pub enum Command {
         verbose: bool,
         /// Show the program's output as messages.
         output_messages: bool,
+        /// Show the program's output in a new tab.
+        output: bool,
         /// Don't wait for the program or report on it.
         detach: bool,
         argv: Vec<String>,
@@ -516,7 +518,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "spawn",
-        "Run a program: :spawn [-u] [-v] [-m] [-d] <cmd> [args]; -u runs a userscript",
+        "Run a program: :spawn [-u] [-v] [-m] [-o] [-d] <cmd> [args]; -u runs a userscript",
     ),
     spec(
         "open-editor",
@@ -911,8 +913,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "download-clear" => Command::DownloadClear,
         "adblock-update" => Command::AdblockUpdate,
         "spawn" => {
-            let (mut userscript, mut verbose, mut output_messages, mut detach) =
-                (false, false, false, false);
+            let (mut userscript, mut verbose, mut output_messages, mut output, mut detach) =
+                (false, false, false, false, false);
             while let Some(flag) = args.flag(&[
                 "-u",
                 "--userscript",
@@ -920,6 +922,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 "--verbose",
                 "-m",
                 "--output-messages",
+                "-o",
+                "--output",
                 "-d",
                 "--detach",
             ]) {
@@ -927,6 +931,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                     "-u" | "--userscript" => userscript = true,
                     "-v" | "--verbose" => verbose = true,
                     "-m" | "--output-messages" => output_messages = true,
+                    "-o" | "--output" => output = true,
                     _ => detach = true,
                 }
             }
@@ -938,6 +943,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 userscript,
                 verbose,
                 output_messages,
+                output,
                 detach,
                 argv,
             }
@@ -1489,6 +1495,7 @@ mod tests {
                 userscript: true,
                 verbose: true,
                 output_messages: false,
+                output: false,
                 detach: false,
                 argv: vec!["password-fill".into(), "--user".into(), "a b".into()],
             }

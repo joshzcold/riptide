@@ -29,6 +29,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("changelog", "/") => Some((crate::help::changelog_page(), html)),
         ("history", "/") => Some((crate::help::history_page(), html)),
         ("downloads", "/") => Some((crate::downloads::page(), html)),
+        ("process", "/") => Some((crate::spawn::output_page(), html)),
         _ => None,
     }
 }
