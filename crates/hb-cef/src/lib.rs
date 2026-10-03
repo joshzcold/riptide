@@ -13,6 +13,7 @@ mod greasemonkey;
 mod help;
 mod hints;
 mod marks;
+mod navigate;
 mod permissions;
 mod privacy;
 mod prompts;

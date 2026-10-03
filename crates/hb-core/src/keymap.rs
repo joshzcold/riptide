@@ -70,6 +70,19 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Normal, "@", "macro-run")
             .expect("valid default binding");
+        for (keys, cmd) in [
+            ("gu", "navigate up"),
+            ("gU", "navigate up -t"),
+            ("[[", "navigate prev"),
+            ("]]", "navigate next"),
+            ("{{", "navigate prev -t"),
+            ("}}", "navigate next -t"),
+            ("<Ctrl-a>", "navigate increment"),
+            ("<Ctrl-x>", "navigate decrement"),
+        ] {
+            map.bind(Mode::Normal, keys, cmd)
+                .expect("valid default binding");
+        }
         map.bind(Mode::Normal, "/", "cmd-set-text /")
             .expect("valid default binding");
         map.bind(Mode::Normal, "?", "cmd-set-text ?")

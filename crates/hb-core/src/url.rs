@@ -57,6 +57,56 @@ fn is_valid_scheme(s: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
+/// Split `scheme://authority` from the rest (path, query and fragment).
+fn split_origin(url: &str) -> Option<(&str, &str)> {
+    let start = url.find("://")? + 3;
+    let end = url[start..]
+        .find(['/', '?', '#'])
+        .map_or(url.len(), |i| start + i);
+    Some((&url[..end], &url[end..]))
+}
+
+/// One level up: drop the query and fragment, then the last path segment.
+/// `None` at the site's root.
+pub fn up(url: &str) -> Option<String> {
+    let (origin, rest) = split_origin(url)?;
+    let path = rest.split(['?', '#']).next().unwrap_or_default();
+    if path.len() < rest.len() {
+        return Some(format!("{origin}{path}"));
+    }
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parent = &trimmed[..trimmed.rfind('/').unwrap_or(0) + 1];
+    Some(format!("{origin}{parent}"))
+}
+
+/// Add `delta` to the last number in the path or query, keeping leading zeros.
+pub fn increment(url: &str, delta: i64) -> Option<String> {
+    let (origin, rest) = split_origin(url)?;
+    let rest_end = rest.find('#').unwrap_or(rest.len());
+    let digits_end = rest[..rest_end].rfind(|c: char| c.is_ascii_digit())? + 1;
+    let digits_start = rest[..digits_end]
+        .rfind(|c: char| !c.is_ascii_digit())
+        .map_or(0, |i| i + 1);
+    let number = &rest[digits_start..digits_end];
+    let value = number.parse::<i64>().ok()?.checked_add(delta)?;
+    if value < 0 {
+        return None;
+    }
+    let width = if number.starts_with('0') {
+        number.len()
+    } else {
+        0
+    };
+    Some(format!(
+        "{origin}{}{value:0width$}{}",
+        &rest[..digits_start],
+        &rest[digits_end..]
+    ))
+}
+
 /// The host name of a URL, without user info or port; empty if it has none.
 pub fn host(url: &str) -> &str {
     let Some((_, rest)) = url.split_once("://") else {
@@ -117,6 +167,48 @@ fn encode_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn going_up() {
+        assert_eq!(
+            up("https://x.org/a/b/c").as_deref(),
+            Some("https://x.org/a/b/")
+        );
+        assert_eq!(
+            up("https://x.org/a/b/").as_deref(),
+            Some("https://x.org/a/")
+        );
+        assert_eq!(
+            up("https://x.org/a?q=1#f").as_deref(),
+            Some("https://x.org/a")
+        );
+        assert_eq!(up("https://x.org/a").as_deref(), Some("https://x.org/"));
+        assert_eq!(up("https://x.org/"), None);
+        assert_eq!(up("https://x.org"), None);
+        assert_eq!(up("about:blank"), None);
+    }
+
+    #[test]
+    fn incrementing() {
+        assert_eq!(
+            increment("https://x.org/page/9", 1).as_deref(),
+            Some("https://x.org/page/10")
+        );
+        assert_eq!(
+            increment("https://x.org/img007.png", 1).as_deref(),
+            Some("https://x.org/img008.png")
+        );
+        assert_eq!(
+            increment("https://x.org/p?page=2&x=a#s3", -1).as_deref(),
+            Some("https://x.org/p?page=1&x=a#s3")
+        );
+        assert_eq!(
+            increment("https://x2.org/a", 1),
+            None,
+            "the host isn't touched"
+        );
+        assert_eq!(increment("https://x.org/p0", -1), None);
+    }
 
     #[test]
     fn hosts() {

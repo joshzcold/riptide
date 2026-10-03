@@ -122,10 +122,10 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `o` / `go` open / edit current URL (current tab only)
 - [x] `O` / `gO` open in a new tab
 - [x] `H` / `L` back/forward, `r` / `R` reload
-- [ ] `gu` / `gU` go up URL
+- [x] `gu` / `gU` go up URL (M9)
 - [x] `hjkl`, `gg`, `G`, `0`, `$`, `Ctrl-d/u/f/b` scrolling with counts
 - [x] `/`, `?`, `n`, `N` search (M9)
-- [ ] `[[` / `]]` prev/next page navigation
+- [x] `[[` / `]]` prev/next page navigation, `Ctrl-a`/`Ctrl-x` (M9)
 - [x] Quickmarks / bookmarks (`m`, `b`, `B`, `M`, `gb`, `gB`)
 - [x] Marks (`` ` ``-style in-page marks; `m` is the quickmark key, as in qutebrowser) (M9)
 
@@ -353,6 +353,7 @@ Gaps:
   - In this CEF build `find_next = false` never activates or scrolls to a match. Every call passes `true`; repeating the same text first calls `StopFinding(clear_selection)`, so it starts again from the top.
   - `search.ignore_case` is `smart`, `always` or `never`. Chromium always wraps around.
   - A smoke step checks that `/needle` scrolls to the first match and `n` to the second.
+- ✅ **`:navigate`** (2026-10-02): `up`, `increment` and `decrement` are pure URL functions in `hb_core::url` (unit tested: query and fragment first, leading zeros kept, the host never touched). `prev`/`next` use `js/navigate.js`: `rel` links first, then link text matching qutebrowser's default `hints.prev_regexes`/`hints.next_regexes`. These are bound to `gu gU [[ ]] {{ }} Ctrl-a Ctrl-x` as in qutebrowser and covered by a smoke step. The regexes aren't settings yet.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.

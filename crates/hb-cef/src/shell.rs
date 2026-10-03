@@ -317,6 +317,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::caret::run_command(&command, count)
         || crate::greasemonkey::run_command(&command)
         || crate::search::run_command(&command, count)
+        || crate::navigate::run_command(&command, count)
     {
         return;
     }

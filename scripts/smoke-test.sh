@@ -90,6 +90,13 @@ cat >"$work/search.html" <<'EOF'
 <script>addEventListener('scroll', () => { document.title = 's=' + Math.round(scrollY); });</script>
 EOF
 
+cat >"$work/nav1.html" <<'EOF'
+<!doctype html><title>nav1</title><a href="nav2.html">Next »</a>
+EOF
+cat >"$work/nav2.html" <<'EOF'
+<!doctype html><title>nav2</title><link rel="prev" href="nav1.html">
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -452,6 +459,21 @@ if [[ $first =~ ^s=([0-9]+)$ ]] && (( BASH_REMATCH[1] > 1000 )) && [[ $second =~
 else
     fail "scroll went from '$first' to '$second'"
 fi
+
+step "]] and [[ follow next/prev links, Ctrl-a increments the URL"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+xdotool key bracketright bracketright
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; sleep 0.1; done
+next=$(page_title)
+xdotool key bracketleft bracketleft
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav1 ]] && break; sleep 0.1; done
+prev=$(page_title)
+nap 0.3
+xdotool key ctrl+a
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; sleep 0.1; done
+incremented=$(page_title)
+[[ $next == nav2 && $prev == nav1 && $incremented == nav2 ]] && pass || fail "]] → '$next', [[ → '$prev', Ctrl-a → '$incremented'"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

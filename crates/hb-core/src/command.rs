@@ -64,6 +64,16 @@ pub enum YankWhat {
     Selection,
 }
 
+/// Where `:navigate` goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavigateTo {
+    Up,
+    Prev,
+    Next,
+    Increment,
+    Decrement,
+}
+
 /// Caret movements, with qutebrowser's command names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaretMove {
@@ -253,6 +263,11 @@ pub enum Command {
     OpenEditor,
     /// Read the Greasemonkey scripts again.
     GreasemonkeyReload,
+    /// Go up the URL, to the previous/next page, or change the number in it.
+    Navigate {
+        to: NavigateTo,
+        tab: bool,
+    },
     /// Find `text` in the page (backwards with `reverse`); empty clears the search.
     /// `incremental` searches update as the user types.
     Search {
@@ -450,6 +465,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "greasemonkey-reload",
         "Read the scripts in the greasemonkey directories again",
+    ),
+    spec(
+        "navigate",
+        "Go up, prev, next, increment or decrement the URL: :navigate <where> [-t]",
     ),
     spec(
         "search",
@@ -815,6 +834,20 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
+        "navigate" => {
+            let to = match args.required("where")? {
+                "up" => NavigateTo::Up,
+                "prev" => NavigateTo::Prev,
+                "next" => NavigateTo::Next,
+                "increment" => NavigateTo::Increment,
+                "decrement" => NavigateTo::Decrement,
+                other => return Err(args.error(format!("can't navigate to {other:?}"))),
+            };
+            Command::Navigate {
+                to,
+                tab: args.flag(&["-t", "--tab"]).is_some(),
+            }
+        }
         "search" => {
             let reverse = args.flag(&["-r", "--reverse"]).is_some();
             Command::Search {
@@ -1345,6 +1378,7 @@ mod tests {
             "prompt-accept",
             "spell-replace",
             "spawn",
+            "navigate",
             "set-mark",
             "jump-mark",
         ];

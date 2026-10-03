@@ -225,6 +225,9 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `gb` / `gB` | Open a bookmark here / in a new tab |
 | `` `a `` / `'a` | Set / jump to mark `a`: `a`–`z` remember this page's scroll position, `A`–`Z` also the page itself; `''` returns to where the last jump started |
 | `Ctrl-e` (insert mode) | `open-editor`: edit the text field in `editor.command` |
+| `gu` / `gU` | `navigate up`: one level up the URL, here / in a new tab (a count goes further) |
+| `[[` `]]` / `{{` `}}` | `navigate prev` / `next`: follow the page's previous/next link (`rel` links, or link text such as "Next »"), here / in a new tab |
+| `Ctrl-a` / `Ctrl-x` | `navigate increment` / `decrement`: change the last number in the URL (`page/9` → `page/10`) |
 | `/` `?` then `n` `N` | Find text in the page forward / backward, then go to the next / previous match. Matches highlight as you type (`search.incremental`); case is ignored unless the text has a capital (`search.ignore_case`). `:search` with no text clears it. |
 | `v` / `V` | Caret mode: move with `h` `j` `k` `l` `w` `b` `e` `0` `$` `gg` `G`, select with `v` (or `V` for lines), swap the ends with `o`, yank with `y`, leave with `Escape` |
 | `qa` … `q` / `@a` | Record a macro into register `a` / replay it (`@@` repeats the last one, `3@a` runs it three times). Keys typed into pages are replayed too. |
