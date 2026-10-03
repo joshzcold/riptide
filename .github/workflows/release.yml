@@ -39,14 +39,13 @@ jobs:
       - run: ./task setup
       - run: cargo build --release --locked
       - name: Package
-        id: package
-        run: echo "tarball=$(scripts/package-linux.sh "${GITHUB_REF_NAME#v}")" >> "$GITHUB_OUTPUT"
+        run: scripts/package-linux.sh --appimage "${GITHUB_REF_NAME#v}"
       - name: Release notes
         run: scripts/git-cliff.sh --latest --strip header > notes.md
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum *.tar.gz *.AppImage > SHA256SUMS)
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
-            "${{ steps.package.outputs.tarball }}" dist/SHA256SUMS
+            dist/*.tar.gz dist/*.AppImage dist/SHA256SUMS

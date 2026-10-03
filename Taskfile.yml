@@ -46,6 +46,12 @@ tasks:
     cmds:
       - scripts/package-linux.sh
 
+  appimage:
+    desc: Release build as a tarball and an AppImage in dist/ (Linux)
+    deps: [release]
+    cmds:
+      - scripts/package-linux.sh --appimage
+
   changelog:
     desc: 'Regenerate CHANGELOG.md; for a release: task changelog -- --tag v0.2.0'
     cmds:

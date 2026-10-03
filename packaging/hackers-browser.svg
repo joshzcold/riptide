@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="#16181d"/>
+  <rect x="8" y="196" width="240" height="52" rx="0" fill="#2a2e37"/>
+  <rect x="8" y="204" width="240" height="44" rx="44" fill="#2a2e37"/>
+  <text x="128" y="150" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="104" fill="#e6e6e3">:hb</text>
+  <rect x="36" y="214" width="58" height="22" rx="4" fill="#3fb950"/>
+  <text x="65" y="231" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="18" fill="#16181d">NORMAL</text>
+</svg>

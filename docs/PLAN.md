@@ -381,6 +381,10 @@ Gaps:
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
+- ✅ **Tarball and AppImage** (2026-10-02): `scripts/package-linux.sh [--appimage]` stages the stripped binary and CEF runtime. The AppImage adds `packaging/hackers-browser.{desktop,svg}` and an `AppRun`, and is built by appimagetool 1.9.1 (pinned and checksum-verified; it fetches its runtime itself). `./task appimage` builds both locally, and `release.yml` publishes both.
+  - Tested locally: the 146 MB AppImage starts, opens a window under Xvfb, quits cleanly and unmounts.
+  - Inside an AppImage `chrome-sandbox` can't be setuid, so the sandbox needs user namespaces (see the README).
+  - Not done: AUR, Nix, the macOS app bundle and Windows packaging (none can be tested on this machine).
 
 ### M12 — Lua scripting ✅ mostly done 2026-10-02
 Builds on the M5 Lua config API.
