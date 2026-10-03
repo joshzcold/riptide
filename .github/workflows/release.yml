@@ -1,0 +1,52 @@
+name: release
+
+# Push a tag such as v0.2.0 (after `./task changelog -- --tag v0.2.0` and a
+# chore(release) commit) to build and publish a release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: linux release
+    runs-on: ubuntu-24.04
+    env:
+      CEF_PATH: ${{ github.workspace }}/../cef
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the tag matches the crate version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hb") | .version')
+          if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
+            echo "tag $GITHUB_REF_NAME doesn't match version $version in Cargo.toml" >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache CEF binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CEF_PATH }}
+          key: cef-linux-${{ hashFiles('Cargo.lock') }}
+      - run: ./task setup
+      - run: cargo build --release --locked
+      - name: Package
+        id: package
+        run: echo "tarball=$(scripts/package-linux.sh "${GITHUB_REF_NAME#v}")" >> "$GITHUB_OUTPUT"
+      - name: Release notes
+        run: scripts/git-cliff.sh --latest --strip header > notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum *.tar.gz > SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
+            "${{ steps.package.outputs.tarball }}" dist/SHA256SUMS

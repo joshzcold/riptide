@@ -40,6 +40,17 @@ tasks:
     cmds:
       - cargo build --release
 
+  package:
+    desc: Release build packed with its CEF runtime into dist/ (Linux)
+    deps: [release]
+    cmds:
+      - scripts/package-linux.sh
+
+  changelog:
+    desc: 'Regenerate CHANGELOG.md; for a release: task changelog -- --tag v0.2.0'
+    cmds:
+      - scripts/git-cliff.sh -o CHANGELOG.md {{.CLI_ARGS}}
+
   run:
     desc: 'Run the browser; pass a URL after --, e.g. task run -- example.com'
     deps: [setup]
