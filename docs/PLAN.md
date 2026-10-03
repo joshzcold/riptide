@@ -431,7 +431,15 @@ Original plan:
 - Bindings: `F1` and `:help`, as in qutebrowser.
 - **Tests:** the generated pages render without errors (a smoke step opens `:help` and checks the title). A unit test checks every command and setting appears.
 
-### M17 — Spell checking
+### M17 — Spell checking ✅ done 2026-10-02 (except the offline dictionary installer)
+
+Result:
+- **Setting:** `spellcheck.languages` (list, default empty, so spell checking is off). Changes apply live through `RequestContext::SetPreference` (`browser.enable_spellchecking`, `spellcheck.dictionaries`), called outside the shell borrow. `privacy.rs` still writes spell checking off before startup, and the setting turns it on again.
+- **Keyboard:** `:spell-suggest` runs `js/spell.js` to find the word at the text cursor (a mirror element for inputs and textareas, the selection range for contenteditable), then right-clicks its centre. `OnBeforeContextMenu` takes `GetMisspelledWord`/`GetDictionarySuggestions`, clears the menu so it never shows, and opens `:spell-replace ` with the suggestions as completions (`CompletionKind::Spelling`). `:spell-replace` calls `ReplaceMisspelling` and goes back to insert mode; `:spell-add` calls `AddWordToDictionary`.
+- Tested by hand under Xvfb: "teh" → the, eh, tech, tee, tea; replacing it, a word with no suggestions, and `:spell-add`. There's no smoke step because the dictionary comes from Google's servers.
+- Not done: `--install-dictionary` (offline `.bdic` with pinned checksums), a default key binding, and hints for misspelled words.
+
+Original plan:
 - **Chromium's spell checker is built into CEF.** Turn it on per profile with `RequestContext::SetPreference("browser.enable_spellchecking", true)` and `spellcheck.dictionaries = [...]`. Keep `spellcheck.use_spelling_service = false` so typed text is never sent to Google.
 - **Settings:** `spellcheck.languages` (list, default empty, so spell checking is off). Applied live when changed.
 - **Dictionaries:**

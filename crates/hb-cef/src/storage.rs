@@ -71,6 +71,9 @@ fn item(category: &'static str, name: &str, description: &str) -> Completion {
 
 /// The engine's completion source.
 pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
+    if kind == CompletionKind::Spelling {
+        return crate::spell::completions(pattern);
+    }
     with(|s| {
         let mut items = Vec::new();
         if matches!(kind, CompletionKind::Url | CompletionKind::Quickmark) {

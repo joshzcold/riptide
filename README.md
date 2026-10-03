@@ -66,7 +66,7 @@ Chromium calls Google in the background. hackers-browser turns off the calls tha
 |---|---|---|
 | `update.googleapis.com`, `edgedl.me.gvt1.com` | Component updates | Only the components Chromium marks as security data still update: certificate revocation lists (CRLSets) and the subresource filter rules. The ~20 others no longer download, saving ~115 MB per profile. These include Widevine, optimization hints, the on-device suggest model, TTS and the password-strength data. |
 | `clients2.google.com/time` | Secure network time, used to explain certificate date errors | kept |
-| `redirector.gvt1.com/…/dict` | Spell-check dictionary | off until spell checking arrives (M17) |
+| `redirector.gvt1.com/…/dict` | Spell-check dictionary | only once per language in `spellcheck.languages` (empty by default) |
 | `www.google.com/async/folae` | AI Mode eligibility | off (`--disable-features=AimEnabled`) |
 | `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; hackers-browser has its own `url.searchengines`) |
 | `accounts.google.com/ListAccounts` | Google accounts in the cookie jar | **still sent** once at startup. Google sign-in is off, but something still asks for the cookie jar; it carries your google.com cookies if you have any. |
@@ -115,6 +115,16 @@ Ads and trackers are blocked at the network level with Adblock Plus filter lists
 - `content.blocking.enabled` turns blocking on or off.
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
 - Top-level pages are never blocked, so a bad rule can't make a site unreachable. Cosmetic (element-hiding) rules aren't applied yet.
+
+### Spell checking
+
+Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.languages = { "en-US", "de-DE" }` in `config.lua` or `:set spellcheck.languages '["en-US"]'`. Chromium downloads each dictionary once from Google (`redirector.gvt1.com`) and underlines mistakes as you type.
+
+From the keyboard, in a text field:
+- `:spell-suggest` lists fixes for the word at the text cursor as completions. `Tab` picks one, `Return` replaces the word, and you're back in insert mode.
+- `:spell-add` adds that word to your dictionary.
+
+Nothing is bound by default. For example, `hb.bind("<Ctrl-s>", "spell-suggest", "insert")`. Right-click suggestions work too.
 
 ### Prompts, downloads and permissions
 

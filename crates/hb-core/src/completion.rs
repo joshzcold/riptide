@@ -22,6 +22,8 @@ pub enum CompletionKind {
     Quickmark,
     Bookmark,
     Session,
+    /// Suggestions from the last `:spell-suggest`.
+    Spelling,
 }
 
 pub type Source = Box<dyn Fn(CompletionKind, &str) -> Vec<Completion>>;
@@ -100,6 +102,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
         "session-load" | "session-delete" | "session-save" => CompletionKind::Session,
+        "spell-replace" => CompletionKind::Spelling,
         _ => return Vec::new(),
     };
     source.map(|s| s(kind, parsed.pattern)).unwrap_or_default()
@@ -144,6 +147,10 @@ mod tests {
             "Quickmark:gh"
         );
         assert_eq!(compute(":session-load ", Some(&s))[0].name, "Session:");
+        assert_eq!(
+            compute(":spell-replace th", Some(&s))[0].name,
+            "Spelling:th"
+        );
         assert!(compute(":reload x", Some(&s)).is_empty());
         assert!(compute(":open x", None).is_empty());
         assert_eq!(compute(":tab-c", None)[0].name, "tab-close");

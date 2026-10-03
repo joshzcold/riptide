@@ -231,7 +231,15 @@ pub fn load_config() -> Vec<String> {
     })
     .unwrap_or_default();
     crate::help::refresh();
+    apply_spellcheck();
     errors
+}
+
+/// Outside the shell borrow: setting Chromium preferences can call back into us.
+fn apply_spellcheck() {
+    if let Some(languages) = with(|s| s.engine.settings().list("spellcheck.languages").to_vec()) {
+        crate::spell::apply(languages);
+    }
 }
 
 fn persist(op: hb_core::config::ConfigOp) {
@@ -246,6 +254,7 @@ fn persist(op: hb_core::config::ConfigOp) {
         storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
         crate::adblock::sync_settings(s.engine.settings());
     });
+    apply_spellcheck();
     let result = with(|s| {
         let auto = s.autoconfig.as_mut()?;
         auto.record(&op);
@@ -298,6 +307,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || storage::run_command(&command)
         || crate::downloads::run_command(&command, count)
         || crate::adblock::run_command(&command)
+        || crate::spell::run_command(&command)
     {
         return;
     }

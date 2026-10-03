@@ -349,6 +349,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where URLs from a second hackers-browser invocation open"
     ),
     def!(
+        "spellcheck.languages",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once"
+    ),
+    def!(
         "tabs.favicons.show",
         Kind::Enum(&["always", "never", "pinned"]),
         s("always"),

@@ -188,6 +188,13 @@ pub enum Command {
     },
     /// Download the filter lists and rebuild the content blocker.
     AdblockUpdate,
+    /// Offer replacements for the misspelled word at the cursor.
+    SpellSuggest,
+    SpellReplace {
+        word: String,
+    },
+    /// Add the word from the last `:spell-suggest` to the dictionary.
+    SpellAdd,
     /// Download a URL, or the current page.
     Download {
         url: Option<String>,
@@ -322,6 +329,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "adblock-update",
         "Download the filter lists in content.blocking.adblock.lists",
+    ),
+    spec(
+        "spell-suggest",
+        "Suggest fixes for the misspelled word at the cursor (insert mode)",
+    ),
+    spec(
+        "spell-replace",
+        "Replace the misspelled word: :spell-replace <word>",
+    ),
+    spec(
+        "spell-add",
+        "Add the word from the last :spell-suggest to your dictionary",
     ),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
@@ -611,6 +630,11 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "download-open" => Command::DownloadOpen,
         "download-clear" => Command::DownloadClear,
         "adblock-update" => Command::AdblockUpdate,
+        "spell-suggest" => Command::SpellSuggest,
+        "spell-replace" => Command::SpellReplace {
+            word: args.required("word")?.to_string(),
+        },
+        "spell-add" => Command::SpellAdd,
         "history-clear" => Command::HistoryClear {
             force: args.flag(&["-f", "--force"]).is_some(),
         },
@@ -1061,6 +1085,7 @@ mod tests {
             "session-delete",
             "completion-item-focus",
             "prompt-accept",
+            "spell-replace",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

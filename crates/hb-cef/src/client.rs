@@ -61,6 +61,10 @@ wrap_client! {
             (self.role == Role::Tab).then(crate::downloads::HbDownloadHandler::new)
         }
 
+        fn context_menu_handler(&self) -> Option<ContextMenuHandler> {
+            (self.role == Role::Tab).then(crate::spell::HbContextMenuHandler::new)
+        }
+
         fn permission_handler(&self) -> Option<PermissionHandler> {
             (self.role == Role::Tab).then(crate::permissions::HbPermissionHandler::new)
         }
