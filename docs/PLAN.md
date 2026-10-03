@@ -553,7 +553,7 @@ Original plan:
   - `scripts/git-cliff.sh` downloads a pinned, checksum-verified git-cliff, like `./task`. `./task changelog` regenerates the changelog.
   - `release.yml` runs on a `v*` tag: it checks the version, builds `--release`, and publishes `scripts/package-linux.sh`'s tarball with `SHA256SUMS` and `git-cliff --latest` notes. The libraries are stripped: CEF's `libcef.so` has debug info and goes from 1.4 GB to 260 MB, giving a 156 MB tarball.
   - `:changelog [-t]` serves the bundled changelog at `hb://changelog/` through `hb_core::changelog::to_html`, a minimal, escaping Markdown renderer that is unit tested. The "Updated to X" notice compares `<data>/last-version`.
-  - No release has been tagged yet; that's the maintainer's call. The release workflow has only been run locally (`./task package` plus starting the extracted browser), not on GitHub.
+  - No release has been tagged yet; that's the maintainer's call. Running `release.yml` by hand is a dry run that keeps the files as a one-day artifact. Run 37088697211 (2026-10-02) built the tarball, the AppImage, `SHA256SUMS` and the notes (301 MB in total) with publishing skipped.
   - Not done: macOS and Windows release artifacts (M10).
 - **Commit messages:** Conventional Commits, decided 2026-10-02 and checked by `scripts/check-commits.sh` in CI and in the optional `./task hooks` git hook.
 - Original CI plan:
