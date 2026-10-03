@@ -5,6 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use cef::*;
 use hb_config::Paths;
 use hb_core::Command;
 use hb_core::completion::{Completion, CompletionKind};
@@ -255,4 +256,58 @@ pub fn run_command(command: &Command) -> bool {
         _ => return false,
     }
     true
+}
+
+/// Saved every `auto_save.interval` ms and deleted on a clean exit, so it is
+/// only there at startup after a crash.
+pub const AUTOSAVE_SESSION: &str = "_autosave";
+
+/// Start the crash-recovery saves.
+pub fn start_autosave() {
+    let mut task = Autosave::new();
+    let interval = shell::with(|s| s.engine.settings().int("auto_save.interval")).unwrap_or(0);
+    post_delayed_task(ThreadId::UI, Some(&mut task), interval.max(1000));
+}
+
+/// A crash left tabs behind: the autosave from the last run, if any.
+pub fn crashed_session() -> Option<Session> {
+    let exists = with(|s| s.sessions.exists(AUTOSAVE_SESSION)).unwrap_or(false);
+    exists
+        .then(|| load_session(AUTOSAVE_SESSION).ok())
+        .flatten()
+}
+
+wrap_task! {
+    struct Autosave {}
+
+    impl Task {
+        fn execute(&self) {
+            let interval = shell::with(|s| s.engine.settings().int("auto_save.interval")).unwrap_or(0);
+            if interval > 0 {
+                let session = shell::current_session();
+                if !session.windows.is_empty()
+                    && let Some(Err(e)) = with(|s| s.sessions.save(AUTOSAVE_SESSION, &session))
+                {
+                    tracing::warn!("crash-recovery save failed: {e}");
+                }
+            }
+            // Check again later even when off, in case it is turned on.
+            let mut task = Autosave::new();
+            post_delayed_task(ThreadId::UI, Some(&mut task), interval.max(1000));
+        }
+    }
+}
+
+/// The latest `limit` history entries as JSON objects, newest first.
+pub fn recent_history(limit: usize) -> Vec<serde_json::Value> {
+    with(|s| {
+        s.history
+            .as_ref()
+            .and_then(|h| h.search("", limit).ok())
+            .unwrap_or_default()
+    })
+    .unwrap_or_default()
+    .into_iter()
+    .map(|e| serde_json::json!({ "url": e.url, "title": e.title, "last_visit": e.last_visit }))
+    .collect()
 }

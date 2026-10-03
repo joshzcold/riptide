@@ -240,6 +240,15 @@ pub static SETTINGS: &[SettingDef] = &[
         "Command aliases: name → command"
     ),
     def!(
+        "auto_save.interval",
+        Kind::Int {
+            min: 0,
+            max: 3_600_000
+        },
+        Value::Int(15000),
+        "Milliseconds between crash-recovery saves of the open tabs (0 turns them off)"
+    ),
+    def!(
         "auto_save.session",
         Kind::Bool,
         Value::Bool(false),

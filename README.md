@@ -285,6 +285,7 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `qa` … `q` / `@a` | Record a macro into register `a` / replay it (`@@` repeats the last one, `3@a` runs it three times). Keys typed into pages are replayed too. |
 | `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
+| `:history [-t]` | Browsing history by day, with a search box |
 | `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |
@@ -293,6 +294,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
 `:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
+
+Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. A normal exit deletes that save. If the browser crashed, the next start reopens those tabs; with URLs on the command line, it says where they are (`:session-load _autosave`).
 
 With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab while typing in insert mode, and you're back in insert mode when you return. The default `normal` leaves insert mode on every switch, and `persist` keeps the current mode.
 

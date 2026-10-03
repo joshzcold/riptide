@@ -14,6 +14,18 @@ use crate::shell;
 const TEMPLATE: &str = include_str!("../ui/help.html");
 const CHANGELOG_TEMPLATE: &str = include_str!("../ui/changelog.html");
 const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
+const HISTORY_TEMPLATE: &str = include_str!("../ui/history.html");
+
+/// `hb://history/`, rebuilt each time `:history` runs.
+static HISTORY_PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
+
+pub fn history_page() -> Arc<[u8]> {
+    let cached = HISTORY_PAGE.read().ok().and_then(|p| p.clone());
+    cached.unwrap_or_else(|| Arc::from(HISTORY_TEMPLATE.as_bytes()))
+}
+
+/// How many entries the history page lists.
+const HISTORY_PAGE_ENTRIES: usize = 2000;
 
 static PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
 
@@ -122,6 +134,27 @@ pub fn refresh() {
 
 pub fn run_command(command: &Command) -> bool {
     let (tab, topic) = match command {
+        Command::History { tab } => {
+            let entries = crate::storage::recent_history(HISTORY_PAGE_ENTRIES);
+            // `</` would end the inline <script> early.
+            let json = serde_json::to_string(&entries)
+                .unwrap_or_else(|_| "[]".into())
+                .replace("</", "<\\/");
+            if let Ok(mut page) = HISTORY_PAGE.write() {
+                *page = Some(Arc::from(
+                    HISTORY_TEMPLATE
+                        .replace("/*HB_DATA*/null", &json)
+                        .into_bytes(),
+                ));
+            }
+            let target = if *tab {
+                OpenTarget::Tab
+            } else {
+                OpenTarget::Current
+            };
+            shell::open(target, true, Some("hb://history/".to_string()));
+            return true;
+        }
         Command::Changelog { tab } => {
             let target = if *tab {
                 OpenTarget::Tab

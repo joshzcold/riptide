@@ -424,6 +424,10 @@ step ":changelog opens the bundled changelog"
 run "changelog"
 expect_title "hackers-browser changelog"
 
+step ":history lists visited pages"
+run "history"
+expect_title "History"
+
 step "a second invocation hands its arguments to this browser"
 code=0
 "$BIN" --basedir "$work/base" "file://$work/second.html" ":tab-focus -1" || code=$?

@@ -266,6 +266,7 @@ pub fn run() -> i32 {
         tracing::warn!("Chromium sandbox {}", sandbox.describe());
     }
     let _ = help::SANDBOX.set(sandbox.describe());
+    let data_dir = paths.data_dir.clone();
     let loaded = hb_config::load(&paths);
     let widevine = startup_bool(&loaded, "content.widevine");
     let fetch_widevine = widevine && !privacy::widevine_installed(&paths.data_dir);
@@ -299,6 +300,15 @@ pub fn run() -> i32 {
         return 1;
     }
     run_message_loop();
+    // A clean exit: no crash to recover from next time.
+    let autosave = data_dir
+        .join("sessions")
+        .join(format!("{}.toml", storage::AUTOSAVE_SESSION));
+    if let Err(e) = std::fs::remove_file(&autosave)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("can't remove {}: {e}", autosave.display());
+    }
     shutdown();
     remote::cleanup();
     0

@@ -269,6 +269,10 @@ pub enum Command {
     GreasemonkeyReload,
     /// Close the current window.
     Close,
+    /// Show the browsing history page, in a new tab with `tab`.
+    History {
+        tab: bool,
+    },
     /// Go to a tab in any window: `window/tab` (1-based) or text in its title or URL.
     TabSelect {
         target: String,
@@ -493,6 +497,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "tab-select",
         "Go to a tab in any window: :tab-select <window/tab | text> (T)",
     ),
+    spec("history", "Show the browsing history: :history [-t]"),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
@@ -876,6 +881,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
         "close" => Command::Close,
+        "history" => Command::History {
+            tab: args.flag(&["-t", "--tab"]).is_some(),
+        },
         "tab-select" => Command::TabSelect {
             target: args.rest().to_string(),
         },

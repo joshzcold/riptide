@@ -156,10 +156,27 @@ wrap_window_delegate! {
             if let Some(session) = &self.session {
                 tabs::restore_window(session);
             } else {
+                let crashed = if first { storage::crashed_session() } else { None };
+                let recovered = match crashed {
+                    Some(session) if self.urls.is_empty() => {
+                        tabs::restore(&session);
+                        shell::show_message(hb_core::engine::Level::Info, "Restored the tabs open before the crash");
+                        true
+                    }
+                    Some(_) => {
+                        shell::show_message(
+                            hb_core::engine::Level::Info,
+                            "The tabs open before the crash are in :session-load _autosave",
+                        );
+                        false
+                    }
+                    None => false,
+                };
                 let restore = first
+                    && !recovered
                     && self.urls.is_empty()
                     && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
-                let restored = restore
+                let restored = recovered || restore
                     && match storage::load_session(DEFAULT_SESSION) {
                         Ok(session) => {
                             tabs::restore(&session);
@@ -172,6 +189,9 @@ wrap_window_delegate! {
                     };
                 if !restored {
                     open_start_tabs(&self.urls);
+                }
+                if first {
+                    storage::start_autosave();
                 }
             }
             crate::remote::run_commands(&self.commands);
