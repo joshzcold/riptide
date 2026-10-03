@@ -804,3 +804,23 @@ fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
 fn frame_of(view: &Option<BrowserView>) -> Option<Frame> {
     view.as_ref()?.browser()?.main_frame()
 }
+
+/// Show a message from another thread.
+pub fn post_message(level: Level, text: String) {
+    let mut task = ShowMessage::new(level, text);
+    post_task(ThreadId::UI, Some(&mut task));
+}
+
+wrap_task! {
+    struct ShowMessage {
+        level: Level,
+        text: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            show_message(self.level, self.text.clone());
+            refresh_ui();
+        }
+    }
+}

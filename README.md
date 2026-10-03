@@ -64,7 +64,7 @@ Chromium calls Google in the background. hackers-browser turns off the calls tha
 
 | Request | Purpose | Status |
 |---|---|---|
-| `update.googleapis.com`, `edgedl.me.gvt1.com` | Component updates | Only the components Chromium marks as security data still update: certificate revocation lists (CRLSets) and the subresource filter rules. The ~20 others no longer download, saving ~115 MB per profile. These include Widevine, optimization hints, the on-device suggest model, TTS and the password-strength data. |
+| `update.googleapis.com`, `edgedl.me.gvt1.com` | Component updates (all of them for one run if you turn on `content.widevine`) | Only the components Chromium marks as security data still update: certificate revocation lists (CRLSets) and the subresource filter rules. The ~20 others no longer download, saving ~115 MB per profile. These include Widevine, optimization hints, the on-device suggest model, TTS and the password-strength data. |
 | `clients2.google.com/time` | Secure network time, used to explain certificate date errors | kept |
 | `redirector.gvt1.com/…/dict` | Spell-check dictionary | only once per language in `spellcheck.languages` (empty by default) |
 | `www.google.com/async/folae` | AI Mode eligibility | off (`--disable-features=AimEnabled`) |
@@ -112,6 +112,12 @@ Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, s
 
 - `colors.webpage.preferred_color_scheme` (`auto`, `light` or `dark`) is what pages see in `prefers-color-scheme`. It applies immediately.
 - `colors.webpage.darkmode.enabled = true` renders light pages dark with Chromium's automatic dark mode. It takes effect after a restart: it's a Chromium switch, so `config.toml`/`config.lua` are read before Chromium starts.
+
+### Widevine (DRM)
+
+Off by default. With `c.content.widevine = true` and a restart, Chromium downloads Google's Widevine CDM (about 21 MB) into the data directory, and it loads from the next start. Chromium has no switch for a single component, so component updates are on during that one run. Once the CDM is installed they go back off, and the CDM itself isn't updated. To update or remove it, delete `<data>/WidevineCdm`.
+
+Limits: only VP9/AV1 streams work (prebuilt CEF has no H.264/AAC), Linux Widevine is the software-only level (L3) that services often cap at lower resolutions, and this hasn't been checked against Google's Widevine terms for third-party browsers.
 
 ### Content blocking
 

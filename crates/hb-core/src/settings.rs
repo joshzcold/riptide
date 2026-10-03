@@ -324,6 +324,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely"
     ),
     def!(
+        "content.widevine",
+        Kind::Bool,
+        Value::Bool(false),
+        "Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart)"
+    ),
+    def!(
         "downloads.location.directory",
         Kind::Str,
         s(""),

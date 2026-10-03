@@ -542,8 +542,19 @@ Original plan:
 
 The rest of M18 (releases) can land whenever the first release is cut.
 
-### M11 — Widevine DRM (opt-in)
+### M11 — Widevine DRM (opt-in) ✅ mostly done 2026-10-02
 Depends on M5 (settings) and the M8 component review.
+
+Result:
+- `content.widevine` (off by default) is read before CEF starts, like dark mode. When it's on and `<data>/WidevineCdm/<version>/manifest.json` is missing, `privacy::seed_prefs` turns component updates on for that run, since Chromium has no per-component switch.
+- A watcher thread reports "Widevine downloaded; restart to enable it". At the next start updates are off again, and Chromium still registers the installed CDM from disk.
+- Tested 2026-10-02 in a scratch profile: run 1 downloaded 4.10.3050.0, and run 2's `requestMediaKeySystemAccess('com.widevine.alpha', vp9)` resolved, with `component_updates_enabled` back to false.
+- Gaps:
+  - The CDM is never updated afterwards (delete `<data>/WidevineCdm` to fetch it again).
+  - Turning the setting off doesn't remove a downloaded CDM.
+  - Protected playback against a real stream isn't verified.
+  - Startup messages share the one status-bar slot, so the "downloading" notice can be replaced by another.
+  - The licensing review below is still open.
 
 Tested 2026-10-02 on CEF 154 / Linux with the stock (Spotify CDN) build and no code changes:
 

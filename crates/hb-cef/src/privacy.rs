@@ -22,12 +22,45 @@ const DISABLED_FEATURES: &[&str] = &[
 ];
 
 /// Browser-wide preferences, in `Local State`.
-fn global_prefs() -> Vec<(&'static str, Value)> {
+fn global_prefs(component_updates: bool) -> Vec<(&'static str, Value)> {
     vec![
-        // Stops component updates except the ones Chromium exempts as security
-        // data (CRLSets and the like), as the ComponentUpdatesEnabled policy does.
-        ("component_updates.component_updates_enabled", json!(false)),
+        // Off, this stops component updates except the ones Chromium exempts
+        // as security data (CRLSets and the like), as the
+        // ComponentUpdatesEnabled policy does.
+        (
+            "component_updates.component_updates_enabled",
+            json!(component_updates),
+        ),
     ]
+}
+
+/// Say so once Chromium has fetched the CDM, which loads at the next start.
+pub fn watch_widevine_download(data_dir: std::path::PathBuf) {
+    crate::shell::show_message(
+        hb_core::engine::Level::Info,
+        "Downloading Widevine from Google; this takes a minute",
+    );
+    std::thread::spawn(move || {
+        for _ in 0..120 {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            if widevine_installed(&data_dir) {
+                crate::shell::post_message(
+                    hb_core::engine::Level::Info,
+                    "Widevine downloaded; restart to enable it".into(),
+                );
+                return;
+            }
+        }
+    });
+}
+
+/// Whether Chromium has downloaded the Widevine CDM into this profile.
+pub fn widevine_installed(data_dir: &Path) -> bool {
+    std::fs::read_dir(data_dir.join("WidevineCdm"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .any(|version| version.path().join("manifest.json").is_file())
 }
 
 /// Per-profile preferences, in `Default/Preferences`.
@@ -56,8 +89,13 @@ pub fn append_switches(command_line: &mut CommandLine) {
 }
 
 /// Write the preferences into the profile before CEF reads it.
-pub fn seed_prefs(data_dir: &Path, profile_dir: &Path) {
-    seed(&data_dir.join("Local State"), &global_prefs());
+/// `component_updates` is on only to fetch Widevine (`content.widevine`):
+/// Chromium has no switch for a single component.
+pub fn seed_prefs(data_dir: &Path, profile_dir: &Path, component_updates: bool) {
+    seed(
+        &data_dir.join("Local State"),
+        &global_prefs(component_updates),
+    );
     seed(&profile_dir.join("Preferences"), &profile_prefs());
 }
 

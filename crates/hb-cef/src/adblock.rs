@@ -67,7 +67,7 @@ pub fn load(data_dir: PathBuf, lists: Vec<String>) {
             state.blocker = blocker.map(Arc::new);
         }
         if !loaded {
-            post_message(
+            shell::post_message(
                 Level::Info,
                 "Content blocking has no filter lists yet; run :adblock-update".into(),
             );
@@ -259,27 +259,8 @@ fn finish() {
                 ),
             ),
         };
-        post_message(message.0, message.1);
+        shell::post_message(message.0, message.1);
     });
-}
-
-fn post_message(level: Level, text: String) {
-    let mut task = ShowMessage::new(level, text);
-    post_task(ThreadId::UI, Some(&mut task));
-}
-
-wrap_task! {
-    struct ShowMessage {
-        level: Level,
-        text: String,
-    }
-
-    impl Task {
-        fn execute(&self) {
-            shell::show_message(self.level, self.text.clone());
-            shell::refresh_ui();
-        }
-    }
 }
 
 wrap_task! {

@@ -47,6 +47,8 @@ struct Startup {
     /// become Chromium switches; taken once CEF is up.
     config: std::sync::Arc<std::sync::Mutex<Option<hb_config::Loaded>>>,
     dark_mode: bool,
+    /// `content.widevine` is on but the CDM isn't downloaded yet.
+    fetch_widevine: bool,
 }
 
 wrap_app! {
@@ -117,6 +119,9 @@ wrap_browser_process_handler! {
             report_config_errors(&errors);
             if let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) {
                 help::note_upgrade(&data_dir);
+                if startup.fetch_widevine {
+                    privacy::watch_widevine_download(data_dir);
+                }
             }
             remote::listen();
         }
@@ -259,7 +264,10 @@ pub fn run() -> i32 {
         tracing::warn!("Chromium sandbox {}", sandbox.describe());
     }
     let _ = help::SANDBOX.set(sandbox.describe());
-    privacy::seed_prefs(&paths.data_dir, &profile);
+    let loaded = hb_config::load(&paths);
+    let widevine = startup_bool(&loaded, "content.widevine");
+    let fetch_widevine = widevine && !privacy::widevine_installed(&paths.data_dir);
+    privacy::seed_prefs(&paths.data_dir, &profile, fetch_widevine);
     let settings = Settings {
         no_sandbox: (!sandbox.is_on()).into(),
         persist_session_cookies: 1,
@@ -269,7 +277,6 @@ pub fn run() -> i32 {
         log_file: path_string(&paths.data_dir.join("cef.log")),
         ..Default::default()
     };
-    let loaded = hb_config::load(&paths);
     let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");
     let mut app = HbApp::new(Some(Startup {
         paths,
@@ -277,6 +284,7 @@ pub fn run() -> i32 {
         commands,
         config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
         dark_mode,
+        fetch_widevine,
     }));
     if initialize(
         Some(args.as_main_args()),
