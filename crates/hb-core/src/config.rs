@@ -9,6 +9,12 @@ pub enum ConfigOp {
         name: String,
         value: Value,
     },
+    /// A setting for pages matching a URL pattern.
+    SetFor {
+        pattern: String,
+        name: String,
+        value: Value,
+    },
     Bind {
         mode: Mode,
         keys: String,

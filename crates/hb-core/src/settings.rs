@@ -490,9 +490,21 @@ pub fn find(name: &str) -> Option<&'static SettingDef> {
 }
 
 /// Current values, starting from the defaults.
+/// Settings that can differ per site (`:set -u <pattern>`, `[per_domain]`).
+pub const PER_DOMAIN: &[&str] = &[
+    "content.blocking.enabled",
+    "content.desktop_capture",
+    "content.geolocation",
+    "content.media.audio_capture",
+    "content.media.video_capture",
+    "content.notifications.enabled",
+];
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     values: HashMap<&'static str, Value>,
+    /// URL pattern overrides, in the order they were set; the last match wins.
+    per_domain: Vec<(String, &'static str, Value)>,
 }
 
 impl Default for Settings {
@@ -502,6 +514,7 @@ impl Default for Settings {
                 .iter()
                 .map(|d| (d.name, d.default_value()))
                 .collect(),
+            per_domain: Vec::new(),
         }
     }
 }
@@ -516,6 +529,48 @@ impl Settings {
         let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
         self.values.insert(def.name, value);
         Ok(())
+    }
+
+    /// Store an already validated value for URLs matching `pattern`.
+    pub fn set_for(&mut self, pattern: &str, name: &str, value: Value) -> Result<(), String> {
+        let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
+        if !PER_DOMAIN.contains(&def.name) {
+            return Err(format!("{name} can't be set per site"));
+        }
+        self.per_domain
+            .retain(|(p, n, _)| !(p == pattern && *n == def.name));
+        self.per_domain.push((pattern.to_string(), def.name, value));
+        Ok(())
+    }
+
+    /// The value for a page: the last matching `per_domain` entry, or the global one.
+    pub fn get_for(&self, name: &str, url: &str) -> Option<&Value> {
+        self.per_domain
+            .iter()
+            .rev()
+            .find(|(pattern, n, _)| *n == name && crate::url::pattern_matches(pattern, url))
+            .map(|(_, _, v)| v)
+            .or_else(|| self.get(name))
+    }
+
+    pub fn str_for(&self, name: &str, url: &str) -> &str {
+        match self.get_for(name, url) {
+            Some(Value::Str(s)) => s,
+            _ => "",
+        }
+    }
+
+    pub fn bool_for(&self, name: &str, url: &str) -> bool {
+        matches!(self.get_for(name, url), Some(Value::Bool(true)))
+    }
+
+    /// Every per-site value of `name`, as `(pattern, value)`.
+    pub fn overrides(&self, name: &str) -> Vec<(String, Value)> {
+        self.per_domain
+            .iter()
+            .filter(|(_, n, _)| *n == name)
+            .map(|(p, _, v)| (p.clone(), v.clone()))
+            .collect()
     }
 
     pub fn bool(&self, name: &str) -> bool {
@@ -554,6 +609,41 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn per_site_values_override_the_global_one() {
+        let mut s = Settings::default();
+        let ask = |s: &Settings, url| s.str_for("content.geolocation", url).to_string();
+        assert_eq!(ask(&s, "https://maps.example/"), "ask");
+        s.set_for(
+            "*.example",
+            "content.geolocation",
+            Value::Str("true".into()),
+        )
+        .unwrap();
+        s.set_for(
+            "https://bad.example",
+            "content.geolocation",
+            Value::Str("false".into()),
+        )
+        .unwrap();
+        assert_eq!(ask(&s, "https://maps.example/"), "true");
+        assert_eq!(ask(&s, "https://bad.example/x"), "false");
+        assert_eq!(ask(&s, "https://other.org/"), "ask");
+        // Setting the same pattern again replaces it and makes it the newest.
+        s.set_for(
+            "*.example",
+            "content.geolocation",
+            Value::Str("false".into()),
+        )
+        .unwrap();
+        assert_eq!(ask(&s, "https://maps.example/"), "false");
+        assert_eq!(s.overrides("content.geolocation").len(), 2);
+        assert!(
+            s.set_for("x.org", "hints.chars", Value::Str("ab".into()))
+                .is_err()
+        );
+    }
 
     #[test]
     fn editor_fields() {

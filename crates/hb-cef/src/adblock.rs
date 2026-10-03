@@ -17,12 +17,15 @@ use crate::shell;
 struct State {
     blocker: Option<Arc<Blocker>>,
     enabled: bool,
+    /// Per-site `content.blocking.enabled`, as `(pattern, enabled)`; the last match wins.
+    enabled_for: Vec<(String, bool)>,
     whitelist: Vec<String>,
 }
 
 static STATE: RwLock<State> = RwLock::new(State {
     blocker: None,
     enabled: true,
+    enabled_for: Vec::new(),
     whitelist: Vec::new(),
 });
 
@@ -41,6 +44,16 @@ struct Update {
 pub fn sync_settings(settings: &Settings) {
     if let Ok(mut state) = STATE.write() {
         state.enabled = settings.bool("content.blocking.enabled");
+        state.enabled_for = settings
+            .overrides("content.blocking.enabled")
+            .into_iter()
+            .map(|(pattern, value)| {
+                (
+                    pattern,
+                    matches!(value, hb_core::settings::Value::Bool(true)),
+                )
+            })
+            .collect();
         state.whitelist = settings.list("content.blocking.whitelist").to_vec();
     }
 }
@@ -70,7 +83,13 @@ pub fn should_block(url: &str, page: &str, resource: ResourceType) -> bool {
     let Ok(state) = STATE.read() else {
         return false;
     };
-    let Some(blocker) = state.blocker.as_ref().filter(|_| state.enabled) else {
+    let enabled = state
+        .enabled_for
+        .iter()
+        .rev()
+        .find(|(pattern, _)| hb_core::url::pattern_matches(pattern, page))
+        .map_or(state.enabled, |(_, on)| *on);
+    let Some(blocker) = state.blocker.as_ref().filter(|_| enabled) else {
         return false;
     };
     let host = hb_core::url::host(page);

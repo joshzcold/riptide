@@ -135,16 +135,33 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     let s = state.clone();
     hb.set(
         "set",
-        lua.create_function(move |lua, (name, value): (String, Value)| {
-            let def = settings::find(&name)
-                .ok_or_else(|| mlua::Error::runtime(format!("no option {name:?}")))?;
-            let json: serde_json::Value = lua.from_value(value)?;
-            let value = def.from_json(&json).map_err(mlua::Error::runtime)?;
-            let mut state = s.borrow_mut();
-            let _ = state.settings.set(&name, value.clone());
-            state.ops.push(ConfigOp::Set { name, value });
-            Ok(())
-        })?,
+        lua.create_function(
+            move |lua, (name, value, pattern): (String, Value, Option<String>)| {
+                let def = settings::find(&name)
+                    .ok_or_else(|| mlua::Error::runtime(format!("no option {name:?}")))?;
+                let json: serde_json::Value = lua.from_value(value)?;
+                let value = def.from_json(&json).map_err(mlua::Error::runtime)?;
+                let mut state = s.borrow_mut();
+                match pattern {
+                    Some(pattern) => {
+                        state
+                            .settings
+                            .set_for(&pattern, &name, value.clone())
+                            .map_err(mlua::Error::runtime)?;
+                        state.ops.push(ConfigOp::SetFor {
+                            pattern,
+                            name,
+                            value,
+                        });
+                    }
+                    None => {
+                        let _ = state.settings.set(&name, value.clone());
+                        state.ops.push(ConfigOp::Set { name, value });
+                    }
+                }
+                Ok(())
+            },
+        )?,
     )?;
 
     let s = state.clone();
@@ -206,6 +223,26 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hb_set_takes_a_url_pattern() {
+        let dir = std::env::temp_dir().join(format!("hb-lua-pattern-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            "hb.set('content.geolocation', 'true', '*.example.com')\nhb.set('hints.chars', 'ab', 'x.org')\n",
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (ops, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert!(ops.contains(&ConfigOp::SetFor {
+            pattern: "*.example.com".into(),
+            name: "content.geolocation".into(),
+            value: hb_core::settings::Value::Str("true".into()),
+        }));
+        assert!(error.is_some_and(|e| e.contains("can't be set per site")));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
     use hb_core::settings::Value as SettingValue;
 
     struct TempDir(std::path::PathBuf);

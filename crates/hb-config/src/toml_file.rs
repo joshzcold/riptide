@@ -7,6 +7,9 @@
 //! [bindings.normal]
 //! "<Ctrl-x>" = "quit"
 //! d = ""                           # an empty command unbinds the key
+//!
+//! [per_domain."https://meet.example.com"]
+//! "content.media.video_capture" = "true"
 //! ```
 
 use hb_core::Mode;
@@ -29,11 +32,53 @@ pub fn parse(text: &str, source: &str) -> (Vec<ConfigOp>, Vec<String>) {
     for (key, value) in &table {
         if key == "bindings" {
             parse_bindings(value, source, &mut ops, &mut errors);
+        } else if key == "per_domain" {
+            parse_per_domain(value, source, &mut ops, &mut errors);
         } else {
             parse_setting(key, value, source, &mut ops, &mut errors);
         }
     }
     (ops, errors)
+}
+
+/// `[per_domain."<pattern>"]` tables: settings for matching pages.
+fn parse_per_domain(
+    value: &toml::Value,
+    source: &str,
+    ops: &mut Vec<ConfigOp>,
+    errors: &mut Vec<String>,
+) {
+    let Some(patterns) = value.as_table() else {
+        return errors.push(format!(
+            "{source}: per_domain must be a table of URL patterns"
+        ));
+    };
+    for (pattern, table) in patterns {
+        let Some(table) = table.as_table() else {
+            errors.push(format!(
+                "{source}: per_domain.{pattern:?} must be a table of settings"
+            ));
+            continue;
+        };
+        for (key, value) in table {
+            let mut found = Vec::new();
+            parse_setting(key, value, source, &mut found, errors);
+            for op in found {
+                let ConfigOp::Set { name, value } = op else {
+                    continue;
+                };
+                if settings::PER_DOMAIN.contains(&name.as_str()) {
+                    ops.push(ConfigOp::SetFor {
+                        pattern: pattern.clone(),
+                        name,
+                        value,
+                    });
+                } else {
+                    errors.push(format!("{source}: {name} can't be set per site"));
+                }
+            }
+        }
+    }
 }
 
 /// Walk nested tables until the dotted path names a known setting, so both
@@ -201,6 +246,23 @@ mod tests {
         assert_eq!(ops.len(), 1, "{ops:?}");
         assert_eq!(errors.len(), 4, "{errors:?}");
         assert!(errors.iter().all(|e| e.starts_with("config.toml: ")));
+    }
+
+    #[test]
+    fn per_domain_tables() {
+        let (ops, errors) = parse(
+            "[per_domain.\"*.example.com\"]\n\"content.geolocation\" = \"true\"\nhints.chars = \"ab\"\n",
+            "t.toml",
+        );
+        assert_eq!(
+            ops,
+            [ConfigOp::SetFor {
+                pattern: "*.example.com".into(),
+                name: "content.geolocation".into(),
+                value: hb_core::settings::Value::Str("true".into()),
+            }]
+        );
+        assert_eq!(errors, ["t.toml: hints.chars can't be set per site"]);
     }
 
     #[test]

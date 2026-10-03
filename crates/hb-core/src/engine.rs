@@ -184,6 +184,11 @@ impl Engine {
     pub fn apply_config(&mut self, op: &ConfigOp) -> Result<(), String> {
         match op {
             ConfigOp::Set { name, value } => self.settings.set(name, value.clone()),
+            ConfigOp::SetFor {
+                pattern,
+                name,
+                value,
+            } => self.settings.set_for(pattern, name, value.clone()),
             ConfigOp::Bind {
                 mode,
                 keys,
@@ -901,7 +906,11 @@ impl Engine {
                     self.set_mode(Mode::Normal, effects);
                 }
             }
-            Command::Set { name, value } => self.set_command(name, value, effects),
+            Command::Set {
+                name,
+                value,
+                pattern,
+            } => self.set_command(name, value, pattern, effects),
             Command::Bind {
                 mode,
                 keys,
@@ -932,6 +941,7 @@ impl Engine {
         &mut self,
         name: Option<String>,
         value: Option<String>,
+        pattern: Option<String>,
         effects: &mut Vec<Effect>,
     ) {
         let Some(name) = name else {
@@ -966,13 +976,26 @@ impl Engine {
                 return;
             }
         };
-        match value {
-            Ok(value) => {
+        match (value, pattern) {
+            (Ok(value), Some(pattern)) => {
+                match self.settings.set_for(&pattern, &name, value.clone()) {
+                    Ok(()) => effects.push(Effect::ConfigChanged(ConfigOp::SetFor {
+                        pattern,
+                        name,
+                        value,
+                    })),
+                    Err(e) => {
+                        self.show_message(Level::Error, e);
+                    }
+                }
+                self.dirty = true;
+            }
+            (Ok(value), None) => {
                 let _ = self.settings.set(&name, value.clone());
                 effects.push(Effect::ConfigChanged(ConfigOp::Set { name, value }));
                 self.dirty = true;
             }
-            Err(e) => {
+            (Err(e), _) => {
                 self.show_message(Level::Error, e);
             }
         }

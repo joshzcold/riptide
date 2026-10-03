@@ -165,11 +165,13 @@ pub fn decide(
             .answers
             .get(&(origin.to_string(), feature.bit))
             .copied()
-            .or_else(|| match feature.setting.map(|s| settings.str(s)) {
-                Some("true") => Some(true),
-                Some("false") => Some(false),
-                _ => None,
-            });
+            .or_else(
+                || match feature.setting.map(|s| settings.str_for(s, origin)) {
+                    Some("true") => Some(true),
+                    Some("false") => Some(false),
+                    _ => None,
+                },
+            );
         match answer {
             Some(false) => return Decision::Deny,
             Some(true) => {}
@@ -254,6 +256,26 @@ mod tests {
         assert!(
             matches!(decide("o", 1 << 31, PROMPT_FEATURES, &s, &none), Decision::Ask(m) if m.contains("a browser feature"))
         );
+    }
+
+    #[test]
+    fn per_site_settings_decide_for_their_site() {
+        let mut s = Settings::default();
+        s.set_for(
+            "https://meet.example",
+            "content.media.video_capture",
+            Value::Str("true".into()),
+        )
+        .unwrap();
+        let none = Remembered::default();
+        assert_eq!(
+            decide("https://meet.example", 4, PROMPT_FEATURES, &s, &none),
+            Decision::Allow
+        );
+        assert!(matches!(
+            decide("https://other.example", 4, PROMPT_FEATURES, &s, &none),
+            Decision::Ask(_)
+        ));
     }
 
     #[test]

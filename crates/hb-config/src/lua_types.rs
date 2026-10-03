@@ -109,10 +109,13 @@ pub fn generate() -> String {
 ---@field data_dir string
 hb = {{}}
 
----Set an option; `c.name = value` does the same.
+---Set an option; `c.name = value` does the same. With `pattern` (e.g.
+---`"*.example.com"` or `"https://meet.example.com"`), only for matching pages;
+---this works for the content.* permission settings and content.blocking.enabled.
 ---@param name hb.SettingName
 ---@param value any
-function hb.set(name, value) end
+---@param pattern? string
+function hb.set(name, value, pattern) end
 
 ---Get an option's current value.
 ---@param name hb.SettingName

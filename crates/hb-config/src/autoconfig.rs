@@ -58,6 +58,26 @@ impl AutoConfig {
                     self.table.insert(name.clone(), value);
                 }
             }
+            ConfigOp::SetFor {
+                pattern,
+                name,
+                value,
+            } => {
+                let Ok(value) = toml::Value::try_from(value.to_json()) else {
+                    return;
+                };
+                let per_domain = self
+                    .table
+                    .entry("per_domain")
+                    .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                if let Some(site) = per_domain.as_table_mut().map(|t| {
+                    t.entry(pattern.clone())
+                        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+                }) && let Some(site) = site.as_table_mut()
+                {
+                    site.insert(name.clone(), value);
+                }
+            }
             ConfigOp::Bind {
                 mode,
                 keys,
@@ -101,6 +121,24 @@ mod tests {
     use super::*;
     use hb_core::Mode;
     use hb_core::settings::Value;
+
+    #[test]
+    fn per_site_values_round_trip() {
+        let dir = std::env::temp_dir().join(format!("hb-autoconfig-site-{}", std::process::id()));
+        let path = dir.join("autoconfig.toml");
+        let (mut auto, _, _) = AutoConfig::load(&path);
+        let op = ConfigOp::SetFor {
+            pattern: "https://meet.example".into(),
+            name: "content.media.audio_capture".into(),
+            value: Value::Str("true".into()),
+        };
+        auto.record(&op);
+        auto.save().unwrap();
+        let (_, ops, errors) = AutoConfig::load(&path);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(ops, [op]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn round_trips_through_the_file() {

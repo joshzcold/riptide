@@ -155,7 +155,26 @@ Everything that needs an answer appears above the status bar, one at a time:
 | prompt (text) | type, readline keys (`Ctrl-w` deletes one path component), `Return` accepts, `Escape` cancels |
 | yesno | `y` / `n`, `Return` (the default), `Escape` cancels |
 
-For permission prompts, `y` allows and `N` blocks. Chromium saves both per site; `n` and `Escape` mean "not now". Camera and microphone requests use `A`/`N` to remember the answer for the session. The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture` and `content.desktop_capture` settings (`ask`, `true` or `false`) answer without asking.
+For permission prompts:
+- `y` allows once and `n` (or `Escape`) means "not now".
+- `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, as in qutebrowser, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.
+
+The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture` and `content.desktop_capture` settings (`ask`, `true` or `false`) answer without asking.
+
+#### Per-site settings
+
+The permission settings above and `content.blocking.enabled` can differ per site. The last matching pattern wins. Patterns are hosts (`example.com`, `*.example.com` for subdomains too), origins (`https://meet.example.com`) or match patterns (`*://*.example.com/app/*`):
+
+```sh
+:set -u https://meet.example.com content.media.video_capture true
+```
+```toml
+[per_domain."*.example.com"]          # config.toml or autoconfig.toml
+"content.blocking.enabled" = false
+```
+```lua
+hb.set("content.geolocation", "false", "*.tracker.example")  -- config.lua
+```
 
 Downloads go to `downloads.location.directory`, or the system Downloads folder if that's empty (on Linux, `XDG_DOWNLOAD_DIR` or `~/.config/user-dirs.dirs`). Server-suggested names are reduced to a plain file name, existing files get ` (1)` appended, and typing an existing path asks before overwriting. Set `downloads.location.prompt = false` to skip the question. The status bar shows `↓2 41%` while downloads run.
 

@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use hb_core::url::{glob, pattern_matches as match_pattern};
 use serde::{Deserialize, Serialize};
 
 use crate::Paths;
@@ -103,59 +104,6 @@ impl Script {
     }
 }
 
-/// `*` matches any run of characters.
-fn glob(pattern: &str, text: &str) -> bool {
-    let parts: Vec<&str> = pattern.split('*').collect();
-    let (first, rest) = parts.split_first().expect("split yields at least one part");
-    let Some(mut text) = text.strip_prefix(first) else {
-        return false;
-    };
-    let Some((last, middle)) = rest.split_last() else {
-        return text.is_empty();
-    };
-    for part in middle {
-        match text.find(part) {
-            Some(i) => text = &text[i + part.len()..],
-            None => return false,
-        }
-    }
-    text.ends_with(last)
-}
-
-/// Chrome extension match patterns: `<all_urls>` or `scheme://host/path`,
-/// where scheme `*` means http or https and host `*.example.com` also
-/// matches example.com.
-fn match_pattern(pattern: &str, url: &str) -> bool {
-    if pattern == "<all_urls>" {
-        return ["http://", "https://", "file://"]
-            .iter()
-            .any(|s| url.starts_with(s));
-    }
-    let (Some((scheme, rest)), Some((url_scheme, url_rest))) =
-        (pattern.split_once("://"), url.split_once("://"))
-    else {
-        return false;
-    };
-    let scheme_ok = match scheme {
-        "*" => matches!(url_scheme, "http" | "https"),
-        s => s == url_scheme,
-    };
-    let (host, path) = rest.split_once('/').map_or((rest, ""), |(h, p)| (h, p));
-    let (url_host, url_path) = url_rest
-        .split_once('/')
-        .map_or((url_rest, ""), |(h, p)| (h, p));
-    let url_host = url_host.rsplit_once('@').map_or(url_host, |(_, h)| h);
-    let url_host = url_host.split(':').next().unwrap_or_default();
-    let host_ok = match host {
-        "*" => true,
-        h => match h.strip_prefix("*.") {
-            Some(domain) => url_host == domain || url_host.ends_with(&format!(".{domain}")),
-            None => url_host == h,
-        },
-    };
-    scheme_ok && host_ok && glob(path, url_path)
-}
-
 pub fn dirs(paths: &Paths) -> [PathBuf; 2] {
     [
         paths.data_dir.join("greasemonkey"),
@@ -236,16 +184,6 @@ document.body.style.background = 'black';
         let everywhere = Script::parse("e.js", "1");
         assert!(everywhere.applies_to("https://a.org/"));
         assert!(!everywhere.applies_to("hb://help/"));
-    }
-
-    #[test]
-    fn globs() {
-        assert!(glob("a*c", "abbbc"));
-        assert!(glob("*", ""));
-        assert!(glob("https://x.org/*", "https://x.org/"));
-        assert!(!glob("a*c", "abd"));
-        assert!(glob("a*b*c", "a-b-c"));
-        assert!(!glob("abc", "abcd"));
     }
 
     #[test]

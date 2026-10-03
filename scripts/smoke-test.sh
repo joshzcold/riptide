@@ -119,6 +119,10 @@ cat >"$work/http/adblock.html" <<'EOF'
 EOF
 echo "blocked = 'yes';" >"$work/http/ads/banner.js"
 echo "allowed = 'yes';" >"$work/http/app.js"
+cat >"$work/http/geo.html" <<'EOF'
+<!doctype html><title>geo</title>
+<button onclick="navigator.geolocation.getCurrentPosition(() => { document.title = 'geo=ok'; }, (e) => { document.title = 'geo=' + (e.code === 1 ? 'denied' : 'allowed'); })">ask</button>
+EOF
 printf '! test list\n/ads/banner.js\n' >"$work/filters.txt"
 
 Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
@@ -403,13 +407,30 @@ nap 0.5
 run "open $http/adblock.html"
 expect_title "ads b=no a=yes"
 
+step "an 'always' permission answer is saved for the site"
+run "open $http/geo.html"
+expect_title "geo"
+hint a
+wait_mode yesno || true
+xdotool key shift+a
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == geo=* ]] && break; sleep 0.1; done
+geo=$(page_title)
+for _ in $(seq $((TIMEOUT * 10))); do grep -q "per_domain.\"$http\"" "$work/base/config/autoconfig.toml" 2>/dev/null && break; sleep 0.1; done
+if [[ $geo != geo=allowed && $geo != geo=ok ]]; then
+    fail "the page got '$geo'"
+elif ! grep -A1 "per_domain.\"$http\"" "$work/base/config/autoconfig.toml" | grep -q '"content.geolocation" = "true"'; then
+    fail "autoconfig.toml has no per_domain entry"
+else
+    pass
+fi
+
 step "a userscript gets QUTE_* and runs what it writes to QUTE_FIFO"
 run "spawn -u us"
 for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
 us=$(cat "$work/us.out" 2>/dev/null || true)
 if [[ $(page_title) != second ]]; then
     fail "the FIFO command didn't run; title was '$(name)'"
-elif [[ $us != "$http/adblock.html|command" ]]; then
+elif [[ $us != "$http/geo.html|command" ]]; then
     fail "QUTE_URL|QUTE_MODE was '$us'"
 else
     pass

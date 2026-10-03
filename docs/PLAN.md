@@ -152,8 +152,8 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Primary selection (`yY`, `pP`)
 
 ### Content
-- [ ] Ad blocking (EasyList / uBlock lists) and host blocking
-- [ ] Per-domain settings (JS, cookies, images, notifications)
+- [x] Ad blocking (EasyList / uBlock lists) (M8; host-file blocking not yet)
+- [x] Per-domain settings for permissions and content blocking (M8; JS, cookies and images still to come)
 - [x] Downloads with status-bar progress and prompts
 - [x] Permission prompts (geolocation, camera, notifications)
 - [x] HTTP auth and JS dialogs in the prompt UI
@@ -248,7 +248,7 @@ Notes:
 - **Paths:** XDG on Linux. On macOS, `~/.config` for config and Application Support for data. On Windows, `%APPDATA%` for config and `%LOCALAPPDATA%` for data. `XDG_*` is honoured everywhere, and `--basedir` overrides all. Unit tests cover all three platforms' rules, but macOS and Windows builds have not been run yet.
 
 Gaps:
-- Per-domain settings (with M8). Answering a permission prompt with "always" should save a per-domain setting to `autoconfig.toml`, as qutebrowser does, which also fixes camera and microphone answers being forgotten.
+- ~~Per-domain settings (with M8). Answering a permission prompt with "always" should save a per-domain setting to `autoconfig.toml`, as qutebrowser does, which also fixes camera and microphone answers being forgotten.~~ Done in M8 (2026-10-02).
 - Watching config files for changes (`:config-source` reloads by hand).
 - `:config-edit`.
 - Importing qutebrowser's `config.py`.
@@ -285,7 +285,7 @@ Gaps:
 - No per-download bar.
 - No path completion in the save prompt.
 - No command to reset per-site permissions (Chromium's saved answers).
-- Camera and microphone answers are forgotten on restart, so video-call sites ask every session.
+- ~~Camera and microphone answers are forgotten on restart, so video-call sites ask every session.~~ `A`/`N` now save a per-site setting (M8).
 - Closing a tab with `d` skips leave-page warnings.
 - File-upload dialogs (`<input type=file>`) use CEF's default and are untested.
 - TLS errors have no override.
@@ -297,7 +297,17 @@ Gaps:
   - Settings: `content.blocking.enabled`, `content.blocking.adblock.lists` and `content.blocking.whitelist`, all with qutebrowser's names.
   - Top-level navigations are never blocked. The smoke test serves a page on 127.0.0.1 and checks that a listed script is cancelled while another loads.
   - Not done: cosmetic filtering (`hidden_class_id_selectors`, `url_cosmetic_resources` injected per frame), scriptlets and `$redirect` resources, a blocked count in the status bar, automatic list updates, and qutebrowser's hosts-file method.
-- Remaining: per-domain settings and private windows.
+- ✅ **Per-domain settings** (2026-10-02):
+  - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
+  - `hb_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.
+  - `ConfigOp::SetFor` comes from `:set -u <pattern>`, `[per_domain."<pattern>"]` in TOML (autoconfig writes it the same way) and `hb.set(name, value, pattern)` in Lua.
+  - `permissions::decide` uses the requesting origin's value, and content blocking checks the page's.
+  - Permission answers `A`/`N` save a per-site setting, which fixes the user's note about camera and microphone answers being forgotten.
+  - Unit tests cover each layer. A smoke step answers `A` to a geolocation request and checks `autoconfig.toml`. By hand: after deleting Chromium's data, the saved answer still allows without asking.
+  - Gaps:
+    - Chromium also remembers `y` per site for permission prompts, and that memory wins over a later per-site `false`.
+    - There are no per-site JavaScript, cookie or image settings yet.
+- Remaining: private windows (needs multiple windows first).
 - ✅ **Background Google traffic reviewed** (2026-10-02). Method: a fresh profile on `about:blank` for 90 s with `--log-net-log`. Each request was mapped to its Chromium source through its traffic-annotation hash (`hash(id) = fold(c, h*31 + c) mod 138003713` over `tools/traffic_annotation/summary/annotations.xml`). Results are in the README's "Network traffic" table. Before: 8 Google hosts and 122 MB downloaded. After: CRLSets, subresource filter rules, network time and one `ListAccounts`, 5.8 MB.
   - Changes are in `hb-cef/src/privacy.rs`: `component_updates.component_updates_enabled = false` (Chromium still updates the components it exempts as security data, as with the `ComponentUpdatesEnabled` policy), spell-check dictionaries off, sign-in off, Chrome's default search engine off, and `--disable-features=AimEnabled,PreconnectToSearch,SearchEnginePreconnect2`, merged with any `--disable-features` the user passes.
   - Prefs are written into `Local State` and `Default/Preferences` before CEF starts, because these services start within 100 ms. `CefPreferenceManager::SetPreference` from `on_context_initialized` is too late. Through cef-rs it also fails silently unless the `error` out-string is non-empty, since an empty `CefString` is passed as NULL.

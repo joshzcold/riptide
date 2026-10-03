@@ -107,6 +107,62 @@ pub fn increment(url: &str, delta: i64) -> Option<String> {
     ))
 }
 
+/// `*` matches any run of characters.
+pub fn glob(pattern: &str, text: &str) -> bool {
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let (first, rest) = parts.split_first().expect("split yields at least one part");
+    let Some(mut text) = text.strip_prefix(first) else {
+        return false;
+    };
+    let Some((last, middle)) = rest.split_last() else {
+        return text.is_empty();
+    };
+    for part in middle {
+        match text.find(part) {
+            Some(i) => text = &text[i + part.len()..],
+            None => return false,
+        }
+    }
+    text.ends_with(last)
+}
+
+/// Whether `url` matches a URL pattern, as qutebrowser and Chrome extensions
+/// write them: `<all_urls>`, `scheme://host/path` (scheme `*` is http or
+/// https, host `*.example.com` includes example.com, a missing path means any
+/// path), or just a host such as `example.com` or `*.example.com`.
+pub fn pattern_matches(pattern: &str, url: &str) -> bool {
+    if pattern == "<all_urls>" {
+        return ["http://", "https://", "file://"]
+            .iter()
+            .any(|s| url.starts_with(s));
+    }
+    let (scheme, rest) = pattern.split_once("://").unwrap_or(("*", pattern));
+    let Some((url_scheme, url_rest)) = url.split_once("://") else {
+        return false;
+    };
+    let scheme_ok = match scheme {
+        "*" => matches!(url_scheme, "http" | "https"),
+        s => s == url_scheme,
+    };
+    let (host, path) = rest.split_once('/').unwrap_or((rest, "*"));
+    let (url_host, url_path) = url_rest.split_once('/').unwrap_or((url_rest, ""));
+    let url_host = url_host.rsplit_once('@').map_or(url_host, |(_, h)| h);
+    // A pattern with a port (as saved from an origin) must match it too.
+    let url_host = if host.contains(':') {
+        url_host
+    } else {
+        url_host.split(':').next().unwrap_or_default()
+    };
+    let host_ok = match host {
+        "*" => true,
+        h => match h.strip_prefix("*.") {
+            Some(domain) => url_host == domain || url_host.ends_with(&format!(".{domain}")),
+            None => url_host == h,
+        },
+    };
+    scheme_ok && host_ok && glob(path, url_path)
+}
+
 /// The host name of a URL, without user info or port; empty if it has none.
 pub fn host(url: &str) -> &str {
     let Some((_, rest)) = url.split_once("://") else {
@@ -167,6 +223,43 @@ fn encode_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_patterns() {
+        assert!(pattern_matches(
+            "*://*.example.com/news/*",
+            "https://www.example.com/news/x"
+        ));
+        assert!(pattern_matches(
+            "*://*.example.com/news/*",
+            "http://example.com/news/"
+        ));
+        assert!(!pattern_matches(
+            "*://*.example.com/news/*",
+            "https://badexample.com/news/x"
+        ));
+        assert!(pattern_matches(
+            "https://meet.example.com",
+            "https://meet.example.com/room/1"
+        ));
+        assert!(!pattern_matches(
+            "https://meet.example.com",
+            "http://meet.example.com/"
+        ));
+        assert!(pattern_matches("example.com", "https://example.com:8443/"));
+        assert!(pattern_matches(
+            "http://127.0.0.1:8080",
+            "http://127.0.0.1:8080/a"
+        ));
+        assert!(!pattern_matches(
+            "http://127.0.0.1:8080",
+            "http://127.0.0.1:9090/a"
+        ));
+        assert!(!pattern_matches("example.com", "https://www.example.com/"));
+        assert!(pattern_matches("*.example.com", "https://www.example.com/"));
+        assert!(pattern_matches("<all_urls>", "file:///tmp/x"));
+        assert!(!pattern_matches("example.com", "about:blank"));
+    }
 
     #[test]
     fn going_up() {

@@ -75,8 +75,12 @@ fn resolve(
         move |answer| {
             let outcome = match answer {
                 PromptAnswer::Yes { remember } => {
-                    if remember && !site {
-                        REMEMBERED.with(|r| r.borrow_mut().remember(&origin, bits, features, true));
+                    if remember {
+                        if !site {
+                            REMEMBERED
+                                .with(|r| r.borrow_mut().remember(&origin, bits, features, true));
+                        }
+                        save_for_site(&origin, bits, features, true);
                     }
                     Outcome::Allow
                 }
@@ -85,6 +89,7 @@ fn resolve(
                         REMEMBERED
                             .with(|r| r.borrow_mut().remember(&origin, bits, features, false));
                     }
+                    save_for_site(&origin, bits, features, false);
                     Outcome::Block
                 }
                 _ => Outcome::NotNow,
@@ -93,6 +98,29 @@ fn resolve(
         },
     );
     Some(id)
+}
+
+/// An "always" answer becomes a per-site setting in `autoconfig.toml`, as in
+/// qutebrowser, so it survives restarts and can be changed with `:set -u`.
+fn save_for_site(origin: &str, bits: u32, features: &[Feature], allow: bool) {
+    let pattern = origin.trim_end_matches('/').to_string();
+    let value = hb_core::settings::Value::Str(allow.to_string());
+    let mut names: Vec<&str> = features
+        .iter()
+        .filter(|f| bits & f.bit != 0)
+        .filter_map(|f| f.setting)
+        .collect();
+    names.dedup();
+    for name in names {
+        let op = hb_core::config::ConfigOp::SetFor {
+            pattern: pattern.clone(),
+            name: name.to_string(),
+            value: value.clone(),
+        };
+        if shell::with(|s| s.engine.apply_config(&op)).is_some_and(|r| r.is_ok()) {
+            shell::apply(vec![hb_core::Effect::ConfigChanged(op)]);
+        }
+    }
 }
 
 wrap_permission_handler! {

@@ -183,6 +183,8 @@ pub enum Command {
     Set {
         name: Option<String>,
         value: Option<String>,
+        /// `-u <pattern>`: only for matching pages.
+        pattern: Option<String>,
     },
     Bind {
         mode: Mode,
@@ -692,11 +694,16 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
         }),
         "set" => {
+            let pattern = match args.flag(&["-u", "--pattern"]) {
+                Some(_) => Some(args.required("pattern")?.to_string()),
+                None => None,
+            };
             let name = args.optional().map(String::from);
             let value = args.rest();
             Command::Set {
                 name,
                 value: (!value.is_empty()).then(|| value.to_string()),
+                pattern,
             }
         }
         "bind" => {
@@ -1245,14 +1252,24 @@ mod tests {
             parse("set url.start_pages [\"a\", \"b\"]").unwrap(),
             Command::Set {
                 name: Some("url.start_pages".into()),
-                value: Some("[\"a\", \"b\"]".into())
+                value: Some("[\"a\", \"b\"]".into()),
+                pattern: None,
             }
         );
         assert_eq!(
             parse("set").unwrap(),
             Command::Set {
                 name: None,
-                value: None
+                value: None,
+                pattern: None,
+            }
+        );
+        assert_eq!(
+            parse("set -u *.example.com content.geolocation true").unwrap(),
+            Command::Set {
+                name: Some("content.geolocation".into()),
+                value: Some("true".into()),
+                pattern: Some("*.example.com".into()),
             }
         );
         assert_eq!(
