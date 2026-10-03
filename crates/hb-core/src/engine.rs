@@ -453,14 +453,31 @@ impl Engine {
 
     /// Switching tabs drops back to normal mode, like qutebrowser's
     /// `tabs.mode_on_change = normal`.
-    pub fn tab_switched(&mut self) -> Vec<Effect> {
+    /// The current tab changed. `left_in` is the mode the new tab was in when
+    /// the user last left it, for `tabs.mode_on_change = restore`.
+    pub fn tab_switched(&mut self, left_in: Option<Mode>) -> Vec<Effect> {
         let mut effects = Vec::new();
-        let persist = self.settings.str("tabs.mode_on_change") == "persist";
-        // Hints belong to the old tab's page, so they always end.
-        if self.mode == Mode::Hint
-            || (!persist && matches!(self.mode, Mode::Insert | Mode::Passthrough))
+        let typing = |m: Mode| matches!(m, Mode::Insert | Mode::Passthrough);
+        let target = match self.settings.str("tabs.mode_on_change") {
+            "persist" if typing(self.mode) => self.mode,
+            "restore" => left_in.filter(|m| typing(*m)).unwrap_or(Mode::Normal),
+            _ => Mode::Normal,
+        };
+        // Hints, the caret and the like belong to the old tab's page, so they
+        // end. The command line and prompts belong to the window and stay.
+        let page_bound = matches!(
+            self.mode,
+            Mode::Hint
+                | Mode::Caret
+                | Mode::SetMark
+                | Mode::JumpMark
+                | Mode::RecordMacro
+                | Mode::RunMacro
+        );
+        if self.mode != target
+            && (page_bound || typing(self.mode) || (self.mode == Mode::Normal && typing(target)))
         {
-            self.set_mode(Mode::Normal, &mut effects);
+            self.set_mode(target, &mut effects);
         }
         effects
     }
@@ -1255,6 +1272,37 @@ mod tests {
     }
 
     #[test]
+    fn tab_switches_follow_mode_on_change() {
+        let mut e = engine();
+        e.set_mode(Mode::Insert, &mut Vec::new());
+        e.tab_switched(Some(Mode::Normal));
+        assert_eq!(e.mode(), Mode::Normal, "normal is the default");
+        e.apply_config(&ConfigOp::Set {
+            name: "tabs.mode_on_change".into(),
+            value: Value::Str("restore".into()),
+        })
+        .unwrap();
+        e.tab_switched(Some(Mode::Insert));
+        assert_eq!(
+            e.mode(),
+            Mode::Insert,
+            "restore brings the tab's insert mode back"
+        );
+        e.tab_switched(Some(Mode::Normal));
+        assert_eq!(e.mode(), Mode::Normal);
+        e.tab_switched(Some(Mode::Hint));
+        assert_eq!(e.mode(), Mode::Normal, "transient modes aren't restored");
+        e.apply_config(&ConfigOp::Set {
+            name: "tabs.mode_on_change".into(),
+            value: Value::Str("persist".into()),
+        })
+        .unwrap();
+        e.set_mode(Mode::Insert, &mut Vec::new());
+        e.tab_switched(Some(Mode::Normal));
+        assert_eq!(e.mode(), Mode::Insert, "persist keeps insert mode");
+    }
+
+    #[test]
     fn marks_take_the_next_key() {
         let mut e = engine();
         let out = press(&mut e, "`a");
@@ -1562,10 +1610,10 @@ mod tests {
     fn tab_switch_leaves_insert_mode() {
         let mut e = engine();
         press(&mut e, "i");
-        e.tab_switched();
+        e.tab_switched(None);
         assert_eq!(e.mode(), Mode::Normal);
         press(&mut e, ":");
-        e.tab_switched();
+        e.tab_switched(None);
         assert_eq!(e.mode(), Mode::Command);
     }
 

@@ -424,9 +424,9 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "tabs.mode_on_change",
-        Kind::Enum(&["normal", "persist"]),
+        Kind::Enum(&["normal", "persist", "restore"]),
         s("normal"),
-        "Mode after switching tabs: back to normal, or keep insert/passthrough"
+        "Mode after switching tabs: normal, persist (keep insert/passthrough), or restore (the mode the tab was left in)"
     ),
     def!(
         "tabs.mousewheel_switching",

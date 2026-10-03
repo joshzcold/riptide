@@ -31,6 +31,8 @@ pub struct Tab {
     pub load_error: bool,
     /// Error to draw into Chromium's error document once it commits.
     pub pending_error: Option<(String, String)>,
+    /// The mode this tab was in when the user last left it.
+    pub mode: hb_core::Mode,
 }
 
 impl Tab {
@@ -43,6 +45,7 @@ impl Tab {
             progress: None,
             load_error: false,
             pending_error: None,
+            mode: hb_core::Mode::Normal,
         }
     }
 

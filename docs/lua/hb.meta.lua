@@ -132,7 +132,7 @@ function hb.unbind(keys, mode) end
 ---@class hb.c.tabs
 ---@field favicons hb.c.tabs.favicons
 ---@field last_close "ignore"|"blank"|"startpage"|"default-page"|"close" What closing the last tab does
----@field mode_on_change "normal"|"persist" Mode after switching tabs: back to normal, or keep insert/passthrough
+---@field mode_on_change "normal"|"persist"|"restore" Mode after switching tabs: normal, persist (keep insert/passthrough), or restore (the mode the tab was left in)
 ---@field mousewheel_switching boolean Switch tabs with the mouse wheel over the tab bar
 ---@field new_position hb.c.tabs.new_position
 ---@field pinned hb.c.tabs.pinned

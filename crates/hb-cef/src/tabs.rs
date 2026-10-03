@@ -158,6 +158,11 @@ fn focus_number(number: i64) {
 /// Make `index` the visible, focused tab. `force` re-shows it even if it is already current.
 fn switch_to(index: usize, force: bool) {
     let Some(Some((views, effects))) = shell::with(|s| {
+        let leaving = s.tabs.current_index();
+        let mode = s.engine.mode();
+        if let Some(tab) = s.tabs.get_mut(leaving) {
+            tab.mode = mode;
+        }
         if !s.tabs.focus(index) && !force {
             return None;
         }
@@ -170,7 +175,8 @@ fn switch_to(index: usize, force: bool) {
             .enumerate()
             .map(|(i, t)| (t.view.clone(), i == s.tabs.current_index()))
             .collect();
-        Some((views, s.engine.tab_switched()))
+        let left_in = s.tabs.current().map(|t| t.mode);
+        Some((views, s.engine.tab_switched(left_in)))
     }) else {
         return;
     };
