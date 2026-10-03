@@ -31,6 +31,10 @@ pub enum HintTarget {
     Current,
     /// Download its URL.
     Download,
+    /// Run a program with `{hint-url}` (or the URL appended).
+    Spawn,
+    /// Run a userscript with `QUTE_URL` set to the URL.
+    Userscript,
 }
 
 macro_rules! names {
@@ -67,6 +71,8 @@ names!(HintTarget {
     Fill => "fill",
     Current => "current",
     Download => "download",
+    Spawn => "spawn",
+    Userscript => "userscript",
 });
 
 /// A parsed `:hint` command.

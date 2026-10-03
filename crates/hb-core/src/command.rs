@@ -265,6 +265,8 @@ pub enum Command {
         output_messages: bool,
         /// Show the program's output in a new tab.
         output: bool,
+        /// Set by hints: the URL a hinted userscript gets as `QUTE_URL`.
+        hint_url: Option<String>,
         /// Don't wait for the program or report on it.
         detach: bool,
         argv: Vec<String>,
@@ -773,8 +775,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 None => HintTarget::Normal,
             };
             let fill = args.rest();
-            if target == HintTarget::Fill && fill.is_empty() {
-                return Err(args.error("the fill target needs command text"));
+            if matches!(
+                target,
+                HintTarget::Fill | HintTarget::Spawn | HintTarget::Userscript
+            ) && fill.is_empty()
+            {
+                return Err(args.error(format!("the {target} target needs more text")));
             }
             Command::Hint(HintRequest {
                 group,
@@ -944,6 +950,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 verbose,
                 output_messages,
                 output,
+                hint_url: None,
                 detach,
                 argv,
             }
@@ -1496,6 +1503,7 @@ mod tests {
                 verbose: true,
                 output_messages: false,
                 output: false,
+                hint_url: None,
                 detach: false,
                 argv: vec!["password-fill".into(), "--user".into(), "a b".into()],
             }

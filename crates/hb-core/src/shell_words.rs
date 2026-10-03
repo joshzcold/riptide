@@ -61,6 +61,11 @@ pub fn split(text: &str) -> Result<Vec<String>, String> {
     Ok(words)
 }
 
+/// `text` as one shell word, e.g. for putting a URL into a `:spawn` line.
+pub fn quote(text: &str) -> String {
+    format!("'{}'", text.replace('\'', r"'\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,5 +90,12 @@ mod tests {
         assert!(ok("   ").is_empty());
         assert!(split("'open").is_err());
         assert!(split("\"open").is_err());
+    }
+
+    #[test]
+    fn quoting_round_trips() {
+        for text in ["https://x.org/a b", "it's", "plain", ""] {
+            assert_eq!(split(&quote(text)).unwrap(), [text]);
+        }
     }
 }

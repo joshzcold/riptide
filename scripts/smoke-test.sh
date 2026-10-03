@@ -525,6 +525,31 @@ else
     pass
 fi
 
+step "hints can run a userscript or a program on a link"
+run "open file://$work/nav1.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav1 ]] && break; sleep 0.1; done
+rm -f "$work/us.out"
+run "hint links userscript us"
+wait_mode hint || true
+xdotool key a
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/us.out ]] && break; sleep 0.1; done
+from_userscript=$(cat "$work/us.out" 2>/dev/null || true)
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
+run "open file://$work/nav1.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav1 ]] && break; sleep 0.1; done
+run "hint links spawn sh -c 'echo \"\$1\" > $work/hinted' sh"
+wait_mode hint || true
+xdotool key a
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/hinted ]] && break; sleep 0.1; done
+from_spawn=$(cat "$work/hinted" 2>/dev/null || true)
+if [[ $from_userscript != "file://$work/nav2.html|hints" ]]; then
+    fail "the userscript got '$from_userscript'"
+elif [[ $from_spawn != "file://$work/nav2.html" ]]; then
+    fail ":spawn got '$from_spawn'"
+else
+    pass
+fi
+
 step ":spawn -o shows the output in a new tab"
 run "spawn -o echo hello from spawn"
 expect_title "echo output"

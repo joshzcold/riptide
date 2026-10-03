@@ -760,6 +760,35 @@ impl Engine {
                             &mut effects,
                         );
                     }
+                    (HintTarget::Spawn, Some(line)) => {
+                        let url = url.unwrap_or_default();
+                        let quoted = crate::shell_words::quote(&url);
+                        let line = if line.contains("{hint-url}") {
+                            line.replace("{hint-url}", &quoted)
+                        } else {
+                            format!("{line} {quoted}")
+                        };
+                        effects.extend(self.execute_str(&format!("spawn {line}"), None));
+                    }
+                    (HintTarget::Userscript, Some(line)) => {
+                        match crate::shell_words::split(&line) {
+                            Ok(argv) if !argv.is_empty() => effects.push(Effect::Run {
+                                command: Command::Spawn {
+                                    userscript: true,
+                                    verbose: false,
+                                    output_messages: false,
+                                    output: false,
+                                    hint_url: Some(url.unwrap_or_default()),
+                                    detach: false,
+                                    argv,
+                                },
+                                count: None,
+                            }),
+                            _ => {
+                                self.show_message(Level::Error, "hint userscript: bad script name");
+                            }
+                        }
+                    }
                     (target, _) => effects.push(Effect::FollowHint { index, url, target }),
                 }
             }

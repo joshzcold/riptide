@@ -51,6 +51,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             verbose,
             output_messages,
             output,
+            hint_url,
             detach,
             argv,
         } => {
@@ -61,7 +62,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                 detach: *detach,
             };
             if *userscript {
-                userscript_start(argv.clone(), flags, count);
+                userscript_start(argv.clone(), flags, count, hint_url.clone());
             } else {
                 start(argv.clone(), Vec::new(), flags, None, None);
             }
@@ -105,7 +106,9 @@ struct PageDump {
     selection: String,
 }
 
-fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>) {
+/// `hint_url` is set for userscripts run from hints: they get the hinted URL
+/// as `QUTE_URL` and `QUTE_MODE=hints`, as in qutebrowser.
+fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_url: Option<String>) {
     let Some((paths, url, title, index, browser, download_dir)) = shell::with(|s| {
         let tab = s.tabs.current();
         (
@@ -124,9 +127,14 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>) {
     argv[0] = hb_config::userscripts::resolve(&argv[0], &paths, home.as_deref())
         .to_string_lossy()
         .into_owned();
+    let mode = if hint_url.is_some() {
+        "hints"
+    } else {
+        "command"
+    };
     let mut env = vec![
-        ("QUTE_MODE", "command".to_string()),
-        ("QUTE_URL", url),
+        ("QUTE_MODE", mode.to_string()),
+        ("QUTE_URL", hint_url.unwrap_or(url)),
         ("QUTE_TITLE", title),
         ("QUTE_TAB_INDEX", index.to_string()),
         ("QUTE_CONFIG_DIR", paths.config_dir.display().to_string()),
