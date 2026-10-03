@@ -268,8 +268,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `;i` / `;I` | Hint an image; open it here / in a new tab |
 | `;o` / `;O` | Hint a link and put `:open` (or `:open -t`) with its URL on the command line |
 | `;r` | Rapid hinting: open several links in background tabs (leave with `Escape`) |
-| `yy` / `yt` / `yd` | Yank the URL / title / domain |
-| `pp` / `PP` | Open the clipboard contents here / in a new tab |
+| `yy` / `yt` / `yd` | Yank the URL / title / domain (`yY` `yT` `yD`: to the primary selection) |
+| `pp` / `Pp` | Open the clipboard contents here / in a new tab (`pP` / `PP`: the primary selection) |
 | `m` | Quickmark this page (type a name, then `Return`) |
 | `b` / `B` | Open a quickmark here / in a new tab |
 | `M` | Bookmark this page |

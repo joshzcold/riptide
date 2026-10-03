@@ -470,7 +470,8 @@ fn run_command(command: Command, count: Option<u32>) {
     }
     match command {
         Command::Hint(request) => return hints::request(request),
-        Command::Yank(what) => return yank(what),
+        Command::Yank(what) => return yank(what, false),
+        Command::YankPrimary(what) => return yank(what, true),
         Command::ConfigSource => {
             let errors = load_config();
             if errors.is_empty() {
@@ -643,20 +644,20 @@ fn focus_for_prompt(prompting: bool) {
     }
 }
 
-fn yank(what: YankWhat) {
+fn yank(what: YankWhat, primary: bool) {
     let Some((url, title)) =
         with(|s| s.tabs.current().map(|t| (t.url.clone(), t.title.clone()))).flatten()
     else {
         return;
     };
     match what {
-        YankWhat::Url => clipboard::yank(&url, "URL"),
-        YankWhat::Title => clipboard::yank(&title, "title"),
+        YankWhat::Url => clipboard::yank_to(&url, "URL", primary),
+        YankWhat::Title => clipboard::yank_to(&title, "title", primary),
         YankWhat::Domain => match domain_of(&url) {
-            Some(domain) => clipboard::yank(&domain, "domain"),
+            Some(domain) => clipboard::yank_to(&domain, "domain", primary),
             None => show_message(Level::Error, "This page has no domain"),
         },
-        YankWhat::Selection => crate::caret::yank(),
+        YankWhat::Selection => crate::caret::yank(primary),
     }
 }
 

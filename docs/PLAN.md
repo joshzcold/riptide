@@ -116,7 +116,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 
 ### Modes
 - [x] Normal, Insert (with auto-enter/leave on focus), Command, Passthrough
-- [ ] Hint, Caret, Prompt, Yes/No, Register (marks/macros)
+- [x] Hint, Caret, Prompt, Yes/No, Register (marks/macros)
 
 ### Navigation
 - [x] `o` / `go` open / edit current URL (current tab only)
@@ -132,9 +132,10 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Tabs
 - [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
 - [x] `:tab-move`, `:tab-only`, `:open -t/-b/-r`, popups as tabs (keeping `window.opener`)
-- [ ] `:tab-pin` and pinned tabs (M14), `:tab-clone`, `:tab-give`, `:tab-take`
-- [ ] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
-- [ ] Favicons in the tab bar and completion (M14)
+- [x] `:tab-pin` and pinned tabs (M14)
+- [ ] `:tab-clone`, `:tab-give`, `:tab-take`
+- [x] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
+- [x] Favicons in the tab bar (M14); not yet in completion
 - [x] Multiple windows (2026-10-02)
 - [x] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Each tab stores the mode it was left in; with `restore`, switching back brings insert or passthrough mode back (2026-10-02). Hints, the caret and the like end on any switch; the command line and prompts stay.
 
@@ -144,12 +145,12 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Number hint mode, configurable chars (M5), hints inside iframes
 
 ### Command line
-- [ ] `:` command entry with history, fuzzy completion (commands, URLs, history, bookmarks, tabs, settings)
-- [ ] Command chaining (`;;`), aliases, `:bind` / `:unbind`, `:set`
+- [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings); not yet open tabs
+- [x] Command chaining (`;;`), aliases, `:bind` / `:unbind`, `:set`
 
 ### Yank / paste
 - [x] `yy`, `yt`, `yd`, `pp`, `PP` (`{clipboard}` is substituted per command, so pasted text can't add `;;` commands)
-- [ ] Primary selection (`yY`, `pP`)
+- [x] Primary selection (`yY`, `pP`; X11 via arboard, the clipboard elsewhere) (2026-10-02)
 
 ### Content
 - [x] Ad blocking (EasyList / uBlock lists) (M8; host-file blocking not yet)
@@ -160,14 +161,14 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [ ] Download bar listing each download; path completion in the save prompt
 - [x] TLS certificate errors: `OnCertificateError` asks per `content.tls.certificate_errors` (`ask`/`block`/`load-insecurely`, per-site). `A`/`N` save the answer for the origin. A smoke step uses a self-signed HTTPS server (2026-10-02).
 - [x] Dark mode: `colors.webpage.preferred_color_scheme` (live, `SetChromeColorScheme`) and `colors.webpage.darkmode.enabled` (startup `--blink-settings=forceDarkModeEnabled=true`)
-- [ ] Widevine DRM, opt-in (M11)
+- [x] Widevine DRM, opt-in (M11)
 - [x] Review of background Google service traffic (M8; one `ListAccounts` call left)
 
 ### Help and tooling
-- [ ] `:help` pages generated from the live commands, settings and bindings; `:version` (M16)
-- [ ] `hackers-browser ':cmd' url` talks to the running instance (M15)
-- [ ] Spell checking with keyboard-driven suggestions (M17)
-- [ ] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18)
+- [x] `:help` pages generated from the live commands, settings and bindings; `:version` (M16)
+- [x] `hackers-browser ':cmd' url` talks to the running instance (M15; Unix)
+- [x] Spell checking with keyboard-driven suggestions (M17)
+- [x] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18; Linux release artifacts only)
 
 ### Extensibility
 - [x] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility) (M9)

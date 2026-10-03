@@ -110,6 +110,7 @@ pub struct Engine {
     message_generation: u64,
     url: String,
     clipboard: Option<Box<dyn Fn() -> Option<String>>>,
+    primary: Option<Box<dyn Fn() -> Option<String>>>,
     completion_source: Option<completion::Source>,
     completion: Option<CompletionState>,
     hints: Option<HintSession>,
@@ -157,6 +158,7 @@ impl Engine {
             message_generation: 0,
             url: String::new(),
             clipboard: None,
+            primary: None,
             completion_source: None,
             completion: None,
             hints: None,
@@ -413,6 +415,11 @@ impl Engine {
         self.clipboard = Some(Box::new(reader));
     }
 
+    /// Lets `{primary}` read the primary selection (X11); defaults to the clipboard.
+    pub fn set_primary_reader(&mut self, reader: impl Fn() -> Option<String> + 'static) {
+        self.primary = Some(Box::new(reader));
+    }
+
     /// Begin hint mode once the page has reported its hintable elements.
     pub fn start_hints(&mut self, request: HintRequest, items: Vec<HintItem>) -> Vec<Effect> {
         let mut effects = Vec::new();
@@ -592,6 +599,17 @@ impl Engine {
                 .filter(|t| !t.is_empty())
                 .ok_or("Clipboard is empty")?;
             piece = piece.replace("{clipboard}", &text);
+        }
+        if piece.contains("{primary}") {
+            let text = self
+                .primary
+                .as_ref()
+                .or(self.clipboard.as_ref())
+                .and_then(|read| read())
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .ok_or("Primary selection is empty")?;
+            piece = piece.replace("{primary}", &text);
         }
         Ok(piece)
     }

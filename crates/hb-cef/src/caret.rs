@@ -56,9 +56,9 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     true
 }
 
-/// `:yank selection`.
-pub fn yank() {
-    call("text()", |result| {
+/// `:yank selection`, to the primary selection with `primary`.
+pub fn yank(primary: bool) {
+    call("text()", move |result| {
         let text = result
             .ok()
             .and_then(|json| serde_json::from_str::<String>(&json).ok())
@@ -67,7 +67,7 @@ pub fn yank() {
             shell::show_message(Level::Error, "Nothing is selected");
             shell::refresh_ui();
         } else {
-            clipboard::yank(&text, "selection");
+            clipboard::yank_to(&text, "selection", primary);
             shell::refresh_ui();
         }
     });

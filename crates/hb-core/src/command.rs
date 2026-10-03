@@ -179,6 +179,8 @@ pub enum Command {
     Undo,
     Hint(HintRequest),
     Yank(YankWhat),
+    /// The same, into the primary selection (`yank -s`).
+    YankPrimary(YankWhat),
     /// `:set [name[?|!]] [value]`
     Set {
         name: Option<String>,
@@ -702,13 +704,21 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 fill: (!fill.is_empty()).then(|| fill.to_string()),
             })
         }
-        "yank" => Command::Yank(match args.optional() {
-            None | Some("url") => YankWhat::Url,
-            Some("title") => YankWhat::Title,
-            Some("domain") => YankWhat::Domain,
-            Some("selection") => YankWhat::Selection,
-            Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
-        }),
+        "yank" => {
+            let primary = args.flag(&["-s", "--sel"]).is_some();
+            let what = match args.optional() {
+                None | Some("url") => YankWhat::Url,
+                Some("title") => YankWhat::Title,
+                Some("domain") => YankWhat::Domain,
+                Some("selection") => YankWhat::Selection,
+                Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
+            };
+            if primary {
+                Command::YankPrimary(what)
+            } else {
+                Command::Yank(what)
+            }
+        }
         "set" => {
             let pattern = match args.flag(&["-u", "--pattern"]) {
                 Some(_) => Some(args.required("pattern")?.to_string()),
@@ -1267,6 +1277,10 @@ mod tests {
         ));
         assert_eq!(parse("yank title").unwrap(), Command::Yank(YankWhat::Title));
         assert_eq!(parse("yank").unwrap(), Command::Yank(YankWhat::Url));
+        assert_eq!(
+            parse("yank -s title").unwrap(),
+            Command::YankPrimary(YankWhat::Title)
+        );
     }
 
     #[test]
