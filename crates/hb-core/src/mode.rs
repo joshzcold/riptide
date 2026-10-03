@@ -21,10 +21,16 @@ pub enum Mode {
     /// The next key names a mark to jump to (after `'`).
     #[serde(rename = "jump_mark")]
     JumpMark,
+    /// The next key names the register to record a macro into (after `q`).
+    #[serde(rename = "record_macro")]
+    RecordMacro,
+    /// The next key names the macro to run (after `@`).
+    #[serde(rename = "run_macro")]
+    RunMacro,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 9] = [
+    pub const ALL: [Mode; 11] = [
         Mode::Normal,
         Mode::Insert,
         Mode::Command,
@@ -34,6 +40,8 @@ impl Mode {
         Mode::YesNo,
         Mode::SetMark,
         Mode::JumpMark,
+        Mode::RecordMacro,
+        Mode::RunMacro,
     ];
 
     pub fn name(self) -> &'static str {
@@ -47,6 +55,8 @@ impl Mode {
             Mode::YesNo => "yesno",
             Mode::SetMark => "set_mark",
             Mode::JumpMark => "jump_mark",
+            Mode::RecordMacro => "record_macro",
+            Mode::RunMacro => "run_macro",
         }
     }
 }

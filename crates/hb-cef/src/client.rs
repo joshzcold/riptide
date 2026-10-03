@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use cef::*;
 use hb_core::Modifiers;
 use hb_core::engine::Level;
@@ -146,11 +148,50 @@ wrap_keyboard_handler! {
     }
 }
 
+thread_local! {
+    static SENDING_TO_PAGE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Type `key` into the current tab, as a macro replays it.
+pub fn send_to_page(key: hb_core::Key) {
+    let Some(host) = shell::with(|s| s.current_browser())
+        .flatten()
+        .and_then(|b| b.host())
+    else {
+        return;
+    };
+    let raw = vk::to_raw(key);
+    let flag = |on: bool, bit: u32| if on { bit } else { 0 };
+    let modifiers = flag(raw.mods.shift, EVENTFLAG_SHIFT_DOWN)
+        | flag(raw.mods.ctrl, EVENTFLAG_CONTROL_DOWN)
+        | flag(raw.mods.alt, EVENTFLAG_ALT_DOWN)
+        | flag(raw.mods.meta, EVENTFLAG_COMMAND_DOWN);
+    let event = |type_: KeyEventType| KeyEvent {
+        type_,
+        modifiers,
+        windows_key_code: raw.windows_key_code,
+        character: raw.character,
+        unmodified_character: raw.unmodified_character,
+        ..Default::default()
+    };
+    SENDING_TO_PAGE.with(|s| s.set(true));
+    host.send_key_event(Some(&event(KeyEventType::RAWKEYDOWN)));
+    if raw.character != 0 {
+        host.send_key_event(Some(&event(KeyEventType::CHAR)));
+    }
+    host.send_key_event(Some(&event(KeyEventType::KEYUP)));
+    SENDING_TO_PAGE.with(|s| s.set(false));
+}
+
 /// Keys normally arrive from the focused tab. If a UI view (tab bar, status
 /// bar, overlay) has keyboard focus instead, e.g. after a click on the tab
 /// bar, keys the engine doesn't consume would land in that view, so they're
 /// sent on to the current tab and focus goes back to it.
 fn route_key_event(role: Role, event: &KeyEvent) -> bool {
+    // Keys replayed by a macro already went through the engine.
+    if SENDING_TO_PAGE.with(Cell::get) {
+        return false;
+    }
     let consumed = handle_key_event(event);
     if consumed || role == Role::Tab {
         return consumed;

@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use crate::cmdline::{History, LineEditor};
 use crate::command::{self, Command, FocusDirection};
@@ -45,6 +45,8 @@ pub enum Effect {
         id: u64,
         answer: PromptAnswer,
     },
+    /// A replayed macro key the engine doesn't handle: send it to the page.
+    PassKey(Key),
 }
 
 /// Completion results for one command line text, plus Tab-cycling state.
@@ -116,7 +118,28 @@ pub struct Engine {
     /// The mode to return to once the prompt queue is empty.
     mode_before_prompt: Mode,
     dirty: bool,
+    macros: Macros,
 }
+
+/// Keyboard macros (`q` / `@`).
+#[derive(Default)]
+struct Macros {
+    recording: Option<(char, Vec<Key>)>,
+    registers: HashMap<char, Vec<Key>>,
+    last_run: Option<char>,
+    /// Nesting depth of replays, to stop a macro that runs itself.
+    replaying: usize,
+    /// Keys in the binding that ran the current command, so stopping a
+    /// recording can drop them.
+    binding_len: usize,
+    /// Where the current command line started in the recording.
+    cmdline_start: Option<usize>,
+    /// The count given to `@`, waiting for the register key.
+    count: Option<u32>,
+}
+
+/// How deeply macros may run other macros.
+const MAX_MACRO_DEPTH: usize = 10;
 
 impl Engine {
     pub fn new(keymap: Keymap) -> Self {
@@ -139,6 +162,7 @@ impl Engine {
             prompt_editor: LineEditor::default(),
             mode_before_prompt: Mode::Normal,
             dirty: true,
+            macros: Macros::default(),
         }
     }
 
@@ -189,7 +213,11 @@ impl Engine {
     }
 
     pub fn status(&self) -> StatusView {
-        let mut keystring = self.count.map(|c| c.to_string()).unwrap_or_default();
+        let mut keystring = match &self.macros.recording {
+            Some((register, _)) => format!("recording @{register} "),
+            None => String::new(),
+        };
+        keystring.push_str(&self.count.map(|c| c.to_string()).unwrap_or_default());
         keystring.push_str(&format_sequence(&self.pending));
         if let Some(hints) = &self.hints {
             keystring.push_str(&hints.typed);
@@ -446,6 +474,15 @@ impl Engine {
     }
 
     pub fn handle_key(&mut self, key: Key) -> KeyOutcome {
+        if self.macros.replaying == 0
+            && let Some((_, keys)) = &mut self.macros.recording
+        {
+            keys.push(key);
+        }
+        self.dispatch_key(key)
+    }
+
+    fn dispatch_key(&mut self, key: Key) -> KeyOutcome {
         match self.mode {
             Mode::Normal => self.handle_normal(key),
             Mode::Command => self.handle_command(key),
@@ -453,6 +490,7 @@ impl Engine {
             Mode::Hint => self.handle_hint(key),
             Mode::Prompt | Mode::YesNo => self.handle_prompt(key),
             Mode::SetMark | Mode::JumpMark => self.handle_mark(key),
+            Mode::RecordMacro | Mode::RunMacro => self.handle_macro_register(key),
         }
     }
 
@@ -532,6 +570,8 @@ impl Engine {
             Lookup::Exact(cmd) => {
                 let cmd = cmd.to_string();
                 let count = self.count.take();
+                self.macros.binding_len =
+                    self.pending.len() + count.map_or(0, |c| c.to_string().len());
                 self.pending.clear();
                 consumed(self.execute_str(&cmd, count))
             }
@@ -658,6 +698,96 @@ impl Engine {
         consumed(effects)
     }
 
+    /// The key after `q` or `@` names the register; anything else cancels.
+    fn handle_macro_register(&mut self, key: Key) -> KeyOutcome {
+        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+            let cmd = cmd.to_string();
+            return consumed(self.execute_str(&cmd, None));
+        }
+        let record = self.mode == Mode::RecordMacro;
+        let mut effects = Vec::new();
+        self.set_mode(Mode::Normal, &mut effects);
+        if let Some(c) = key.text().filter(|c| !c.is_whitespace()) {
+            if record {
+                // The register key isn't part of the macro.
+                if let Some((_, keys)) = &mut self.macros.recording {
+                    keys.pop();
+                }
+                self.execute(
+                    Command::MacroRecord { register: Some(c) },
+                    None,
+                    &mut effects,
+                );
+            } else {
+                let count = self.macros.count.take();
+                self.execute(Command::MacroRun { register: Some(c) }, count, &mut effects);
+            }
+        }
+        consumed(effects)
+    }
+
+    fn macro_record(&mut self, register: Option<char>, effects: &mut Vec<Effect>) {
+        if let Some((register, mut keys)) = self.macros.recording.take() {
+            // Drop the keys that asked to stop: the binding, or the command line.
+            let keep = match self.macros.cmdline_start.take() {
+                Some(start) if self.mode == Mode::Command => start,
+                _ => keys.len().saturating_sub(self.macros.binding_len),
+            };
+            keys.truncate(keep);
+            self.macros.registers.insert(register, keys);
+            self.show_message(Level::Info, format!("Recorded macro {register}"));
+            self.dirty = true;
+            return;
+        }
+        match register {
+            Some(register) => {
+                self.macros.recording = Some((register, Vec::new()));
+                self.dirty = true;
+            }
+            None => self.set_mode(Mode::RecordMacro, effects),
+        }
+    }
+
+    fn macro_run(&mut self, register: Option<char>, count: Option<u32>, effects: &mut Vec<Effect>) {
+        let Some(register) = register else {
+            self.macros.count = count;
+            return self.set_mode(Mode::RunMacro, effects);
+        };
+        let register = match register {
+            '@' => match self.macros.last_run {
+                Some(last) => last,
+                None => {
+                    self.show_message(Level::Error, "No macro has run yet");
+                    return;
+                }
+            },
+            r => r,
+        };
+        let Some(keys) = self.macros.registers.get(&register).cloned() else {
+            self.show_message(Level::Error, format!("Macro {register} is empty"));
+            return;
+        };
+        if self.macros.replaying >= MAX_MACRO_DEPTH {
+            self.show_message(
+                Level::Error,
+                "Macros nest too deeply (does one run itself?)",
+            );
+            return;
+        }
+        self.macros.last_run = Some(register);
+        self.macros.replaying += 1;
+        for _ in 0..count.unwrap_or(1).max(1) {
+            for &key in &keys {
+                let outcome = self.dispatch_key(key);
+                effects.extend(outcome.effects);
+                if !outcome.consumed {
+                    effects.push(Effect::PassKey(key));
+                }
+            }
+        }
+        self.macros.replaying -= 1;
+    }
+
     fn handle_passthrough(&mut self, key: Key) -> KeyOutcome {
         match self.keymap.lookup(self.mode, &[key]) {
             Lookup::Exact(cmd) => {
@@ -671,6 +801,8 @@ impl Engine {
     fn execute(&mut self, cmd: Command, count: Option<u32>, effects: &mut Vec<Effect>) {
         match cmd {
             Command::ModeEnter(mode) => self.set_mode(mode, effects),
+            Command::MacroRecord { register } => self.macro_record(register, effects),
+            Command::MacroRun { register } => self.macro_run(register, count, effects),
             Command::ModeLeave if matches!(self.mode, Mode::Prompt | Mode::YesNo) => {
                 self.answer_prompt(PromptAnswer::Cancelled, effects)
             }
@@ -918,6 +1050,57 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    fn passed_keys(outcomes: &[KeyOutcome]) -> Vec<Key> {
+        outcomes
+            .iter()
+            .flat_map(|o| &o.effects)
+            .filter_map(|e| match e {
+                Effect::PassKey(k) => Some(*k),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn macros_record_and_replay() {
+        let mut e = engine();
+        press(&mut e, "qa");
+        assert!(e.status().keystring.starts_with("recording @a"));
+        press(&mut e, "jjq");
+        assert!(!e.status().keystring.starts_with("recording"));
+        let down = (Command::Scroll(Direction::Down), None);
+        assert_eq!(runs(&press(&mut e, "@a")), vec![down.clone(); 2]);
+        assert_eq!(runs(&press(&mut e, "2@a")), vec![down.clone(); 4]);
+        assert_eq!(runs(&press(&mut e, "@@")), vec![down.clone(); 2]);
+        assert_eq!(e.mode(), Mode::Normal);
+    }
+
+    #[test]
+    fn macro_keys_the_engine_ignores_go_to_the_page() {
+        let mut e = engine();
+        press(&mut e, "qbix<Escape>q");
+        let out = press(&mut e, "@b");
+        assert_eq!(passed_keys(&out), vec![Key::char('x')]);
+        assert_eq!(e.mode(), Mode::Normal);
+    }
+
+    #[test]
+    fn stopping_from_the_command_line_drops_it() {
+        let mut e = engine();
+        press(&mut e, "qcj:macro-record<Return>");
+        let down = (Command::Scroll(Direction::Down), None);
+        assert_eq!(runs(&press(&mut e, "@c")), vec![down]);
+    }
+
+    #[test]
+    fn a_macro_that_runs_itself_stops() {
+        let mut e = engine();
+        press(&mut e, "qd@dq");
+        press(&mut e, "@d");
+        let message = e.status().message.map(|m| m.text).unwrap_or_default();
+        assert!(message.contains("too deeply"), "{message}");
     }
 
     #[test]

@@ -243,6 +243,12 @@ step "'' returns to where the jump started"
 xdotool key apostrophe apostrophe
 expect_scroll "== 0"
 
+step "qa records a macro and @a replays it"
+xdotool key q a 5 j q g g
+nap 0.3
+xdotool key at a
+expect_scroll "== 200"
+
 # Matches the first page's title whatever its scroll state.
 expect_first_page() {
     for _ in $(seq $((TIMEOUT * 10))); do
@@ -372,6 +378,12 @@ xdotool key ctrl+e
 expect_title "v=edited text"
 xdotool key Escape
 wait_mode normal || true
+
+step "a macro types the keys it recorded into the page"
+xdotool key q z i x y Escape q
+expect_title "v=edited textxy"
+xdotool key at z
+expect_title "v=edited textxyxy"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

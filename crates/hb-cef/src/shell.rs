@@ -296,6 +296,7 @@ pub fn apply(effects: Vec<Effect>) {
             Effect::FollowHint { index, url, target } => hints::follow(index, url, target),
             Effect::ConfigChanged(op) => persist(op),
             Effect::PromptAnswered { id, answer } => crate::prompts::answered(id, answer),
+            Effect::PassKey(key) => crate::client::send_to_page(key),
         }
     }
     refresh_ui();

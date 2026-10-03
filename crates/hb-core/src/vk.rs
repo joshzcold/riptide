@@ -37,6 +37,43 @@ pub fn translate(raw: RawKey) -> Option<Key> {
     Some(Key::new(code, raw.mods))
 }
 
+/// The event fields for `key`, for replaying it into a page (macros).
+/// Characters outside a US layout get no key code; pages see them as text.
+pub fn to_raw(key: Key) -> RawKey {
+    let (vk, character) = match key.code {
+        KeyCode::Backspace => (0x08, 0x08),
+        KeyCode::Tab => (0x09, 0x09),
+        KeyCode::Enter => (0x0D, 0x0D),
+        KeyCode::Escape => (0x1B, 0x1B),
+        KeyCode::PageUp => (0x21, 0),
+        KeyCode::PageDown => (0x22, 0),
+        KeyCode::End => (0x23, 0),
+        KeyCode::Home => (0x24, 0),
+        KeyCode::Left => (0x25, 0),
+        KeyCode::Up => (0x26, 0),
+        KeyCode::Right => (0x27, 0),
+        KeyCode::Down => (0x28, 0),
+        KeyCode::Insert => (0x2D, 0),
+        KeyCode::Delete => (0x2E, 0x7F),
+        KeyCode::F(n) => (0x6F + i32::from(n), 0),
+        KeyCode::Char(c) => (us_key_code(c).unwrap_or(0), c as u16),
+    };
+    let unmodified = match key.code {
+        KeyCode::Char(c) => c.to_lowercase().next().unwrap_or(c) as u16,
+        _ => character,
+    };
+    RawKey {
+        windows_key_code: vk,
+        character,
+        unmodified_character: unmodified,
+        mods: key.mods,
+    }
+}
+
+fn us_key_code(c: char) -> Option<i32> {
+    (0x20..=0xDE).find(|&vk| us_layout(vk, false) == Some(c) || us_layout(vk, true) == Some(c))
+}
+
 fn printable(c: u16) -> Option<char> {
     char::from_u32(u32::from(c)).filter(|c| !c.is_control())
 }
@@ -83,6 +120,27 @@ fn us_layout(vk: i32, shift: bool) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raw_round_trips() {
+        for keys in [
+            "a",
+            "Z",
+            "5",
+            ":",
+            "<Ctrl-w>",
+            "<Alt-x>",
+            "<Escape>",
+            "<Return>",
+            "<BackSpace>",
+            "<F5>",
+            "<Down>",
+            "é",
+        ] {
+            let key = Key::parse_sequence(keys).unwrap()[0];
+            assert_eq!(translate(to_raw(key)), Some(key), "{keys}");
+        }
+    }
 
     fn raw(vk: i32, character: char, mods: Modifiers) -> RawKey {
         RawKey {

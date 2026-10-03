@@ -66,7 +66,16 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Normal, "'", "mode-enter jump_mark")
             .expect("valid default binding");
-        for mode in [Mode::SetMark, Mode::JumpMark] {
+        map.bind(Mode::Normal, "q", "macro-record")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "@", "macro-run")
+            .expect("valid default binding");
+        for mode in [
+            Mode::SetMark,
+            Mode::JumpMark,
+            Mode::RecordMacro,
+            Mode::RunMacro,
+        ] {
             map.bind(mode, "<Escape>", "mode-leave")
                 .expect("valid default binding");
         }

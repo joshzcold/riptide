@@ -207,6 +207,14 @@ pub enum Command {
         set: bool,
         key: char,
     },
+    /// Start recording keys into `register`, or stop when already recording.
+    MacroRecord {
+        register: Option<char>,
+    },
+    /// Replay the keys in `register` (`@` is the last macro run).
+    MacroRun {
+        register: Option<char>,
+    },
     /// Offer replacements for the misspelled word at the cursor.
     SpellSuggest,
     SpellReplace {
@@ -376,6 +384,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "jump-mark",
         "Go back to a mark; ' is where the last jump started",
+    ),
+    spec(
+        "macro-record",
+        "Record keys into a register until macro-record again (q + register)",
+    ),
+    spec(
+        "macro-run",
+        "Replay a macro (@ + register; @@ repeats the last one; a count repeats it)",
     ),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
@@ -698,6 +714,27 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "open-editor" => Command::OpenEditor,
+        "macro-record" | "macro-run" => {
+            let register = match args.optional() {
+                None => None,
+                Some(r) => {
+                    let mut chars = r.chars();
+                    match (chars.next(), chars.next()) {
+                        (Some(c), None) => Some(c),
+                        _ => {
+                            return Err(
+                                args.error(format!("a register is one character, not {r:?}"))
+                            );
+                        }
+                    }
+                }
+            };
+            if name == "macro-record" {
+                Command::MacroRecord { register }
+            } else {
+                Command::MacroRun { register }
+            }
+        }
         "set-mark" | "jump-mark" => {
             let key = args.required("key")?;
             let mut chars = key.chars();

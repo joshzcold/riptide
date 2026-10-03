@@ -321,6 +321,15 @@ Gaps:
     - Password fields are skipped by `:open-editor`.
     - The remote socket can run `:spawn`; it is limited to the same user (M15).
 - ✅ **Marks** (2026-10-02): `` ` `` and `'` enter the `set_mark` and `jump_mark` modes (qutebrowser's names), and the next key names the mark (`Command::Mark`, unit tested). `hb-cef/src/marks.rs` reads and sets `scrollX`/`scrollY` through the eval channel. Uppercase marks also reopen their page and scroll once `on_load_end` fires. `''` goes back to where the last jump started. Marks last for the session. A smoke step covers `` `a ``, `gg`, `'a` and `''`.
+- ✅ **Macros** (2026-10-02):
+  - `q` and `@` enter `record_macro`/`run_macro` (qutebrowser's names). `:macro-record [r]` and `:macro-run [r]` work too, `@@` repeats the last macro, and a count repeats it.
+  - The engine records every key in any mode, then drops the keys that stopped the recording: the binding, or the `:macro-record` command line.
+  - Replay feeds the keys back through the engine. Keys it doesn't consume become `Effect::PassKey`, which `client::send_to_page` turns into RAWKEYDOWN/CHAR/KEYUP using `vk::to_raw` (round-trip tested). A flag keeps those events from going through the engine a second time. Nesting stops at 10.
+  - The status bar shows `recording @r`. Smoke steps cover a scroll macro and a macro that types into a field.
+  - Gaps:
+    - Replay doesn't wait for asynchronous results (a hint's page reply, a new tab loading), so keys after them can run too early, much as in qutebrowser.
+    - Registers last for the session.
+    - Characters outside a US layout are replayed as text without a key code.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
