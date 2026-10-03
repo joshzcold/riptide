@@ -74,4 +74,7 @@ Useful checks:
 - **`file://` vs `http://`:** use HTTP for anything origin-dependent (auth, favicons, permissions).
 - **Chromium remembers permission answers per site** in the profile. Start from a fresh `--basedir` to test a prompt again.
 - **Heredocs:** a test page containing a line `EOF` ends an outer `<<'EOF'`. Use a distinct delimiter (`<<'HTML'`, `<<'PYEOF'`).
+- **A display number may already be taken by your own earlier Xvfb.** A second `Xvfb :99` fails quietly; read the PID from `/tmp/.X99-lock` and reuse or kill that one, or let the smoke test pick a free display with `-displayfd`.
+- **If the test instance dies, the next `':command'` starts a new one** (the socket is gone) instead of failing. Check the original PID is still alive after each command.
+- **Start a long-lived test instance as a tracked background task** (`exec … --basedir "$B" … > log 2>&1`), not with `( … & )` in a subshell, which can leave it without its output or kill it with the shell.
 - **macOS and Windows** builds can't launch the browser yet (no app bundle or installer). CI only builds and unit-tests them, plus `--version` and `--paths`.
