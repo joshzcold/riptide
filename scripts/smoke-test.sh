@@ -175,6 +175,18 @@ pass() { echo "ok"; }
 fail() { echo "FAIL ($1)"; failures=$((failures + 1)); }
 
 name() { xdotool getwindowname "$window" 2>/dev/null || true; }
+
+# Waits for a window whose name matches, other than $2. Polls instead of
+# `xdotool search --sync`, which aborts with BadWindow when one of
+# Chromium's short-lived helper windows disappears mid-search.
+find_window() {
+    local found
+    for _ in $(seq $((TIMEOUT * 10))); do
+        found=$(xdotool search --name "$1" 2>/dev/null | grep -vx "${2:-none}" | head -1 || true)
+        [[ -n $found ]] && { echo "$found"; return; }
+        sleep 0.1
+    done
+}
 page_title() { local n; n=$(name); echo "${n#*::}"; }
 mode() { local n; n=$(name); echo "${n%%::*}"; }
 
@@ -266,7 +278,7 @@ HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"
 browser_pid=$!
 
 step "window opens and loads the page"
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::ready$" | head -1 || true)
+window=$(find_window "^normal::ready$")
 if [[ -z $window ]]; then
     fail "no window"
     tail -20 "$work/browser.log" >&2
@@ -610,7 +622,7 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == search || $(page_title
 
 step ":open -w opens a window that takes keys, :close closes it"
 run "open -w file://$work/nav1.html"
-second=$(timeout "$TIMEOUT" xdotool search --sync --name '^normal::nav1$' | grep -v "^$window$" | head -1 || true)
+second=$(find_window '^normal::nav1$' "$window")
 if [[ -z $second ]]; then
     fail "no second window"
 else
@@ -636,7 +648,7 @@ fi
 
 step ":open -p opens a private window that keeps no history"
 run "open -p file://$work/private.html"
-private=$(timeout "$TIMEOUT" xdotool search --sync --name '^normal::private$' | head -1 || true)
+private=$(find_window '^normal::private$' "$window")
 if [[ -z $private ]]; then
     fail "no private window"
 else
@@ -661,7 +673,7 @@ expect_exit
 step "restarting restores the session"
 "$BIN" --basedir "$work/base" >>"$work/browser.log" 2>&1 &
 browser_pid=$!
-window=$(timeout "$TIMEOUT" xdotool search --sync --name "^normal::search$" | head -1 || true)
+window=$(find_window "^normal::search$")
 [[ -n $window ]] && pass || fail "no restored window"
 
 step ":quit exits cleanly"
