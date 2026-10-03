@@ -63,6 +63,16 @@ pub struct Context {
     pub title: String,
     pub mode: String,
     pub count: Option<u32>,
+    /// The tabs of the current window, in order.
+    pub tabs: Vec<TabInfo>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TabInfo {
+    pub title: String,
+    pub url: String,
+    pub current: bool,
+    pub pinned: bool,
 }
 
 /// What callbacks ask the browser to do, in order.
@@ -478,6 +488,24 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 
     let s = state.clone();
     hb.set(
+        "tabs",
+        lua.create_function(move |lua, ()| {
+            let list = lua.create_table()?;
+            for (i, tab) in s.borrow().context.tabs.iter().enumerate() {
+                let t = lua.create_table()?;
+                t.set("index", i + 1)?;
+                t.set("title", tab.title.clone())?;
+                t.set("url", tab.url.clone())?;
+                t.set("current", tab.current)?;
+                t.set("pinned", tab.pinned)?;
+                list.push(t)?;
+            }
+            Ok(list)
+        })?,
+    )?;
+
+    let s = state.clone();
+    hb.set(
         "run",
         lua.create_function(move |_, line: String| {
             s.borrow_mut().actions.push(Action::Run(line));
@@ -551,6 +579,11 @@ hb.command("wiki", function(args) hb.open("https://en.wikipedia.org/wiki/" .. ar
 hb.on("load_finished", function(e) if e.url:find("example") then hb.run("zoom-in") end end)
 hb.command("boom", function() error("broken") end)
 hb.command("dark", function() hb.set("colors.webpage.preferred_color_scheme", "dark") end)
+hb.command("count-tabs", function()
+  local pinned = 0
+  for _, t in ipairs(hb.tabs()) do if t.pinned then pinned = pinned + 1 end end
+  hb.message(#hb.tabs() .. " tabs, " .. pinned .. " pinned, current " .. hb.tabs()[2].title)
+end)
 "#,
         )
         .unwrap();
@@ -604,12 +637,29 @@ hb.command("dark", function() hb.set("colors.webpage.preferred_color_scheme", "d
                 "set colors.webpage.preferred_color_scheme dark".into()
             )]
         );
+        let tab = |title: &str, current, pinned| TabInfo {
+            title: title.into(),
+            url: String::new(),
+            current,
+            pinned,
+        };
+        let with_tabs = Context {
+            tabs: vec![tab("a", false, true), tab("b", true, false)],
+            ..Context::default()
+        };
+        assert_eq!(
+            run_command("count-tabs", "", &with_tabs).unwrap(),
+            [Action::Message {
+                error: false,
+                text: "2 tabs, 1 pinned, current b".into()
+            }]
+        );
         assert_eq!(
             user_commands()
                 .iter()
                 .map(|(n, _)| n.as_str())
                 .collect::<Vec<_>>(),
-            ["wiki", "boom", "dark"]
+            ["wiki", "boom", "dark", "count-tabs"]
         );
         std::fs::write(dir.join("config.lua"), "hb.command('open', function() end)").unwrap();
         let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());

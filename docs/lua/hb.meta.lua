@@ -62,6 +62,10 @@ function hb.title() end
 ---@return string
 function hb.mode() end
 
+---The current window's tabs, in order (in callbacks).
+---@return { index: integer, title: string, url: string, current: boolean, pinned: boolean }[]
+function hb.tabs() end
+
 ---The count typed before the key, if any (in callbacks).
 ---@return integer?
 function hb.count() end

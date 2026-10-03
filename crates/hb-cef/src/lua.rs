@@ -20,11 +20,23 @@ const MAX_DEPTH: u32 = 8;
 fn context(count: Option<u32>) -> Context {
     shell::with(|s| {
         let tab = s.tabs.current();
+        let current = s.tabs.current_index();
         Context {
             url: tab.map(|t| t.url.clone()).unwrap_or_default(),
             title: tab.map(|t| t.title.clone()).unwrap_or_default(),
             mode: s.engine.mode().name().to_string(),
             count,
+            tabs: s
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| lua::TabInfo {
+                    title: t.title.clone(),
+                    url: t.url.clone(),
+                    current: i == current,
+                    pinned: s.tabs.is_pinned(i),
+                })
+                .collect(),
         }
     })
     .unwrap_or_default()

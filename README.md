@@ -249,7 +249,7 @@ hb.on("load_finished", function(e)
 end)
 ```
 
-In callbacks, `hb.url()`, `hb.title()`, `hb.mode()` and `hb.count()` describe the current page. `hb.run(line)`, `hb.open(url, target)`, `hb.message(text, level)` and `hb.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
+In callbacks, `hb.url()`, `hb.title()`, `hb.mode()`, `hb.count()` and `hb.tabs()` (the window's tabs, with `title`, `url`, `current` and `pinned`) describe the current state. `hb.run(line)`, `hb.open(url, target)`, `hb.message(text, level)` and `hb.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
 
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 

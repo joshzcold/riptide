@@ -402,7 +402,7 @@ Result:
 - In callbacks, `hb.set` becomes a `:set`.
 - Unit tests in hb-config drive the VM without CEF (bindings, commands, hooks, errors with `config.lua:line`). A smoke step uses all three entry points.
 - Lua commands appear on the help page, after the built-in ones.
-- Not done: a sandbox for third-party scripts (only the user's own config runs), a richer API (tabs list, settings watchers), and Lua userscripts.
+- Not done: a sandbox for third-party scripts (only the user's own config runs), settings watchers, and Lua userscripts. `hb.tabs()` lists the window's tabs.
 
 Original plan:
 - Bind keys to Lua functions: `hb.bind("<Ctrl-g>", function() ... end)`.
