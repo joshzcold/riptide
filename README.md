@@ -221,6 +221,7 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `gb` / `gB` | Open a bookmark here / in a new tab |
 | `` `a `` / `'a` | Set / jump to mark `a`: `a`–`z` remember this page's scroll position, `A`–`Z` also the page itself; `''` returns to where the last jump started |
 | `Ctrl-e` (insert mode) | `open-editor`: edit the text field in `editor.command` |
+| `v` / `V` | Caret mode: move with `h` `j` `k` `l` `w` `b` `e` `0` `$` `gg` `G`, select with `v` (or `V` for lines), swap the ends with `o`, yank with `y`, leave with `Escape` |
 | `qa` … `q` / `@a` | Record a macro into register `a` / replay it (`@@` repeats the last one, `3@a` runs it three times). Keys typed into pages are replayed too. |
 | `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |

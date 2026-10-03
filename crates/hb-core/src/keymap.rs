@@ -70,6 +70,18 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Normal, "@", "macro-run")
             .expect("valid default binding");
+        map.bind(Mode::Normal, "v", "mode-enter caret")
+            .expect("valid default binding");
+        map.bind(
+            Mode::Normal,
+            "V",
+            "mode-enter caret ;; selection-toggle --line",
+        )
+        .expect("valid default binding");
+        for (keys, cmd) in CARET_DEFAULTS {
+            map.bind(Mode::Caret, keys, cmd)
+                .expect("valid default binding");
+        }
         for mode in [
             Mode::SetMark,
             Mode::JumpMark,
@@ -228,6 +240,28 @@ const YESNO_DEFAULTS: &[(&str, &str)] = &[
     ("A", "prompt-accept --save yes"),
     ("N", "prompt-accept --save no"),
     ("<Return>", "prompt-accept"),
+    ("<Escape>", "mode-leave"),
+];
+
+/// Caret mode, as in qutebrowser.
+const CARET_DEFAULTS: &[(&str, &str)] = &[
+    ("h", "move-to-prev-char"),
+    ("l", "move-to-next-char"),
+    ("j", "move-to-next-line"),
+    ("k", "move-to-prev-line"),
+    ("w", "move-to-next-word"),
+    ("b", "move-to-prev-word"),
+    ("e", "move-to-end-of-word"),
+    ("0", "move-to-start-of-line"),
+    ("$", "move-to-end-of-line"),
+    ("gg", "move-to-start-of-document"),
+    ("G", "move-to-end-of-document"),
+    ("v", "selection-toggle"),
+    ("<Space>", "selection-toggle"),
+    ("V", "selection-toggle --line"),
+    ("o", "selection-reverse"),
+    ("y", "yank selection"),
+    ("<Return>", "yank selection"),
     ("<Escape>", "mode-leave"),
 ];
 

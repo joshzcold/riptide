@@ -60,6 +60,56 @@ pub enum YankWhat {
     Url,
     Title,
     Domain,
+    /// The text selected in caret mode.
+    Selection,
+}
+
+/// Caret movements, with qutebrowser's command names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaretMove {
+    NextChar,
+    PrevChar,
+    NextLine,
+    PrevLine,
+    NextWord,
+    PrevWord,
+    EndOfWord,
+    StartOfLine,
+    EndOfLine,
+    StartOfDocument,
+    EndOfDocument,
+}
+
+impl CaretMove {
+    pub const ALL: [(&'static str, CaretMove); 11] = [
+        ("move-to-next-char", CaretMove::NextChar),
+        ("move-to-prev-char", CaretMove::PrevChar),
+        ("move-to-next-line", CaretMove::NextLine),
+        ("move-to-prev-line", CaretMove::PrevLine),
+        ("move-to-next-word", CaretMove::NextWord),
+        ("move-to-prev-word", CaretMove::PrevWord),
+        ("move-to-end-of-word", CaretMove::EndOfWord),
+        ("move-to-start-of-line", CaretMove::StartOfLine),
+        ("move-to-end-of-line", CaretMove::EndOfLine),
+        ("move-to-start-of-document", CaretMove::StartOfDocument),
+        ("move-to-end-of-document", CaretMove::EndOfDocument),
+    ];
+
+    /// The `Selection.modify` direction and granularity for this move.
+    pub fn js(self) -> (&'static str, &'static str) {
+        match self {
+            CaretMove::NextChar => ("forward", "character"),
+            CaretMove::PrevChar => ("backward", "character"),
+            CaretMove::NextLine => ("forward", "line"),
+            CaretMove::PrevLine => ("backward", "line"),
+            CaretMove::NextWord | CaretMove::EndOfWord => ("forward", "word"),
+            CaretMove::PrevWord => ("backward", "word"),
+            CaretMove::StartOfLine => ("backward", "lineboundary"),
+            CaretMove::EndOfLine => ("forward", "lineboundary"),
+            CaretMove::StartOfDocument => ("backward", "documentboundary"),
+            CaretMove::EndOfDocument => ("forward", "documentboundary"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,6 +257,13 @@ pub enum Command {
         set: bool,
         key: char,
     },
+    CaretMove(CaretMove),
+    /// Start or stop selecting in caret mode; `line` selects whole lines.
+    SelectionToggle {
+        line: bool,
+    },
+    /// Swap the selection's anchor and focus.
+    SelectionReverse,
     /// Start recording keys into `register`, or stop when already recording.
     MacroRecord {
         register: Option<char>,
@@ -393,6 +450,25 @@ pub const COMMANDS: &[CommandSpec] = &[
         "macro-run",
         "Replay a macro (@ + register; @@ repeats the last one; a count repeats it)",
     ),
+    spec(
+        "selection-toggle",
+        "Start or stop selecting in caret mode (--line selects whole lines)",
+    ),
+    spec(
+        "selection-reverse",
+        "Swap the ends of the selection (caret mode)",
+    ),
+    hidden("move-to-next-char", "Move the caret (caret mode)"),
+    hidden("move-to-prev-char", "Move the caret (caret mode)"),
+    hidden("move-to-next-line", "Move the caret (caret mode)"),
+    hidden("move-to-prev-line", "Move the caret (caret mode)"),
+    hidden("move-to-next-word", "Move the caret (caret mode)"),
+    hidden("move-to-prev-word", "Move the caret (caret mode)"),
+    hidden("move-to-end-of-word", "Move the caret (caret mode)"),
+    hidden("move-to-start-of-line", "Move the caret (caret mode)"),
+    hidden("move-to-end-of-line", "Move the caret (caret mode)"),
+    hidden("move-to-start-of-document", "Move the caret (caret mode)"),
+    hidden("move-to-end-of-document", "Move the caret (caret mode)"),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
     spec(
@@ -570,6 +646,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             None | Some("url") => YankWhat::Url,
             Some("title") => YankWhat::Title,
             Some("domain") => YankWhat::Domain,
+            Some("selection") => YankWhat::Selection,
             Some(other) => return Err(args.error(format!("cannot yank {other:?}"))),
         }),
         "set" => {
@@ -714,6 +791,15 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "open-editor" => Command::OpenEditor,
+        "selection-toggle" => Command::SelectionToggle {
+            line: args.flag(&["-l", "--line"]).is_some(),
+        },
+        "selection-reverse" => Command::SelectionReverse,
+        name if name.starts_with("move-to-")
+            && let Some((_, m)) = CaretMove::ALL.iter().find(|(n, _)| *n == name) =>
+        {
+            Command::CaretMove(*m)
+        }
         "macro-record" | "macro-run" => {
             let register = match args.optional() {
                 None => None,

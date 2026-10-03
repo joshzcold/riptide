@@ -330,6 +330,11 @@ Gaps:
     - Replay doesn't wait for asynchronous results (a hint's page reply, a new tab loading), so keys after them can run too early, much as in qutebrowser.
     - Registers last for the session.
     - Characters outside a US layout are replayed as text without a key code.
+- ✅ **Caret mode** (2026-10-02):
+  - `v`/`V` enter `caret` mode with qutebrowser's bindings and command names (`move-to-next-word`, `selection-toggle [--line]`, `selection-reverse`, `yank selection`). It shares the normal-mode binding logic (counts, `gg`); unbound keys stay out of the page.
+  - `js/caret.js` starts at the first text on screen (`caretPositionFromPoint`), moves with `Selection.modify`, draws its own caret (Chromium only draws one in editable text) and scrolls to keep it visible. Leaving clears the selection.
+  - A smoke step selects "brown fox" with `w w v e e`.
+  - Not done: paragraph/block moves (`{`, `}`), the primary selection (`Y`), and following a selected link with `Return`.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.

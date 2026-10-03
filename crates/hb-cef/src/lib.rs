@@ -2,6 +2,7 @@
 //! `hb-core` inputs and carries out the effects the engine returns.
 
 mod adblock;
+mod caret;
 mod client;
 mod clipboard;
 mod dialogs;

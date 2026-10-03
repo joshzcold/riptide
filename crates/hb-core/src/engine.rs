@@ -484,7 +484,7 @@ impl Engine {
 
     fn dispatch_key(&mut self, key: Key) -> KeyOutcome {
         match self.mode {
-            Mode::Normal => self.handle_normal(key),
+            Mode::Normal | Mode::Caret => self.handle_bound(self.mode, key),
             Mode::Command => self.handle_command(key),
             Mode::Insert | Mode::Passthrough => self.handle_passthrough(key),
             Mode::Hint => self.handle_hint(key),
@@ -552,7 +552,9 @@ impl Engine {
         Ok(piece)
     }
 
-    fn handle_normal(&mut self, key: Key) -> KeyOutcome {
+    /// Normal and caret mode: counts, multi-key bindings, and what to do
+    /// with keys nothing is bound to.
+    fn handle_bound(&mut self, mode: Mode, key: Key) -> KeyOutcome {
         if self.message.take().is_some() {
             self.dirty = true;
         }
@@ -566,7 +568,7 @@ impl Engine {
         }
         self.pending.push(key);
         self.dirty = true;
-        match self.keymap.lookup(Mode::Normal, &self.pending) {
+        match self.keymap.lookup(mode, &self.pending) {
             Lookup::Exact(cmd) => {
                 let cmd = cmd.to_string();
                 let count = self.count.take();
@@ -580,11 +582,13 @@ impl Engine {
                 let had_prefix = self.pending.len() > 1 || self.count.is_some();
                 self.pending.clear();
                 self.count = None;
-                let forward = match self.settings.str("input.forward_unbound_keys") {
-                    "all" => true,
-                    "none" => false,
-                    _ => is_forwardable(key),
-                };
+                // Caret mode keeps every key; the page would scroll or type.
+                let forward = mode == Mode::Normal
+                    && match self.settings.str("input.forward_unbound_keys") {
+                        "all" => true,
+                        "none" => false,
+                        _ => is_forwardable(key),
+                    };
                 KeyOutcome {
                     consumed: had_prefix || !forward,
                     effects: Vec::new(),
@@ -1101,6 +1105,40 @@ mod tests {
         press(&mut e, "@d");
         let message = e.status().message.map(|m| m.text).unwrap_or_default();
         assert!(message.contains("too deeply"), "{message}");
+    }
+
+    #[test]
+    fn caret_mode_moves_selects_and_yanks() {
+        use crate::command::{CaretMove, YankWhat};
+        let mut e = engine();
+        press(&mut e, "v");
+        assert_eq!(e.mode(), Mode::Caret);
+        assert_eq!(
+            runs(&press(&mut e, "3w")),
+            vec![(Command::CaretMove(CaretMove::NextWord), Some(3))]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "0")),
+            vec![(Command::CaretMove(CaretMove::StartOfLine), None)]
+        );
+        assert_eq!(
+            runs(&press(&mut e, "v")),
+            vec![(Command::SelectionToggle { line: false }, None)]
+        );
+        let out = press(&mut e, "x");
+        assert!(out[0].consumed, "unbound keys stay out of the page");
+        assert_eq!(
+            runs(&press(&mut e, "y")),
+            vec![(Command::Yank(YankWhat::Selection), None)]
+        );
+        press(&mut e, "<Escape>");
+        assert_eq!(e.mode(), Mode::Normal);
+        let out = press(&mut e, "V");
+        assert_eq!(e.mode(), Mode::Caret);
+        assert_eq!(
+            runs(&out),
+            vec![(Command::SelectionToggle { line: true }, None)]
+        );
     }
 
     #[test]

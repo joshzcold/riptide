@@ -72,6 +72,12 @@ cat >"$work/editor.html" <<'EOF'
 <script>t.addEventListener('input', () => { document.title = 'v=' + t.value; });</script>
 EOF
 
+cat >"$work/caret.html" <<'EOF'
+<!doctype html><title>caret</title>
+<p style="font-size:20px">The quick brown fox jumps over the lazy dog.</p>
+<script>document.addEventListener('selectionchange', () => { document.title = 'sel=' + getSelection(); });</script>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -384,6 +390,16 @@ xdotool key q z i x y Escape q
 expect_title "v=edited textxy"
 xdotool key at z
 expect_title "v=edited textxyxy"
+
+step "caret mode moves and selects with the keyboard"
+run "open file://$work/caret.html"
+expect_title "caret"
+xdotool key v
+wait_mode caret || true
+xdotool key w w v e e
+expect_title "sel=brown fox"
+xdotool key Escape
+wait_mode normal || true
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

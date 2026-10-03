@@ -27,10 +27,12 @@ pub enum Mode {
     /// The next key names the macro to run (after `@`).
     #[serde(rename = "run_macro")]
     RunMacro,
+    /// Moving a text caret and selecting text with the keyboard.
+    Caret,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 11] = [
+    pub const ALL: [Mode; 12] = [
         Mode::Normal,
         Mode::Insert,
         Mode::Command,
@@ -42,6 +44,7 @@ impl Mode {
         Mode::JumpMark,
         Mode::RecordMacro,
         Mode::RunMacro,
+        Mode::Caret,
     ];
 
     pub fn name(self) -> &'static str {
@@ -57,6 +60,7 @@ impl Mode {
             Mode::JumpMark => "jump_mark",
             Mode::RecordMacro => "record_macro",
             Mode::RunMacro => "run_macro",
+            Mode::Caret => "caret",
         }
     }
 }

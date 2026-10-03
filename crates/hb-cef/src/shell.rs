@@ -286,6 +286,9 @@ pub fn apply(effects: Vec<Effect>) {
                 if from == Mode::Hint {
                     hints::clear();
                 }
+                if (from == Mode::Caret) != (to == Mode::Caret) {
+                    crate::caret::mode_changed(to == Mode::Caret);
+                }
                 let prompting = |m: Mode| matches!(m, Mode::Prompt | Mode::YesNo);
                 if prompting(to) != prompting(from) {
                     focus_for_prompt(prompting(to));
@@ -311,6 +314,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::spell::run_command(&command)
         || crate::spawn::run_command(&command, count)
         || crate::marks::run_command(&command)
+        || crate::caret::run_command(&command, count)
     {
         return;
     }
@@ -485,6 +489,7 @@ fn yank(what: YankWhat) {
             Some(domain) => clipboard::yank(&domain, "domain"),
             None => show_message(Level::Error, "This page has no domain"),
         },
+        YankWhat::Selection => crate::caret::yank(),
     }
 }
 
