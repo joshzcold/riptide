@@ -251,6 +251,8 @@ pub enum Command {
     },
     /// Edit the focused text field in an external editor.
     OpenEditor,
+    /// Read the Greasemonkey scripts again.
+    GreasemonkeyReload,
     /// Remember (`set`) or go back to the scroll position named `key`.
     /// Lowercase marks belong to the page, uppercase ones also remember the URL.
     Mark {
@@ -433,6 +435,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "open-editor",
         "Edit the focused text field in editor.command",
+    ),
+    spec(
+        "greasemonkey-reload",
+        "Read the scripts in the greasemonkey directories again",
     ),
     spec(
         "set-mark",
@@ -791,6 +797,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "open-editor" => Command::OpenEditor,
+        "greasemonkey-reload" => Command::GreasemonkeyReload,
         "selection-toggle" => Command::SelectionToggle {
             line: args.flag(&["-l", "--line"]).is_some(),
         },

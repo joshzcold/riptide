@@ -32,11 +32,14 @@ pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
         ..Default::default()
     };
     let mut delegate = HbBrowserViewDelegate::new(role);
+    let mut extra_info = (role == Role::Tab)
+        .then(crate::greasemonkey::extra_info)
+        .flatten();
     browser_view_create(
         Some(&mut client),
         Some(&CefString::from(url)),
         Some(&settings),
-        None,
+        extra_info.as_mut(),
         None,
         Some(&mut delegate),
     )

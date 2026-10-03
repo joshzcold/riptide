@@ -122,6 +122,10 @@ Ads and trackers are blocked at the network level with Adblock Plus filter lists
 - `:spawn -u <name>` runs a **userscript**, compatible with qutebrowser's. It is looked up in `<config>/userscripts/`, then `<data>/userscripts/`, then `PATH`. It gets `QUTE_URL`, `QUTE_TITLE`, `QUTE_SELECTED_TEXT`, `QUTE_HTML`/`QUTE_TEXT` (files with the page's HTML and text), `QUTE_TAB_INDEX`, `QUTE_COUNT`, `QUTE_MODE`, `QUTE_CONFIG_DIR`, `QUTE_DATA_DIR`, `QUTE_DOWNLOAD_DIR` and `QUTE_VERSION`. Commands it writes to `QUTE_FIFO`, one per line, run when it exits.
 - `:open-editor`, or `Ctrl-e` in insert mode, edits the focused text field in `editor.command` (default `gvim -f {file} -c "normal {line}G{column0}l"`, as in qutebrowser). The text is written back when the editor exits successfully. For a terminal editor: `c.editor.command = { "foot", "nvim", "+call cursor({line}, {column})", "{file}" }`.
 
+### Greasemonkey scripts
+
+`*.js` files in `<data>/greasemonkey/` (as in qutebrowser) or `<config>/greasemonkey/` run in matching pages. They follow the usual `// ==UserScript==` block: `@match`, `@include`, `@exclude`, `@run-at` (`document-start`, `document-end` (the default) or `document-idle`) and `@noframes`. Scripts get `GM_info`, `GM_addStyle` and `unsafeWindow`; the other `GM_*` APIs aren't there yet. `:greasemonkey-reload` reads the files again; reload a page to run the new versions.
+
 ### Spell checking
 
 Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.languages = { "en-US", "de-DE" }` in `config.lua` or `:set spellcheck.languages '["en-US"]'`. Chromium downloads each dictionary once from Google (`redirector.gvt1.com`) and underlines mistakes as you type.

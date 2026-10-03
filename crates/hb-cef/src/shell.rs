@@ -315,6 +315,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::spawn::run_command(&command, count)
         || crate::marks::run_command(&command)
         || crate::caret::run_command(&command, count)
+        || crate::greasemonkey::run_command(&command)
     {
         return;
     }

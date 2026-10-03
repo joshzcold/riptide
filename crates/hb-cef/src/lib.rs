@@ -9,6 +9,7 @@ mod dialogs;
 mod downloads;
 mod eval;
 mod favicons;
+mod greasemonkey;
 mod help;
 mod hints;
 mod marks;
@@ -92,6 +93,7 @@ wrap_browser_process_handler! {
             shell::install(shell::Shell::new(engine, startup.paths));
             scheme::install();
             errors.extend(shell::load_config());
+            errors.extend(greasemonkey::load().1);
             if let Some((data_dir, lists)) = shell::with(|s| {
                 (s.paths.data_dir.clone(), s.engine.settings().list("content.blocking.adblock.lists").to_vec())
             }) {

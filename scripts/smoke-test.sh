@@ -78,6 +78,11 @@ cat >"$work/caret.html" <<'EOF'
 <script>document.addEventListener('selectionchange', () => { document.title = 'sel=' + getSelection(); });</script>
 EOF
 
+cat >"$work/gm.html" <<'EOF'
+<!doctype html><title>gm</title><body>x
+<script>document.title = 'start=' + (window.__gmStart || 'no');</script>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -172,6 +177,23 @@ cat >"$work/editor.sh" <<'EOF'
 printf 'edited text\n' >"$1"
 EOF
 chmod +x "$work/base/config/userscripts/us" "$work/editor.sh"
+# Greasemonkey scripts for gm.html only: one before the page's scripts, one after.
+mkdir -p "$work/base/data/greasemonkey"
+cat >"$work/base/data/greasemonkey/start.user.js" <<'EOF'
+// ==UserScript==
+// @name   Start
+// @include file://*/gm.html
+// @run-at document-start
+// ==/UserScript==
+window.__gmStart = GM_info.script.name;
+EOF
+cat >"$work/base/data/greasemonkey/end.user.js" <<'EOF'
+// ==UserScript==
+// @include file://*/gm.html
+// ==/UserScript==
+GM_addStyle('body { color: rgb(1, 2, 3); }');
+document.title += ' end=' + getComputedStyle(document.body).color;
+EOF
 
 echo "smoke-test on $DISPLAY"
 # A private basedir keeps the test away from the real config and profile.
@@ -400,6 +422,10 @@ xdotool key w w v e e
 expect_title "sel=brown fox"
 xdotool key Escape
 wait_mode normal || true
+
+step "Greasemonkey scripts run at document-start and -end"
+run "open file://$work/gm.html"
+expect_title "start=Start end=rgb(1, 2, 3)"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

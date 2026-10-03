@@ -10,6 +10,7 @@
 pub mod autoconfig;
 pub mod cli;
 pub mod downloads;
+pub mod greasemonkey;
 pub mod lua;
 pub mod lua_types;
 pub mod paths;

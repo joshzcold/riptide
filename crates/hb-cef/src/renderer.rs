@@ -1,6 +1,9 @@
 //! Code that runs in the renderer process.
 
+use std::cell::RefCell;
+
 use cef::*;
+use hb_config::greasemonkey::{RunAt, Script};
 
 /// Renderer → browser: focus moved; argument 0 is whether the new node is editable.
 pub const FOCUS_MESSAGE: &str = "hb.focus";
@@ -10,12 +13,104 @@ pub const EVAL_MESSAGE: &str = "hb.eval";
 pub const EVAL_RESULT_MESSAGE: &str = "hb.eval-result";
 /// Renderer → browser, from `hb://ui/` pages only: message name and JSON payload.
 pub const UI_MESSAGE: &str = "hb.ui";
+/// Browser → renderer: the Greasemonkey scripts as JSON (argument 0). New
+/// browsers get the same JSON in their `extra_info` under this key.
+pub const GREASEMONKEY_MESSAGE: &str = "hb.greasemonkey";
+
+/// The scripts, numbered so a renderer can tell which list is newest.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Scripts {
+    pub generation: u64,
+    pub scripts: Vec<Script>,
+}
+
+thread_local! {
+    static SCRIPTS: RefCell<(u64, Vec<Script>)> = const { RefCell::new((0, Vec::new())) };
+}
+
+fn set_scripts(json: &str) {
+    match serde_json::from_str::<Scripts>(json) {
+        Ok(Scripts {
+            generation,
+            scripts,
+        }) => SCRIPTS.with(|s| {
+            let mut s = s.borrow_mut();
+            // CEF hands a browser's original `extra_info` over again on
+            // reload, so keep a newer list from `:greasemonkey-reload`.
+            if generation >= s.0 {
+                *s = (generation, scripts);
+            }
+        }),
+        Err(e) => tracing::warn!("bad greasemonkey scripts from the browser: {e}"),
+    }
+}
+
+/// Run the Greasemonkey scripts for this frame. `document-start` scripts run
+/// now, before the page's own; the others wait for their event.
+fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
+    let main = frame.is_main() != 0;
+    SCRIPTS.with(|scripts| {
+        for script in scripts.borrow().1.iter() {
+            if (script.no_frames && !main) || !script.applies_to(url) {
+                continue;
+            }
+            let info = serde_json::json!({
+                "script": { "name": script.name, "version": script.version, "description": script.description },
+                "scriptHandler": "hackers-browser",
+                "version": env!("CARGO_PKG_VERSION"),
+            });
+            let body = format!(
+                "(function () {{\n\
+                 const GM_info = {info};\n\
+                 const unsafeWindow = window;\n\
+                 const GM_addStyle = (css) => {{ const s = document.createElement('style'); \
+                 s.textContent = css; (document.head || document.documentElement).appendChild(s); return s; }};\n\
+                 const GM = {{ info: GM_info, addStyle: GM_addStyle }};\n\
+                 {code}\n}})();",
+                code = script.code
+            );
+            let code = match script.run_at {
+                RunAt::Start => body,
+                RunAt::End => format!(
+                    "document.addEventListener('DOMContentLoaded', () => {{ {body} }}, {{ once: true }});"
+                ),
+                RunAt::Idle => format!(
+                    "addEventListener('load', () => setTimeout(() => {{ {body} }}, 0), {{ once: true }});"
+                ),
+            };
+            let name = CefString::from(format!("greasemonkey:{}", script.name).as_str());
+            let mut retval = None;
+            let mut exception = None;
+            context.enter();
+            let ok = context.eval(
+                Some(&CefString::from(code.as_str())),
+                Some(&name),
+                0,
+                Some(&mut retval),
+                Some(&mut exception),
+            );
+            context.exit();
+            if ok == 0 {
+                let message = exception.map(|e| CefString::from(&e.message()).to_string());
+                tracing::warn!(script = %script.name, ?message, "greasemonkey script failed");
+            }
+        }
+    });
+}
 
 wrap_render_process_handler! {
     pub struct HbRenderProcessHandler {}
 
     impl RenderProcessHandler {
-        /// Give the browser's own UI pages (and only those) `hb.send(name, json)`.
+        fn on_browser_created(&self, _browser: Option<&mut Browser>, extra_info: Option<&mut DictionaryValue>) {
+            let key = CefString::from(GREASEMONKEY_MESSAGE);
+            if let Some(info) = extra_info.filter(|i| i.has_key(Some(&key)) != 0) {
+                set_scripts(&CefString::from(&info.string(Some(&key))).to_string());
+            }
+        }
+
+        /// Give the browser's own UI pages (and only those) `hb.send(name, json)`;
+        /// run Greasemonkey scripts in web pages.
         fn on_context_created(
             &self,
             _browser: Option<&mut Browser>,
@@ -25,6 +120,9 @@ wrap_render_process_handler! {
             let (Some(frame), Some(context)) = (frame, context) else { return };
             let url = CefString::from(&frame.url()).to_string();
             if !url.starts_with(hb_core::ui_message::UI_PREFIX) {
+                if !url.starts_with("hb://") {
+                    run_greasemonkey(frame, context, &url);
+                }
                 return;
             }
             let Some(global) = context.global() else { return };
@@ -67,7 +165,14 @@ wrap_render_process_handler! {
             message: Option<&mut ProcessMessage>,
         ) -> ::std::os::raw::c_int {
             let (Some(frame), Some(message)) = (frame, message) else { return 0 };
-            if CefString::from(&message.name()).to_string() != EVAL_MESSAGE {
+            let name = CefString::from(&message.name()).to_string();
+            if name == GREASEMONKEY_MESSAGE {
+                if let Some(args) = message.argument_list() {
+                    set_scripts(&CefString::from(&args.string(0)).to_string());
+                }
+                return 1;
+            }
+            if name != EVAL_MESSAGE {
                 return 0;
             }
             let Some(args) = message.argument_list() else { return 0 };

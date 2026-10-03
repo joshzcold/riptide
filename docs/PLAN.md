@@ -171,7 +171,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 
 ### Extensibility
 - [x] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility) (M9)
-- [ ] Greasemonkey-style injected JS
+- [x] Greasemonkey-style injected JS (M9)
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
 
@@ -335,6 +335,17 @@ Gaps:
   - `js/caret.js` starts at the first text on screen (`caretPositionFromPoint`), moves with `Selection.modify`, draws its own caret (Chromium only draws one in editable text) and scrolls to keep it visible. Leaving clears the selection.
   - A smoke step selects "brown fox" with `w w v e e`.
   - Not done: paragraph/block moves (`{`, `}`), the primary selection (`Y`), and following a selected link with `Return`.
+- ✅ **Greasemonkey** (2026-10-02):
+  - `hb_config::greasemonkey` parses the metadata block and matches URLs (Chrome match patterns plus `@include`/`@exclude` globs), with unit tests.
+  - The browser passes the scripts to each tab's renderer in `extra_info`. `:greasemonkey-reload` sends them as a process message.
+  - The renderer runs them from `on_context_created`: `document-start` runs before the page's scripts, `document-end` waits for `DOMContentLoaded`, and `document-idle` waits for `load`.
+  - Lists carry a generation number: CEF passes a browser's original `extra_info` to `on_browser_created` again on reload, which would otherwise undo a reload.
+  - A smoke step checks start before the page's script, end after it, and `GM_addStyle`.
+  - Gaps:
+    - Scripts run in the page's main world.
+    - Only `GM_info`, `GM_addStyle` and `unsafeWindow` exist; no `GM_setValue` or `GM_xmlhttpRequest`.
+    - Popups opened by pages don't get `extra_info`. They usually share their opener's renderer, which already has the scripts.
+    - A tab that moves to a new renderer process after `:greasemonkey-reload` gets the older list until it's reopened.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
