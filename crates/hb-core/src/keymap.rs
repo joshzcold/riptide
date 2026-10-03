@@ -256,6 +256,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
 ];
 
 const PROMPT_DEFAULTS: &[(&str, &str)] = &[
+    ("<Tab>", "prompt-complete"),
     ("<Ctrl-w>", "rl-filename-rubout"),
     ("<Return>", "prompt-accept"),
     ("<Escape>", "mode-leave"),

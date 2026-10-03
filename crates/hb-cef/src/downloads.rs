@@ -3,6 +3,7 @@
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use cef::*;
 use hb_config::downloads::{current_system_dir, expand_home, sanitize_name, unique_path};
@@ -89,6 +90,7 @@ fn save_to(path: PathBuf, id: u32, callback: BeforeDownloadCallback, browser: Op
                 callback: None,
             })
         });
+        publish();
         shell::refresh_ui();
     };
     if path.exists() {
@@ -145,7 +147,7 @@ wrap_download_handler! {
                 return 1;
             }
             let default = suggestion.to_string_lossy().into_owned();
-            prompts::ask(browser, Scope::Other, "Save file to", name.clone(), PromptKind::Text { default, masked: false }, move |answer| {
+            prompts::ask(browser, Scope::Other, "Save file to", name.clone(), PromptKind::Text { default, masked: false, path: true }, move |answer| {
                 let PromptAnswer::Text(text) = answer else { return };
                 let mut path = expand_home(text.trim(), home().as_deref());
                 if path.is_dir() {
@@ -193,6 +195,7 @@ wrap_download_handler! {
                 Some((State::Failed, path)) => shell::show_message(Level::Error, format!("Download failed: {}", path.display())),
                 _ => {}
             }
+            publish();
             shell::refresh_ui();
         }
     }
@@ -285,7 +288,16 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             Err(e) => shell::show_message(Level::Error, e),
         },
         Command::DownloadClear => {
-            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| d.state == State::Running))
+            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| d.state == State::Running));
+            publish();
+        }
+        Command::Downloads => {
+            publish();
+            shell::open(
+                hb_core::command::OpenTarget::Tab,
+                true,
+                Some("hb://downloads/".to_string()),
+            );
         }
         _ => return false,
     }
@@ -299,3 +311,86 @@ pub fn start(url: &str) {
         host.start_download(Some(&CefString::from(url)));
     }
 }
+
+/// `hb://downloads/`, rebuilt on the UI thread whenever a download changes
+/// and served from the IO thread.
+static PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
+
+pub fn page() -> Arc<[u8]> {
+    PAGE.read().ok().and_then(|p| p.clone()).unwrap_or_else(|| {
+        publish();
+        PAGE.read()
+            .ok()
+            .and_then(|p| p.clone())
+            .unwrap_or_else(|| Arc::from(&b""[..]))
+    })
+}
+
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+fn publish() {
+    let (rows, running) = DOWNLOADS.with(|d| {
+        let d = d.borrow();
+        let rows: String = d
+            .iter()
+            .enumerate()
+            .map(|(i, dl)| {
+                let name = dl.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let dir = dl.path.parent().map(|p| p.display().to_string()).unwrap_or_default();
+                let state = match (dl.state, dl.percent) {
+                    (State::Running, Some(p)) => format!("{p}%"),
+                    (State::Running, None) => "downloading".into(),
+                    (State::Done, _) => "done".into(),
+                    (State::Cancelled, _) => "cancelled".into(),
+                    (State::Failed, _) => "failed".into(),
+                };
+                format!(
+                    "<tr><td class=n>{}</td><td>{}<div class=dir>{}</div></td><td class=state>{}</td></tr>",
+                    i + 1,
+                    escape(&name),
+                    escape(&dir),
+                    escape(&state)
+                )
+            })
+            .collect();
+        (rows, d.iter().any(|dl| dl.state == State::Running))
+    });
+    let body = if rows.is_empty() {
+        "<p class=empty>No downloads this session.</p>".to_string()
+    } else {
+        format!("<table>{rows}</table>")
+    };
+    // While something downloads, the page reloads itself to show progress.
+    let refresh = if running {
+        "<meta http-equiv=refresh content=1>"
+    } else {
+        ""
+    };
+    let html = format!(
+        "<!doctype html><html><head><meta charset=utf-8><title>Downloads</title>{refresh}<style>{STYLE}</style></head>\
+         <body><main><h1>Downloads</h1>{body}<p class=help>:download-cancel and :download-open take the number as a count, e.g. 2:download-open. \
+         :download-clear forgets finished ones.</p></main></body></html>"
+    );
+    if let Ok(mut page) = PAGE.write() {
+        *page = Some(Arc::from(html.into_bytes()));
+    }
+}
+
+const STYLE: &str = "
+  :root { color-scheme: light dark; --bg: #fbfbf9; --fg: #1d1f21; --muted: #5f6368; --line: #e2e2dc; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #17181a; --fg: #e6e6e3; --muted: #9a9ea6; --line: #2c2e32; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  main { max-width: 50rem; padding: 1.5rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: .4rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .n { color: var(--muted); width: 2rem; }
+  .dir { color: var(--muted); font-size: .85em; }
+  .state { text-align: right; white-space: nowrap; }
+  .empty, .help { color: var(--muted); }
+";

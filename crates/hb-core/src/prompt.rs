@@ -5,8 +5,13 @@ use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PromptKind {
-    /// Free text, e.g. a download path or `window.prompt()`.
-    Text { default: String, masked: bool },
+    /// Free text, e.g. a download path or `window.prompt()`. `path` turns on
+    /// file name completion with Tab.
+    Text {
+        default: String,
+        masked: bool,
+        path: bool,
+    },
     /// y/n; `default` is what Return means.
     YesNo { default: bool, remember: Remember },
     /// Information only; any accept dismisses it.
@@ -64,6 +69,9 @@ pub struct PromptView {
 impl Prompt {
     pub fn hint(&self) -> String {
         match self.kind {
+            PromptKind::Text { path: true, .. } => {
+                "Tab: complete, Return: accept, Escape: cancel".into()
+            }
             PromptKind::Text { .. } => "Return: accept, Escape: cancel".into(),
             PromptKind::YesNo { default, remember } => {
                 let default = if default { "yes" } else { "no" };

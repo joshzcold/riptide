@@ -638,6 +638,26 @@ hint s
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/saved.txt ]] && break; sleep 0.1; done
 [[ $(cat "$work/dl/saved.txt" 2>/dev/null) == hello ]] && pass || fail "no $work/dl/saved.txt"
 
+step "Tab completes paths in the download prompt"
+mkdir -p "$work/dl/subdir"
+run "set downloads.location.prompt true"
+hint s
+wait_mode prompt || true
+# The name is "saved (1).txt" now; Ctrl-w stops at spaces as well as slashes.
+xdotool key ctrl+w ctrl+w
+xdotool type --delay 20 "su"
+xdotool key Tab
+xdotool type --delay 20 "via-tab.txt"
+xdotool key Return
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dl/subdir/via-tab.txt ]] && break; sleep 0.1; done
+run "set downloads.location.prompt false"
+[[ -s $work/dl/subdir/via-tab.txt ]] && pass || fail "nothing in $work/dl/subdir"
+
+step ":downloads lists this session's downloads"
+run "downloads"
+expect_title "Downloads"
+run "tab-close"
+
 step "T picks a tab by title from completion"
 run "open -t file://$work/search.html"
 for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == search || $(page_title) == s=* ]] && break; sleep 0.1; done

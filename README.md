@@ -192,6 +192,9 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 | `;d` | Hint a link to download |
 | `:download-cancel`, `:download-open` | The newest running / finished download, or the one given as a count (`2:download-open`) |
 | `:download-clear` | Forget finished downloads |
+| `:downloads` | A page listing this session's downloads with their numbers and progress |
+
+In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell.
 
 `:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
 

@@ -271,6 +271,10 @@ pub enum Command {
     OpenEditor,
     /// Read the Greasemonkey scripts again.
     GreasemonkeyReload,
+    /// Complete the file path typed in a path prompt.
+    PromptComplete,
+    /// Show this session's downloads.
+    Downloads,
     /// Close the current window.
     Close,
     /// Duplicate the current tab, in the background or a new window.
@@ -531,6 +535,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Go to a tab in any window: :tab-select <window/tab | text> (T)",
     ),
     spec("history", "Show the browsing history: :history [-t]"),
+    hidden("prompt-complete", "Complete the file path in the prompt"),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
@@ -584,6 +589,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Open a finished download (count: its number)",
     ),
     spec("download-clear", "Remove finished downloads from the list"),
+    spec(
+        "downloads",
+        "List this session's downloads and their progress",
+    ),
     spec(
         "quit",
         "Quit the browser; --save keeps the tabs as the default session",
@@ -935,6 +944,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "open-editor" => Command::OpenEditor,
         "greasemonkey-reload" => Command::GreasemonkeyReload,
+        "prompt-complete" => Command::PromptComplete,
+        "downloads" => Command::Downloads,
         "close" => Command::Close,
         "history" => Command::History {
             tab: args.flag(&["-t", "--tab"]).is_some(),

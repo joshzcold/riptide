@@ -35,7 +35,7 @@ wrap_jsdialog_handler! {
             } else if dialog_type == JsdialogType::CONFIRM {
                 PromptKind::YesNo { default: true, remember: Remember::Never }
             } else {
-                PromptKind::Text { default: string(default_prompt_text), masked: false }
+                PromptKind::Text { default: string(default_prompt_text), masked: false, path: false }
             };
             prompts::ask(browser, Scope::JsDialog, title, message, kind, move |answer| {
                 let (ok, input) = match answer {
@@ -211,6 +211,7 @@ fn ask_credentials(browser: Option<i32>, message: String, callback: AuthCallback
         PromptKind::Text {
             default: String::new(),
             masked: false,
+            path: false,
         },
         move |answer| {
             let PromptAnswer::Text(username) = answer else {
@@ -224,6 +225,7 @@ fn ask_credentials(browser: Option<i32>, message: String, callback: AuthCallback
                 PromptKind::Text {
                     default: String::new(),
                     masked: true,
+                    path: false,
                 },
                 move |answer| match answer {
                     PromptAnswer::Text(password) => callback.cont(

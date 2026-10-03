@@ -159,7 +159,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Downloads with status-bar progress and prompts
 - [x] Permission prompts (geolocation, camera, notifications)
 - [x] HTTP auth and JS dialogs in the prompt UI
-- [ ] Download bar listing each download; path completion in the save prompt
+- [x] Download list (`:downloads`, a page that refreshes while downloads run) and `Tab` path completion in the save prompt (2026-10-02)
 - [x] TLS certificate errors: `OnCertificateError` asks per `content.tls.certificate_errors` (`ask`/`block`/`load-insecurely`, per-site). `A`/`N` save the answer for the origin. A smoke step uses a self-signed HTTPS server (2026-10-02).
 - [x] Dark mode: `colors.webpage.preferred_color_scheme` (live, `SetChromeColorScheme`) and `colors.webpage.darkmode.enabled` (startup `--blink-settings=forceDarkModeEnabled=true`)
 - [x] Widevine DRM, opt-in (M11)

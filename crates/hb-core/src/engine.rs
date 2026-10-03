@@ -915,6 +915,20 @@ impl Engine {
                 self.set_mode(Mode::Normal, effects)
             }
             Command::PromptAccept { value, save } => self.accept_prompt(value, save, effects),
+            Command::PromptComplete => {
+                let path = matches!(
+                    self.prompts.front().map(|p| &p.kind),
+                    Some(PromptKind::Text { path: true, .. })
+                );
+                let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+                if path
+                    && let Some(text) =
+                        crate::path_complete::complete(self.prompt_editor.text(), home.as_deref())
+                {
+                    self.prompt_editor.set(&text);
+                    self.dirty = true;
+                }
+            }
             Command::CmdSetText { text, append_space } => {
                 let text = if append_space {
                     format!("{text} ")
@@ -2013,6 +2027,7 @@ mod tests {
             PromptKind::Text {
                 default: "/tmp/file".into(),
                 masked: false,
+                path: false,
             },
         ));
         assert_eq!(e.mode(), Mode::Prompt);
@@ -2036,6 +2051,7 @@ mod tests {
             PromptKind::Text {
                 default: String::new(),
                 masked: true,
+                path: false,
             },
         ));
         press(&mut e, "hunter2");
@@ -2092,6 +2108,7 @@ mod tests {
             PromptKind::Text {
                 default: "x".into(),
                 masked: false,
+                path: false,
             },
         ));
         assert_eq!(e.mode(), Mode::YesNo);
