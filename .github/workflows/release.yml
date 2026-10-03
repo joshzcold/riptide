@@ -1,10 +1,13 @@
 name: release
 
 # Push a tag such as v0.2.0 (after `./task changelog -- --tag v0.2.0` and a
-# chore(release) commit) to build and publish a release.
+# chore(release) commit) to build and publish a release. Running it by hand
+# (workflow_dispatch) is a dry run: it builds and packages, and keeps the
+# files as workflow artifacts for a day instead of publishing.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,17 +21,22 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       CEF_PATH: ${{ github.workspace }}/../cef
+      PUBLISH: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Check the tag matches the crate version
+        id: version
         run: |
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hb") | .version')
-          if [[ "v$version" != "$GITHUB_REF_NAME" ]]; then
+          if [[ $PUBLISH == true && "v$version" != "$GITHUB_REF_NAME" ]]; then
             echo "tag $GITHUB_REF_NAME doesn't match version $version in Cargo.toml" >&2
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install appimagetool's runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libfuse2t64 file
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache CEF binaries
@@ -39,13 +47,26 @@ jobs:
       - run: ./task setup
       - run: cargo build --release --locked
       - name: Package
-        run: scripts/package-linux.sh --appimage "${GITHUB_REF_NAME#v}"
+        run: |
+          scripts/package-linux.sh --appimage "${{ steps.version.outputs.version }}"
+          (cd dist && sha256sum *.tar.gz *.AppImage > SHA256SUMS)
       - name: Release notes
         run: scripts/git-cliff.sh --latest --strip header > notes.md
+      - name: Keep the files (dry run)
+        if: env.PUBLISH != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+            dist/SHA256SUMS
+            notes.md
+          retention-days: 1
       - name: Publish
+        if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          (cd dist && sha256sum *.tar.gz *.AppImage > SHA256SUMS)
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md \
             dist/*.tar.gz dist/*.AppImage dist/SHA256SUMS
