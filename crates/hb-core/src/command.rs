@@ -88,10 +88,12 @@ pub enum CaretMove {
     EndOfLine,
     StartOfDocument,
     EndOfDocument,
+    PrevParagraph,
+    NextParagraph,
 }
 
 impl CaretMove {
-    pub const ALL: [(&'static str, CaretMove); 11] = [
+    pub const ALL: [(&'static str, CaretMove); 13] = [
         ("move-to-next-char", CaretMove::NextChar),
         ("move-to-prev-char", CaretMove::PrevChar),
         ("move-to-next-line", CaretMove::NextLine),
@@ -103,6 +105,8 @@ impl CaretMove {
         ("move-to-end-of-line", CaretMove::EndOfLine),
         ("move-to-start-of-document", CaretMove::StartOfDocument),
         ("move-to-end-of-document", CaretMove::EndOfDocument),
+        ("move-to-prev-block", CaretMove::PrevParagraph),
+        ("move-to-next-block", CaretMove::NextParagraph),
     ];
 
     /// The `Selection.modify` direction and granularity for this move.
@@ -118,6 +122,8 @@ impl CaretMove {
             CaretMove::EndOfLine => ("forward", "lineboundary"),
             CaretMove::StartOfDocument => ("backward", "documentboundary"),
             CaretMove::EndOfDocument => ("forward", "documentboundary"),
+            CaretMove::PrevParagraph => ("backward", "paragraph"),
+            CaretMove::NextParagraph => ("forward", "paragraph"),
         }
     }
 }
@@ -281,6 +287,10 @@ pub enum Command {
     Downloads,
     /// Close the current window.
     Close,
+    /// Follow the link around the selection (e.g. a search match) or the focused link.
+    SelectionFollow {
+        tab: bool,
+    },
     /// Duplicate the current tab, in the background or a new window.
     TabClone {
         background: bool,
@@ -540,6 +550,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("history", "Show the browsing history: :history [-t]"),
     hidden("prompt-complete", "Complete the file path in the prompt"),
+    spec(
+        "selection-follow",
+        "Follow the link around the selection, e.g. after a search (Return; -t: new tab)",
+    ),
     hidden("lua-call", "Run a Lua function bound in config.lua"),
     spec(
         "navigate",
@@ -586,6 +600,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     hidden("move-to-end-of-line", "Move the caret (caret mode)"),
     hidden("move-to-start-of-document", "Move the caret (caret mode)"),
     hidden("move-to-end-of-document", "Move the caret (caret mode)"),
+    hidden("move-to-prev-block", "Move the caret (caret mode)"),
+    hidden("move-to-next-block", "Move the caret (caret mode)"),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
     spec(
@@ -960,6 +976,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "prompt-complete" => Command::PromptComplete,
         "downloads" => Command::Downloads,
         "close" => Command::Close,
+        "selection-follow" => Command::SelectionFollow {
+            tab: args.flag(&["-t", "--tab"]).is_some(),
+        },
         "history" => Command::History {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },

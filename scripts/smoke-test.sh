@@ -123,6 +123,10 @@ cat >"$work/links.html" <<'EOF'
 <a href="#about" onclick="document.title='clicked about'">About us</a></p>
 EOF
 
+cat >"$work/follow.html" <<'EOF'
+<!doctype html><title>follow</title><p>Some text, then <a href="nav2.html">the target link</a>.</p>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -604,6 +608,18 @@ if [[ $first =~ ^s=([0-9]+)$ ]] && (( BASH_REMATCH[1] > 1000 )) && [[ $second =~
 else
     fail "scroll went from '$first' to '$second'"
 fi
+
+step "Return follows the link a search found"
+run "open file://$work/follow.html"
+expect_title "follow"
+xdotool key slash
+wait_mode command || true
+xdotool type --delay 20 "target"
+xdotool key Return
+wait_mode normal || true
+nap 0.3
+xdotool key Return
+expect_title "nav2"
 
 step "]] and [[ follow next/prev links, Ctrl-a increments the URL"
 run "open file://$work/nav1.html"

@@ -345,7 +345,7 @@ Gaps:
     - `QUTE_FIFO` is a regular file read when the script exits, not a live FIFO, so long-running scripts' commands are delayed until they exit.
     - `-o` shows the output in a new tab (`hb://process/`).
     - Hints can run programs and userscripts: `:hint links spawn …` with `{hint-url}` shell-quoted, and `:hint links userscript …` with `QUTE_MODE=hints`.
-    - Not yet: `QUTE_USER_AGENT`.
+    - `QUTE_USER_AGENT` comes from the page's `navigator.userAgent`.
     - Password fields are skipped by `:open-editor`.
     - The remote socket can run `:spawn`; it is limited to the same user (M15).
 - ✅ **Marks** (2026-10-02): `` ` `` and `'` enter the `set_mark` and `jump_mark` modes (qutebrowser's names), and the next key names the mark (`Command::Mark`, unit tested). `hb-cef/src/marks.rs` reads and sets `scrollX`/`scrollY` through the eval channel. Uppercase marks also reopen their page and scroll once `on_load_end` fires. `''` goes back to where the last jump started. Marks last for the session. A smoke step covers `` `a ``, `gg`, `'a` and `''`.
@@ -363,7 +363,7 @@ Gaps:
   - `js/caret.js` starts at the first text on screen (`caretPositionFromPoint`), moves with `Selection.modify`, draws its own caret (Chromium only draws one in editable text) and scrolls to keep it visible. Leaving clears the selection.
   - A smoke step selects "brown fox" with `w w v e e`.
   - `Y` yanks the selection to the primary selection.
-  - Not done: paragraph/block moves (`{`, `}`) and following a selected link with `Return`.
+  - `{`/`}` move by paragraph. `Return` in normal mode follows the link around a search match (`selection-follow`, which ends the find session so the match becomes the selection) or the focused link, and otherwise passes `Return` to the page.
 - ✅ **Greasemonkey** (2026-10-02):
   - `hb_config::greasemonkey` parses the metadata block and matches URLs (Chrome match patterns plus `@include`/`@exclude` globs), with unit tests.
   - The browser passes the scripts to each tab's renderer in `extra_info`. `:greasemonkey-reload` sends them as a process message.

@@ -83,6 +83,10 @@ impl Keymap {
             map.bind(Mode::Normal, keys, cmd)
                 .expect("valid default binding");
         }
+        map.bind(Mode::Normal, "<Return>", "selection-follow")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "<Ctrl-Return>", "selection-follow -t")
+            .expect("valid default binding");
         map.bind(Mode::Normal, "/", "cmd-set-text /")
             .expect("valid default binding");
         map.bind(Mode::Normal, "?", "cmd-set-text ?")
@@ -284,6 +288,8 @@ const CARET_DEFAULTS: &[(&str, &str)] = &[
     ("$", "move-to-end-of-line"),
     ("gg", "move-to-start-of-document"),
     ("G", "move-to-end-of-document"),
+    ("{", "move-to-prev-block"),
+    ("}", "move-to-next-block"),
     ("v", "selection-toggle"),
     ("<Space>", "selection-toggle"),
     ("V", "selection-toggle --line"),

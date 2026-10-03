@@ -31,7 +31,48 @@ fn match_case(text: &str) -> bool {
     }
 }
 
+/// The link around the selection (a search match), or the focused link.
+const SELECTED_LINK_JS: &str = "(() => {
+  const sel = getSelection();
+  let node = sel.rangeCount ? sel.anchorNode : null;
+  if (node && node.nodeType !== Node.ELEMENT_NODE) node = node.parentElement;
+  const link = (node && node.closest('a[href]')) || (document.activeElement && document.activeElement.closest && document.activeElement.closest('a[href]'));
+  return JSON.stringify(link ? link.href : null);
+})()";
+
+fn follow_selection(tab: bool) {
+    let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
+        return;
+    };
+    // A find match only becomes the page's selection once the find ends.
+    if let Some(host) = browser.host() {
+        host.stop_finding(0);
+    }
+    crate::eval::eval(&browser, SELECTED_LINK_JS, move |result| {
+        let link = result
+            .ok()
+            .and_then(|json| serde_json::from_str::<Option<String>>(&json).ok())
+            .flatten();
+        match link {
+            Some(url) => {
+                let target = if tab {
+                    hb_core::command::OpenTarget::Tab
+                } else {
+                    hb_core::command::OpenTarget::Current
+                };
+                shell::open(target, true, Some(url));
+            }
+            // Nothing to follow: the page gets its Return after all.
+            None => crate::client::send_to_page(hb_core::Key::plain(hb_core::KeyCode::Enter)),
+        }
+    });
+}
+
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {
+    if let Command::SelectionFollow { tab } = command {
+        follow_selection(*tab);
+        return true;
+    }
     let Some(host) = shell::with(|s| s.current_browser())
         .flatten()
         .and_then(|b| b.host())

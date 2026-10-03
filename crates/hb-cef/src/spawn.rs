@@ -104,6 +104,8 @@ struct PageDump {
     html: String,
     text: String,
     selection: String,
+    #[serde(default)]
+    user_agent: String,
 }
 
 /// `hint_url` is set for userscripts run from hints: they get the hinted URL
@@ -148,7 +150,7 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
     }
     let code = "JSON.stringify({ html: document.documentElement.outerHTML, \
                 text: document.body ? document.body.innerText : '', \
-                selection: String(getSelection()) })";
+                selection: String(getSelection()), user_agent: navigator.userAgent })";
     let launch = move |dump: PageDump| {
         let dir = match temp_dir("userscript") {
             Ok(dir) => dir,
@@ -169,6 +171,7 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
         }
         let mut env = env;
         env.push(("QUTE_SELECTED_TEXT", dump.selection));
+        env.push(("QUTE_USER_AGENT", dump.user_agent));
         env.push(("QUTE_HTML", html.display().to_string()));
         env.push(("QUTE_TEXT", text.display().to_string()));
         env.push(("QUTE_FIFO", fifo.display().to_string()));
