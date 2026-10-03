@@ -183,3 +183,62 @@ wrap_permission_handler! {
         }
     }
 }
+
+/// Per-site permission settings Chromium also keeps itself: it remembers
+/// `y` answers and then never asks us, so a later per-site `false` must be
+/// written into Chromium's content settings too. Only exact origins
+/// (`https://host[:port]`, what `A`/`N` save) can be; wildcard patterns
+/// only apply when Chromium asks.
+pub fn sync_site_settings(
+    settings: &hb_core::settings::Settings,
+) -> Vec<(String, ContentSettingTypes, ContentSettingValues)> {
+    const TYPES: &[(&str, ContentSettingTypes)] = &[
+        ("content.geolocation", ContentSettingTypes::GEOLOCATION),
+        (
+            "content.notifications.enabled",
+            ContentSettingTypes::NOTIFICATIONS,
+        ),
+        (
+            "content.media.audio_capture",
+            ContentSettingTypes::MEDIASTREAM_MIC,
+        ),
+        (
+            "content.media.video_capture",
+            ContentSettingTypes::MEDIASTREAM_CAMERA,
+        ),
+    ];
+    let mut out = Vec::new();
+    for (name, kind) in TYPES {
+        for (pattern, value) in settings.overrides(name) {
+            let origin = pattern.trim_end_matches('/');
+            let exact = (origin.starts_with("https://") || origin.starts_with("http://"))
+                && !origin.contains('*')
+                && origin
+                    .split_once("://")
+                    .is_some_and(|(_, rest)| !rest.contains('/'));
+            if !exact {
+                continue;
+            }
+            let value = match value {
+                hb_core::settings::Value::Str(v) if v == "true" => ContentSettingValues::ALLOW,
+                hb_core::settings::Value::Str(v) if v == "false" => ContentSettingValues::BLOCK,
+                _ => ContentSettingValues::DEFAULT,
+            };
+            out.push((format!("{origin}/"), *kind, value));
+        }
+    }
+    out
+}
+
+/// Write [`sync_site_settings`] into Chromium. Outside the shell borrow.
+pub fn apply_site_settings(entries: Vec<(String, ContentSettingTypes, ContentSettingValues)>) {
+    let Some(context) = request_context_get_global_context() else {
+        return;
+    };
+    for (url, kind, value) in entries {
+        let url = CefString::from(url.as_str());
+        if context.content_setting(Some(&url), Some(&url), kind) != value {
+            context.set_content_setting(Some(&url), Some(&url), kind, value);
+        }
+    }
+}

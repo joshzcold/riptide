@@ -308,7 +308,7 @@ Gaps:
   - Permission answers `A`/`N` save a per-site setting, which fixes the user's note about camera and microphone answers being forgotten.
   - Unit tests cover each layer. A smoke step answers `A` to a geolocation request and checks `autoconfig.toml`. By hand: after deleting Chromium's data, the saved answer still allows without asking.
   - Gaps:
-    - Chromium also remembers `y` per site for permission prompts, and that memory wins over a later per-site `false`.
+    - ~~Chromium also remembers `y` per site for permission prompts, and that memory wins over a later per-site `false`.~~ Exact-origin per-site values (what `A`/`N` save, or `:set -u https://host`) are now also written into Chromium's content settings (`SetContentSetting`), so a later `false` blocks. Tested by hand: `y`, then `:set -u <origin> content.geolocation false`, reload, and the site is denied without a prompt. Wildcard patterns still only apply when Chromium asks.
     - There are no per-site JavaScript, cookie or image settings yet.
 - ✅ **Multiple and private windows** (2026-10-02):
   - `shell::WindowState` holds a window's views, tabs, closed-tab list and redraw caches. `Shell` keeps a never-empty list and derefs to the active one, so the single-window code kept working.

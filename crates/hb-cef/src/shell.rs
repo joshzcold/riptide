@@ -363,18 +363,20 @@ pub fn apply_config(loaded: hb_config::Loaded) -> Vec<String> {
 
 /// Outside the shell borrow: setting Chromium preferences can call back into us.
 fn apply_chromium_settings() {
-    let Some((languages, scheme)) = with(|s| {
+    let Some((languages, scheme, sites)) = with(|s| {
         let settings = s.engine.settings();
         (
             settings.list("spellcheck.languages").to_vec(),
             settings
                 .str("colors.webpage.preferred_color_scheme")
                 .to_string(),
+            crate::permissions::sync_site_settings(settings),
         )
     }) else {
         return;
     };
     crate::spell::apply(languages);
+    crate::permissions::apply_site_settings(sites);
     let variant = match scheme.as_str() {
         "light" => ColorVariant::LIGHT,
         "dark" => ColorVariant::DARK,
