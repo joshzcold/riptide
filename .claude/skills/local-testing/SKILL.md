@@ -37,7 +37,8 @@ HB_LOG=hb_cef=trace,info ./target/debug/hackers-browser --basedir "$B" file://$S
 pid=$!
 sleep 4
 
-# The browser window is the X window whose name ends in " - hackers-browser".
+# With c.window.title_format = "{mode}::{current_title}" in the test profile's
+# config.lua, the window name says the mode and page title (what the smoke test does).
 W=$(for w in $(xdotool search --name hackers-browser); do
       [[ $(xdotool getwindowname "$w") == *" - hackers-browser" ]] && echo "$w"; done | head -1)
 xdotool windowfocus --sync "$W"
@@ -60,6 +61,11 @@ Useful checks:
 
 ## Pitfalls seen so far
 
+- **`xdotool search --sync` can abort with `BadWindow`** when one of Chromium's short-lived helper windows disappears mid-search. Poll `xdotool search --name … 2>/dev/null` in a loop instead (the smoke test's `find_window`).
+- **A `pkill -f` pattern that appears in your own command line kills your own shell.** Kill by PID wherever you can.
+- **Keys sent right as a tab opened from a typed `:open -t` finishes loading can be lost** under Xvfb, before CEF sees them (see the M14 notes in docs/PLAN.md). Pause 0.3 s after such a step, or retry the first key until the mode changes (the smoke test's `run` retries `:`).
+- **Windows stack at the origin without a window manager.** Focus the one you want with `xdotool windowfocus --sync`; `import -window` of a covered window may fail.
+- **Driving the browser without keys:** `./target/debug/hackers-browser --basedir "$B" ':some-command'` runs a command in the running test instance (insert mode included), which avoids key-timing problems entirely.
 - **Type only after the browser is ready for it.** Keys sent before a prompt, hint labels or a new tab is ready land in normal mode, and the stray letters run commands (`m` = quickmark, `b` = `:quickmark-load`, `o` = `:open`). Wait for a title change or sleep generously, more on CI.
 - **Poll, don't sleep once.** Wait for a file, title or process with a loop and a timeout. One-shot `sleep 0.5; check` steps are flaky.
 - **Prefer hint clicks to `xdotool click` for page content.** On CI the xdotool click missed. A hint sends a real CEF mouse event that doesn't depend on window placement. Tab-bar mouse tests via xdotool work locally only.
