@@ -250,6 +250,10 @@ pub enum Command {
     HistoryClear {
         force: bool,
     },
+    /// Import qutebrowser's history.sqlite (default: qutebrowser's data dir).
+    HistoryImport {
+        path: Option<String>,
+    },
     /// Download the filter lists and rebuild the content blocker.
     AdblockUpdate,
     /// Run an external program, or a userscript with `userscript`.
@@ -460,6 +464,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "history-clear",
         "Delete all browsing history (needs --force)",
+    ),
+    spec(
+        "history-import",
+        "Import qutebrowser's history: :history-import [path to history.sqlite]",
     ),
     spec(
         "adblock-update",
@@ -963,6 +971,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             word: args.required("word")?.to_string(),
         },
         "spell-add" => Command::SpellAdd,
+        "history-import" => Command::HistoryImport {
+            path: args.optional().map(String::from),
+        },
         "history-clear" => Command::HistoryClear {
             force: args.flag(&["-f", "--force"]).is_some(),
         },

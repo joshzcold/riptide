@@ -286,6 +286,7 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
 | `:history [-t]` | Browsing history by day, with a search box |
+| `:history-import [path]` | Import qutebrowser's `history.sqlite` (default: qutebrowser's data directory); importing twice adds nothing new |
 | `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |

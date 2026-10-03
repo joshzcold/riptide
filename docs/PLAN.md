@@ -181,7 +181,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] History with completion (`:open` + `Tab`)
 - [x] Quickmarks and bookmarks in qutebrowser's file formats
 - [x] Crash-recovery autosave (`auto_save.interval`, `_autosave` removed on a clean exit) and a history page (`:history`, `hb://history/`) (2026-10-02)
-- [ ] Importing qutebrowser's history.sqlite
+- [x] Importing qutebrowser's history.sqlite (`:history-import`, read-only, skips redirects and duplicates) (2026-10-02)
 - [x] Private windows (separate `CefRequestContext`) (2026-10-02)
 
 ---

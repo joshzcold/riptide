@@ -428,6 +428,20 @@ step ":history lists visited pages"
 run "history"
 expect_title "History"
 
+step ":history-import reads qutebrowser's history"
+python3 - "$work/qb-history.sqlite" <<'QB'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("CREATE TABLE History (url TEXT, title TEXT, atime INTEGER, redirect BOOLEAN)")
+db.execute("INSERT INTO History VALUES ('https://imported.example/', 'Imported page', 1700000000, 0)")
+db.commit()
+QB
+run "history-import $work/qb-history.sqlite"
+for _ in $(seq $((TIMEOUT * 10))); do
+    python3 -c "import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); sys.exit(0 if c.execute(\"select count(*) from completion where url = 'https://imported.example/'\").fetchone()[0] else 1)" "$work/base/data/history.sqlite" && break
+    sleep 0.1
+done && pass || fail "the visit wasn't imported"
+
 step "a second invocation hands its arguments to this browser"
 code=0
 "$BIN" --basedir "$work/base" "file://$work/second.html" ":tab-focus -1" || code=$?

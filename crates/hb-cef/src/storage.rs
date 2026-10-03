@@ -243,6 +243,33 @@ pub fn run_command(command: &Command) -> bool {
             Level::Warning,
             "This deletes all browsing history. Run :history-clear --force to confirm.",
         ),
+        Command::HistoryImport { path } => {
+            let path = match path {
+                Some(path) => std::path::PathBuf::from(path),
+                None => match qutebrowser_history() {
+                    Some(path) => path,
+                    None => {
+                        shell::show_message(
+                            Level::Error,
+                            "Where is qutebrowser's history? :history-import <path>",
+                        );
+                        return true;
+                    }
+                },
+            };
+            let result = with(|s| s.history.as_mut().map(|h| h.import_qutebrowser(&path)));
+            match result.flatten() {
+                Some(Ok(n)) => shell::show_message(
+                    Level::Info,
+                    format!("Imported {n} visits from {}", path.display()),
+                ),
+                Some(Err(e)) => shell::show_message(
+                    Level::Error,
+                    format!("Could not import {}: {e}", path.display()),
+                ),
+                None => shell::show_message(Level::Error, "History is unavailable"),
+            }
+        }
         Command::HistoryClear { force: true } => {
             let result = with(|s| s.history.as_ref().map(|h| h.clear()));
             match result.flatten() {
@@ -310,4 +337,23 @@ pub fn recent_history(limit: usize) -> Vec<serde_json::Value> {
     .into_iter()
     .map(|e| serde_json::json!({ "url": e.url, "title": e.title, "last_visit": e.last_visit }))
     .collect()
+}
+
+/// Where qutebrowser keeps `history.sqlite` on this platform.
+fn qutebrowser_history() -> Option<std::path::PathBuf> {
+    let env = |name: &str| {
+        std::env::var_os(name)
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from)
+    };
+    let dir = if cfg!(windows) {
+        env("APPDATA")?.join("qutebrowser").join("data")
+    } else if cfg!(target_os = "macos") {
+        env("HOME")?.join("Library/Application Support/qutebrowser")
+    } else {
+        env("XDG_DATA_HOME")
+            .or_else(|| env("HOME").map(|h| h.join(".local/share")))?
+            .join("qutebrowser")
+    };
+    Some(dir.join("history.sqlite"))
 }

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use rusqlite::{Connection, params, params_from_iter};
+use rusqlite::{Connection, OpenFlags, params, params_from_iter};
 
 const SCHEMA_VERSION: i32 = 1;
 
@@ -86,6 +86,50 @@ impl History {
         Ok(())
     }
 
+    /// Import qutebrowser's `history.sqlite`: every visit that wasn't a
+    /// redirect. Visits already here (same URL and time) are skipped, so
+    /// importing twice is harmless. Returns how many were added.
+    pub fn import_qutebrowser(&mut self, path: &Path) -> rusqlite::Result<usize> {
+        let source = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut rows = source
+            .prepare("SELECT url, title, atime FROM History WHERE NOT redirect ORDER BY atime")?;
+        let visits = rows
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let tx = self.conn.transaction()?;
+        let mut added = 0;
+        for (url, title, atime) in visits {
+            if !is_recordable(&url) {
+                continue;
+            }
+            let inserted = tx.execute(
+                "INSERT INTO visits (url, title, atime)
+                 SELECT ?1, ?2, ?3 WHERE NOT EXISTS (SELECT 1 FROM visits WHERE url = ?1 AND atime = ?3)",
+                params![url, title, atime],
+            )?;
+            if inserted == 0 {
+                continue;
+            }
+            added += 1;
+            tx.execute(
+                "INSERT INTO completion (url, title, last_visit, visits) VALUES (?1, ?2, ?3, 1)
+                 ON CONFLICT (url) DO UPDATE SET
+                     title = CASE WHEN excluded.title = '' THEN title ELSE excluded.title END,
+                     last_visit = MAX(last_visit, excluded.last_visit),
+                     visits = visits + 1",
+                params![url, title, atime],
+            )?;
+        }
+        tx.commit()?;
+        Ok(added)
+    }
+
     /// Titles often arrive after the load finishes.
     pub fn set_title(&self, url: &str, title: &str) -> rusqlite::Result<()> {
         if title.is_empty() {
@@ -143,6 +187,42 @@ fn escape_like(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn imports_qutebrowser_history_once() {
+        let path =
+            std::env::temp_dir().join(format!("hb-qb-history-{}.sqlite", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let qb = Connection::open(&path).unwrap();
+            qb.execute_batch(
+                "CREATE TABLE History (url TEXT, title TEXT, atime INTEGER, redirect BOOLEAN);
+                 INSERT INTO History VALUES ('https://rust-lang.org/', 'Rust', 100, 0);
+                 INSERT INTO History VALUES ('https://rust-lang.org/', 'Rust', 200, 0);
+                 INSERT INTO History VALUES ('https://t.co/x', '', 150, 1);
+                 INSERT INTO History VALUES ('about:blank', '', 160, 0);",
+            )
+            .unwrap();
+        }
+        let mut history = History::open_in_memory().unwrap();
+        assert_eq!(history.import_qutebrowser(&path).unwrap(), 2);
+        assert_eq!(
+            history.import_qutebrowser(&path).unwrap(),
+            0,
+            "a second import adds nothing"
+        );
+        let found = history.search("rust", 10).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            (found[0].title.as_str(), found[0].last_visit),
+            ("Rust", 200)
+        );
+        assert!(
+            history.search("t.co", 10).unwrap().is_empty(),
+            "redirects are skipped"
+        );
+        std::fs::remove_file(&path).unwrap();
+    }
 
     fn urls(entries: &[HistoryEntry]) -> Vec<&str> {
         entries.iter().map(|e| e.url.as_str()).collect()
