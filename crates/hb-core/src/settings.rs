@@ -369,6 +369,12 @@ pub static SETTINGS: &[SettingDef] = &[
         hint_chars
     ),
     def!(
+        "hints.mode",
+        Kind::Enum(&["letter", "number"]),
+        s("letter"),
+        "letter: labels from hints.chars; number: numbered labels, and typing letters filters by text"
+    ),
+    def!(
         "hints.uppercase",
         Kind::Bool,
         Value::Bool(false),

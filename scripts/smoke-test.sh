@@ -117,6 +117,12 @@ cat >"$work/frames.html" <<'EOF'
 <iframe style="width:400px;height:200px" srcdoc="<button style='margin:40px' onclick=&quot;parent.document.title = 'inner clicked ' + event.isTrusted&quot;>inside</button>"></iframe>
 EOF
 
+cat >"$work/links.html" <<'EOF'
+<!doctype html><title>links</title>
+<p><a href="#home" onclick="document.title='clicked home'">Home</a> <a href="#news" onclick="document.title='clicked news'">News</a>
+<a href="#about" onclick="document.title='clicked about'">About us</a></p>
+EOF
+
 cat >"$work/dialogs.html" <<'EOF'
 <!doctype html><title>dialogs</title>
 <button onclick="document.title = 'confirm ' + confirm('Sure?')">confirm</button>
@@ -606,6 +612,18 @@ expect_title "frames"
 nap 0.5
 hint a
 expect_title "inner clicked true"
+
+step "number hints filter by the text typed"
+run "set hints.mode number"
+run "open file://$work/links.html"
+expect_title "links"
+xdotool key f
+wait_mode hint || true
+xdotool type --delay 20 "ou"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "clicked about" ]] && break; sleep 0.1; done
+clicked=$(page_title)
+run "set hints.mode letter"
+[[ $clicked == "clicked about" ]] && pass || fail "title was '$clicked'"
 
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"

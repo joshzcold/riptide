@@ -26,6 +26,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |
+| `hints.mode` | letter \| number | `letter` | letter: labels from hints.chars; number: numbered labels, and typing letters filters by text |
 | `hints.uppercase` | boolean | `false` | Show hint labels in upper case |
 | `input.forward_unbound_keys` | all \| auto \| none | `auto` | Pass unbound keys to the page in normal mode (auto: all but plain letters and digits) |
 | `input.insert_mode.auto_enter` | boolean | `true` | Enter insert mode when an editable element gets focus |

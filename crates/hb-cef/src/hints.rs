@@ -14,6 +14,8 @@ const HINTS_JS: &str = include_str!("../js/hints.js");
 #[derive(Deserialize)]
 struct Item {
     url: Option<String>,
+    #[serde(default)]
+    text: String,
 }
 
 #[derive(Deserialize)]
@@ -36,7 +38,13 @@ pub fn request(request: HintRequest) {
             Ok(Err(e)) => return shell::show_message(Level::Error, format!("Hints failed: {e}")),
             Err(e) => return shell::show_message(Level::Error, format!("Hints failed: {e}")),
         };
-        let items = items.into_iter().map(|i| HintItem { url: i.url }).collect();
+        let items = items
+            .into_iter()
+            .map(|i| HintItem {
+                url: i.url,
+                text: i.text,
+            })
+            .collect();
         let effects = shell::with(|s| {
             // Ignore stale replies if the user switched tabs meanwhile.
             if s.current_browser().map(|b| b.identifier()) != Some(id) {

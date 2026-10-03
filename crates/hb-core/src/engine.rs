@@ -230,6 +230,7 @@ impl Engine {
         keystring.push_str(&self.count.map(|c| c.to_string()).unwrap_or_default());
         keystring.push_str(&format_sequence(&self.pending));
         if let Some(hints) = &self.hints {
+            keystring.push_str(&hints.filter);
             keystring.push_str(&hints.typed);
         }
         StatusView {
@@ -427,7 +428,11 @@ impl Engine {
             self.show_message(Level::Info, "No elements found");
             return effects;
         }
-        let session = HintSession::new(request, items, self.settings.str("hints.chars"));
+        let session = if self.settings.str("hints.mode") == "number" {
+            HintSession::new_numbers(request, items)
+        } else {
+            HintSession::new(request, items, self.settings.str("hints.chars"))
+        };
         effects.push(Effect::ShowHints {
             labels: session.labels.clone(),
         });
@@ -701,10 +706,7 @@ impl Engine {
             return consumed(effects);
         };
         let input = match (key.code, key.text()) {
-            (KeyCode::Backspace, _) => {
-                session.pop();
-                HintInput::Filtered
-            }
+            (KeyCode::Backspace, _) => session.pop(),
             (_, Some(c)) => session.push(c),
             _ => return consumed(effects),
         };
@@ -713,6 +715,9 @@ impl Engine {
             HintInput::NoMatch => {}
             HintInput::Filtered => effects.push(Effect::FilterHints {
                 typed: session.typed.clone(),
+            }),
+            HintInput::Relabeled => effects.push(Effect::ShowHints {
+                labels: session.labels.clone(),
             }),
             HintInput::Chosen(index) => {
                 let url = session.items[index].url.clone();
@@ -1716,6 +1721,7 @@ mod tests {
     fn items(n: usize) -> Vec<HintItem> {
         (0..n)
             .map(|i| HintItem {
+                text: String::new(),
                 url: Some(format!("https://example.com/{i}")),
             })
             .collect()

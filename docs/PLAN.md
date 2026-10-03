@@ -143,7 +143,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
 - [x] `;d` download
 - [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02; cross-origin iframes are hinted as a whole)
-- [ ] Number hint mode
+- [x] Number hint mode (`hints.mode = number`: digit labels, letters filter by element text, a unique match is followed) (2026-10-02)
 
 ### Command line
 - [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings, open tabs via `:tab-select`/`T`)

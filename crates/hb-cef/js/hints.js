@@ -89,6 +89,12 @@
     }
   }
 
+  // What number hints filter on: the visible text, or a label for elements without one.
+  function textOf(el) {
+    const text = el.innerText || el.value || el.getAttribute("aria-label") || el.alt || el.title || "";
+    return String(text).trim().slice(0, 200).toLowerCase();
+  }
+
   // The document inside a same-origin frame; null for cross-origin ones.
   function innerDocument(frame) {
     try {
@@ -125,7 +131,7 @@
       clear();
       const selector = (SELECTORS[group] || SELECTORS.all).join(",");
       elements = gather(document, [], selector, []);
-      return JSON.stringify(elements.map(({ el }) => ({ url: urlOf(el) })));
+      return JSON.stringify(elements.map(({ el }) => ({ url: urlOf(el), text: textOf(el) })));
     },
 
     show(texts, uppercase) {
@@ -136,6 +142,8 @@
       style.textContent = STYLE;
       root.append(style);
       labels = texts.map((text, i) => {
+        // Number hints give elements the text filter hid no label.
+        if (!text) return { text, label: null };
         const rect = visibleRect(elements[i]) || elements[i].el.getBoundingClientRect();
         const label = document.createElement("span");
         label.className = "label";
@@ -152,6 +160,7 @@
 
     filter(typed) {
       for (const { text, label } of labels) {
+        if (!label) continue;
         const match = text.startsWith(typed);
         label.style.display = match ? "" : "none";
         if (!match) continue;

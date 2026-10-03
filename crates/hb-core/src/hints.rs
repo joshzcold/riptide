@@ -81,10 +81,15 @@ pub struct HintRequest {
 }
 
 /// One hintable element as reported by the page.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HintItem {
     pub url: Option<String>,
+    /// Its text, lowercased, which number hints filter on.
+    pub text: String,
 }
+
+/// Number hints use digits; `1` first reads more naturally than `0`.
+const NUMBER_CHARS: &str = "1234567890";
 
 /// Labels for `count` hints, using qutebrowser's scattered letter algorithm:
 /// as many labels as possible are one character shorter, and no label is a
@@ -143,8 +148,13 @@ fn scatter(labels: Vec<String>, buckets: usize) -> Vec<String> {
 pub struct HintSession {
     pub request: HintRequest,
     pub items: Vec<HintItem>,
+    /// One per item; empty for items hidden by the number-mode text filter.
     pub labels: Vec<String>,
     pub typed: String,
+    /// `hints.mode = number`: digits pick, other characters filter by text.
+    pub numbers: bool,
+    /// The text typed so far in number mode.
+    pub filter: String,
 }
 
 /// Result of typing a character in hint mode.
@@ -154,6 +164,8 @@ pub enum HintInput {
     Filtered,
     /// The typed text uniquely matches this item.
     Chosen(usize),
+    /// Number mode: the text filter changed which items have labels.
+    Relabeled,
     /// No label starts with the typed text; the key was ignored.
     NoMatch,
 }
@@ -166,13 +178,57 @@ impl HintSession {
             items,
             labels,
             typed: String::new(),
+            numbers: false,
+            filter: String::new(),
+        }
+    }
+
+    /// qutebrowser's `hints.mode = number`.
+    pub fn new_numbers(request: HintRequest, items: Vec<HintItem>) -> Self {
+        let mut session = Self::new(request, items, NUMBER_CHARS);
+        session.numbers = true;
+        session.relabel();
+        session
+    }
+
+    fn visible(&self) -> Vec<usize> {
+        (0..self.items.len())
+            .filter(|&i| self.items[i].text.contains(&self.filter))
+            .collect()
+    }
+
+    /// Number the items matching the filter; the rest get no label.
+    fn relabel(&mut self) {
+        let visible = self.visible();
+        let mut numbers = labels(visible.len(), NUMBER_CHARS).into_iter();
+        self.labels = vec![String::new(); self.items.len()];
+        for i in visible {
+            self.labels[i] = numbers.next().unwrap_or_default();
         }
     }
 
     pub fn push(&mut self, c: char) -> HintInput {
+        if self.numbers && !c.is_ascii_digit() {
+            self.filter.extend(c.to_lowercase());
+            let visible = self.visible();
+            if visible.is_empty() {
+                self.filter.pop();
+                return HintInput::NoMatch;
+            }
+            self.typed.clear();
+            if let [only] = visible.as_slice() {
+                return HintInput::Chosen(*only);
+            }
+            self.relabel();
+            return HintInput::Relabeled;
+        }
         let mut typed = self.typed.clone();
         typed.push(c);
-        if !self.labels.iter().any(|l| l.starts_with(&typed)) {
+        if !self
+            .labels
+            .iter()
+            .any(|l| !l.is_empty() && l.starts_with(&typed))
+        {
             return HintInput::NoMatch;
         }
         match self.labels.iter().position(|l| *l == typed) {
@@ -187,8 +243,13 @@ impl HintSession {
         }
     }
 
-    pub fn pop(&mut self) {
-        self.typed.pop();
+    /// Backspace: undo the last label character, or else the last filter one.
+    pub fn pop(&mut self) -> HintInput {
+        if self.typed.pop().is_some() || !self.numbers || self.filter.pop().is_none() {
+            return HintInput::Filtered;
+        }
+        self.relabel();
+        HintInput::Relabeled
     }
 }
 
@@ -248,7 +309,7 @@ mod tests {
             rapid: false,
             fill: None,
         };
-        let items = vec![HintItem { url: None }; 5];
+        let items = vec![HintItem::default(); 5];
         // Labels: [a, bc, ba, ca, bb]
         let mut s = HintSession::new(request, items, "abc");
         assert_eq!(s.push('x'), HintInput::NoMatch);
@@ -258,5 +319,41 @@ mod tests {
         assert_eq!(s.push('b'), HintInput::Filtered);
         assert_eq!(s.push('a'), HintInput::Chosen(2));
         assert_eq!(s.typed, "");
+    }
+
+    #[test]
+    fn number_hints_filter_by_text() {
+        let request = HintRequest {
+            group: HintGroup::All,
+            target: HintTarget::Normal,
+            rapid: false,
+            fill: None,
+        };
+        let item = |text: &str| HintItem {
+            url: None,
+            text: text.into(),
+        };
+        let items = vec![item("home"), item("news"), item("new post"), item("about")];
+        let mut s = HintSession::new_numbers(request, items);
+        assert!(
+            s.labels
+                .iter()
+                .all(|l| l.chars().all(|c| c.is_ascii_digit()) && !l.is_empty())
+        );
+        assert_eq!(s.push('n'), HintInput::Relabeled);
+        assert_eq!(s.labels.iter().filter(|l| !l.is_empty()).count(), 2);
+        assert!(s.labels[0].is_empty() && s.labels[3].is_empty());
+        assert_eq!(s.push('z'), HintInput::NoMatch);
+        assert_eq!(s.filter, "n");
+        assert_eq!(s.pop(), HintInput::Relabeled);
+        assert_eq!(s.labels.iter().filter(|l| !l.is_empty()).count(), 4);
+        assert_eq!(
+            s.push('A'),
+            HintInput::Chosen(3),
+            "a single match is followed at once"
+        );
+        let label = s.labels[1].clone();
+        let chosen = label.chars().fold(HintInput::NoMatch, |_, c| s.push(c));
+        assert_eq!(chosen, HintInput::Chosen(1));
     }
 }
