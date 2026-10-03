@@ -318,6 +318,7 @@ wrap_load_handler! {
             };
             match self.role {
                 Role::Tab => {
+                    let browser_ref = browser.as_deref().cloned();
                     let done = shell::with_tab(browser, |s, index, _| {
                         let tab = s.tabs.get_mut(index)?;
                         let visit = (!tab.load_error).then(|| (tab.url.clone(), tab.title.clone()));
@@ -329,6 +330,9 @@ wrap_load_handler! {
                     }
                     if let Some((url, title)) = visit {
                         storage::record_visit(&url, &title);
+                    }
+                    if let Some(browser) = browser_ref {
+                        crate::marks::loaded(&browser);
                     }
                     return;
                 }

@@ -219,6 +219,8 @@ mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
 | `b` / `B` | Open a quickmark here / in a new tab |
 | `M` | Bookmark this page |
 | `gb` / `gB` | Open a bookmark here / in a new tab |
+| `` `a `` / `'a` | Set / jump to mark `a`: `a`–`z` remember this page's scroll position, `A`–`Z` also the page itself; `''` returns to where the last jump started |
+| `Ctrl-e` (insert mode) | `open-editor`: edit the text field in `editor.command` |
 | `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
 | `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |

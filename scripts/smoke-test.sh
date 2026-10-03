@@ -223,6 +223,26 @@ nap 0.5
 title=$(page_title)
 [[ $title =~ ^s=([0-9]+)\ k=3\  && ${BASH_REMATCH[1]} -gt 3000 ]] && pass || fail "title was '$title'"
 
+# Waits for the page's scroll position to satisfy a test, e.g. "-gt 3000".
+expect_scroll() {
+    local title=""
+    for _ in $(seq $((TIMEOUT * 10))); do
+        title=$(page_title)
+        [[ $title =~ ^s=([0-9]+)\  ]] && (( BASH_REMATCH[1] $1 )) && { pass; return; }
+        sleep 0.1
+    done
+    fail "title was '$title'"
+}
+
+step "\`a sets a mark and 'a jumps back to it"
+xdotool key grave a g g
+nap 0.3
+xdotool key apostrophe a
+expect_scroll "> 3000"
+step "'' returns to where the jump started"
+xdotool key apostrophe apostrophe
+expect_scroll "== 0"
+
 # Matches the first page's title whatever its scroll state.
 expect_first_page() {
     for _ in $(seq $((TIMEOUT * 10))); do

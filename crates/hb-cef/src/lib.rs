@@ -10,6 +10,7 @@ mod eval;
 mod favicons;
 mod help;
 mod hints;
+mod marks;
 mod permissions;
 mod privacy;
 mod prompts;

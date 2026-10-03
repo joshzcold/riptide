@@ -62,6 +62,14 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Insert, "<Ctrl-e>", "open-editor")
             .expect("valid default binding");
+        map.bind(Mode::Normal, "`", "mode-enter set_mark")
+            .expect("valid default binding");
+        map.bind(Mode::Normal, "'", "mode-enter jump_mark")
+            .expect("valid default binding");
+        for mode in [Mode::SetMark, Mode::JumpMark] {
+            map.bind(mode, "<Escape>", "mode-leave")
+                .expect("valid default binding");
+        }
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
             .expect("valid default binding");
         map

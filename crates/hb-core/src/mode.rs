@@ -15,10 +15,16 @@ pub enum Mode {
     Prompt,
     /// Answering a yes/no question.
     YesNo,
+    /// The next key names a mark to set (after `` ` ``).
+    #[serde(rename = "set_mark")]
+    SetMark,
+    /// The next key names a mark to jump to (after `'`).
+    #[serde(rename = "jump_mark")]
+    JumpMark,
 }
 
 impl Mode {
-    pub const ALL: [Mode; 7] = [
+    pub const ALL: [Mode; 9] = [
         Mode::Normal,
         Mode::Insert,
         Mode::Command,
@@ -26,6 +32,8 @@ impl Mode {
         Mode::Hint,
         Mode::Prompt,
         Mode::YesNo,
+        Mode::SetMark,
+        Mode::JumpMark,
     ];
 
     pub fn name(self) -> &'static str {
@@ -37,6 +45,8 @@ impl Mode {
             Mode::Hint => "hint",
             Mode::Prompt => "prompt",
             Mode::YesNo => "yesno",
+            Mode::SetMark => "set_mark",
+            Mode::JumpMark => "jump_mark",
         }
     }
 }

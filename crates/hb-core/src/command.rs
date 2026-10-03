@@ -201,6 +201,12 @@ pub enum Command {
     },
     /// Edit the focused text field in an external editor.
     OpenEditor,
+    /// Remember (`set`) or go back to the scroll position named `key`.
+    /// Lowercase marks belong to the page, uppercase ones also remember the URL.
+    Mark {
+        set: bool,
+        key: char,
+    },
     /// Offer replacements for the misspelled word at the cursor.
     SpellSuggest,
     SpellReplace {
@@ -362,6 +368,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "open-editor",
         "Edit the focused text field in editor.command",
+    ),
+    spec(
+        "set-mark",
+        "Remember the scroll position as a mark: a-z for this page, A-Z with its URL",
+    ),
+    spec(
+        "jump-mark",
+        "Go back to a mark; ' is where the last jump started",
     ),
     spec("download", "Download a URL (default: the current page)"),
     spec("download-cancel", "Cancel a download (count: its number)"),
@@ -684,6 +698,17 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "open-editor" => Command::OpenEditor,
+        "set-mark" | "jump-mark" => {
+            let key = args.required("key")?;
+            let mut chars = key.chars();
+            let (Some(c), None) = (chars.next(), chars.next()) else {
+                return Err(args.error(format!("a mark is one character, not {key:?}")));
+            };
+            Command::Mark {
+                set: name == "set-mark",
+                key: c,
+            }
+        }
         "spell-suggest" => Command::SpellSuggest,
         "spell-replace" => Command::SpellReplace {
             word: args.required("word")?.to_string(),
@@ -1163,6 +1188,8 @@ mod tests {
             "prompt-accept",
             "spell-replace",
             "spawn",
+            "set-mark",
+            "jump-mark",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

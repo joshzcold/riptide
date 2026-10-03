@@ -320,6 +320,7 @@ Gaps:
     - Not yet: `-o` (output in a tab), `QUTE_USER_AGENT`, hint-mode userscripts (`QUTE_MODE=hints`) and `:spawn` from hints.
     - Password fields are skipped by `:open-editor`.
     - The remote socket can run `:spawn`; it is limited to the same user (M15).
+- ✅ **Marks** (2026-10-02): `` ` `` and `'` enter the `set_mark` and `jump_mark` modes (qutebrowser's names), and the next key names the mark (`Command::Mark`, unit tested). `hb-cef/src/marks.rs` reads and sets `scrollX`/`scrollY` through the eval channel. Uppercase marks also reopen their page and scroll once `on_load_end` fires. `''` goes back to where the last jump started. Marks last for the session. A smoke step covers `` `a ``, `gg`, `'a` and `''`.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.

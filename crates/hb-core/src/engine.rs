@@ -452,6 +452,7 @@ impl Engine {
             Mode::Insert | Mode::Passthrough => self.handle_passthrough(key),
             Mode::Hint => self.handle_hint(key),
             Mode::Prompt | Mode::YesNo => self.handle_prompt(key),
+            Mode::SetMark | Mode::JumpMark => self.handle_mark(key),
         }
     }
 
@@ -630,6 +631,31 @@ impl Engine {
             self.dirty = true;
         }
         consumed(Vec::new())
+    }
+
+    /// The key after `` ` `` or `'` names the mark; anything else cancels.
+    fn handle_mark(&mut self, key: Key) -> KeyOutcome {
+        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+            let cmd = cmd.to_string();
+            return consumed(self.execute_str(&cmd, None));
+        }
+        let command = match self.mode {
+            Mode::SetMark => "set-mark",
+            _ => "jump-mark",
+        };
+        let mut effects = Vec::new();
+        self.set_mode(Mode::Normal, &mut effects);
+        if let Some(c) = key.text().filter(|c| !c.is_whitespace()) {
+            self.execute(
+                Command::Mark {
+                    set: command == "set-mark",
+                    key: c,
+                },
+                None,
+                &mut effects,
+            );
+        }
+        consumed(effects)
     }
 
     fn handle_passthrough(&mut self, key: Key) -> KeyOutcome {
@@ -892,6 +918,36 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn marks_take_the_next_key() {
+        let mut e = engine();
+        let out = press(&mut e, "`a");
+        assert_eq!(
+            runs(&out),
+            vec![(
+                Command::Mark {
+                    set: true,
+                    key: 'a'
+                },
+                None
+            )]
+        );
+        assert_eq!(e.mode(), Mode::Normal);
+        let out = press(&mut e, "'A");
+        assert_eq!(
+            runs(&out),
+            vec![(
+                Command::Mark {
+                    set: false,
+                    key: 'A'
+                },
+                None
+            )]
+        );
+        let out = press(&mut e, "'<Escape>j");
+        assert_eq!(runs(&out), vec![(Command::Scroll(Direction::Down), None)]);
     }
 
     #[test]
