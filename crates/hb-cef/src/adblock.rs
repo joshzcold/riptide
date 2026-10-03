@@ -12,7 +12,7 @@ use hb_core::Command;
 use hb_core::engine::Level;
 use hb_core::settings::Settings;
 
-use crate::shell;
+use crate::{eval, shell};
 
 struct State {
     blocker: Option<Arc<Blocker>>,
@@ -76,26 +76,29 @@ pub fn load(data_dir: PathBuf, lists: Vec<String>) {
 }
 
 /// Whether to cancel a request. `page` is the URL of the tab's top frame.
-pub fn should_block(url: &str, page: &str, resource: ResourceType) -> bool {
-    let Some(kind) = kind(resource) else {
-        return false;
-    };
-    let Ok(state) = STATE.read() else {
-        return false;
-    };
+/// The engine, if blocking is on for `page` (per-site setting, whitelist).
+fn blocker_for(page: &str) -> Option<Arc<Blocker>> {
+    let state = STATE.read().ok()?;
     let enabled = state
         .enabled_for
         .iter()
         .rev()
         .find(|(pattern, _)| hb_core::url::pattern_matches(pattern, page))
         .map_or(state.enabled, |(_, on)| *on);
-    let Some(blocker) = state.blocker.as_ref().filter(|_| enabled) else {
+    let host = hb_core::url::host(page);
+    if !enabled || hb_adblock::whitelisted(host, &state.whitelist) {
+        return None;
+    }
+    state.blocker.clone()
+}
+
+pub fn should_block(url: &str, page: &str, resource: ResourceType) -> bool {
+    let Some(kind) = kind(resource) else {
         return false;
     };
-    let host = hb_core::url::host(page);
-    if hb_adblock::whitelisted(host, &state.whitelist) {
+    let Some(blocker) = blocker_for(page) else {
         return false;
-    }
+    };
     let blocked = blocker.should_block(url, page, kind);
     if blocked {
         tracing::debug!(url, page, kind, "blocked");
@@ -305,4 +308,65 @@ wrap_urlrequest_client! {
             post_task(ThreadId::UI, Some(&mut task));
         }
     }
+}
+
+/// Every class and id in the page, for the generic hiding rules.
+const COLLECT_JS: &str = "JSON.stringify((() => {
+  const classes = new Set(), ids = new Set();
+  for (const el of document.querySelectorAll('[class],[id]')) {
+    if (el.id) ids.add(el.id);
+    for (const c of el.classList) classes.add(c);
+    if (classes.size + ids.size > 20000) break;
+  }
+  return { classes: [...classes], ids: [...ids] };
+})())";
+
+#[derive(serde::Deserialize)]
+struct ClassesAndIds {
+    classes: Vec<String>,
+    ids: Vec<String>,
+}
+
+/// Hide ads with the lists' element-hiding rules once a page has loaded:
+/// its site-specific rules, then the generic ones for the classes and ids
+/// it uses.
+pub fn apply_cosmetic(browser: &Browser, url: &str) {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return;
+    }
+    let Some(blocker) = blocker_for(url) else {
+        return;
+    };
+    let cosmetic = blocker.cosmetic(url);
+    inject_css(browser, &cosmetic.css);
+    if !cosmetic.generic {
+        return;
+    }
+    let target = browser.clone();
+    eval::eval(browser, COLLECT_JS, move |result| {
+        let Some(found) = result
+            .ok()
+            .and_then(|json| serde_json::from_str::<ClassesAndIds>(&json).ok())
+        else {
+            return;
+        };
+        inject_css(
+            &target,
+            &blocker.generic_css(&found.classes, &found.ids, &cosmetic),
+        );
+    });
+}
+
+fn inject_css(browser: &Browser, css: &str) {
+    if css.is_empty() {
+        return;
+    }
+    let css = serde_json::to_string(css).unwrap_or_default();
+    let code = format!(
+        "(() => {{ let s = document.getElementById('__hb_cosmetic'); \
+         if (!s) {{ s = document.createElement('style'); s.id = '__hb_cosmetic'; \
+         (document.head || document.documentElement).appendChild(s); }} \
+         s.textContent += {css}; return 'null'; }})()"
+    );
+    eval::eval(browser, &code, |_| {});
 }

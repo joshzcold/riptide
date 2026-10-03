@@ -5,6 +5,7 @@
 //! engine is cached in `<data>/adblock/engine.dat` so startup doesn't parse
 //! every list again.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use adblock::Engine;
@@ -13,6 +14,25 @@ use adblock::request::Request;
 
 pub struct Blocker {
     engine: Engine,
+}
+
+/// Element hiding for one page: CSS for its site-specific rules, and what the
+/// generic class and id rules need.
+pub struct Cosmetic {
+    pub css: String,
+    /// False when the lists say `#@#` generic hiding is off for the site.
+    pub generic: bool,
+    exceptions: HashSet<String>,
+}
+
+/// One rule per selector: a single invalid selector would void a whole list.
+fn hide_css<'a>(selectors: impl IntoIterator<Item = &'a String>) -> String {
+    let mut selectors: Vec<&String> = selectors.into_iter().collect();
+    selectors.sort();
+    selectors
+        .into_iter()
+        .map(|s| format!("{s}{{display:none!important}}\n"))
+        .collect()
 }
 
 impl Blocker {
@@ -42,6 +62,25 @@ impl Blocker {
         let mut engine = Engine::default();
         engine.deserialize(bytes).ok()?;
         Some(Blocker { engine })
+    }
+
+    /// The site-specific element hiding for `url`.
+    pub fn cosmetic(&self, url: &str) -> Cosmetic {
+        let resources = self.engine.url_cosmetic_resources(url);
+        Cosmetic {
+            css: hide_css(&resources.hide_selectors),
+            generic: !resources.generichide,
+            exceptions: resources.exceptions,
+        }
+    }
+
+    /// CSS for the generic rules matching the classes and ids a page uses.
+    pub fn generic_css(&self, classes: &[String], ids: &[String], cosmetic: &Cosmetic) -> String {
+        hide_css(
+            &self
+                .engine
+                .hidden_class_id_selectors(classes, ids, &cosmetic.exceptions),
+        )
     }
 
     /// `kind` is a request type such as "script", "image" or "sub_frame".
@@ -159,6 +198,30 @@ mod tests {
             "xmlhttprequest"
         ));
         assert!(!b.should_block("https://example.org/app.js", page, "script"));
+    }
+
+    #[test]
+    fn element_hiding() {
+        let (b, _) = Blocker::from_lists([concat!(
+            "##.ad-banner\n",
+            "news.example.org##.sponsored\n",
+            "##div[data-ad]\n",
+            "news.example.org#@#.ad-banner\n",
+        )]);
+        let page = b.cosmetic("https://news.example.org/today");
+        assert!(page.css.contains(".sponsored{display:none!important}"));
+        assert!(page.generic);
+        let other = b.cosmetic("https://other.example.com/");
+        assert!(!other.css.contains(".sponsored"));
+        let classes = vec!["ad-banner".to_string(), "content".to_string()];
+        assert!(
+            b.generic_css(&classes, &[], &other)
+                .contains(".ad-banner{display:none!important}")
+        );
+        assert!(
+            b.generic_css(&classes, &[], &page).is_empty(),
+            "#@# makes an exception"
+        );
     }
 
     #[test]

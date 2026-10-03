@@ -135,7 +135,8 @@ Ads and trackers are blocked at the network level with Adblock Plus filter lists
 
 - `content.blocking.enabled` turns blocking on or off.
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
-- Top-level pages are never blocked, so a bad rule can't make a site unreachable. Cosmetic (element-hiding) rules aren't applied yet.
+- Top-level pages are never blocked, so a bad rule can't make a site unreachable.
+- Element-hiding rules (`##.ad`, `example.com##.sponsored`) are applied once a page loads: the site-specific ones, and the generic ones for the classes and ids the page uses. Content added later isn't checked again.
 
 ### External programs and userscripts
 

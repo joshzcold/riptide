@@ -390,10 +390,11 @@ wrap_load_handler! {
                     if let Some((url, title)) = visit {
                         storage::record_visit(&url, &title);
                     }
+                    let url = CefString::from(&frame.url()).to_string();
                     if let Some(browser) = browser_ref {
                         crate::marks::loaded(&browser);
+                        crate::adblock::apply_cosmetic(&browser, &url);
                     }
-                    let url = CefString::from(&frame.url()).to_string();
                     crate::lua::emit("load_finished", &[("url", &url)]);
                     return;
                 }

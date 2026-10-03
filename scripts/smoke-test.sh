@@ -144,7 +144,15 @@ cat >"$work/http/geo.html" <<'EOF'
 <!doctype html><title>geo</title>
 <button onclick="navigator.geolocation.getCurrentPosition(() => { document.title = 'geo=ok'; }, (e) => { document.title = 'geo=' + (e.code === 1 ? 'denied' : 'allowed'); })">ask</button>
 EOF
-printf '! test list\n/ads/banner.js\n' >"$work/filters.txt"
+printf '! test list\n/ads/banner.js\n##.ad-banner\n127.0.0.1##.local-ad\n' >"$work/filters.txt"
+cat >"$work/http/cosmetic.html" <<'EOF'
+<!doctype html><title>cosmetic</title>
+<div class="ad-banner">ad</div><div class="local-ad">ad</div><div class="content">text</div>
+<script>
+const shown = (c) => getComputedStyle(document.querySelector('.' + c)).display;
+setInterval(() => { document.title = `banner=${shown('ad-banner')} local=${shown('local-ad')} content=${shown('content')}`; }, 200);
+</script>
+EOF
 
 Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
 xvfb_pid=$!
@@ -481,6 +489,10 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/base/data/adblock/engine.dat ]
 nap 0.5
 run "open $http/adblock.html"
 expect_title "ads b=no a=yes"
+
+step "element-hiding rules hide ads on the page"
+run "open $http/cosmetic.html"
+expect_title "banner=none local=none content=block"
 
 step "an 'always' permission answer is saved for the site"
 run "open $http/geo.html"
