@@ -72,7 +72,11 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         Command::ZoomStep { out } => {
             let steps = i64::from(count.unwrap_or(1).max(1));
             let current = rt_core::zoom::to_percent(host.zoom_level());
-            let next = rt_core::zoom::step(current, if *out { -steps } else { steps });
+            let levels = shell::with(|s| {
+                rt_core::zoom::levels_from(s.engine.settings().list("zoom.levels"))
+            })
+            .unwrap_or_default();
+            let next = rt_core::zoom::step_in(&levels, current, if *out { -steps } else { steps });
             set_zoom(&browser, &host, next);
         }
         Command::DevTools => {

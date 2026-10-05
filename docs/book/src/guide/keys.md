@@ -70,6 +70,16 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
+## Searching, scrolling and zoom
+
+`/` and `?` search the page, and `n`/`N` move between matches. Searches go on from the top after the last match, saying so, unless you set `search.wrap = false` (they stop at the last match) or `search.wrap_messages = false` (they wrap quietly). `search.ignore_case` (`smart`, `always`, `never`) and `search.incremental` set how matching works.
+
+`scrolling.smooth = true` animates scrolling by keys. `+` and `-` step through `zoom.levels`, and `=` goes back to `zoom.default`:
+
+```toml
+"zoom.levels" = ["50%", "75%", "100%", "125%", "150%", "200%"]
+```
+
 ## Insert mode and key mappings
 
 Clicking into a text field enters insert mode (`input.insert_mode.auto_enter`), and loading a new page leaves it (`input.insert_mode.leave_on_load`). A field the page focuses by itself, like a search box with `autofocus`, doesn't take insert mode unless you set `input.insert_mode.auto_load = true`. Your keys keep working in normal mode until you click or press `i`.

@@ -50,8 +50,11 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `keyhint.delay` | integer | `500` | How long after a partial key chain the popup listing its continuations appears, in milliseconds |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
 | `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
+| `scrolling.smooth` | boolean | `false` | Animate scrolling by keys instead of jumping |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |
 | `search.incremental` | boolean | `true` | Search while typing after / or ? |
+| `search.wrap` | boolean | `true` | Go on from the top when a search passes the last match (or from the bottom, searching up) |
+| `search.wrap_messages` | boolean | `true` | Say when a search wraps around the page |
 | `session.lazy_restore` | boolean | `false` | When restoring a session, load background tabs only when they are first shown |
 | `spellcheck.languages` | string[] | `[]` | Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once |
 | `statusbar.position` | top \| bottom | `bottom` | Where the status bar is |
@@ -81,3 +84,4 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `url.yank_ignored_parameters` | string[] | `["ref","utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_name","fbclid","gclid"]` | Query parameters dropped when yanking a URL, such as tracking tags |
 | `window.title_format` | string | `{current_title}{title_sep}Riptide` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
 | `zoom.default` | integer | `100` | Zoom in percent for pages, and what :zoom without a value resets to |
+| `zoom.levels` | string[] | `["25%","33%","50%","67%","75%","90%","100%","110%","125%","150%","175%","200%","250%","300%","400%","500%"]` | The zoom levels + and - step through, in percent |

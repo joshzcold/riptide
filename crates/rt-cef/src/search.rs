@@ -15,6 +15,12 @@ struct Last {
     reverse: bool,
     /// Report "not found" once the final result arrives.
     report: bool,
+    /// The direction of the last find, and the match it landed on, to tell
+    /// when a search wraps around the page.
+    forward: bool,
+    ordinal: i32,
+    /// The next result comes from stepping back over a wrap (`search.wrap = false`).
+    undoing: bool,
 }
 
 thread_local! {
@@ -96,6 +102,8 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                     text: text.clone(),
                     reverse: *reverse,
                     report: !incremental,
+                    forward: !reverse,
+                    ..Last::default()
                 }
             });
             if same {
@@ -113,6 +121,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             let (text, reverse) = LAST.with(|l| {
                 let mut l = l.borrow_mut();
                 l.report = true;
+                l.forward = l.reverse == *prev;
                 (l.text.clone(), l.reverse)
             });
             if text.is_empty() {
@@ -146,10 +155,31 @@ wrap_find_handler! {
             if final_update == 0 {
                 return;
             }
-            let (text, report) = LAST.with(|l| {
+            let host = browser.as_ref().and_then(|b| b.host());
+            let (text, report, forward, wrapped) = LAST.with(|l| {
                 let mut l = l.borrow_mut();
-                (l.text.clone(), std::mem::take(&mut l.report))
+                let wrapped = !std::mem::take(&mut l.undoing)
+                    && l.ordinal != 0
+                    && count > 0
+                    && if l.forward { active_match_ordinal < l.ordinal } else { active_match_ordinal > l.ordinal };
+                l.ordinal = active_match_ordinal;
+                (l.text.clone(), std::mem::take(&mut l.report), l.forward, wrapped)
             });
+            let (wrap, wrap_messages) = shell::with(|s| {
+                let settings = s.engine.settings();
+                (settings.bool("search.wrap"), settings.bool("search.wrap_messages"))
+            })
+            .unwrap_or((true, true));
+            let (edge, other) = if forward { ("BOTTOM", "TOP") } else { ("TOP", "BOTTOM") };
+            if wrapped && !wrap {
+                // Chromium always wraps; step back to the match before.
+                if let Some(host) = &host {
+                    LAST.with(|l| l.borrow_mut().undoing = true);
+                    host.find(Some(&CefString::from(text.as_str())), (!forward).into(), match_case(&text).into(), 1);
+                }
+                shell::show_message(Level::Warning, format!("Search hit {edge} without match for '{text}'"));
+                return shell::refresh_ui();
+            }
             let found = (!text.is_empty() && count > 0).then_some((active_match_ordinal, count));
             shell::with_tab(browser, |s, index, _| {
                 if let Some(tab) = s.tabs.get_mut(index) {
@@ -162,6 +192,8 @@ wrap_find_handler! {
             }
             if count == 0 {
                 shell::show_message(Level::Warning, format!("Text '{text}' not found on page"));
+            } else if wrapped && wrap_messages {
+                shell::show_message(Level::Info, format!("Search hit {edge}, continuing at {other}"));
             } else {
                 shell::show_message(Level::Info, format!("Match {active_match_ordinal} of {count} for '{text}'"));
             }

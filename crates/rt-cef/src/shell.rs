@@ -794,7 +794,11 @@ fn domain_of(url: &str) -> Option<String> {
 }
 
 fn scroll(browser: &Browser, op: &str, x: &str, y: &str) {
-    run_js(browser, &format!("({SCROLL_JS})({op:?}, {x}, {y});"));
+    let smooth = with(|s| s.engine.settings().bool("scrolling.smooth")).unwrap_or(false);
+    run_js(
+        browser,
+        &format!("({SCROLL_JS})({op:?}, {x}, {y}, {smooth});"),
+    );
 }
 
 fn run_js(browser: &Browser, code: &str) {

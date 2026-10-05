@@ -688,7 +688,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - `input.insert_mode.auto_load`: the renderer now reports `navigator.userActivation` with each focus change, so a field the page focuses by itself no longer takes insert mode unless this is on.
     - The mouse's back and forward buttons already work in Alloy windows (checked with X11 buttons 8 and 9). A setting to turn them off would need a page hook, so it isn't planned.
   - `input.partial_timeout`, `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`, `input.match_counts`, `input.mode_override`.
-- **Scrolling, search, zoom:** `scrolling.smooth`, `scrolling.bar`, `search.wrap`, `search.wrap_messages`, `zoom.levels`, `zoom.mouse_divider` (Ctrl+wheel), `zoom.text_only`.
+- **Scrolling, search, zoom:**
+  - ✅ (2026-10-05) `scrolling.smooth`, `search.wrap` and `search.wrap_messages`, and `zoom.levels`. Chromium always wraps searches, so `search.wrap = false` steps back when a result wraps.
+  - Still to do: `scrolling.bar`.
+  - Not possible: `zoom.text_only` (Chromium has no text-only zoom) and `zoom.mouse_divider` (Ctrl+wheel zoom is Chromium's own).
 - **Sessions and window:**
   - ✅ Tier 1 (2026-10-05): `session.lazy_restore` (background tabs keep their URL and title and load when first shown) and `confirm_quit` (always, multiple-tabs, downloads, never; asked on `:quit` and when closing the last window), each with a smoke step.
   - `session.default_name`, `:save`, `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.

@@ -298,6 +298,22 @@ pub fn confirm_quit_reason(values: &[String], tabs: usize, downloads: usize) -> 
     has("always").then(|| "Quit riptide?".to_string())
 }
 
+fn zoom_levels(value: &Value) -> Result<(), String> {
+    let Value::List(levels) = value else {
+        return Ok(());
+    };
+    if levels.is_empty() {
+        return Err("needs at least one level".into());
+    }
+    match levels
+        .iter()
+        .find(|l| crate::zoom::parse_percent(l).is_none())
+    {
+        Some(bad) => Err(format!("{bad:?} isn't a percentage like 110%")),
+        None => Ok(()),
+    }
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -642,6 +658,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where URLs from a second riptide invocation open"
     ),
     def!(
+        "scrolling.smooth",
+        Kind::Bool,
+        Value::Bool(false),
+        "Animate scrolling by keys instead of jumping"
+    ),
+    def!(
         "search.ignore_case",
         Kind::Enum(&["smart", "always", "never"]),
         s("smart"),
@@ -652,6 +674,18 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Search while typing after / or ?"
+    ),
+    def!(
+        "search.wrap",
+        Kind::Bool,
+        Value::Bool(true),
+        "Go on from the top when a search passes the last match (or from the bottom, searching up)"
+    ),
+    def!(
+        "search.wrap_messages",
+        Kind::Bool,
+        Value::Bool(true),
+        "Say when a search wraps around the page"
     ),
     def!(
         "session.lazy_restore",
@@ -863,6 +897,18 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Int { min: 25, max: 500 },
         Value::Int(100),
         "Zoom in percent for pages, and what :zoom without a value resets to"
+    ),
+    def!(
+        "zoom.levels",
+        Kind::List,
+        Value::List(
+            crate::zoom::LEVELS
+                .iter()
+                .map(|l| format!("{l}%"))
+                .collect()
+        ),
+        "The zoom levels + and - step through, in percent",
+        zoom_levels
     ),
 ];
 

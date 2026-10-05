@@ -1,6 +1,8 @@
-// Called as (op, x, y): op is "by" (pixels), "page" (fractions of the viewport)
-// or "perc" (absolute percentage; a null axis is left unchanged).
-(function (op, x, y) {
+// Called as (op, x, y, smooth): op is "by" (pixels), "page" (fractions of the
+// viewport) or "perc" (absolute percentage; a null axis is left unchanged).
+// smooth is scrolling.smooth.
+(function (op, x, y, smooth) {
+  const behavior = smooth ? "smooth" : "instant";
   const rt = (window.__rt = window.__rt || {});
   const root = document.scrollingElement || document.documentElement;
 
@@ -31,11 +33,11 @@
   const el = target();
   const view = el === root ? { w: window.innerWidth, h: window.innerHeight } : { w: el.clientWidth, h: el.clientHeight };
   if (op === "by") {
-    el.scrollBy({ left: x, top: y, behavior: "instant" });
+    el.scrollBy({ left: x, top: y, behavior });
   } else if (op === "page") {
-    el.scrollBy({ left: x * view.w, top: y * view.h, behavior: "instant" });
+    el.scrollBy({ left: x * view.w, top: y * view.h, behavior });
   } else if (op === "perc") {
-    const opts = { behavior: "instant" };
+    const opts = { behavior };
     if (x != null) opts.left = ((el.scrollWidth - view.w) * x) / 100;
     if (y != null) opts.top = ((el.scrollHeight - view.h) * y) / 100;
     el.scrollTo(opts);

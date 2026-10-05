@@ -655,6 +655,14 @@ else
     fail "scroll went from '$first' to '$second'"
 fi
 
+step "search.wrap = false keeps n at the last match"
+run "set search.wrap false"
+xdotool key n
+nap 1
+stayed=$(page_title)
+run "set search.wrap true"
+[[ $stayed == "$second" ]] && pass || fail "n moved from '$second' to '$stayed'"
+
 step "Return follows the link a search found"
 run "open file://$work/follow.html"
 expect_title "follow"
