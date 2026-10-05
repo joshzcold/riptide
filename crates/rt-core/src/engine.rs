@@ -280,6 +280,39 @@ impl Engine {
         }
     }
 
+    /// What the pending keys can still become, for the key hint popup:
+    /// the keys typed so far and `(the rest, command)` for each binding,
+    /// minus chains matching `keyhint.blacklist`.
+    pub fn keyhints(&self) -> Option<(String, Vec<(String, String)>)> {
+        if self.pending.is_empty() || !matches!(self.mode, Mode::Normal | Mode::Caret) {
+            return None;
+        }
+        let prefix = format_sequence(&self.pending);
+        let blacklist = self.settings.list("keyhint.blacklist");
+        let mut items: Vec<_> = self
+            .keymap
+            .continuations(self.mode, &self.pending)
+            .into_iter()
+            .filter(|(rest, _)| {
+                let chain = format!("{prefix}{rest}");
+                !blacklist.iter().any(|glob| crate::url::glob(glob, &chain))
+            })
+            .collect();
+        // Letters first (a, A, b, B…), then digits, then symbols and named keys.
+        items.sort_by_key(|(rest, _)| {
+            let first = rest.chars().next().unwrap_or(' ');
+            let group = if first.is_ascii_alphabetic() {
+                0
+            } else if first.is_ascii_digit() {
+                1
+            } else {
+                2
+            };
+            (group, rest.to_lowercase(), first.is_ascii_uppercase())
+        });
+        (!items.is_empty()).then_some((prefix, items))
+    }
+
     /// Completions for the command line, recomputed only when the text changes.
     pub fn completions(&mut self) -> CompletionView {
         if self.mode != Mode::Command {
@@ -2038,6 +2071,33 @@ mod tests {
         e.set_clipboard_reader(|| Some("  ".into()));
         assert!(runs(&press(&mut e, "pp")).is_empty());
         assert_eq!(e.status().message.unwrap().text, "Clipboard is empty");
+    }
+
+    #[test]
+    fn keyhints_list_what_pending_keys_can_become() {
+        let mut e = engine();
+        assert!(e.keyhints().is_none());
+        press(&mut e, "g");
+        let (prefix, items) = e.keyhints().unwrap();
+        assert_eq!(prefix, "g");
+        assert!(items.contains(&("g".to_string(), "scroll-to-perc 0".to_string())));
+        assert!(items.iter().all(|(rest, _)| !rest.is_empty()));
+        let order: Vec<&str> = items.iter().map(|(rest, _)| rest.as_str()).collect();
+        let pos = |k| order.iter().position(|r| *r == k).unwrap();
+        assert!(
+            pos("g") < pos("t")
+                && pos("t") < pos("T")
+                && pos("T") < pos("0")
+                && pos("0") < pos("$")
+        );
+        press(&mut e, "<Escape>");
+        e.apply_config(&ConfigOp::Set {
+            name: "keyhint.blacklist".into(),
+            value: Value::List(vec!["gg".into(), "g*".into()]),
+        })
+        .unwrap();
+        press(&mut e, "g");
+        assert!(e.keyhints().is_none(), "every g chain is blacklisted");
     }
 
     #[test]

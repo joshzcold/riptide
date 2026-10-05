@@ -166,6 +166,23 @@ impl Keymap {
         list
     }
 
+    /// Bindings that start with `prefix` (and are longer), as `(the rest of
+    /// the keys, command)` in qutebrowser notation, sorted by keys.
+    pub fn continuations(&self, mode: Mode, prefix: &[Key]) -> Vec<(String, String)> {
+        let mut list: Vec<(String, String)> = self
+            .bindings
+            .get(&mode)
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, _)| k.len() > prefix.len() && k.starts_with(prefix))
+                    .map(|(k, c)| (format_sequence(&k[prefix.len()..]), c.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        list.sort();
+        list
+    }
+
     /// An exact match wins even when longer bindings share the prefix.
     pub fn lookup(&self, mode: Mode, seq: &[Key]) -> Lookup<'_> {
         let Some(map) = self.bindings.get(&mode) else {

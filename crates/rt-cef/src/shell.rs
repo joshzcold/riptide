@@ -165,6 +165,9 @@ pub struct Shell {
     /// Browser id of the tab currently showing hint labels.
     pub hint_browser: Option<i32>,
     timed_message: u64,
+    /// The pending key chain and when it last changed, for `keyhint.delay`.
+    keyhint_chain: String,
+    keyhint_since: std::time::Instant,
 }
 
 impl std::ops::Deref for Shell {
@@ -201,6 +204,8 @@ impl Shell {
             suppress_char: false,
             hint_browser: None,
             timed_message: 0,
+            keyhint_chain: String::new(),
+            keyhint_since: std::time::Instant::now(),
         }
     }
 
@@ -944,6 +949,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         }
     }
 
+    let mut keyhint_wait = None;
     // A prompt takes the overlay; otherwise it shows command completions.
     let prompt = if focused {
         s.engine.prompt_view()
@@ -955,8 +961,15 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             let rows = prompt_rows(s, &prompt);
             (json!({ "kind": "prompt", "prompt": prompt }), rows)
         }
-        None if focused => {
+        None if focused => 'rows: {
             let mut rows = completion_rows(&s.engine.completions());
+            if rows.is_empty() {
+                let (hints, wait) = keyhints(s);
+                keyhint_wait = wait;
+                if let Some(hints) = hints {
+                    break 'rows hints;
+                }
+            }
             // Without completions, show the messages the status bar replaced.
             if rows.is_empty() && status.command_line.is_none() {
                 rows = s
@@ -990,6 +1003,11 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         s.last_overlay = payload;
         s.last_overlay_rows = rows;
     }
+    // Come back when the key hint delay runs out, or the tab bar's switching delay.
+    let refresh_after = match (refresh_after, keyhint_wait) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
 
     UiUpdate {
         scripts,
@@ -1110,6 +1128,47 @@ fn completion_rows(view: &CompletionView) -> Vec<serde_json::Value> {
             _ => return rows,
         }
     }
+}
+
+/// Width of one key hint column, in characters.
+const KEYHINT_COLUMN_CHARS: i32 = 40;
+/// Approximate width of a character in the overlay's monospace font.
+const OVERLAY_CHAR_WIDTH: i32 = 8;
+
+/// The key hint popup once the pending chain has been unchanged for
+/// `keyhint.delay`, with the rows it needs; otherwise how long until it's due.
+fn keyhints(s: &mut Shell) -> (Option<(serde_json::Value, usize)>, Option<i64>) {
+    let hints = s.engine.keyhints();
+    let chain = hints
+        .as_ref()
+        .map(|(prefix, _)| prefix.clone())
+        .unwrap_or_default();
+    if chain != s.keyhint_chain {
+        s.keyhint_chain = chain;
+        s.keyhint_since = std::time::Instant::now();
+    }
+    let Some((prefix, items)) = hints else {
+        return (None, None);
+    };
+    let delay = s.engine.settings().int("keyhint.delay");
+    let waited = s.keyhint_since.elapsed().as_millis() as i64;
+    if waited < delay {
+        return (None, Some(delay - waited + 10));
+    }
+    // As many columns as fit, filled top to bottom; a header row above them.
+    let width = s
+        .statusbar
+        .as_ref()
+        .map_or(800, |v| View::from(v).bounds().width);
+    let columns = (width / (KEYHINT_COLUMN_CHARS * OVERLAY_CHAR_WIDTH)).max(1) as usize;
+    let rows = items.len().div_ceil(columns).min(OVERLAY_MAX_ROWS - 1);
+    let items: Vec<_> = items
+        .into_iter()
+        .take(rows * columns)
+        .map(|(keys, command)| json!({ "keys": keys, "command": command }))
+        .collect();
+    let payload = json!({ "kind": "keyhints", "prefix": prefix, "items": items, "rows": rows });
+    (Some((payload, rows + 1)), None)
 }
 
 /// Overlay rows for a prompt: title, wrapped message, input or hint line.

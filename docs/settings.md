@@ -32,6 +32,8 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `input.insert_mode.auto_enter` | boolean | `true` | Enter insert mode when an editable element gets focus |
 | `input.insert_mode.auto_leave` | boolean | `true` | Leave insert mode when focus leaves an editable element |
 | `input.insert_mode.leave_on_load` | boolean | `true` | Leave insert mode when a new page starts loading |
+| `keyhint.blacklist` | string[] | `[]` | Key chains the key hint popup leaves out, as globs on the whole chain (e.g. g* for every chain starting with g) |
+| `keyhint.delay` | integer | `500` | How long after a partial key chain the popup listing its continuations appears, in milliseconds |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
 | `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |

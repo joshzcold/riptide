@@ -439,6 +439,21 @@ pub static SETTINGS: &[SettingDef] = &[
         "Leave insert mode when a new page starts loading"
     ),
     def!(
+        "keyhint.blacklist",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Key chains the key hint popup leaves out, as globs on the whole chain (e.g. g* for every chain starting with g)"
+    ),
+    def!(
+        "keyhint.delay",
+        Kind::Int {
+            min: 0,
+            max: 10_000
+        },
+        Value::Int(500),
+        "How long after a partial key chain the popup listing its continuations appears, in milliseconds"
+    ),
+    def!(
         "messages.timeout",
         Kind::Int {
             min: 0,

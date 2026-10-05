@@ -70,6 +70,16 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
+## Key hints
+
+Type the start of a key chain, like `g` or `;`, and pause: after `keyhint.delay` (500 ms), a popup lists every binding the keys can still become, with its command. Finish the chain to run it, or press `Escape`.
+
+To leave chains out of the popup, add globs to `keyhint.blacklist`. They match the whole chain:
+
+```toml
+keyhint.blacklist = ["<Ctrl-x>*", "g$"]
+```
+
 ## The command line
 
 In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from quickmarks, bookmarks and history (every typed word must match, in any order). `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
@@ -77,3 +87,29 @@ In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` comp
 The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 
 Every command is listed in the [commands reference](../reference/commands.md). `.` repeats the last command, and `:messages` shows earlier status bar messages.
+
+## The status bar
+
+The status bar shows the mode, messages and the command line on the left. On the right are widgets, in the order `statusbar.widgets` lists them:
+
+| Widget | Shows |
+|---|---|
+| `keypress` | Keys typed so far, and the count |
+| `url` | The page's address, green for HTTPS |
+| `scroll` / `scroll_raw` | How far down the page you are: `[Top]`, `[42%]`, `[Bot]`, `[All]` / just the number |
+| `history` | `[<]` and `[>]` when you can go back or forward |
+| `tabs` | `[current/total]` |
+| `progress` | Loading progress |
+| `search_match` | `Match [2/14]` after a `/` search |
+| `downloads`, `muted`, `zoom` | Running downloads, a muted tab, and a zoom other than 100% |
+| `clock`, `clock:%a %H:%M` | The time, in an optional strftime format |
+| `text:…` | Fixed text |
+
+```toml
+statusbar.widgets = ["keypress", "url", "scroll", "tabs", "clock:%H:%M"]
+```
+
+`statusbar.position` puts the bar at the `top` or `bottom`. `statusbar.show` hides it:
+
+- `never` keeps it hidden except while you type a command or answer a prompt, since those happen in the bar.
+- `in-mode` also shows it outside normal mode, and while a message is up.

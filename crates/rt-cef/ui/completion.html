@@ -10,6 +10,7 @@
     --desc-fg: #8fb3c4;
     --selected-bg: #2ec4b6;
     --selected-fg: #061826;
+    --keyhint-fg: #2ec4b6;
     --row-height: 18px;
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
@@ -31,6 +32,11 @@
     white-space: pre;
   }
   .header { background: var(--header-bg); font-weight: bold; }
+  .keyhints { display: grid; grid-auto-flow: column; grid-auto-columns: 40ch; }
+  .keyhint { height: var(--row-height); line-height: var(--row-height); padding: 0 4px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+  .keyhint .rest { margin-right: 1ch; }
+  .keyhint .typed { color: var(--desc-fg); }
+  .keyhint .rest { color: var(--keyhint-fg); font-weight: bold; }
   .message { background: #061826; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
   .message.error { background: #b8323f; }
   .message.warning { background: #a8651a; }
@@ -78,11 +84,40 @@
   }
 
   // Either {kind: "prompt", prompt} or {kind: "rows", rows}, where rows are
-  // {header}, {name, description, selected}, or {message, level} for
-  // messages older than the one in the status bar.
+  // The key hint popup: a header, then columns filled top to bottom. Each
+  // entry shows the keys typed so far, the keys that complete it, and its command.
+  function renderKeyhints(list, { prefix, items, rows }) {
+    const header = document.createElement("div");
+    header.className = "header";
+    header.textContent = "Keys";
+    const grid = document.createElement("div");
+    grid.className = "keyhints";
+    grid.style.gridTemplateRows = `repeat(${rows}, var(--row-height))`;
+    for (const { keys, command } of items) {
+      const el = document.createElement("div");
+      el.className = "keyhint";
+      const typed = document.createElement("span");
+      typed.className = "typed";
+      typed.textContent = prefix;
+      const rest = document.createElement("span");
+      rest.className = "rest";
+      rest.textContent = keys;
+      const desc = document.createElement("span");
+      desc.className = "desc";
+      desc.textContent = command;
+      el.append(typed, rest, desc);
+      grid.append(el);
+    }
+    list.replaceChildren(header, grid);
+  }
+
+  // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows},
+  // where rows are {header}, {name, description, selected}, or {message, level}
+  // for messages older than the one in the status bar.
   window.rtRender = (payload) => {
     const list = document.getElementById("list");
     if (payload.kind === "prompt") return renderPrompt(list, payload.prompt);
+    if (payload.kind === "keyhints") return renderKeyhints(list, payload);
     list.replaceChildren(...payload.rows.map((row) => {
       const el = document.createElement("div");
       if (row.header) {

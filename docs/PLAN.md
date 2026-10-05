@@ -635,7 +635,9 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - `scroll` reads the current tab's position twice a second while the widget is shown, rather than giving pages a hook that would let them detect the browser.
     - The smoke test can't read the status bar's text, so the widgets were checked by screenshot.
   - `statusbar.padding` waits for M20's measured bar sizes.
-- **Key hints** (tier 1): a popup listing what a pending key chain can still become, after `keyhint.delay`, minus `keyhint.blacklist`.
+- ✅ **Key hints** (tier 1, 2026-10-05): after `keyhint.delay`, the overlay lists what a pending key chain can still become, minus `keyhint.blacklist` globs.
+  - The entries are laid out in columns, letters first.
+  - `Engine::keyhints` and `Keymap::continuations` are unit tested; the layout was checked by screenshot.
 - **Completion:**
   - Tier 1: `completion-item-del` (delete a history, quickmark, bookmark or session entry from the list) and `completion-item-yank`.
   - `completion.height`, `shrink`, `show`, `open_categories` (order and which ones), `web_history.exclude`, `timestamp_format`, `min_chars`, `delay`, `use_best_match`, `quick`, and `cmd_history_max_items`.
