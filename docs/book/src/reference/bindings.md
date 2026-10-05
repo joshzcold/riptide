@@ -177,6 +177,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | Keys | Command |
 |---|---|
 | `<Escape>` | `mode-leave` |
+| `<Return>` | `hint-follow` |
 
 ## prompt mode
 

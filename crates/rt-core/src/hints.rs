@@ -3,13 +3,52 @@ use std::str::FromStr;
 
 pub const DEFAULT_HINT_CHARS: &str = "asdfghjkl";
 
-/// Which elements get hints, like qutebrowser's `hints.selectors` groups.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HintGroup {
-    All,
-    Links,
-    Images,
-    Inputs,
+/// The built-in `hints.selectors` groups: CSS selector lists, keyed by the
+/// group name `:hint` takes. User entries are merged over these.
+pub const DEFAULT_SELECTORS: &[(&str, &str)] = &[
+    (
+        "all",
+        "a, area, textarea, select, input:not([type=hidden]), button, iframe, summary, \
+         [contenteditable]:not([contenteditable=false]), [onclick], [onmousedown], \
+         [role=link], [role=option], [role=button], [role=tab], [role=checkbox], \
+         [role=switch], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], \
+         [role=treeitem], [aria-haspopup], [tabindex]:not([tabindex='-1'])",
+    ),
+    ("links", "a[href], area[href], [role=link][href]"),
+    ("images", "img"),
+    ("media", "audio, img, video"),
+    (
+        "inputs",
+        "input:not([type]), input[type=text], input[type=search], input[type=email], \
+         input[type=url], input[type=tel], input[type=password], input[type=number], \
+         input[type=date], input[type=datetime-local], input[type=month], input[type=time], \
+         input[type=week], textarea, [contenteditable]:not([contenteditable=false])",
+    ),
+];
+
+/// When a hint is followed without pressing Return (`hints.auto_follow`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AutoFollow {
+    /// Whenever only one hint is left, or a label is typed in full.
+    Always,
+    /// When only one hint is left (qutebrowser's default).
+    #[default]
+    UniqueMatch,
+    /// Only when a label is typed in full.
+    FullMatch,
+    /// Never; Return follows.
+    Never,
+}
+
+impl AutoFollow {
+    pub fn from_setting(value: &str) -> Self {
+        match value {
+            "always" => Self::Always,
+            "full-match" => Self::FullMatch,
+            "never" => Self::Never,
+            _ => Self::UniqueMatch,
+        }
+    }
 }
 
 /// What to do with the chosen element.
@@ -61,7 +100,6 @@ macro_rules! names {
     };
 }
 
-names!(HintGroup { All => "all", Links => "links", Images => "images", Inputs => "inputs" });
 names!(HintTarget {
     Normal => "normal",
     Tab => "tab",
@@ -78,7 +116,8 @@ names!(HintTarget {
 /// A parsed `:hint` command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HintRequest {
-    pub group: HintGroup,
+    /// A `hints.selectors` group name.
+    pub group: String,
     pub target: HintTarget,
     /// Stay in hint mode after following, like `--rapid`.
     pub rapid: bool,
@@ -161,6 +200,9 @@ pub struct HintSession {
     pub numbers: bool,
     /// The text typed so far in number mode.
     pub filter: String,
+    pub auto_follow: AutoFollow,
+    /// A match `auto_follow` didn't follow by itself; Return follows it.
+    pub ready: Option<usize>,
 }
 
 /// Result of typing a character in hint mode.
@@ -174,6 +216,8 @@ pub enum HintInput {
     Relabeled,
     /// No label starts with the typed text; the key was ignored.
     NoMatch,
+    /// Matched, but `hints.auto_follow` waits for Return (`hint-follow`).
+    Ready(usize),
 }
 
 impl HintSession {
@@ -186,6 +230,27 @@ impl HintSession {
             typed: String::new(),
             numbers: false,
             filter: String::new(),
+            auto_follow: AutoFollow::default(),
+            ready: None,
+        }
+    }
+
+    /// Follow `index` now, or keep it ready for Return, as `auto_follow` says.
+    /// `full` is true when a whole label was typed rather than the text
+    /// filter narrowing to one.
+    fn matched(&mut self, index: usize, full: bool) -> HintInput {
+        let follow = match self.auto_follow {
+            AutoFollow::Always => true,
+            AutoFollow::UniqueMatch => true,
+            AutoFollow::FullMatch => full,
+            AutoFollow::Never => false,
+        };
+        if follow {
+            self.ready = None;
+            HintInput::Chosen(index)
+        } else {
+            self.ready = Some(index);
+            HintInput::Ready(index)
         }
     }
 
@@ -222,8 +287,11 @@ impl HintSession {
                 return HintInput::NoMatch;
             }
             self.typed.clear();
-            if let [only] = visible.as_slice() {
-                return HintInput::Chosen(*only);
+            self.ready = None;
+            if let [only] = visible.as_slice()
+                && let chosen @ HintInput::Chosen(_) = self.matched(*only, false)
+            {
+                return chosen;
             }
             self.relabel();
             return HintInput::Relabeled;
@@ -239,11 +307,18 @@ impl HintSession {
         }
         match self.labels.iter().position(|l| *l == typed) {
             Some(index) => {
-                self.typed.clear();
-                HintInput::Chosen(index)
+                self.typed = typed;
+                match self.matched(index, true) {
+                    HintInput::Chosen(index) => {
+                        self.typed.clear();
+                        HintInput::Chosen(index)
+                    }
+                    ready => ready,
+                }
             }
             None => {
                 self.typed = typed;
+                self.ready = None;
                 HintInput::Filtered
             }
         }
@@ -251,6 +326,7 @@ impl HintSession {
 
     /// Backspace: undo the last label character, or else the last filter one.
     pub fn pop(&mut self) -> HintInput {
+        self.ready = None;
         if self.typed.pop().is_some() || !self.numbers || self.filter.pop().is_none() {
             return HintInput::Filtered;
         }
@@ -310,7 +386,7 @@ mod tests {
     #[test]
     fn session_filters_and_chooses() {
         let request = HintRequest {
-            group: HintGroup::All,
+            group: "all".into(),
             target: HintTarget::Normal,
             rapid: false,
             fill: None,
@@ -330,7 +406,7 @@ mod tests {
     #[test]
     fn number_hints_filter_by_text() {
         let request = HintRequest {
-            group: HintGroup::All,
+            group: "all".into(),
             target: HintTarget::Normal,
             rapid: false,
             fill: None,
@@ -361,5 +437,65 @@ mod tests {
         let label = s.labels[1].clone();
         let chosen = label.chars().fold(HintInput::NoMatch, |_, c| s.push(c));
         assert_eq!(chosen, HintInput::Chosen(1));
+    }
+
+    fn auto_follow_session(policy: AutoFollow, numbers: bool) -> HintSession {
+        let request = HintRequest {
+            group: "all".into(),
+            target: HintTarget::Normal,
+            rapid: false,
+            fill: None,
+        };
+        let item = |text: &str| HintItem {
+            url: None,
+            text: text.into(),
+        };
+        let items = vec![item("home"), item("news"), item("about")];
+        let mut s = if numbers {
+            HintSession::new_numbers(request, items)
+        } else {
+            HintSession::new(request, items, "abc")
+        };
+        s.auto_follow = policy;
+        s
+    }
+
+    #[test]
+    fn auto_follow_decides_when_a_match_is_followed() {
+        // A full label: followed unless the policy is never.
+        for (policy, followed) in [
+            (AutoFollow::UniqueMatch, true),
+            (AutoFollow::FullMatch, true),
+            (AutoFollow::Always, true),
+            (AutoFollow::Never, false),
+        ] {
+            let mut s = auto_follow_session(policy, false);
+            let label = s.labels[0].clone();
+            let result = label.chars().fold(HintInput::NoMatch, |_, c| s.push(c));
+            if followed {
+                assert_eq!(result, HintInput::Chosen(0), "{policy:?}");
+            } else {
+                assert_eq!(result, HintInput::Ready(0), "{policy:?}");
+                assert_eq!(s.ready, Some(0));
+            }
+        }
+        // Text narrowing number hints to one: not a full match.
+        for (policy, followed) in [
+            (AutoFollow::UniqueMatch, true),
+            (AutoFollow::Always, true),
+            (AutoFollow::FullMatch, false),
+            (AutoFollow::Never, false),
+        ] {
+            let mut s = auto_follow_session(policy, true);
+            let result = s.push('b');
+            if followed {
+                assert_eq!(result, HintInput::Chosen(2), "{policy:?}");
+            } else {
+                assert_eq!(result, HintInput::Relabeled, "{policy:?}");
+                assert_eq!(s.ready, Some(2), "{policy:?}");
+                assert_eq!(s.pop(), HintInput::Relabeled);
+                assert_eq!(s.ready, None, "backspace forgets the match");
+            }
+        }
     }
 }

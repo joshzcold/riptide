@@ -42,6 +42,8 @@ impl Keymap {
         }
         map.bind(Mode::Hint, "<Escape>", "mode-leave")
             .expect("valid default binding");
+        map.bind(Mode::Hint, "<Return>", "hint-follow")
+            .expect("valid default binding");
         // Prompts edit text like the command line, minus history and completion.
         for (keys, cmd) in COMMAND_DEFAULTS
             .iter()

@@ -29,8 +29,21 @@ pub fn request(request: HintRequest) {
     let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
         return;
     };
-    let group = serde_json::to_string(request.group.name()).unwrap_or_default();
-    let code = format!("{HINTS_JS}; window.__rtHints.collect({group})");
+    let groups =
+        shell::with(|s| rt_core::settings::hint_selectors(s.engine.settings())).unwrap_or_default();
+    let Some(selectors) = groups.get(&request.group) else {
+        let names: Vec<&str> = groups.keys().map(String::as_str).collect();
+        return shell::show_message(
+            Level::Error,
+            format!(
+                "No hint group {:?}; hints.selectors has {}",
+                request.group,
+                names.join(", ")
+            ),
+        );
+    };
+    let selectors = serde_json::to_string(selectors).unwrap_or_default();
+    let code = format!("{HINTS_JS}; window.__rtHints.collect({selectors})");
     let id = browser.identifier();
     eval::eval(&browser, &code, move |result| {
         let items: Vec<Item> = match result.map(|json| serde_json::from_str(&json)) {

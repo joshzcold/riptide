@@ -3,24 +3,6 @@
 (function () {
   if (window.__rtHints) return;
 
-  const SELECTORS = {
-    all: [
-      "a", "area", "textarea", "select", "input:not([type=hidden])", "button", "iframe", "summary",
-      "[contenteditable]:not([contenteditable=false])", "[onclick]", "[onmousedown]",
-      "[role=link]", "[role=option]", "[role=button]", "[role=tab]", "[role=checkbox]",
-      "[role=switch]", "[role=menuitem]", "[role=menuitemcheckbox]", "[role=menuitemradio]",
-      "[role=treeitem]", "[aria-haspopup]", "[tabindex]:not([tabindex='-1'])",
-    ],
-    links: ["a[href]", "area[href]", "[role=link][href]"],
-    images: ["img"],
-    inputs: [
-      "input:not([type])", "input[type=text]", "input[type=search]", "input[type=email]",
-      "input[type=url]", "input[type=tel]", "input[type=password]", "input[type=number]",
-      "input[type=date]", "input[type=datetime-local]", "input[type=month]", "input[type=time]",
-      "input[type=week]", "textarea", "[contenteditable]:not([contenteditable=false])",
-    ],
-  };
-
   const STYLE = `
     :host { all: initial; }
     .label {
@@ -127,9 +109,9 @@
   }
 
   window.__rtHints = {
-    collect(group) {
+    // `selector` is a CSS selector list from hints.selectors.
+    collect(selector) {
       clear();
-      const selector = (SELECTORS[group] || SELECTORS.all).join(",");
       elements = gather(document, [], selector, []);
       return JSON.stringify(elements.map(({ el }) => ({ url: urlOf(el), text: textOf(el) })));
     },

@@ -164,6 +164,8 @@ pub struct Shell {
     pub suppress_char: bool,
     /// Browser id of the tab currently showing hint labels.
     pub hint_browser: Option<i32>,
+    /// When a hint was last followed, for `hints.auto_follow_timeout`.
+    pub hint_followed_at: Option<std::time::Instant>,
     timed_message: u64,
     /// The pending key chain and when it last changed, for `keyhint.delay`.
     keyhint_chain: String,
@@ -204,6 +206,7 @@ impl Shell {
             suppress_char: false,
             hint_browser: None,
             timed_message: 0,
+            hint_followed_at: None,
             keyhint_chain: String::new(),
             keyhint_since: std::time::Instant::now(),
         }
@@ -485,7 +488,10 @@ pub fn apply(effects: Vec<Effect>) {
             }
             Effect::ShowHints { labels } => hints::show(&labels),
             Effect::FilterHints { typed } => hints::filter(&typed),
-            Effect::FollowHint { index, url, target } => hints::follow(index, url, target),
+            Effect::FollowHint { index, url, target } => {
+                with(|s| s.hint_followed_at = Some(std::time::Instant::now()));
+                hints::follow(index, url, target)
+            }
             Effect::ConfigChanged(op) => persist(op),
             Effect::PromptAnswered { id, answer } => crate::prompts::answered(id, answer),
             Effect::PassKey(key) => crate::client::send_to_page(key),

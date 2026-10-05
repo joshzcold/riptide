@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::hints::{HintGroup, HintRequest, HintTarget};
+use crate::hints::{HintRequest, HintTarget};
 use crate::mode::Mode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -222,6 +222,10 @@ pub enum Command {
         tab: bool,
     },
     CompletionFocus(FocusDirection),
+    /// Follow the hint with this label, or the one waiting for Return.
+    HintFollow {
+        label: Option<String>,
+    },
     /// Delete the selected completion: a history entry, quickmark,
     /// bookmark or session, or close a tab.
     CompletionItemDel,
@@ -789,6 +793,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Select the next or previous completion",
     ),
     spec(
+        "hint-follow",
+        "Follow the hint with this label, or the match waiting for Return (Return in hint mode)",
+    ),
+    spec(
         "completion-item-del",
         "Delete the selected completion: history entry, quickmark, bookmark or session, or close the tab (Ctrl-d)",
     ),
@@ -957,10 +965,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "undo" => Command::Undo,
         "hint" => {
             let rapid = args.flag(&["-r", "--rapid"]).is_some();
-            let group = match args.optional() {
-                Some(g) => g.parse::<HintGroup>().map_err(|e| args.error(e))?,
-                None => HintGroup::All,
-            };
+            let group = args.optional().unwrap_or("all").to_string();
             let target = match args.optional() {
                 Some(t) => t.parse::<HintTarget>().map_err(|e| args.error(e))?,
                 None => HintTarget::Normal,
@@ -1393,6 +1398,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
         }),
         "completion-item-del" => Command::CompletionItemDel,
+        "hint-follow" => Command::HintFollow {
+            label: args.optional().map(String::from),
+        },
         "completion-item-yank" => Command::CompletionItemYank {
             sel: args.flag(&["-s", "--sel"]).is_some(),
         },
@@ -1679,7 +1687,7 @@ mod tests {
         assert_eq!(
             parse("hint").unwrap(),
             Command::Hint(HintRequest {
-                group: HintGroup::All,
+                group: "all".into(),
                 target: HintTarget::Normal,
                 rapid: false,
                 fill: None
@@ -1688,7 +1696,7 @@ mod tests {
         assert_eq!(
             parse("hint --rapid links tab-bg").unwrap(),
             Command::Hint(HintRequest {
-                group: HintGroup::Links,
+                group: "links".into(),
                 target: HintTarget::TabBg,
                 rapid: true,
                 fill: None
@@ -1697,7 +1705,7 @@ mod tests {
         assert_eq!(
             parse("hint links fill :open -t {hint-url}").unwrap(),
             Command::Hint(HintRequest {
-                group: HintGroup::Links,
+                group: "links".into(),
                 target: HintTarget::Fill,
                 rapid: false,
                 fill: Some(":open -t {hint-url}".into())
@@ -1715,8 +1723,12 @@ mod tests {
                 url: Some("-t is text".into())
             }
         );
+        // Groups come from hints.selectors, so any name parses; :hint checks it when run.
+        assert!(
+            matches!(parse("hint code"), Ok(Command::Hint(HintRequest { group, .. })) if group == "code")
+        );
         assert!(matches!(
-            parse("hint everything"),
+            parse("hint links explode"),
             Err(CommandError::BadArgs { .. })
         ));
         assert_eq!(parse("yank title").unwrap(), Command::Yank(YankWhat::Title));

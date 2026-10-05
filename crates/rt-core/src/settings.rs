@@ -164,6 +164,19 @@ fn editor_command(value: &Value) -> Result<(), String> {
 }
 
 /// `editor.command` with its fields filled in. `line` and `column` count from 1.
+/// `hints.selectors` with the built-in groups filled in, so adding a group
+/// doesn't take the others away.
+pub fn hint_selectors(settings: &Settings) -> BTreeMap<String, String> {
+    let mut groups: BTreeMap<String, String> = crate::hints::DEFAULT_SELECTORS
+        .iter()
+        .map(|(name, selectors)| (name.to_string(), selectors.to_string()))
+        .collect();
+    if let Some(user) = settings.map("hints.selectors") {
+        groups.extend(user.clone());
+    }
+    groups
+}
+
 pub fn editor_argv(template: &[String], file: &str, line: usize, column: usize) -> Vec<String> {
     template
         .iter()
@@ -396,6 +409,21 @@ pub static SETTINGS: &[SettingDef] = &[
         editor_command
     ),
     def!(
+        "hints.auto_follow",
+        Kind::Enum(&["always", "unique-match", "full-match", "never"]),
+        s("unique-match"),
+        "When a hint is followed without Return: when one is left (unique-match), only when its label is typed in full (full-match), always, or never"
+    ),
+    def!(
+        "hints.auto_follow_timeout",
+        Kind::Int {
+            min: 0,
+            max: 10_000
+        },
+        Value::Int(0),
+        "Ignore keys for this many milliseconds after following a hint, so extra typing doesn't reach the page"
+    ),
+    def!(
         "hints.chars",
         Kind::Str,
         s(crate::hints::DEFAULT_HINT_CHARS),
@@ -407,6 +435,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["letter", "number"]),
         s("letter"),
         "letter: labels from hints.chars; number: numbered labels, and typing letters filters by text"
+    ),
+    def!(
+        "hints.selectors",
+        Kind::Map,
+        map(crate::hints::DEFAULT_SELECTORS),
+        "Hint groups for :hint, as CSS selector lists; your entries are added to the built-in all, links, images, media and inputs"
     ),
     def!(
         "hints.uppercase",

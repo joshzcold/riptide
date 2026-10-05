@@ -255,6 +255,19 @@ fn handle_key_event(event: &KeyEvent) -> bool {
         return false;
     };
     let Some(outcome) = shell::with(|s| {
+        // hints.auto_follow_timeout: keys typed just after a hint was followed are dropped.
+        let timeout = s.engine.settings().int("hints.auto_follow_timeout");
+        if timeout > 0
+            && s.engine.mode() == rt_core::Mode::Normal
+            && s.hint_followed_at
+                .is_some_and(|at| at.elapsed().as_millis() < timeout as u128)
+        {
+            s.suppress_char = true;
+            return rt_core::engine::KeyOutcome {
+                consumed: true,
+                effects: Vec::new(),
+            };
+        }
         let outcome = s.engine.handle_key(key);
         s.suppress_char = outcome.consumed;
         outcome

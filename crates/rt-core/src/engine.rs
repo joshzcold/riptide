@@ -6,7 +6,7 @@ use crate::cmdline::{History, LineEditor};
 use crate::command::{self, Command, FocusDirection};
 use crate::completion::{self, Completion, CompletionKind, CompletionView};
 use crate::config::ConfigOp;
-use crate::hints::{HintInput, HintItem, HintRequest, HintSession, HintTarget};
+use crate::hints::{AutoFollow, HintInput, HintItem, HintRequest, HintSession, HintTarget};
 use crate::key::{Key, KeyCode, format_sequence};
 use crate::keymap::{Keymap, Lookup};
 use crate::mode::Mode;
@@ -541,11 +541,12 @@ impl Engine {
             self.show_message(Level::Info, "No elements found");
             return effects;
         }
-        let session = if self.settings.str("hints.mode") == "number" {
+        let mut session = if self.settings.str("hints.mode") == "number" {
             HintSession::new_numbers(request, items)
         } else {
             HintSession::new(request, items, self.settings.str("hints.chars"))
         };
+        session.auto_follow = AutoFollow::from_setting(self.settings.str("hints.auto_follow"));
         effects.push(Effect::ShowHints {
             labels: session.labels.clone(),
         });
@@ -859,62 +860,69 @@ impl Engine {
             HintInput::Relabeled => effects.push(Effect::ShowHints {
                 labels: session.labels.clone(),
             }),
-            HintInput::Chosen(index) => {
-                let url = session.items[index].url.clone();
-                let request = session.request.clone();
-                if request.rapid {
-                    effects.push(Effect::FilterHints {
-                        typed: String::new(),
-                    });
-                } else {
-                    self.set_mode(Mode::Normal, &mut effects);
-                }
-                match (request.target, request.fill) {
-                    (HintTarget::Fill, Some(fill)) => {
-                        let text = fill.replace("{hint-url}", url.as_deref().unwrap_or_default());
-                        self.execute(
-                            Command::CmdSetText {
-                                text,
-                                append_space: false,
-                            },
-                            None,
-                            &mut effects,
-                        );
-                    }
-                    (HintTarget::Spawn, Some(line)) => {
-                        let url = url.unwrap_or_default();
-                        let quoted = crate::shell_words::quote(&url);
-                        let line = if line.contains("{hint-url}") {
-                            line.replace("{hint-url}", &quoted)
-                        } else {
-                            format!("{line} {quoted}")
-                        };
-                        effects.extend(self.execute_str(&format!("spawn {line}"), None));
-                    }
-                    (HintTarget::Userscript, Some(line)) => {
-                        match crate::shell_words::split(&line) {
-                            Ok(argv) if !argv.is_empty() => effects.push(Effect::Run {
-                                command: Command::Spawn {
-                                    userscript: true,
-                                    verbose: false,
-                                    output_messages: false,
-                                    output: false,
-                                    hint_url: Some(url.unwrap_or_default()),
-                                    detach: false,
-                                    argv,
-                                },
-                                count: None,
-                            }),
-                            _ => {
-                                self.show_message(Level::Error, "hint userscript: bad script name");
-                            }
-                        }
-                    }
-                    (target, _) => effects.push(Effect::FollowHint { index, url, target }),
-                }
-            }
+            HintInput::Ready(_) => effects.push(Effect::FilterHints {
+                typed: session.typed.clone(),
+            }),
+            HintInput::Chosen(index) => self.follow_hint(index, &mut effects),
         }
         consumed(effects)
+    }
+
+    /// Act on hint `index`, as typing its label or Return (`hint-follow`) does.
+    fn follow_hint(&mut self, index: usize, effects: &mut Vec<Effect>) {
+        let Some(session) = self.hints.as_ref() else {
+            return;
+        };
+        let url = session.items[index].url.clone();
+        let request = session.request.clone();
+        if request.rapid {
+            effects.push(Effect::FilterHints {
+                typed: String::new(),
+            });
+        } else {
+            self.set_mode(Mode::Normal, effects);
+        }
+        match (request.target, request.fill) {
+            (HintTarget::Fill, Some(fill)) => {
+                let text = fill.replace("{hint-url}", url.as_deref().unwrap_or_default());
+                self.execute(
+                    Command::CmdSetText {
+                        text,
+                        append_space: false,
+                    },
+                    None,
+                    effects,
+                );
+            }
+            (HintTarget::Spawn, Some(line)) => {
+                let url = url.unwrap_or_default();
+                let quoted = crate::shell_words::quote(&url);
+                let line = if line.contains("{hint-url}") {
+                    line.replace("{hint-url}", &quoted)
+                } else {
+                    format!("{line} {quoted}")
+                };
+                effects.extend(self.execute_str(&format!("spawn {line}"), None));
+            }
+            (HintTarget::Userscript, Some(line)) => match crate::shell_words::split(&line) {
+                Ok(argv) if !argv.is_empty() => effects.push(Effect::Run {
+                    command: Command::Spawn {
+                        userscript: true,
+                        verbose: false,
+                        output_messages: false,
+                        output: false,
+                        hint_url: Some(url.unwrap_or_default()),
+                        detach: false,
+                        argv,
+                    },
+                    count: None,
+                }),
+                _ => {
+                    self.show_message(Level::Error, "hint userscript: bad script name");
+                }
+            },
+            (target, _) => effects.push(Effect::FollowHint { index, url, target }),
+        }
     }
 
     /// Prompts swallow every key so nothing reaches the page meanwhile.
@@ -1220,6 +1228,23 @@ impl Engine {
                 }
             },
             Command::CompletionItemDel => self.delete_completion(effects),
+            Command::HintFollow { label } => {
+                let index = self.hints.as_ref().and_then(|session| match &label {
+                    Some(label) => session.labels.iter().position(|l| l == label),
+                    None => session.ready,
+                });
+                match index {
+                    Some(index) => self.follow_hint(index, effects),
+                    None if self.hints.is_some() => {
+                        let what = label
+                            .map_or("No hint is ready; type a label".to_string(), |l| {
+                                format!("No hint labelled {l:?}")
+                            });
+                        self.show_message(Level::Error, what);
+                    }
+                    None => {}
+                }
+            }
             Command::CompletionItemYank { sel } => {
                 let selected = self.completion.as_ref().and_then(|s| {
                     let i = s.view.selected?;
@@ -2037,7 +2062,7 @@ mod tests {
 
     fn hint_request(target: HintTarget, rapid: bool, fill: Option<&str>) -> HintRequest {
         HintRequest {
-            group: crate::hints::HintGroup::All,
+            group: "all".into(),
             target,
             rapid,
             fill: fill.map(String::from),

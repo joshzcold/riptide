@@ -70,6 +70,28 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
+## Hints
+
+`:hint [group] [target]` labels elements and acts on the one you pick. `f` is `:hint`, and `;y` is `:hint links yank`. The groups come from `hints.selectors`:
+- **Built in:** `all`, `links`, `images`, `media` and `inputs`.
+- **Your own:** add a group with a CSS selector list. Your groups are added to the built-in ones, which stay.
+
+```lua
+c.hints.selectors = { code = "pre, code" }
+rt.bind(";c", "hint code yank")
+```
+
+When a hint is followed is set by `hints.auto_follow`:
+
+| Value | Follows |
+|---|---|
+| `unique-match` (default) | As soon as one hint is left |
+| `full-match` | Only when you type a whole label, not when number-mode text narrows to one |
+| `always` | Either way |
+| `never` | Only when you press `Return` (`:hint-follow`) |
+
+`hints.auto_follow_timeout` ignores keys for a moment after a hint is followed, so a fast second keystroke doesn't land in the page. `:hint --rapid` (`;r`) keeps the labels up after each pick.
+
 ## Key hints
 
 Type the start of a key chain, like `g` or `;`, and pause: after `keyhint.delay` (500 ms), a popup lists every binding the keys can still become, with its command. Finish the chain to run it, or press `Escape`.

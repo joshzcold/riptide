@@ -801,6 +801,29 @@ clicked=$(page_title)
 run "set hints.mode letter"
 [[ $clicked == "clicked about" ]] && pass || fail "title was '$clicked'"
 
+step "hints.auto_follow never waits for Return; hints.selectors adds a group"
+run "set hints.auto_follow never"
+run "open file://$work/links.html"
+expect_title "links"
+nap 0.3
+hint a
+nap 0.5
+waiting=$(page_title)
+xdotool key Return
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == clicked* ]] && break; sleep 0.1; done
+followed=$(page_title)
+run "set hints.auto_follow unique-match"
+run "set hints.selectors {\"news\": \"a[href='#news']\"}"
+run "jseval document.title = 'links'"
+expect_title "links"
+run "hint news"
+wait_mode hint || true
+xdotool key a
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "clicked news" ]] && break; sleep 0.1; done
+group=$(page_title)
+[[ $waiting == links && $followed == clicked* && $group == "clicked news" ]] && pass ||
+    fail "before Return '$waiting', after '$followed', news group '$group'"
+
 step "a JavaScript confirm() is answered with y"
 run "open file://$work/dialogs.html"
 expect_title "dialogs"

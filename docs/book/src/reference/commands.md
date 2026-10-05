@@ -104,5 +104,6 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:download-clear` |  | Remove finished downloads from the list |
 | `:downloads` |  | List this session's downloads and their progress |
 | `:quit` | `<Ctrl-q>` `ZQ` `ZZ` | Quit the browser; --save keeps the tabs as the default session |
+| `:hint-follow` |  | Follow the hint with this label, or the match waiting for Return (Return in hint mode) |
 | `:completion-item-del` |  | Delete the selected completion: history entry, quickmark, bookmark or session, or close the tab (Ctrl-d) |
 | `:completion-item-yank` |  | Yank the selected completion's text: [--sel] for the primary selection (Ctrl-c) |
