@@ -32,6 +32,17 @@ pub struct State {
     pub prompt: Option<Value>,
     pub status: Value,
     pub completion: Value,
+    /// The hints on screen in hint mode.
+    #[serde(default)]
+    pub hints: Vec<Hint>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Hint {
+    pub label: String,
+    /// The element's text, lowercased.
+    pub text: String,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +59,16 @@ pub struct TabState {
     pub pinned: bool,
     pub loading: bool,
     pub mode: String,
+    /// Percent, e.g. 100.
+    pub zoom: u32,
+}
+
+impl TabState {
+    /// Showing `url`, finished loading and titled. A new tab knows its URL
+    /// before it starts loading, so the URL alone doesn't mean it's loaded.
+    pub fn is_loaded(&self, url: &str) -> bool {
+        self.url == url && !self.loading && !self.title.is_empty()
+    }
 }
 
 impl State {
@@ -69,23 +90,28 @@ impl State {
     }
 }
 
-/// A running browser, stopped (with its display and server) when dropped.
-pub struct Browser {
-    dir: PathBuf,
-    socket: PathBuf,
-    port: u16,
-    browser: RefCell<Child>,
-    xvfb: Child,
+/// Options for starting a [`Browser`]: `Browser::launch().lua("…").start("page.html")`.
+#[derive(Default)]
+pub struct Launch {
+    config_toml: Option<String>,
+    config_lua: Option<String>,
 }
 
-impl Browser {
-    /// Start on `page` (a file in `pages/`) and wait until it has loaded.
-    pub fn start(page: &str) -> Self {
-        Self::start_with(page, None)
+impl Launch {
+    /// The profile's `config.toml`.
+    pub fn toml(mut self, text: &str) -> Self {
+        self.config_toml = Some(text.into());
+        self
     }
 
-    /// Like [`Browser::start`], with a `config.toml` for the profile.
-    pub fn start_with(page: &str, config_toml: Option<&str>) -> Self {
+    /// The profile's `config.lua`.
+    pub fn lua(mut self, text: &str) -> Self {
+        self.config_lua = Some(text.into());
+        self
+    }
+
+    /// Start on `page` (a file in `pages/`) and wait until it has loaded.
+    pub fn start(self, page: &str) -> Browser {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
         let n = NEXT.fetch_add(1, Ordering::SeqCst);
         // Short, because a Unix socket path must fit in ~108 bytes.
@@ -96,44 +122,101 @@ impl Browser {
         std::fs::create_dir_all(&run).unwrap();
         std::fs::create_dir_all(base.join("config")).unwrap();
         set_private(&run);
-        if let Some(config) = config_toml {
-            std::fs::write(base.join("config/config.toml"), config).unwrap();
+        if let Some(text) = &self.config_toml {
+            std::fs::write(base.join("config/config.toml"), text).unwrap();
+        }
+        if let Some(text) = &self.config_lua {
+            std::fs::write(base.join("config/config.lua"), text).unwrap();
         }
 
         let port = serve_pages();
         let (xvfb, display) = start_xvfb();
         let url = format!("http://127.0.0.1:{port}/{page}");
-        let log = std::fs::File::create(dir.join("browser.log")).unwrap();
-        let mut command = Command::new(binary());
-        command
-            .arg("--basedir")
-            .arg(&base)
-            .arg(&url)
-            .env("DISPLAY", format!(":{display}"))
-            .env("XDG_RUNTIME_DIR", &run)
-            .env(
-                "RT_LOG",
-                std::env::var("RT_LOG").unwrap_or_else(|_| "info".into()),
-            )
-            .stdin(Stdio::null())
-            .stdout(log.try_clone().unwrap())
-            .stderr(log);
-        // Its own process group, so CEF's helpers are stopped with it.
-        std::os::unix::process::CommandExt::process_group(&mut command, 0);
-        let browser = command.spawn().expect("can't start riptide");
-
         let socket = remote::socket_path(&base.join("data"), Some(&run));
-        let b = Self {
+        let browser = spawn_browser(&dir, &display, &[url.as_str()]);
+        let b = Browser {
             dir,
             socket,
             port,
+            display,
             browser: RefCell::new(browser),
             xvfb,
         };
         b.wait_until("the start page loads", |s| {
-            s.tabs().len() == 1 && s.tab().url == url && !s.tab().loading
+            s.tabs().len() == 1 && s.tab().is_loaded(&url)
         });
+        b.wait_painted();
         b
+    }
+}
+
+/// A running browser, stopped (with its display and server) when dropped.
+pub struct Browser {
+    dir: PathBuf,
+    socket: PathBuf,
+    port: u16,
+    display: String,
+    browser: RefCell<Child>,
+    xvfb: Child,
+}
+
+impl Browser {
+    /// Start on `page` (a file in `pages/`) with no config, and wait until it has loaded.
+    pub fn start(page: &str) -> Self {
+        Launch::default().start(page)
+    }
+
+    /// Start with options, e.g. a `config.lua`.
+    pub fn launch() -> Launch {
+        Launch::default()
+    }
+
+    /// The profile's config directory (`config.toml`, `autoconfig.toml`, quickmarks…).
+    pub fn config_dir(&self) -> PathBuf {
+        self.dir.join("base/config")
+    }
+
+    /// The profile's data directory (history, sessions, downloads…).
+    pub fn data_dir(&self) -> PathBuf {
+        self.dir.join("base/data")
+    }
+
+    /// Wait for the browser to exit by itself, e.g. after `:quit`.
+    pub fn wait_exit(&self) -> std::process::ExitStatus {
+        let start = Instant::now();
+        while start.elapsed() < TIMEOUT {
+            if let Ok(Some(status)) = self.browser.borrow_mut().try_wait() {
+                self.stop_helpers();
+                return status;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("riptide didn't exit:\n{}", self.log_tail());
+    }
+
+    /// Send SIGTERM, as `kill`, `pkill` or a logout would.
+    pub fn terminate(&self) {
+        let pid = self.browser.borrow().id();
+        let _ = Command::new("kill")
+            .args(["-s", "TERM", &pid.to_string()])
+            .status();
+    }
+
+    /// Kill the browser without letting it shut down, as a crash would.
+    pub fn crash(&self) {
+        self.stop_browser();
+    }
+
+    /// Start the browser again on the same profile and display, with no URL,
+    /// once the last one has exited or crashed. Waits until it answers.
+    pub fn restart(&self) {
+        assert!(
+            matches!(self.browser.borrow_mut().try_wait(), Ok(Some(_))),
+            "restart() needs the browser to have exited first"
+        );
+        // A crash can leave the socket behind; the new browser replaces it.
+        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, &[]);
+        self.wait_until("the browser is back", |s| !s.tabs().is_empty());
     }
 
     /// The URL of a fixture page on this browser's server.
@@ -198,6 +281,19 @@ impl Browser {
         panic!("timed out waiting until {what}; last state: {last:#?}");
     }
 
+    /// Start hints with `command` (e.g. `hint` or `hint inputs`) and press the
+    /// label of the first element `pick` chooses, which clicks it for real.
+    pub fn follow_hint(&self, command: &str, pick: impl Fn(&Hint) -> bool) {
+        self.run(command);
+        let state = self.wait_until("hints are shown", |s| {
+            s.mode == "hint" && !s.hints.is_empty()
+        });
+        let Some(hint) = state.hints.iter().find(|h| pick(h)) else {
+            panic!("no hint matches; hints: {:#?}", state.hints);
+        };
+        self.keys(&hint.label);
+    }
+
     pub fn wait_mode(&self, mode: &str) -> State {
         self.wait_until(&format!("the mode is {mode}"), |s| s.mode == mode)
     }
@@ -220,9 +316,17 @@ impl Browser {
     pub fn open(&self, page: &str) {
         let url = self.url(page);
         self.run(&format!("open {url}"));
-        self.wait_until(&format!("{page} loads"), |s| {
-            s.tab().url == url && !s.tab().loading
-        });
+        self.wait_until(&format!("{page} loads"), |s| s.tab().is_loaded(&url));
+        self.wait_painted();
+    }
+
+    /// Wait until the current page has drawn a frame. Under load, Chromium
+    /// drops keys sent to a page that has loaded but not painted yet.
+    pub fn wait_painted(&self) {
+        self.eval(
+            "requestAnimationFrame(() => requestAnimationFrame(() => { window.__rtPainted = true })); 'ok'",
+        );
+        self.wait_eval("String(window.__rtPainted === true)", "true");
     }
 
     fn request(&self, test: TestRequest) -> Result<Option<Value>, String> {
@@ -245,6 +349,31 @@ impl Browser {
         }
     }
 
+    /// Only this browser's processes, never another riptide: its process
+    /// group, then the CEF helpers (the zygote leaves the group), which all
+    /// carry this profile's --user-data-dir.
+    fn stop_browser(&self) {
+        let mut browser = self.browser.borrow_mut();
+        let _ = Command::new("kill")
+            .args(["-s", "KILL", "--", &format!("-{}", browser.id())])
+            .status();
+        let _ = browser.wait();
+        drop(browser);
+        self.stop_helpers();
+    }
+
+    fn stop_helpers(&self) {
+        let profile = self.data_dir();
+        let _ = Command::new("pkill")
+            .args([
+                "-KILL",
+                "-f",
+                "--",
+                &format!("[-]-user-data-dir={}", profile.display()),
+            ])
+            .status();
+    }
+
     fn log_tail(&self) -> String {
         let log = std::fs::read_to_string(self.dir.join("browser.log")).unwrap_or_default();
         let lines: Vec<&str> = log.lines().collect();
@@ -261,30 +390,38 @@ impl Drop for Browser {
                 self.log_tail()
             );
         }
-        // Only this browser's process group, never another riptide.
-        // Only this browser's processes, never another riptide: its process
-        // group, then the CEF helpers (the zygote leaves the group), which all
-        // carry this profile's --user-data-dir.
-        let browser = self.browser.get_mut();
-        let _ = Command::new("kill")
-            .args(["-s", "KILL", "--", &format!("-{}", browser.id())])
-            .status();
-        let _ = browser.wait();
-        let profile = self.dir.join("base/data");
-        let _ = Command::new("pkill")
-            .args([
-                "-KILL",
-                "-f",
-                "--",
-                &format!("[-]-user-data-dir={}", profile.display()),
-            ])
-            .status();
+        self.stop_browser();
         let _ = self.xvfb.kill();
         let _ = self.xvfb.wait();
         if !std::thread::panicking() {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
+}
+
+fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("browser.log"))
+        .unwrap();
+    let mut command = Command::new(binary());
+    command
+        .arg("--basedir")
+        .arg(dir.join("base"))
+        .args(args)
+        .env("DISPLAY", format!(":{display}"))
+        .env("XDG_RUNTIME_DIR", dir.join("run"))
+        .env(
+            "RT_LOG",
+            std::env::var("RT_LOG").unwrap_or_else(|_| "info".into()),
+        )
+        .stdin(Stdio::null())
+        .stdout(log.try_clone().unwrap())
+        .stderr(log);
+    // Its own process group, so CEF's helpers are stopped with it.
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    command.spawn().expect("can't start riptide")
 }
 
 /// The browser under test: `RIPTIDE_BIN`, or the workspace's debug build.

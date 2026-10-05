@@ -108,8 +108,22 @@ mod enabled {
                     })
                 })
                 .collect();
+            // Labels with the element's text and link, so tests can pick one.
+            let hints: Vec<Value> = s
+                .engine
+                .hint_session()
+                .map(|h| {
+                    h.items
+                        .iter()
+                        .zip(&h.labels)
+                        .filter(|(_, label)| !label.is_empty())
+                        .map(|(item, label)| json!({ "label": label, "text": item.text, "url": item.url }))
+                        .collect()
+                })
+                .unwrap_or_default();
             json!({
                 "mode": s.engine.mode(),
+                "hints": hints,
                 "status": s.engine.status(),
                 "completion": s.engine.completions(),
                 "prompt": s.engine.prompt_view(),

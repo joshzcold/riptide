@@ -826,7 +826,8 @@ Whatever path wins:
 **Today:** every `auto_save.interval` ms the open tabs are saved to the `_autosave` session. That file is deleted once `run_message_loop` returns, so if it's there at startup, the last run crashed. The tabs are then restored, or, if URLs were given on the command line, the user is pointed to `:session-load _autosave`. A tab saves only its URL, its title and whether it's pinned.
 
 - **Recovering open tabs:**
-  - **Signals count as clean exits:** SIGTERM and SIGINT (`pkill`, Ctrl-C, logout) appear to make Chromium shut down cleanly, so `run_message_loop` returns and `_autosave` is deleted. Unless `auto_save.session` is on, the tabs are then lost. Verify this, then save the session on signals instead of treating them as a normal quit.
+  - ~~**Signals count as clean exits.**~~ Checked 2026-10-05 with the e2e test `tabs_come_back_after_sigterm`. After SIGTERM, riptide exits with status 0 but keeps `_autosave.toml`, and the next start restores the tabs. SIGKILL works the same way (`tabs_come_back_after_a_crash`). SIGINT and logout aren't tested yet.
+  - **The "Restored the tabs open before the crash" message is hidden** almost at once by the "Content blocking has no filter lists yet" notice, so it's easy to miss that recovery happened.
   - **The recovery copy gets overwritten:** after a crash, starting with URLs on the command line leaves the old tabs in `_autosave`, but the next autosave tick replaces them. At startup, rename the crashed autosave to a timestamped session (e.g. `_crashed-2026-10-05T10-34`), keep the last few, and list them in `:session-load` completion.
   - **Crash loops:** if the restored tabs crash the browser again shortly after startup, don't restore them automatically the next time. Instead, show the crashed tabs on a `riptide://recover/` page where the user picks which ones to reopen, the way Firefox's "Restore Session" page works.
   - **More state per tab:** save each tab's back/forward history and scroll position, so restoring doesn't drop where you were.
@@ -976,12 +977,17 @@ Original plan:
     - The socket thread waits on a channel for the UI thread's answer.
     - There's no server-side `wait` request: the harness polls `state` instead.
   - **Harness:** `crates/rt-e2e` gives each test its own Xvfb (`-displayfd`), scratch `--basedir`, short `XDG_RUNTIME_DIR` (Unix socket paths must fit in ~108 bytes) and fixture HTTP server. It stops its process group and then the CEF helpers that carry its `--user-data-dir`, because the zygote leaves the group.
-  - **Tests:** 11 so far, in keys, tabs, command line and prompts. They're `#[ignore]`d so a workspace-wide `cargo test` never starts browsers. `./task e2e` and CI run them; each test binary takes under a second.
-  - **Found while writing them:** a tab closed before its first page commits has an empty `url`, so `close()` doesn't record it and `u` can't reopen it. The tab should remember the URL it was opened with.
+  - **Tests:** 30 so far.
+    - Areas: keys, modes, marks, macros, search, `]]`/`[[`, zoom, tabs, hints (including iframes and number hints), the command line and completion, prompts, `config.toml`/`config.lua`/`autoconfig.toml`, windows, private windows, sessions, and recovery after SIGKILL and SIGTERM.
+    - They're `#[ignore]`d so a workspace-wide `cargo test` never starts browsers. `./task e2e` and CI run them; each test binary takes about a second.
+    - `state` lists hint labels with each element's text and URL, so `follow_hint` can click anything.
+    - The harness can restart a profile, crash it (SIGKILL) or terminate it (SIGTERM).
+  - **Found while writing them:**
+    - ✅ A tab closed before its first page committed had an empty `url`, so `u` couldn't reopen it. `tabs::open` now records the URL it was asked for. Test: `u_reopens_a_tab_closed_before_its_page_loaded`.
+    - Under load, keys sent to a page that has loaded but not painted are dropped, even though it reports focus and visibility. This is probably the "lost keys" gap in M14. The harness waits for two animation frames after each load.
   - **Next:**
-    - Port more smoke areas: hints, downloads, sessions, config and Lua, private windows, adblock.
+    - Port downloads, adblock, Greasemonkey, userscripts and the internal pages.
     - Delete the ported steps from `scripts/smoke-test.sh` once nobody else is editing it.
-    - Expose hint labels in `state`, so tests can click any element, not just the only input.
 
 #### Unit tests for the CEF layer
 

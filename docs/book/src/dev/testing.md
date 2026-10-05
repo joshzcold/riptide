@@ -35,9 +35,13 @@ fn d_closes_the_tab() {
 }
 ```
 
-- **Wait, don't sleep:** `wait_until`, `wait_mode` and `wait_eval` poll until the state matches, and fail with the last state after 15 seconds.
+- **Wait, don't sleep:** `wait_until`, `wait_mode` and `wait_eval` poll until the state matches, and fail with the last state after 15 seconds. Use `s.tab().is_loaded(&url)` to wait for a page: a new tab knows its URL before it starts loading, so checking the URL alone isn't enough.
+- **Start options:** `Browser::launch().toml("…").lua("…").start("page.html")` writes `config.toml` and `config.lua` into the profile first.
+- **Restarts:** `config_dir()` and `data_dir()` give the profile's paths. After `:quit` and `wait_exit()`, a `crash()` (SIGKILL) or a `terminate()` (SIGTERM), `restart()` starts the browser again on the same profile, for testing sessions and crash recovery.
+- **Hints:** `follow_hint("hint links tab", |h| h.url.as_deref() == Some(&url))` starts hints and presses the label of the element you pick by its text or link. `state().hints` lists the labels on screen.
+- **Painting:** `start()` and `open()` wait until the page has drawn a frame. Under load Chromium drops keys sent to a page that has loaded but not painted, so call `wait_painted()` after navigating some other way.
 - **Every test is `#[ignore]`d,** so a plain `cargo test` never starts browsers. `./task e2e` runs them with `--ignored`, two at a time (`E2E_THREADS` changes that).
-- **Clicks that should count as the user's go through hints:** run `hint inputs`, then press the label. Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
+- **Clicks that should count as the user's go through hints** (`follow_hint`). Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
 - **The smoke test stays** for what needs real X11 input (xdotool) and for checking the release packages. New behaviour gets an e2e test.
 
 ## Linters
