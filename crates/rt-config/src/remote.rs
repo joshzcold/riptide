@@ -44,6 +44,8 @@ pub enum TestRequest {
     /// Evaluate JavaScript in a tab of the current window (default: the
     /// current tab); the reply is the script's string result.
     Eval { code: String, tab: Option<usize> },
+    /// Evaluate JavaScript in the current window's `tabbar` or `statusbar`.
+    EvalBar { code: String, bar: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]

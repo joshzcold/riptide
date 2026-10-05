@@ -331,6 +331,17 @@ impl Browser {
             .unwrap_or_default())
     }
 
+    /// Evaluate JavaScript in the `tabbar` or `statusbar`; its value must be a string.
+    pub fn eval_bar(&self, bar: &str, code: &str) -> String {
+        self.request(TestRequest::EvalBar {
+            code: code.into(),
+            bar: bar.into(),
+        })
+        .unwrap_or_else(|e| panic!("eval in {bar} {code:?}: {e}"))
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default()
+    }
+
     /// Poll the state until `test` holds; fails the test after [`TIMEOUT`].
     pub fn wait_until(&self, what: &str, test: impl Fn(&State) -> bool) -> State {
         let start = Instant::now();

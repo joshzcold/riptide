@@ -8,9 +8,17 @@ Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shri
 
 ## The tab bar
 
-The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close, scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
+The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
 
 Tab titles follow `tabs.title.format` (default `{audio}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab) and `{private}`. `tabs.tooltips = false` turns off the title-and-URL tooltip.
+
+In a top or bottom bar, tabs share the width evenly. `tabs.max_width` caps each tab and `tabs.min_width` keeps them from getting narrower; once they don't fit, the bar scrolls to keep the current tab in view. `tabs.title.alignment` (`left`, `center`, `right`) places the title, and `tabs.indicator.width` sets the loading indicator's width (`0` hides it):
+
+```toml
+tabs.max_width = 250
+tabs.min_width = 120
+tabs.title.alignment = "center"
+```
 
 `tabs.position` puts the bar at the `top`, `bottom`, `left` or `right` (a vertical list, `tabs.width` pixels wide), and `tabs.show` hides it: `always`, `never`, `multiple` (only with more than one tab) or `switching` (briefly after switching tabs).
 

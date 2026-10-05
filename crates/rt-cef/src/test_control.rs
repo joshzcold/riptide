@@ -51,6 +51,7 @@ mod enabled {
             }
             TestRequest::State => Ok(Some(state())),
             TestRequest::Eval { code, tab } => return eval(&code, tab, tx),
+            TestRequest::EvalBar { code, bar } => return eval_bar(&code, &bar, tx),
         };
         let _ = tx.send(reply);
     }
@@ -71,6 +72,22 @@ mod enabled {
         .flatten();
         let Some(browser) = browser else {
             let _ = tx.send(Err(format!("no tab {tab:?}")));
+            return;
+        };
+        crate::eval::eval(&browser, code, move |result| {
+            let _ = tx.send(result.map(|text| Some(Value::String(text))));
+        });
+    }
+
+    fn eval_bar(code: &str, bar: &str, tx: Sender<Reply>) {
+        let view = shell::with(|s| match bar {
+            "tabbar" => s.tabbar.clone(),
+            "statusbar" => s.statusbar.clone(),
+            _ => None,
+        })
+        .flatten();
+        let Some(browser) = view.and_then(|v| v.browser()) else {
+            let _ = tx.send(Err(format!("no {bar}")));
             return;
         };
         crate::eval::eval(&browser, code, move |result| {

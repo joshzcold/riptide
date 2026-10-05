@@ -79,8 +79,12 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `statusbar.position` | top \| bottom | `bottom` | Where the status bar is |
 | `statusbar.show` | always \| never \| in-mode | `always` | When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode) |
 | `statusbar.widgets` | string[] | `["keypress","downloads","muted","zoom","search_match","url","scroll","history","tabs","progress"]` | What the right side of the status bar shows, in order: keypress, downloads, muted, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:… |
+| `tabs.close_mouse_button` | middle \| right \| none | `middle` | Which mouse button closes a tab clicked in the tab bar |
 | `tabs.favicons.show` | always \| never \| pinned | `always` | Show site icons in the tab bar: always, never, or only on pinned tabs |
+| `tabs.indicator.width` | integer | `3` | Width in pixels of the loading indicator at the left of each tab (0 hides it) |
 | `tabs.last_close` | ignore \| blank \| startpage \| default-page \| close | `ignore` | What closing the last tab does |
+| `tabs.max_width` | integer | `-1` | Largest width in pixels of a tab in a top or bottom tab bar (-1 for no limit) |
+| `tabs.min_width` | integer | `-1` | Smallest width in pixels of a tab in a top or bottom tab bar; tabs that don't fit scroll (-1 for no minimum) |
 | `tabs.mode_on_change` | normal \| persist \| restore | `normal` | Mode after switching tabs: normal, persist (keep insert/passthrough), or restore (the mode the tab was left in) |
 | `tabs.mousewheel_switching` | boolean | `true` | Switch tabs with the mouse wheel over the tab bar |
 | `tabs.new_position.related` | prev \| next \| first \| last | `next` | Where tabs opened from a page go (popups, hints) |
@@ -91,6 +95,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.select_on_remove` | next \| prev \| last-used | `next` | Which tab to show after closing the current one: the next, the previous, or the one used before |
 | `tabs.show` | always \| never \| multiple \| switching | `always` | When to show the tab bar: always, never, with more than one tab, or briefly after switching tabs |
 | `tabs.show_switching_delay` | integer | `800` | How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds |
+| `tabs.title.alignment` | left \| center \| right | `left` | Where tab titles sit in their tab: left, center or right |
 | `tabs.title.format` | string | `{audio}{index}: {current_title}` | Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {private} |
 | `tabs.title.format_pinned` | string | `{index}` | Titles of pinned tabs while tabs.pinned.shrink shrinks them; same fields as tabs.title.format |
 | `tabs.tooltips` | boolean | `true` | Show a tab's title and URL when the mouse rests on it |

@@ -941,16 +941,46 @@ pub static SETTINGS: &[SettingDef] = &[
         statusbar_widgets
     ),
     def!(
+        "tabs.close_mouse_button",
+        Kind::Enum(&["middle", "right", "none"]),
+        s("middle"),
+        "Which mouse button closes a tab clicked in the tab bar"
+    ),
+    def!(
         "tabs.favicons.show",
         Kind::Enum(&["always", "never", "pinned"]),
         s("always"),
         "Show site icons in the tab bar: always, never, or only on pinned tabs"
     ),
     def!(
+        "tabs.indicator.width",
+        Kind::Int { min: 0, max: 20 },
+        Value::Int(3),
+        "Width in pixels of the loading indicator at the left of each tab (0 hides it)"
+    ),
+    def!(
         "tabs.last_close",
         Kind::Enum(&["ignore", "blank", "startpage", "default-page", "close"]),
         s("ignore"),
         "What closing the last tab does"
+    ),
+    def!(
+        "tabs.max_width",
+        Kind::Int {
+            min: -1,
+            max: 10000
+        },
+        Value::Int(-1),
+        "Largest width in pixels of a tab in a top or bottom tab bar (-1 for no limit)"
+    ),
+    def!(
+        "tabs.min_width",
+        Kind::Int {
+            min: -1,
+            max: 10000
+        },
+        Value::Int(-1),
+        "Smallest width in pixels of a tab in a top or bottom tab bar; tabs that don't fit scroll (-1 for no minimum)"
     ),
     def!(
         "tabs.mode_on_change",
@@ -1014,6 +1044,12 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         Value::Int(800),
         "How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds"
+    ),
+    def!(
+        "tabs.title.alignment",
+        Kind::Enum(&["left", "center", "right"]),
+        s("left"),
+        "Where tab titles sit in their tab: left, center or right"
     ),
     def!(
         "tabs.title.format",

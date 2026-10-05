@@ -28,10 +28,11 @@
     user-select: none;
     cursor: default;
   }
-  #tabs { display: flex; height: 100%; }
+  #tabs { display: flex; height: 100%; overflow-x: auto; scrollbar-width: none; }
   .tab {
     flex: 1 1 0;
-    min-width: 0;
+    min-width: var(--tab-min-width, 0);
+    max-width: var(--tab-max-width, none);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -53,11 +54,11 @@
   .tab.selected.drop-before {
     box-shadow: inset 3px 0 0 var(--drop-mark), inset 0 -2px 0 var(--selected-accent);
   }
-  .indicator { width: 3px; align-self: stretch; flex-shrink: 0; }
+  .indicator { width: var(--indicator-width, 3px); align-self: stretch; flex-shrink: 0; }
   .loading .indicator { background: var(--indicator-loading); }
   .error .indicator { background: var(--indicator-error); }
   .icon { width: 16px; height: 16px; flex-shrink: 0; }
-  .title { overflow: hidden; text-overflow: ellipsis; }
+  .title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: var(--title-align, left); }
   /* tabs.position left or right: one tab per row, scrolling when they don't fit. */
   .vertical #tabs { flex-direction: column; overflow-y: auto; scrollbar-width: none; }
   .vertical .tab { flex: 0 0 auto; padding: 1px 4px 1px 0; }
@@ -122,7 +123,7 @@
     send("cycle-tab", { forward: e.deltaY > 0 });
   }, { passive: false });
 
-  function tabElement(tab, i, current, shrink, tooltips) {
+  function tabElement(tab, i, current, shrink, tooltips, closeButton) {
     const el = document.createElement("div");
     el.className = "tab";
     if (i === current) el.classList.add("selected");
@@ -151,18 +152,26 @@
 
     el.dataset.index = String(i);
     // Middle-click closes, like most browsers.
-    el.addEventListener("mousedown", (e) => { if (e.button === 1) e.preventDefault(); });
-    el.addEventListener("auxclick", (e) => { if (e.button === 1) send("close-tab", { index: i }); });
+    // tabs.close_mouse_button: middle (1), right (2) or none.
+    const close = { middle: 1, right: 2 }[closeButton];
+    el.addEventListener("mousedown", (e) => { if (e.button === close) e.preventDefault(); });
+    el.addEventListener("auxclick", (e) => { if (e.button === close) send("close-tab", { index: i }); });
+    if (close === 2) el.addEventListener("contextmenu", (e) => e.preventDefault());
 
     return el;
   }
 
-  window.rtRender = ({ tabs, current, shrink, vertical, tooltips }) => {
+  window.rtRender = ({ tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button }) => {
     document.body.classList.toggle("vertical", vertical);
+    const root = document.documentElement.style;
+    root.setProperty("--title-align", alignment || "left");
+    root.setProperty("--indicator-width", `${indicator_width ?? 3}px`);
+    root.setProperty("--tab-min-width", !vertical && min_width >= 0 ? `${min_width}px` : "0");
+    root.setProperty("--tab-max-width", !vertical && max_width >= 0 ? `${max_width}px` : "none");
     // Shrinking pinned tabs saves width, which a vertical bar doesn't need.
     const shrinkPinned = shrink && !vertical;
-    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrinkPinned, tooltips)));
-    if (vertical) bar.children[current]?.scrollIntoView({ block: "nearest" });
+    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrinkPinned, tooltips, close_button)));
+    bar.children[current]?.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
 </script>
 </body>

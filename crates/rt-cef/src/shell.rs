@@ -1028,6 +1028,11 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "shrink": settings.bool("tabs.pinned.shrink"),
         "tooltips": settings.bool("tabs.tooltips"),
         "vertical": matches!(settings.str("tabs.position"), "left" | "right"),
+        "alignment": settings.str("tabs.title.alignment"),
+        "min_width": settings.int("tabs.min_width"),
+        "max_width": settings.int("tabs.max_width"),
+        "indicator_width": settings.int("tabs.indicator.width"),
+        "close_button": settings.str("tabs.close_mouse_button"),
     })
     .to_string();
     if s.tabbar_ready
