@@ -494,6 +494,27 @@ fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
     command.spawn().expect("can't start riptide")
 }
 
+/// The first column of the first row of `query` on a SQLite file, as text,
+/// read with python3 (as the smoke test does) to keep SQLite out of this crate.
+pub fn sqlite(db: &Path, query: &str) -> String {
+    let out = Command::new("python3")
+        .args([
+            "-c",
+            "import sqlite3, sys; db = sqlite3.connect(f'file:{sys.argv[1]}?mode=ro', uri=True); \
+             print(db.execute(sys.argv[2]).fetchone()[0])",
+        ])
+        .arg(db)
+        .arg(query)
+        .output()
+        .expect("python3 is needed to read SQLite files");
+    assert!(
+        out.status.success(),
+        "{query}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 /// The browser under test: `RIPTIDE_BIN`, or the workspace's debug build.
 fn binary() -> PathBuf {
     let path = std::env::var_os("RIPTIDE_BIN").map_or_else(

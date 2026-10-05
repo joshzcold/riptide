@@ -115,3 +115,42 @@ fn greasemonkey_values_persist_and_require_runs_first() {
     b.run("reload");
     b.wait_eval("document.title", "gm n=2 lib=loaded");
 }
+
+/// An "editor" that writes a URL for :edit-url, a command line for :cmd-edit
+/// and fixed text otherwise.
+const EDITOR: &str = r#"#!/bin/sh
+case "$1" in
+    *url.txt) printf '{server}/nav2.html\n' >"$1" ;;
+    *cmd.txt) printf ':open {server}/second.html\n' >"$1" ;;
+    *) printf 'edited text\n' >"$1" ;;
+esac
+"#;
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn edit_url_opens_the_url_the_editor_wrote() {
+    let b = Browser::launch()
+        .script("config/editor.sh", EDITOR)
+        .lua("c.editor.command = { rt.config_dir .. \"/editor.sh\", \"{file}\" }\n")
+        .start("nav1.html");
+    b.run("edit-url");
+    let nav2 = b.url("nav2.html");
+    b.wait_until("nav2 opens", |s| s.tab().is_loaded(&nav2));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn cmd_edit_run_runs_the_command_line_the_editor_wrote() {
+    let b = Browser::launch()
+        .script("config/editor.sh", EDITOR)
+        .lua(
+            "c.editor.command = { rt.config_dir .. \"/editor.sh\", \"{file}\" }\n\
+             rt.bind(\"<Ctrl-x>\", \"cmd-edit --run\", \"command\")\n",
+        )
+        .start("page.html");
+    b.keys(":open draft");
+    b.wait_mode("command");
+    b.keys("<Ctrl-x>");
+    let second = b.url("second.html");
+    b.wait_until("the edited command ran", |s| s.tab().is_loaded(&second));
+}

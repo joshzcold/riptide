@@ -50,3 +50,37 @@ fn number_hints_filter_by_the_text_typed() {
     b.keys("ou");
     b.wait_eval("document.title", "clicked about");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn auto_follow_never_waits_for_return() {
+    let b = Browser::launch()
+        .toml("hints.auto_follow = \"never\"\n")
+        .start("links.html");
+    b.follow_hint("hint", |h| h.text == "news");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(
+        b.eval("document.title"),
+        "links",
+        "it followed without Return"
+    );
+    b.keys("<Return>");
+    b.wait_eval("document.title", "clicked news");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn hints_selectors_adds_a_group() {
+    let b = Browser::launch()
+        .toml("[hints.selectors]\nnews = \"a[href='#news']\"\n")
+        .start("links.html");
+    let s = {
+        b.run("hint news");
+        b.wait_until("the group's hints", |s| {
+            s.mode == "hint" && !s.hints.is_empty()
+        })
+    };
+    assert_eq!(s.hints.len(), 1, "{:?}", s.hints);
+    b.keys(&s.hints[0].label);
+    b.wait_eval("document.title", "clicked news");
+}

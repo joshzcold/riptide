@@ -49,3 +49,14 @@ fn passthrough_sends_letters_to_the_page() {
     b.keys("<Shift-Escape>");
     b.wait_mode("normal");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_field_focused_on_load_takes_insert_mode_only_with_auto_load() {
+    let b = Browser::start("autofocus.html");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(b.state().mode, "normal");
+    b.run("set input.insert_mode.auto_load true");
+    b.run("reload");
+    b.wait_mode("insert");
+}

@@ -88,3 +88,58 @@ fn wait_for_autosave(b: &Browser, page: &str) -> std::path::PathBuf {
     }
     autosave
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn lazy_restore_loads_a_background_tab_only_when_its_shown() {
+    let b = Browser::launch()
+        .toml("session.lazy_restore = true\n")
+        .start("nav1.html");
+    let lazy = b.url("second.html?lazy=1");
+    b.run(&format!("open -t {lazy}"));
+    b.wait_until("the second tab loads", |s| s.tab().is_loaded(&lazy));
+    b.run("tab-focus 1");
+    b.run("session-save lazy");
+    b.run("session-load lazy");
+    b.wait_until("the session is back with nav1 in front", |s| {
+        s.tabs().len() == 2 && s.tab().title == "nav1"
+    });
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let db = b.data_dir().join("history.sqlite");
+    let count = "SELECT COUNT(*) FROM visits WHERE url LIKE '%second.html?lazy=1'";
+    assert_eq!(
+        rt_e2e::sqlite(&db, count),
+        "1",
+        "the background tab loaded early"
+    );
+    b.run("tab-focus 2");
+    b.wait_until("showing it loads it", |s| s.tab().is_loaded(&lazy));
+    let start = std::time::Instant::now();
+    while rt_e2e::sqlite(&db, count) != "2" {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "showing it didn't load it"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn confirm_quit_asks_with_several_tabs() {
+    let b = Browser::launch()
+        .toml("confirm_quit = [\"multiple-tabs\"]\n")
+        .start("page.html");
+    b.run(&format!("open -t {}", b.url("second.html")));
+    b.wait_until("two tabs", |s| s.tabs().len() == 2);
+    b.run("quit");
+    b.wait_mode("yesno");
+    b.keys("n");
+    b.wait_mode("normal");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(b.state().tabs().len(), 2, "n quit anyway");
+    b.run("quit");
+    b.wait_mode("yesno");
+    b.keys("y");
+    assert!(b.wait_exit().success());
+}
