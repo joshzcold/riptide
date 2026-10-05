@@ -29,7 +29,7 @@ jobs:
       - name: Check the tag matches the crate version
         id: version
         run: |
-          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "hb") | .version')
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "riptide") | .version')
           if [[ $PUBLISH == true && "v$version" != "$GITHUB_REF_NAME" ]]; then
             echo "tag $GITHUB_REF_NAME doesn't match version $version in Cargo.toml" >&2
             exit 1

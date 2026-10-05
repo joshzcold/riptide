@@ -61,12 +61,12 @@ tasks:
     desc: 'Run the browser; pass a URL after --, e.g. task run -- example.com'
     deps: [setup]
     cmds:
-      - cargo run --bin hackers-browser -- {{.CLI_ARGS}}
+      - cargo run --bin riptide -- {{.CLI_ARGS}}
 
   test:
     desc: Unit tests (everything except the CEF layer)
     cmds:
-      - cargo test --no-fail-fast -p hb-core -p hb-config -p hb-storage -p hb-adblock
+      - cargo test --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock
 
   smoke:
     desc: Drive the real browser on a throwaway X display (needs Xvfb and xdotool)

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d3550"/>
+      <stop offset="1" stop-color="#061826"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1b7fa6"/>
+      <stop offset="0.55" stop-color="#2ec4b6"/>
+      <stop offset="1" stop-color="#8fe3dc"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="8" y="8" width="240" height="240" rx="48"/></clipPath>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="url(#sea)"/>
+  <g clip-path="url(#tile)">
+    <!-- The breaking wave: it rises from the left and curls over to the right. -->
+    <path fill="url(#wave)" d="M0 214
+      C 52 210, 82 186, 98 146
+      C 116 100, 150 66, 194 66
+      C 226 66, 246 88, 240 114
+      C 234 138, 206 146, 190 132
+      C 178 121, 182 102, 198 100
+      C 184 88, 156 96, 142 126
+      C 126 162, 136 196, 256 204
+      L 256 256 L 0 256 Z"/>
+    <!-- Foam on the lip. -->
+    <path fill="none" stroke="#e9f7f6" stroke-width="7" stroke-linecap="round"
+      d="M150 80 C 172 66, 214 64, 232 92"/>
+    <!-- Speed lines. -->
+    <rect x="30" y="64" width="70" height="10" rx="5" fill="#e9f7f6"/>
+    <rect x="22" y="92" width="54" height="10" rx="5" fill="#8fe3dc"/>
+    <rect x="34" y="120" width="34" height="10" rx="5" fill="#2ec4b6"/>
+    <!-- The sea below the wave. -->
+    <path fill="#0b2a3f" opacity="0.65" d="M0 226 C 60 216, 120 236, 180 224 C 214 218, 236 220, 256 226 L 256 256 L 0 256 Z"/>
+  </g>
+</svg>

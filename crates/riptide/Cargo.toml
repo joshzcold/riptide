@@ -1,0 +1,18 @@
+[package]
+name = "riptide"
+description = "Riptide: surf the web really fast, with vim-like keys, on CEF"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "riptide"
+path = "src/main.rs"
+
+[features]
+sandbox = ["rt-cef/sandbox"]
+
+[dependencies]
+rt-cef.workspace = true
+tracing-subscriber.workspace = true

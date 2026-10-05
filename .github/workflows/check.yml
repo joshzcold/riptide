@@ -84,11 +84,11 @@ jobs:
       - name: Build
         run: cargo build --workspace --locked
       - name: Unit tests
-        run: cargo test --locked --no-fail-fast -p hb-core -p hb-config -p hb-storage -p hb-adblock
+        run: cargo test --locked --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock
       - name: Run without CEF (--version, --paths)
         shell: bash
         run: |
-          bin=target/debug/hackers-browser
+          bin=target/debug/riptide
           [[ -f $bin.exe ]] && bin=$bin.exe
           "$bin" --version
           "$bin" --paths

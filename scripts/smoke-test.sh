@@ -5,7 +5,7 @@
 # pages report their state through document.title.
 set -euo pipefail
 
-BIN=${BIN:-target/debug/hackers-browser}
+BIN=${BIN:-target/debug/riptide}
 TIMEOUT=${TIMEOUT:-15}
 # CI runners are slower, especially on the first page load; scale the pauses
 # that give the browser time to react to keys.
@@ -54,7 +54,7 @@ EOF
 
 cat >"$work/isolation.html" <<'EOF'
 <!doctype html><title>isolation</title>
-<iframe id="f" src="hb://ui/statusbar.html"></iframe>
+<iframe id="f" src="riptide://ui/statusbar.html"></iframe>
 <script>
 setTimeout(() => {
   let frame;
@@ -62,7 +62,7 @@ setTimeout(() => {
     const d = document.getElementById('f').contentDocument;
     frame = d && d.getElementById('bar') ? 'ui-loaded' : 'empty';
   } catch (e) { frame = 'cross-origin'; }
-  document.title = `hb=${typeof window.hb} frame=${frame}`;
+  document.title = `rt=${typeof window.rt} frame=${frame}`;
 }, 1000);
 </script>
 EOF
@@ -288,19 +288,19 @@ echo "smoke-test on $DISPLAY"
 # A private basedir keeps the test away from the real config and profile.
 mkdir -p "$work/base/config"
 cat >"$work/base/config/config.lua" <<EOF
-hb.bind("X", "open -t file://$work/second.html")
+rt.bind("X", "open -t file://$work/second.html")
 c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
 c.window.title_format = "{mode}::{current_title}"
 c.content.blocking.adblock.lists = { "file://$work/filters.txt" }
 c.editor.command = { "$work/editor.sh", "{file}" }
-hb.command("second", function(args) hb.open("file://$work/second.html" .. args, "tab") end, "Open the second page")
-hb.bind("gS", function() hb.run("open file://$work/nav1.html") end)
-hb.on("load_finished", function(e)
-  if e.url:find("hook.html", 1, true) then hb.run("open file://$work/nav2.html") end
+rt.command("second", function(args) rt.open("file://$work/second.html" .. args, "tab") end, "Open the second page")
+rt.bind("gS", function() rt.run("open file://$work/nav1.html") end)
+rt.on("load_finished", function(e)
+  if e.url:find("hook.html", 1, true) then rt.run("open file://$work/nav2.html") end
 end)
 EOF
-HB_LOG=${HB_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+RT_LOG=${RT_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
@@ -456,11 +456,11 @@ expect_exit() {
 
 step ":help :open opens the generated help page"
 run "help :open"
-expect_title "hackers-browser help"
+expect_title "riptide help"
 
 step ":changelog opens the bundled changelog"
 run "changelog"
-expect_title "hackers-browser changelog"
+expect_title "riptide changelog"
 
 step ":history lists visited pages"
 run "history"
@@ -485,9 +485,9 @@ code=0
 "$BIN" --basedir "$work/base" "file://$work/second.html" ":tab-focus -1" || code=$?
 if (( code == 0 )); then expect_title "second"; else fail "second invocation exited with $code"; fi
 
-step "web pages can't see or embed hb:// UI pages"
+step "web pages can't see or embed riptide:// UI pages"
 run "open file://$work/isolation.html"
-expect_title "hb=undefined frame=empty"
+expect_title "rt=undefined frame=empty"
 
 step ":adblock-update blocks requests from the filter list"
 run "adblock-update"

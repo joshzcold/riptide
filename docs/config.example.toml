@@ -1,5 +1,5 @@
-# Example config.toml for hackers-browser.
-# Copy to the config directory (run `hackers-browser --paths` to find it).
+# Example config.toml for riptide.
+# Copy to the config directory (run `riptide --paths` to find it).
 # Every key is a setting name, as listed in `:set` completion and the README.
 
 hints.chars = "asdfghjkl"

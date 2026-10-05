@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>History</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4fafb; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+    --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #071a28; --fg: #e3f2f4; --muted: #8aa9b8; --line: #173246; --accent: #3ccfc1; --panel: #0c2536; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+  header { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 1rem 1.5rem; }
+  header h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  #search { width: 100%; max-width: 40rem; padding: .4rem .6rem; font: inherit; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; }
+  main { max-width: 60rem; padding: 0 1.5rem 3rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1.5rem 0 .3rem; }
+  .entry { display: grid; grid-template-columns: 4rem 1fr; gap: .75rem; padding: .15rem 0; }
+  .time { color: var(--muted); font: .85em var(--mono); padding-top: .15rem; }
+  .entry a { color: var(--accent); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .entry .url { color: var(--muted); font-size: .85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #empty { color: var(--muted); margin-top: 2rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>History</h1>
+  <input id="search" type="search" placeholder="Search titles and URLs (press / in normal mode to search the page instead)" autocomplete="off">
+</header>
+<main id="list"></main>
+<script>
+const DATA = /*RT_DATA*/null;
+const list = document.getElementById("list");
+const search = document.getElementById("search");
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function render() {
+  const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const entries = (DATA || []).filter((e) => {
+    const hay = (e.title + " " + e.url).toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+  list.replaceChildren();
+  if (!entries.length) {
+    list.append(el("p", null, words.length ? "Nothing matches." : "No history yet."));
+    list.lastChild.id = "empty";
+    return;
+  }
+  let day = "";
+  for (const e of entries) {
+    const when = new Date(e.last_visit * 1000);
+    const d = when.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    if (d !== day) {
+      day = d;
+      list.append(el("h2", null, d));
+    }
+    const row = el("div", "entry");
+    row.append(el("span", "time", when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })));
+    const text = el("div");
+    const link = el("a", null, e.title || e.url);
+    link.href = e.url;
+    text.append(link, el("div", "url", e.url));
+    row.append(text);
+    list.append(row);
+  }
+}
+
+search.addEventListener("input", render);
+render();
+</script>
+</body>
+</html>

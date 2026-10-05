@@ -2,7 +2,7 @@
 # Packs a release build and the CEF runtime it needs into a tarball, and
 # with --appimage also into an AppImage:
 #   scripts/package-linux.sh [--appimage] [version]
-#     -> dist/hackers-browser-<version>-linux-<arch>.tar.gz (and .AppImage)
+#     -> dist/riptide-<version>-linux-<arch>.tar.gz (and .AppImage)
 # The binary finds libcef.so next to itself through its $ORIGIN rpath.
 set -euo pipefail
 
@@ -23,16 +23,16 @@ fi
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 build=target/release
-version=${1:-$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"hb","version":"\([^"]*\)".*/\1/p')}
-name=hackers-browser-$version-linux-$(uname -m)
+version=${1:-$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"riptide","version":"\([^"]*\)".*/\1/p')}
+name=riptide-$version-linux-$(uname -m)
 
-[[ -x $build/hackers-browser ]] || { echo "package-linux.sh: run 'task release' first" >&2; exit 1; }
+[[ -x $build/riptide ]] || { echo "package-linux.sh: run 'task release' first" >&2; exit 1; }
 
 stage=dist/$name
 rm -rf "$stage"
 mkdir -p "$stage"
 # Chromium's runtime files, as the cef-dll-sys build script copies them.
-files=(hackers-browser libcef.so libvk_swiftshader.so libvulkan.so.1 vk_swiftshader_icd.json
+files=(riptide libcef.so libvk_swiftshader.so libvulkan.so.1 vk_swiftshader_icd.json
     chrome-sandbox icudtl.dat v8_context_snapshot.bin resources.pak chrome_100_percent.pak
     chrome_200_percent.pak CREDITS.html)
 for f in "${files[@]}"; do
@@ -41,7 +41,7 @@ done
 cp -a "$build/locales" "$stage/"
 cp LICENSE README.md CHANGELOG.md "$stage/"
 # CEF ships libcef.so with debug info (1.4 GB); stripped it is ~260 MB.
-strip "$stage/hackers-browser" "$stage/libcef.so" "$stage/libvk_swiftshader.so"
+strip "$stage/riptide" "$stage/libcef.so" "$stage/libvk_swiftshader.so"
 
 tar -C dist -czf "dist/$name.tar.gz" "$name"
 echo "dist/$name.tar.gz"
@@ -65,11 +65,11 @@ if $appimage; then
     appdir=dist/$name.AppDir
     rm -rf "$appdir"
     cp -a "$stage" "$appdir"
-    cp packaging/hackers-browser.desktop packaging/hackers-browser.svg "$appdir/"
+    cp packaging/riptide.desktop packaging/riptide.svg "$appdir/"
     cat >"$appdir/AppRun" <<'APPRUN'
 #!/bin/sh
 here=$(dirname "$(readlink -f "$0")")
-exec "$here/hackers-browser" "$@"
+exec "$here/riptide" "$@"
 APPRUN
     chmod +x "$appdir/AppRun"
     # Works without FUSE too (e.g. in containers).

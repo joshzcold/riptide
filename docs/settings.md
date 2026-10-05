@@ -1,6 +1,6 @@
 # Settings
 
-<!-- Generated from crates/hb-core/src/settings.rs; regenerate with UPDATE_LUA_TYPES=1 cargo test -p hb-config. -->
+<!-- Generated from crates/rt-core/src/settings.rs; regenerate with UPDATE_LUA_TYPES=1 cargo test -p rt-config. -->
 
 Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.chars = "asdf"`) or with `:set hints.chars asdf`.
 
@@ -33,7 +33,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `input.insert_mode.auto_leave` | boolean | `true` | Leave insert mode when focus leaves an editable element |
 | `input.insert_mode.leave_on_load` | boolean | `true` | Leave insert mode when a new page starts loading |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
-| `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second hackers-browser invocation open |
+| `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |
 | `search.incremental` | boolean | `true` | Search while typing after / or ? |
 | `spellcheck.languages` | string[] | `[]` | Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once |
@@ -48,5 +48,5 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |
-| `window.title_format` | string | `{current_title}{title_sep}hackers-browser` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
+| `window.title_format` | string | `{current_title}{title_sep}Riptide` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
 | `zoom.default` | integer | `100` | Zoom in percent for pages, and what :zoom without a value resets to |

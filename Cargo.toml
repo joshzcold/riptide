@@ -7,14 +7,14 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/joshzcold/hackers-browser"
+repository = "https://github.com/joshzcold/riptide"
 
 [workspace.dependencies]
-hb-adblock = { path = "crates/hb-adblock" }
-hb-core = { path = "crates/hb-core" }
-hb-cef = { path = "crates/hb-cef" }
-hb-config = { path = "crates/hb-config" }
-hb-storage = { path = "crates/hb-storage" }
+rt-adblock = { path = "crates/rt-adblock" }
+rt-core = { path = "crates/rt-core" }
+rt-cef = { path = "crates/rt-cef" }
+rt-config = { path = "crates/rt-config" }
+rt-storage = { path = "crates/rt-storage" }
 cef = { version = "=154.3.0", default-features = false }
 # Without "single-thread" the engine is Send + Sync, for CEF's IO thread.
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }

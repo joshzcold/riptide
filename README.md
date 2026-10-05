@@ -1,6 +1,8 @@
-# hackers-browser
+<img src="packaging/riptide.svg" alt="" width="96" align="right">
 
-Modern browser with vim-like bindings using Rust and CEF.
+# Riptide
+
+*Surfing the web really fast.* A modern browser with vim-like bindings, using Rust and CEF.
 
 A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate. See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
@@ -15,7 +17,7 @@ What works today:
 - **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
 - **qutebrowser compatibility:** quickmarks and bookmarks files, userscripts (`QUTE_*`), Greasemonkey scripts, `:open-editor`, and `:history-import`.
 - **Page tools:** zoom (`+` `-` `=`), DevTools (`wi`), print or save as PDF, fullscreen, view source (`gf`), `:jseval`, tab muting, `:messages`, and `.` to repeat the last command.
-- **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`hackers-browser ':open -t x'`).
+- **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`riptide ':open -t x'`).
 
 ## Building
 
@@ -33,7 +35,7 @@ Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your i
 
 The build copies `libcef.so` and Chromium's resources next to the binary. The binary finds them through an `$ORIGIN` rpath.
 
-Logging goes to stderr and uses the `HB_LOG` filter, e.g. `HB_LOG=hb_cef=trace ./task run`. Browser data and `cef.log` live in `~/.local/share/hackers-browser/`.
+Logging goes to stderr and uses the `RT_LOG` filter, e.g. `RT_LOG=rt_cef=trace ./task run`. Browser data and `cef.log` live in `~/.local/share/riptide/`.
 
 <details>
 <summary>Without Task</summary>
@@ -42,7 +44,7 @@ Logging goes to stderr and uses the `HB_LOG` filter, e.g. `HB_LOG=hb_cef=trace .
 git clone --depth 1 --branch cef-v154.3.0+154.0.32 https://github.com/tauri-apps/cef-rs /tmp/cef-rs
 (cd /tmp/cef-rs && cargo run -p export-cef-dir -- --force "$HOME/.local/share/cef")
 export CEF_PATH="$HOME/.local/share/cef"
-cargo build && ./target/debug/hackers-browser
+cargo build && ./target/debug/riptide
 ```
 
 Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `target/` instead.
@@ -54,14 +56,14 @@ On Linux, Chromium's sandbox needs unprivileged user namespaces or a setuid-root
 
 Ubuntu 23.10 and later block user namespaces through AppArmor unless a program has a profile that allows them. Pick one of these fixes:
 
-- **An AppArmor profile (recommended).** It only affects this binary. Save it as `/etc/apparmor.d/hackers-browser`, then load it with `sudo apparmor_parser -r /etc/apparmor.d/hackers-browser`:
+- **An AppArmor profile (recommended).** It only affects this binary. Save it as `/etc/apparmor.d/riptide`, then load it with `sudo apparmor_parser -r /etc/apparmor.d/riptide`:
   ```
   abi <abi/4.0>,
   include <tunables/global>
 
-  profile hackers-browser /path/to/hackers-browser/target/*/hackers-browser flags=(unconfined) {
+  profile riptide /path/to/riptide/target/*/riptide flags=(unconfined) {
     userns,
-    include if exists <local/hackers-browser>
+    include if exists <local/riptide>
   }
   ```
 - **Setuid helper:** `sudo chown root:root target/debug/chrome-sandbox && sudo chmod 4755 target/debug/chrome-sandbox`. A rebuild that copies the file again undoes this.
@@ -71,7 +73,7 @@ macOS and Windows builds run without the sandbox for now; it needs the app bundl
 
 ### Network traffic
 
-Chromium calls Google in the background. hackers-browser turns off the calls that only serve Google and keeps the security updates (`crates/hb-cef/src/privacy.rs`). Measured on a fresh profile left on `about:blank` for 90 seconds, with `--log-net-log`:
+Chromium calls Google in the background. riptide turns off the calls that only serve Google and keeps the security updates (`crates/rt-cef/src/privacy.rs`). Measured on a fresh profile left on `about:blank` for 90 seconds, with `--log-net-log`:
 
 | Request | Purpose | Status |
 |---|---|---|
@@ -79,14 +81,14 @@ Chromium calls Google in the background. hackers-browser turns off the calls tha
 | `clients2.google.com/time` | Secure network time, used to explain certificate date errors | kept |
 | `redirector.gvt1.com/…/dict` | Spell-check dictionary | only once per language in `spellcheck.languages` (empty by default) |
 | `www.google.com/async/folae` | AI Mode eligibility | off (`--disable-features=AimEnabled`) |
-| `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; hackers-browser has its own `url.searchengines`) |
+| `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; riptide has its own `url.searchengines`) |
 | `accounts.google.com/ListAccounts` | Google accounts in the cookie jar | **still sent** once at startup. Google sign-in is off, but something still asks for the cookie jar; it carries your google.com cookies if you have any. |
 
-The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `hackers-browser --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
+The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 
 ## Configuration
 
-Run `hackers-browser --paths` to see where config and data live. All config files are optional and load in this order (later wins):
+Run `riptide --paths` to see where config and data live. All config files are optional and load in this order (later wins):
 
 | File | Purpose |
 |---|---|
@@ -96,9 +98,9 @@ Run `hackers-browser --paths` to see where config and data live. All config file
 
 | Platform | Config directory | Data directory (profile, cookies, cache) |
 |---|---|---|
-| Linux | `$XDG_CONFIG_HOME/hackers-browser`, default `~/.config/hackers-browser` | `$XDG_DATA_HOME/hackers-browser`, default `~/.local/share/hackers-browser` |
-| macOS | `~/.config/hackers-browser` (like Neovim, WezTerm, Zed) | `~/Library/Application Support/hackers-browser` |
-| Windows | `%APPDATA%\hackers-browser\config` | `%LOCALAPPDATA%\hackers-browser\data` |
+| Linux | `$XDG_CONFIG_HOME/riptide`, default `~/.config/riptide` | `$XDG_DATA_HOME/riptide`, default `~/.local/share/riptide` |
+| macOS | `~/.config/riptide` (like Neovim, WezTerm, Zed) | `~/Library/Application Support/riptide` |
+| Windows | `%APPDATA%\riptide\config` | `%LOCALAPPDATA%\riptide\data` |
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honoured on every platform. `--basedir DIR` puts everything under `DIR/config` and `DIR/data`, which is handy for testing or for a separate profile.
 
@@ -141,9 +143,9 @@ Ads and trackers are blocked at the network level with Adblock Plus filter lists
 
 ### External programs and userscripts
 
-- `:spawn [-v] [-m] [-o] [-d] <cmd> [args]` runs a program, with arguments split like a shell would (no shell runs). `{url}` is the current page. `-v` reports success too, `-m` shows the program's output as messages, `-o` shows it in a new tab (`hb://process/`), and `-d` detaches. A non-zero exit is shown as an error. For example, `hb.bind(",m", "spawn -d mpv {url}")`.
+- `:spawn [-v] [-m] [-o] [-d] <cmd> [args]` runs a program, with arguments split like a shell would (no shell runs). `{url}` is the current page. `-v` reports success too, `-m` shows the program's output as messages, `-o` shows it in a new tab (`riptide://process/`), and `-d` detaches. A non-zero exit is shown as an error. For example, `rt.bind(",m", "spawn -d mpv {url}")`.
 - `:spawn -u <name>` runs a **userscript**, compatible with qutebrowser's. It is looked up in `<config>/userscripts/`, then `<data>/userscripts/`, then `PATH`. It gets `QUTE_URL`, `QUTE_TITLE`, `QUTE_SELECTED_TEXT`, `QUTE_HTML`/`QUTE_TEXT` (files with the page's HTML and text), `QUTE_TAB_INDEX`, `QUTE_COUNT`, `QUTE_MODE`, `QUTE_USER_AGENT`, `QUTE_CONFIG_DIR`, `QUTE_DATA_DIR`, `QUTE_DOWNLOAD_DIR` and `QUTE_VERSION`. Commands it writes to `QUTE_FIFO`, one per line, run when it exits.
-- Hints can run them on a link: `:hint links spawn mpv {hint-url}` (the URL is appended if there's no `{hint-url}`), or `:hint links userscript name`, which gets the link as `QUTE_URL` and `QUTE_MODE=hints`. For example, `hb.bind(";m", "hint links spawn mpv")`.
+- Hints can run them on a link: `:hint links spawn mpv {hint-url}` (the URL is appended if there's no `{hint-url}`), or `:hint links userscript name`, which gets the link as `QUTE_URL` and `QUTE_MODE=hints`. For example, `rt.bind(";m", "hint links spawn mpv")`.
 - `:open-editor`, or `Ctrl-e` in insert mode, edits the focused text field in `editor.command` (default `gvim -f {file} -c "normal {line}G{column0}l"`, as in qutebrowser). The text is written back when the editor exits successfully. For a terminal editor: `c.editor.command = { "foot", "nvim", "+call cursor({line}, {column})", "{file}" }`.
 
 ### Greasemonkey scripts
@@ -158,7 +160,7 @@ From the keyboard, in a text field:
 - `:spell-suggest` lists fixes for the word at the text cursor as completions. `Tab` picks one, `Return` replaces the word, and you're back in insert mode.
 - `:spell-add` adds that word to your dictionary.
 
-Nothing is bound by default. For example, `hb.bind("<Ctrl-s>", "spell-suggest", "insert")`. Right-click suggestions work too.
+Nothing is bound by default. For example, `rt.bind("<Ctrl-s>", "spell-suggest", "insert")`. Right-click suggestions work too.
 
 ### Prompts, downloads and permissions
 
@@ -194,7 +196,7 @@ The permission settings above, `content.tls.certificate_errors` and `content.blo
 "content.blocking.enabled" = false
 ```
 ```lua
-hb.set("content.geolocation", "false", "*.tracker.example")  -- config.lua
+rt.set("content.geolocation", "false", "*.tracker.example")  -- config.lua
 ```
 
 Downloads go to `downloads.location.directory`, or the system Downloads folder if that's empty (on Linux, `XDG_DOWNLOAD_DIR` or `~/.config/user-dirs.dirs`). Server-suggested names are reduced to a plain file name, existing files get ` (1)` appended, and typing an existing path asks before overwriting. Set `downloads.location.prompt = false` to skip the question. The status bar shows `↓2 41%` while downloads run.
@@ -213,50 +215,50 @@ In the "Save file to" prompt, `Tab` completes file and directory names, as in a 
 
 ### From the terminal
 
-While the browser is running, `hackers-browser` hands its arguments to that instance (per profile, so `--basedir` instances stay separate) and exits:
+While the browser is running, `riptide` hands its arguments to that instance (per profile, so `--basedir` instances stay separate) and exits:
 
 ```sh
-hackers-browser https://example.com        # opens per new_instance_open_target (default: new tab)
-hackers-browser --target tab-bg notes.html # relative files become file:// URLs
-hackers-browser ':tab-focus 1' ':reload'   # arguments starting with ':' run as commands
+riptide https://example.com        # opens per new_instance_open_target (default: new tab)
+riptide --target tab-bg notes.html # relative files become file:// URLs
+riptide ':tab-focus 1' ':reload'   # arguments starting with ':' run as commands
 ```
 
-The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/hackers-browser/` (or the data directory), inside a `0700` directory and with `0600` permissions, so only your user can send commands. On Windows each start is a new instance for now.
+The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/riptide/` (or the data directory), inside a `0700` directory and with `0600` permissions, so only your user can send commands. On Windows each start is a new instance for now.
 
 ### Internal pages
 
-The tab bar, status bar and overlay are HTML pages served from the browser itself at `hb://ui/…`. Web pages can't link to, frame or redirect to `hb://` addresses, and only `hb://ui/` pages get the `hb.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
+The tab bar, status bar and overlay are HTML pages served from the browser itself at `riptide://ui/…`. Web pages can't link to, frame or redirect to `riptide://` addresses, and only `riptide://ui/` pages get the `rt.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
 
-Pages you can open: `hb://help/` (`:help`), `hb://history/` (`:history`), `hb://downloads/` (`:downloads`) and `hb://changelog/` (`:changelog`).
+Pages you can open: `riptide://help/` (`:help`), `riptide://history/` (`:history`), `riptide://downloads/` (`:downloads`) and `riptide://changelog/` (`:changelog`).
 
 ### Lua
 
-`config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `hb.set/get/bind/unbind`, `hb.platform` (`linux`, `macos`, `windows`), `hb.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
+`config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `rt.set/get/bind/unbind`, `rt.platform` (`linux`, `macos`, `windows`), `rt.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
 
 The Lua VM stays alive after the file runs, so config can also script the browser:
 
 ```lua
 -- A key bound to a function, with access to the page and the count.
-hb.bind("<Ctrl-g>", function() hb.message(hb.title() .. " — " .. hb.url()) end)
+rt.bind("<Ctrl-g>", function() rt.message(rt.title() .. " — " .. rt.url()) end)
 
 -- A command, :wiki rust, with completion next to the built-in ones.
-hb.command("wiki", function(args)
-  hb.open("https://en.wikipedia.org/wiki/" .. args, "tab")
+rt.command("wiki", function(args)
+  rt.open("https://en.wikipedia.org/wiki/" .. args, "tab")
 end, "Search Wikipedia")
 
 -- Hooks: load_finished, url_changed, tab_opened (e.url), mode_changed (e.from, e.to).
-hb.on("load_finished", function(e)
-  if e.url:find("^https://news%.example%.com/") then hb.run("scroll-to-perc 0") end
+rt.on("load_finished", function(e)
+  if e.url:find("^https://news%.example%.com/") then rt.run("scroll-to-perc 0") end
 end)
 ```
 
-In callbacks, `hb.url()`, `hb.title()`, `hb.mode()`, `hb.count()` and `hb.tabs()` (the window's tabs, with `title`, `url`, `current` and `pinned`) describe the current state. `hb.run(line)`, `hb.open(url, target)`, `hb.message(text, level)` and `hb.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
+In callbacks, `rt.url()`, `rt.title()`, `rt.mode()`, `rt.count()` and `rt.tabs()` (the window's tabs, with `title`, `url`, `current` and `pinned`) describe the current state. `rt.run(line)`, `rt.open(url, target)`, `rt.message(text, level)` and `rt.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
 
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh
-dir="$(hackers-browser --paths | sed -n 's/^config: //p')"
-mkdir -p "$dir" && hackers-browser --lua-types > "$dir/hb.meta.lua"
+dir="$(riptide --paths | sed -n 's/^config: //p')"
+mkdir -p "$dir" && riptide --lua-types > "$dir/rt.meta.lua"
 ```
 
 ## Key bindings
@@ -334,17 +336,17 @@ The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`
 
 | Crate | Purpose |
 |---|---|
-| `crates/hb-core` | Modes, key parsing, bindings, commands, command line, URL guessing. No CEF dependency; unit tested. |
-| `crates/hb-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, generated Lua types and settings docs. |
-| `crates/hb-storage` | History (SQLite), quickmarks and bookmarks (qutebrowser formats), sessions (TOML). |
-| `crates/hb-cef` | CEF integration: window layout, handlers, renderer-process bindings, status bar and completion UI. |
-| `crates/hb` | The `hackers-browser` binary. |
+| `crates/rt-core` | Modes, key parsing, bindings, commands, command line, URL guessing. No CEF dependency; unit tested. |
+| `crates/rt-config` | Config paths per platform, command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, generated Lua types and settings docs. |
+| `crates/rt-storage` | History (SQLite), quickmarks and bookmarks (qutebrowser formats), sessions (TOML). |
+| `crates/rt-cef` | CEF integration: window layout, handlers, renderer-process bindings, status bar and completion UI. |
+| `crates/riptide` | The `riptide` binary. |
 
 ## Testing
 
 | Command | What it runs |
 |---|---|
-| `./task test` | Unit tests for `hb-core`, `hb-config` and `hb-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
+| `./task test` | Unit tests for `rt-core`, `rt-config` and `rt-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
 | `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
 | `./task lint` | `cargo fmt --check` and `clippy -D warnings` |
 | `./task check` | All of the above |
@@ -377,7 +379,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org), whic
 2. Run `./task changelog -- --tag vX.Y.Z` to regenerate `CHANGELOG.md` with git-cliff. `scripts/git-cliff.sh` downloads a pinned, checksum-verified git-cliff if it's not installed.
 3. Commit as `chore(release): vX.Y.Z`, tag `vX.Y.Z` and push the tag.
 
-[`.github/workflows/release.yml`](.github/workflows/release.yml) checks that the tag matches the version. It builds with `--release`, packs the binary and the CEF runtime into `hackers-browser-X.Y.Z-linux-x86_64.tar.gz` and an AppImage (`./task package` and `./task appimage` do the same locally), and publishes a GitHub release with the notes for that version. In the browser, `:changelog` shows the changelog it was built with. The first start after an update says so in the status bar.
+[`.github/workflows/release.yml`](.github/workflows/release.yml) checks that the tag matches the version. It builds with `--release`, packs the binary and the CEF runtime into `riptide-X.Y.Z-linux-x86_64.tar.gz` and an AppImage (`./task package` and `./task appimage` do the same locally), and publishes a GitHub release with the notes for that version. In the browser, `:changelog` shows the changelog it was built with. The first start after an update says so in the status bar.
 
 ## License
 

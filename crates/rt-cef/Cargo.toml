@@ -1,0 +1,21 @@
+[package]
+name = "rt-cef"
+description = "CEF integration: windows, tabs, handlers, renderer bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+sandbox = ["cef/sandbox"]
+
+[dependencies]
+rt-adblock.workspace = true
+rt-core.workspace = true
+rt-config.workspace = true
+rt-storage.workspace = true
+cef.workspace = true
+arboard.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

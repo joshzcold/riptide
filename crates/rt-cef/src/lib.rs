@@ -1,0 +1,317 @@
+//! CEF integration for riptide. Translates CEF callbacks into
+//! `rt-core` inputs and carries out the effects the engine returns.
+
+mod actions;
+mod adblock;
+mod caret;
+mod client;
+mod clipboard;
+mod dialogs;
+mod downloads;
+mod eval;
+mod favicons;
+mod greasemonkey;
+mod help;
+mod hints;
+mod lua;
+mod marks;
+mod navigate;
+mod permissions;
+mod privacy;
+mod prompts;
+mod remote;
+mod renderer;
+mod scheme;
+mod search;
+mod shell;
+mod spawn;
+mod spell;
+mod storage;
+mod tabs;
+mod tls;
+mod ui;
+mod view;
+mod window;
+
+use std::path::Path;
+
+use cef::*;
+use rt_config::{Cli, Paths};
+use rt_core::engine::Level;
+use rt_core::{Engine, Keymap};
+
+/// What the browser process needs once CEF is up.
+#[derive(Clone)]
+struct Startup {
+    paths: Paths,
+    urls: Vec<String>,
+    commands: Vec<String>,
+    /// The config, read before CEF starts so startup-only settings can
+    /// become Chromium switches; taken once CEF is up.
+    config: std::sync::Arc<std::sync::Mutex<Option<rt_config::Loaded>>>,
+    dark_mode: bool,
+    /// `content.widevine` is on but the CDM isn't downloaded yet.
+    fetch_widevine: bool,
+}
+
+wrap_app! {
+    struct RtApp {
+        startup: Option<Startup>,
+    }
+
+    impl App {
+        fn on_register_custom_schemes(&self, registrar: Option<&mut SchemeRegistrar>) {
+            if let Some(registrar) = registrar {
+                scheme::register(registrar);
+            }
+        }
+
+        fn on_before_command_line_processing(
+            &self,
+            process_type: Option<&CefString>,
+            command_line: Option<&mut CommandLine>,
+        ) {
+            // CEF runs Chrome underneath even for Alloy-style windows, and
+            // Chrome's own login prompt would swallow HTTP auth (cef#3603).
+            let browser_process = process_type.is_none_or(|t| t.to_string().is_empty());
+            if browser_process && let Some(command_line) = command_line {
+                command_line.append_switch(Some(&CefString::from("disable-chrome-login-prompt")));
+                privacy::append_switches(command_line);
+                if self.startup.as_ref().is_some_and(|s| s.dark_mode) {
+                    append_to_list_switch(command_line, "blink-settings", "forceDarkModeEnabled=true");
+                }
+            }
+        }
+
+        fn browser_process_handler(&self) -> Option<BrowserProcessHandler> {
+            Some(RtBrowserProcessHandler::new(self.startup.clone()))
+        }
+
+        fn render_process_handler(&self) -> Option<RenderProcessHandler> {
+            Some(renderer::RtRenderProcessHandler::new())
+        }
+    }
+}
+
+wrap_browser_process_handler! {
+    struct RtBrowserProcessHandler {
+        startup: Option<Startup>,
+    }
+
+    impl BrowserProcessHandler {
+        fn on_context_initialized(&self) {
+            let Some(startup) = self.startup.clone() else { return };
+            let mut engine = Engine::new(Keymap::defaults());
+            engine.set_clipboard_reader(clipboard::read);
+            engine.set_primary_reader(clipboard::read_primary);
+            engine.set_completion_source(storage::complete);
+            let mut errors = storage::open(&startup.paths);
+            shell::install(shell::Shell::new(engine, startup.paths));
+            scheme::install();
+            let loaded = startup.config.lock().ok().and_then(|mut c| c.take());
+            errors.extend(match loaded {
+                Some(loaded) => shell::apply_config(loaded),
+                None => shell::load_config(),
+            });
+            errors.extend(greasemonkey::load().1);
+            if let Some((data_dir, lists)) = shell::with(|s| {
+                (s.paths.data_dir.clone(), s.engine.settings().list("content.blocking.adblock.lists").to_vec())
+            }) {
+                adblock::load(data_dir, lists);
+            }
+            window::create(startup.urls, startup.commands, false);
+            report_config_errors(&errors);
+            if let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) {
+                help::note_upgrade(&data_dir);
+                if startup.fetch_widevine {
+                    privacy::watch_widevine_download(data_dir);
+                }
+            }
+            remote::listen();
+        }
+    }
+}
+
+pub(crate) fn report_config_errors(errors: &[String]) {
+    match errors {
+        [] => {}
+        [only] => shell::show_message(Level::Error, format!("Config: {only}")),
+        [first, rest @ ..] => shell::show_message(
+            Level::Error,
+            format!("Config: {first} (and {} more; see the log)", rest.len()),
+        ),
+    }
+}
+
+/// A setting's value from config read before the engine exists.
+fn startup_bool(loaded: &rt_config::Loaded, name: &str) -> bool {
+    let mut engine = Engine::new(Keymap::defaults());
+    for op in &loaded.ops {
+        let _ = engine.apply_config(op);
+    }
+    engine.settings().bool(name)
+}
+
+/// Add `value` to a comma-separated switch, keeping what the user passed.
+pub(crate) fn append_to_list_switch(command_line: &mut CommandLine, name: &str, value: &str) {
+    let name = CefString::from(name);
+    let given = CefStringUtf16::from(&command_line.switch_value(Some(&name))).to_string();
+    let joined = if given.is_empty() {
+        value.to_string()
+    } else {
+        format!("{given},{value}")
+    };
+    command_line.append_switch_with_value(Some(&name), Some(&CefString::from(joined.as_str())));
+}
+
+fn path_string(path: &Path) -> CefString {
+    CefString::from(path.to_string_lossy().as_ref())
+}
+
+/// Answer `--help`, `--version`, `--paths` and `--lua-types` without CEF.
+/// Returns `Err(exit code)` when the process should stop here.
+fn early_cli() -> Result<(Cli, Paths), i32> {
+    let cli = match Cli::parse(std::env::args().skip(1)) {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("riptide: {e}\n\n{}", rt_config::cli::USAGE);
+            return Err(2);
+        }
+    };
+    if cli.help {
+        println!("{}", rt_config::cli::USAGE);
+        return Err(0);
+    }
+    if cli.lua_types {
+        print!("{}", rt_config::lua_types::generate());
+        return Err(0);
+    }
+    if cli.version {
+        println!("{}", help::version_line());
+        return Err(0);
+    }
+    let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {
+        eprintln!("riptide: {e}");
+        2
+    })?;
+    if cli.print_paths {
+        println!("config: {}", paths.config_dir.display());
+        println!("data:   {}", paths.data_dir.display());
+        return Err(0);
+    }
+    Ok((cli, paths))
+}
+
+/// Entry point for the browser process and every CEF subprocess. Returns the exit code.
+pub fn run() -> i32 {
+    // CEF subprocesses carry `--type=…`; everything else is the browser process.
+    let subprocess = std::env::args().any(|a| a.starts_with("--type="));
+    let early = if subprocess { None } else { Some(early_cli()) };
+    if let Some(Err(code)) = early {
+        return code;
+    }
+
+    // On macOS the CEF framework is loaded at runtime from the app bundle.
+    #[cfg(target_os = "macos")]
+    let _library = {
+        let loader = library_loader::LibraryLoader::new(
+            &std::env::current_exe().unwrap_or_default(),
+            subprocess,
+        );
+        if !loader.load() {
+            eprintln!("riptide: could not load the Chromium Embedded Framework");
+            return 1;
+        }
+        loader
+    };
+    let _ = api_hash(sys::CEF_API_VERSION_LAST, 0);
+
+    let args = args::Args::new();
+    let mut app = RtApp::new(None);
+    let code = execute_process(
+        Some(args.as_main_args()),
+        Some(&mut app),
+        std::ptr::null_mut(),
+    );
+    if code >= 0 {
+        return code;
+    }
+    let Some(Ok((cli, paths))) = early else {
+        return 1;
+    };
+    if let Some(code) = remote::hand_off(&paths, &cli) {
+        return code;
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let (mut urls, mut commands) = (Vec::new(), Vec::new());
+    for arg in &cli.urls {
+        match rt_config::remote::classify(arg, &cwd) {
+            rt_config::remote::Item::Url(url) => urls.push(url),
+            rt_config::remote::Item::Command(command) => commands.push(command),
+        }
+    }
+    // Chromium names its profile directory "Default" whatever cache_path says.
+    let profile = paths.data_dir.join("Default");
+    if let Err(e) = std::fs::create_dir_all(&profile) {
+        eprintln!("riptide: cannot create {}: {e}", profile.display());
+        return 1;
+    }
+
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+        .unwrap_or_default();
+    let sandbox = rt_config::sandbox::detect(&exe_dir, cli.no_sandbox);
+    if sandbox.is_on() {
+        tracing::info!("Chromium sandbox {}", sandbox.describe());
+    } else {
+        tracing::warn!("Chromium sandbox {}", sandbox.describe());
+    }
+    let _ = help::SANDBOX.set(sandbox.describe());
+    let data_dir = paths.data_dir.clone();
+    let loaded = rt_config::load(&paths);
+    let widevine = startup_bool(&loaded, "content.widevine");
+    let fetch_widevine = widevine && !privacy::widevine_installed(&paths.data_dir);
+    privacy::seed_prefs(&paths.data_dir, &profile, fetch_widevine);
+    let settings = Settings {
+        no_sandbox: (!sandbox.is_on()).into(),
+        persist_session_cookies: 1,
+        log_severity: LogSeverity::WARNING,
+        root_cache_path: path_string(&paths.data_dir),
+        cache_path: path_string(&profile),
+        log_file: path_string(&paths.data_dir.join("cef.log")),
+        ..Default::default()
+    };
+    let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");
+    let mut app = RtApp::new(Some(Startup {
+        paths,
+        urls,
+        commands,
+        config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
+        dark_mode,
+        fetch_widevine,
+    }));
+    if initialize(
+        Some(args.as_main_args()),
+        Some(&settings),
+        Some(&mut app),
+        std::ptr::null_mut(),
+    ) != 1
+    {
+        tracing::error!("CEF failed to initialize");
+        return 1;
+    }
+    run_message_loop();
+    // A clean exit: no crash to recover from next time.
+    let autosave = data_dir
+        .join("sessions")
+        .join(format!("{}.toml", storage::AUTOSAVE_SESSION));
+    if let Err(e) = std::fs::remove_file(&autosave)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::warn!("can't remove {}: {e}", autosave.display());
+    }
+    shutdown();
+    remote::cleanup();
+    0
+}

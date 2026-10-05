@@ -1,4 +1,4 @@
-# hackers-browser — Project Plan
+# riptide — Project Plan
 
 A keyboard-driven, vim-like browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (modern Chromium) and controlled entirely from Rust.
 
@@ -35,7 +35,7 @@ A keyboard-driven, vim-like browser in the spirit of [qutebrowser](https://githu
 **Decision:** CEF Views. The window holds:
 
 - A **content area**: one `BrowserView` per tab; only the active one is visible.
-- A **UI overlay `BrowserView`** (privileged, internal `hb://ui` page) that renders the status bar, command line, completion menu, tab bar, prompts, and messages. Rust drives it via process messages; it never loads remote content.
+- A **UI overlay `BrowserView`** (privileged, internal `riptide://ui` page) that renders the status bar, command line, completion menu, tab bar, prompts, and messages. Rust drives it via process messages; it never loads remote content.
 
 This mirrors qutebrowser's split (Qt widgets around a web view) while keeping the UI layer simple to style.
 
@@ -78,22 +78,22 @@ Most qutebrowser features that touch page content are injected JavaScript (it do
 ## Architecture
 
 ```
-hackers-browser/
+riptide/
 ├── Cargo.toml                 # workspace
 ├── crates/
-│   ├── hb/                    # binary: main(), CEF init, subprocess dispatch
-│   ├── hb-core/               # CEF-free logic: modes, keymap, commands, config (unit-testable)
-│   ├── hb-cef/                # CEF integration: App, Client, handlers, Views window, tabs
-│   ├── hb-renderer/           # renderer-process handler + JS injection
-│   ├── hb-storage/            # history, bookmarks, quickmarks, sessions (SQLite)
-│   └── hb-ui/                 # internal UI page (HTML/CSS/TS) embedded via include_dir
+│   ├── riptide/               # binary: main(), CEF init, subprocess dispatch
+│   ├── rt-core/               # CEF-free logic: modes, keymap, commands, config (unit-testable)
+│   ├── rt-cef/                # CEF integration: App, Client, handlers, Views window, tabs
+│   ├── rt-renderer/           # renderer-process handler + JS injection
+│   ├── rt-storage/            # history, bookmarks, quickmarks, sessions (SQLite)
+│   └── rt-ui/                 # internal UI page (HTML/CSS/TS) embedded via include_dir
 ├── js/                        # page scripts: hints, scroll, caret, insert detection
 └── docs/
 ```
 
-> **Current state (after M0):** only `hb`, `hb-core` and `hb-cef` exist. Renderer code, UI pages (`hb-cef/ui/`) and page scripts (`hb-cef/js/`) live inside `hb-cef` until they grow enough to split out. `hb-storage` arrives with M6.
+> **Current state (after M0):** only `riptide`, `rt-core` and `rt-cef` exist. Renderer code, UI pages (`rt-cef/ui/`) and page scripts (`rt-cef/js/`) live inside `rt-cef` until they grow enough to split out. `rt-storage` arrives with M6.
 
-**Rule:** `hb-core` has no CEF dependency. Modes, key parsing, command dispatch, and config are tested without a browser. CEF is an adapter that turns events into `hb-core` inputs and executes `hb-core` actions.
+**Rule:** `rt-core` has no CEF dependency. Modes, key parsing, command dispatch, and config are tested without a browser. CEF is an adapter that turns events into `rt-core` inputs and executes `rt-core` actions.
 
 ### Core loop
 
@@ -106,13 +106,13 @@ Key event (OnPreKeyEvent)
   → Action on Tab / Window / UI / Storage
 ```
 
-Today `hb-core::Engine` implements this loop: it takes a `Key` and returns `KeyOutcome { consumed, effects }`. Mode and command-line commands are handled inside the engine. Everything else comes back as `Effect::Run(Command)` for `hb-cef` to carry out. The command table is a hand-written `match` for now.
+Today `rt-core::Engine` implements this loop: it takes a `Key` and returns `KeyOutcome { consumed, effects }`. Mode and command-line commands are handled inside the engine. Everything else comes back as `Effect::Run(Command)` for `rt-cef` to carry out. The command table is a hand-written `match` for now.
 
 Commands are registered with a derive macro so each one declares its name, args, flags, count support, and the modes it applies in. This gives `:help`, completion, and argument validation from one source of truth.
 
 ---
 
-## Feature parity checklist (qutebrowser → hackers-browser)
+## Feature parity checklist (qutebrowser → riptide)
 
 ### Modes
 - [x] Normal, Insert (with auto-enter/leave on focus), Command, Passthrough
@@ -167,7 +167,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 
 ### Help and tooling
 - [x] `:help` pages generated from the live commands, settings and bindings; `:version` (M16)
-- [x] `hackers-browser ':cmd' url` talks to the running instance (M15; Unix)
+- [x] `riptide ':cmd' url` talks to the running instance (M15; Unix)
 - [x] Spell checking with keyboard-driven suggestions (M17)
 - [x] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18; Linux release artifacts only)
 
@@ -181,7 +181,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
 - [x] History with completion (`:open` + `Tab`)
 - [x] Quickmarks and bookmarks in qutebrowser's file formats
-- [x] Crash-recovery autosave (`auto_save.interval`, `_autosave` removed on a clean exit) and a history page (`:history`, `hb://history/`) (2026-10-02)
+- [x] Crash-recovery autosave (`auto_save.interval`, `_autosave` removed on a clean exit) and a history page (`:history`, `riptide://history/`) (2026-10-02)
 - [x] Importing qutebrowser's history.sqlite (`:history-import`, read-only, skips redirects and duplicates) (2026-10-02)
 - [x] Private windows (separate `CefRequestContext`) (2026-10-02)
 
@@ -202,7 +202,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 | `OnPreKeyEvent` consumes keys | ✅ `5j`/`3j` scrolled exactly 320px; the page received none of the keys |
 | Status bar `BrowserView` in a box layout | ✅ fixed 20px bar below a flexible page view |
 | Completion overlay (`add_overlay_view`, custom docking) | ✅ floats above the status bar while typing `:scr` |
-| Renderer → browser process message | ✅ `on_focused_node_changed` → `hb.focus` message → auto insert mode on clicking a text field |
+| Renderer → browser process message | ✅ `on_focused_node_changed` → `rt.focus` message → auto insert mode on clicking a text field |
 | Clean shutdown via `:quit` | ✅ exit code 0, no leftover subprocesses |
 
 Lessons learned:
@@ -212,7 +212,7 @@ Lessons learned:
 - The command line is a Rust-owned buffer. Keys are consumed in `OnPreKeyEvent` and the status bar just displays the text, so UI pages never need keyboard focus.
 
 Known gaps carried forward:
-- ~~The Chromium sandbox is disabled.~~ Since M8, the sandbox is on whenever Linux allows it (user namespaces, or a setuid `chrome-sandbox`). Otherwise the browser warns and runs without it (`hb_config::sandbox`). CI enables user namespaces and checks that the sandbox runs. The AppArmor profile in the README hasn't been tried on a real Ubuntu machine yet (it needs root). macOS and Windows still run unsandboxed until M10.
+- ~~The Chromium sandbox is disabled.~~ Since M8, the sandbox is on whenever Linux allows it (user namespaces, or a setuid `chrome-sandbox`). Otherwise the browser warns and runs without it (`rt_config::sandbox`). CI enables user namespaces and checks that the sandbox runs. The AppArmor profile in the README hasn't been tried on a real Ubuntu machine yet (it needs root). macOS and Windows still run unsandboxed until M10.
 - Popups and `:open -t/-b/-w` load in the current tab until M3.
 - When an event carries no character, key translation falls back to a US layout. Verify with other layouts.
 - Status messages expire after 3 s. Completion covers only command names (M2 extends it).
@@ -220,7 +220,7 @@ Known gaps carried forward:
 M1 is essentially complete as a by-product (modes, key parser, scrolling, navigation, `o`, status bar). The M2 command line, history and `;;` chaining also exist. Remaining M1/M2 work: the command registry macro, `Tab` completion selection, and URL/history completion.
 
 ### M1 — Minimal vim browser
-- `hb-core`: mode manager, key parser, command registry.
+- `rt-core`: mode manager, key parser, command registry.
 - Normal/insert modes, scrolling, back/forward/reload, `o` open.
 - Status bar with mode, URL, load progress.
 
@@ -231,23 +231,23 @@ M1 is essentially complete as a by-product (modes, key parser, scrolling, naviga
 ### M3 — Tabs ✅ done 2026-10-02
 - Multiple tabs in one window, tab bar, close/undo, tab commands.
 
-Notes: index logic is `hb_core::tabs::TabList` (unit tested). All tab `BrowserView`s share a fill-layout panel, and only the current one is visible. Popups go through CEF's `on_popup_browser_view_created`, so `window.opener` survives. A page's `window.close()` closes only its tab. Gaps: undo restores the URL only (not back/forward history), closing a tab skips `beforeunload` prompts, and there is still a single window.
+Notes: index logic is `rt_core::tabs::TabList` (unit tested). All tab `BrowserView`s share a fill-layout panel, and only the current one is visible. Popups go through CEF's `on_popup_browser_view_created`, so `window.opener` survives. A page's `window.close()` closes only its tab. Gaps: undo restores the URL only (not back/forward history), closing a tab skips `beforeunload` prompts, and there is still a single window.
 
 ### M4 — Hints ✅ done 2026-10-02
 - JS hint engine, all hint targets, rapid mode.
 
-Notes: labels use qutebrowser's scattered letter algorithm (`hb_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: cross-origin iframes are hinted only as a whole (same-origin ones are searched since 2026-10-02); a page can interfere with hints on its own page by redefining `window.__hbHints`; labels for elements that move after the hints are drawn don't follow them.
+Notes: labels use qutebrowser's scattered letter algorithm (`rt_core::hints::labels`, unit tested against qutebrowser's output). Clicks are real mouse events sent at the element's centre (`send_mouse_click_event`), so pages see `isTrusted` input and `target=_blank` links become tabs. Gaps: cross-origin iframes are hinted only as a whole (same-origin ones are searched since 2026-10-02); a page can interfere with hints on its own page by redefining `window.__rtHints`; labels for elements that move after the hints are drawn don't follow them.
 
 ### M5 — Config ✅ done 2026-10-02
 - `config.toml` (settings, bindings, aliases, per-domain overrides); `:set`, `:bind`, live reload.
 - qutebrowser-compatible setting names where they make sense.
 
 Notes:
-- **Settings registry:** `hb_core::settings`. 15 typed settings with validation; each one has a real effect. Values from TOML, Lua and `:set` all pass through JSON, so validation lives in one place.
-- **Sources** (`hb-config`): `autoconfig.toml`, then `config.toml`, then `config.lua`. Each becomes a list of `ConfigOp`s the engine applies.
+- **Settings registry:** `rt_core::settings`. 15 typed settings with validation; each one has a real effect. Values from TOML, Lua and `:set` all pass through JSON, so validation lives in one place.
+- **Sources** (`rt-config`): `autoconfig.toml`, then `config.toml`, then `config.lua`. Each becomes a list of `ConfigOp`s the engine applies.
   - `:set`/`:bind`/`:unbind` persist to `autoconfig.toml`, never to the user's own files. They warn when a config file overrides the value at startup.
   - Bindings to unknown commands are rejected at load time.
-- **Lua:** `mlua` with vendored Lua 5.4, so it builds on all three platforms with no system Lua. It provides the `c` proxy, `hb.*` and a config-dir `require` searcher. Errors read `file:line: message`, and changes made before an error still apply. `--lua-types` emits lua-language-server definitions generated from the registry. The checked-in `docs/lua/hb.meta.lua` and `docs/settings.md` are tested for staleness.
+- **Lua:** `mlua` with vendored Lua 5.4, so it builds on all three platforms with no system Lua. It provides the `c` proxy, `rt.*` and a config-dir `require` searcher. Errors read `file:line: message`, and changes made before an error still apply. `--lua-types` emits lua-language-server definitions generated from the registry. The checked-in `docs/lua/rt.meta.lua` and `docs/settings.md` are tested for staleness.
 - **Paths:** XDG on Linux. On macOS, `~/.config` for config and Application Support for data. On Windows, `%APPDATA%` for config and `%LOCALAPPDATA%` for data. `XDG_*` is honoured everywhere, and `--basedir` overrides all. Unit tests cover all three platforms' rules, but macOS and Windows builds have not been run yet.
 
 Gaps:
@@ -260,11 +260,11 @@ Gaps:
 - History, bookmarks, quickmarks, sessions.
 
 Notes:
-- **`hb-storage`:**
+- **`rt-storage`:**
   - History is SQLite, with a per-visit table and a per-URL table for completion, like qutebrowser.
   - Quickmarks and bookmarks use qutebrowser's text formats, so you can import by copying the files. If an existing file can't be read, the browser treats it as read-only, so it's never overwritten with an empty list.
   - Sessions are TOML, with names restricted to safe file names.
-- **Completion:** `hb_core::completion` decides what to offer, and the browser layer supplies the quickmark, bookmark, history and session sources. `Tab`/`Shift-Tab` cycle without re-querying, and the popup shows category headers and scrolls to the selection.
+- **Completion:** `rt_core::completion` decides what to offer, and the browser layer supplies the quickmark, bookmark, history and session sources. `Tab`/`Shift-Tab` cycle without re-querying, and the popup shows category headers and scrolls to the selection.
 - **Settings:** `auto_save.session` and `completion.web_history.max_items`.
 
 Gaps:
@@ -276,13 +276,13 @@ Gaps:
 - Unified prompt UI; download manager; permission and auth dialogs.
 
 Notes:
-- **Prompts:** `hb_core::prompt` holds a queue answered one at a time in the new `prompt`/`yesno` modes, and `hb-cef/src/prompts.rs` connects each prompt to its CEF callback. JavaScript dialogs are withdrawn when their page navigates, and every prompt for a tab when the tab closes.
+- **Prompts:** `rt_core::prompt` holds a queue answered one at a time in the new `prompt`/`yesno` modes, and `rt-cef/src/prompts.rs` connects each prompt to its CEF callback. JavaScript dialogs are withdrawn when their page navigates, and every prompt for a tab when the tab closes.
 - **Lessons learned:**
   - Chromium ignores input to a page while it shows a JavaScript dialog, so prompt keys come through the status bar's browser, which gets focus for the duration.
   - CEF calls `GetAuthCredentials` on the IO thread, so the prompt is posted to the UI thread.
   - Chrome's own login prompt swallows HTTP auth unless `--disable-chrome-login-prompt` is set (cef#3603). CEF always runs Chrome's internals now, even for Alloy-style windows.
   - Chromium saves permission answers per site in the profile. So `y`/`N` map to accept/deny (saved), `n` to dismiss (not saved), and a `content.*=false` setting to ignore, so changing the setting later still works. Camera and microphone requests go through a separate CEF API that isn't saved, so they keep a session memory (`A`/`N`).
-- **Downloads:** `hb_config::downloads` finds the platform Downloads folder (XDG on Linux), sanitises suggested names and picks unused names (unit tested).
+- **Downloads:** `rt_config::downloads` finds the platform Downloads folder (XDG on Linux), sanitises suggested names and picks unused names (unit tested).
 
 Gaps:
 - No per-download bar.
@@ -294,7 +294,7 @@ Gaps:
 - TLS errors have no override.
 
 ### M8 — Content blocking & privacy
-- ✅ **adblock-rust via `OnBeforeResourceLoad`** (2026-10-02). The new `hb-adblock` crate (CEF-free, unit tested) uses `adblock` 0.13 without its `single-thread` feature, so the engine is `Send + Sync` for CEF's IO thread.
+- ✅ **adblock-rust via `OnBeforeResourceLoad`** (2026-10-02). The new `rt-adblock` crate (CEF-free, unit tested) uses `adblock` 0.13 without its `single-thread` feature, so the engine is `Send + Sync` for CEF's IO thread.
   - EasyList and EasyPrivacy (135k rules) compile in ~56 ms (release) into a ~6 MB cache that loads in ~18 ms. A check takes ~1.5 µs.
   - `:adblock-update` downloads through `CefURLRequest`, so there's no HTTP client dependency, and `file://` lists work. It compiles on a worker thread.
   - Settings: `content.blocking.enabled`, `content.blocking.adblock.lists` and `content.blocking.whitelist`, all with qutebrowser's names.
@@ -304,8 +304,8 @@ Gaps:
   - Not done: continuous re-checking (a MutationObserver would need a page-to-browser channel for web pages), subframes, procedural filters, scriptlets and `$redirect` resources, a blocked count in the status bar, automatic list updates, and qutebrowser's hosts-file method.
 - ✅ **Per-domain settings** (2026-10-02):
   - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
-  - `hb_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.
-  - `ConfigOp::SetFor` comes from `:set -u <pattern>`, `[per_domain."<pattern>"]` in TOML (autoconfig writes it the same way) and `hb.set(name, value, pattern)` in Lua.
+  - `rt_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.
+  - `ConfigOp::SetFor` comes from `:set -u <pattern>`, `[per_domain."<pattern>"]` in TOML (autoconfig writes it the same way) and `rt.set(name, value, pattern)` in Lua.
   - `permissions::decide` uses the requesting origin's value, and content blocking checks the page's.
   - Permission answers `A`/`N` save a per-site setting, which fixes the user's note about camera and microphone answers being forgotten.
   - Unit tests cover each layer. A smoke step answers `A` to a geolocation request and checks `autoconfig.toml`. By hand: after deleting Chromium's data, the saved answer still allows without asking.
@@ -325,7 +325,7 @@ Gaps:
     - The `{private}` title field.
     - Downloads from private windows still go to the downloads directory and list.
 - ✅ **Background Google traffic reviewed** (2026-10-02). Method: a fresh profile on `about:blank` for 90 s with `--log-net-log`. Each request was mapped to its Chromium source through its traffic-annotation hash (`hash(id) = fold(c, h*31 + c) mod 138003713` over `tools/traffic_annotation/summary/annotations.xml`). Results are in the README's "Network traffic" table. Before: 8 Google hosts and 122 MB downloaded. After: CRLSets, subresource filter rules, network time and one `ListAccounts`, 5.8 MB.
-  - Changes are in `hb-cef/src/privacy.rs`: `component_updates.component_updates_enabled = false` (Chromium still updates the components it exempts as security data, as with the `ComponentUpdatesEnabled` policy), spell-check dictionaries off, sign-in off, Chrome's default search engine off, and `--disable-features=AimEnabled,PreconnectToSearch,SearchEnginePreconnect2`, merged with any `--disable-features` the user passes.
+  - Changes are in `rt-cef/src/privacy.rs`: `component_updates.component_updates_enabled = false` (Chromium still updates the components it exempts as security data, as with the `ComponentUpdatesEnabled` policy), spell-check dictionaries off, sign-in off, Chrome's default search engine off, and `--disable-features=AimEnabled,PreconnectToSearch,SearchEnginePreconnect2`, merged with any `--disable-features` the user passes.
   - Prefs are written into `Local State` and `Default/Preferences` before CEF starts, because these services start within 100 ms. `CefPreferenceManager::SetPreference` from `on_context_initialized` is too late. Through cef-rs it also fails silently unless the `error` out-string is non-empty, since an empty `CefString` is passed as NULL.
   - Feature names in `libcef.so` strings carry a `k` prefix that Chromium strips at runtime (`kAimEnabled` → `AimEnabled`). Class names such as `AimEligibilityService` are not features.
   - The profile lives in `data/Default`: Chromium uses that name whatever `cache_path` says, so `cache_path` now points there.
@@ -336,19 +336,19 @@ Gaps:
 ### M9 — Power features
 - Caret mode, marks, macros, userscripts, greasemonkey, `:open-editor`, search engines.
 - ✅ **`:spawn`, userscripts and `:open-editor`** (2026-10-02):
-  - `hb_core::shell_words` splits arguments like a POSIX shell, with no shell involved.
-  - `hb_config::userscripts::resolve` searches config, then data, then `PATH`.
-  - `hb-cef/src/spawn.rs` runs programs on a worker thread and reports back through a UI task. Userscripts get qutebrowser's `QUTE_*` environment. `QUTE_HTML`, `QUTE_TEXT` and `QUTE_FIFO` live in a private 0700 temp directory that is removed afterwards.
+  - `rt_core::shell_words` splits arguments like a POSIX shell, with no shell involved.
+  - `rt_config::userscripts::resolve` searches config, then data, then `PATH`.
+  - `rt-cef/src/spawn.rs` runs programs on a worker thread and reports back through a UI task. Userscripts get qutebrowser's `QUTE_*` environment. `QUTE_HTML`, `QUTE_TEXT` and `QUTE_FIFO` live in a private 0700 temp directory that is removed afterwards.
   - `editor.command` is validated to contain `{file}`. `js/editor.js` remembers the field and writes the text back with `input`/`change` events. It's bound to `Ctrl-e` in insert mode.
   - Smoke steps cover a userscript (environment plus a FIFO command) and Ctrl-e with a scripted editor.
   - Gaps:
     - `QUTE_FIFO` is a regular file read when the script exits, not a live FIFO, so long-running scripts' commands are delayed until they exit.
-    - `-o` shows the output in a new tab (`hb://process/`).
+    - `-o` shows the output in a new tab (`riptide://process/`).
     - Hints can run programs and userscripts: `:hint links spawn …` with `{hint-url}` shell-quoted, and `:hint links userscript …` with `QUTE_MODE=hints`.
     - `QUTE_USER_AGENT` comes from the page's `navigator.userAgent`.
     - Password fields are skipped by `:open-editor`.
     - The remote socket can run `:spawn`; it is limited to the same user (M15).
-- ✅ **Marks** (2026-10-02): `` ` `` and `'` enter the `set_mark` and `jump_mark` modes (qutebrowser's names), and the next key names the mark (`Command::Mark`, unit tested). `hb-cef/src/marks.rs` reads and sets `scrollX`/`scrollY` through the eval channel. Uppercase marks also reopen their page and scroll once `on_load_end` fires. `''` goes back to where the last jump started. Marks last for the session. A smoke step covers `` `a ``, `gg`, `'a` and `''`.
+- ✅ **Marks** (2026-10-02): `` ` `` and `'` enter the `set_mark` and `jump_mark` modes (qutebrowser's names), and the next key names the mark (`Command::Mark`, unit tested). `rt-cef/src/marks.rs` reads and sets `scrollX`/`scrollY` through the eval channel. Uppercase marks also reopen their page and scroll once `on_load_end` fires. `''` goes back to where the last jump started. Marks last for the session. A smoke step covers `` `a ``, `gg`, `'a` and `''`.
 - ✅ **Macros** (2026-10-02):
   - `q` and `@` enter `record_macro`/`run_macro` (qutebrowser's names). `:macro-record [r]` and `:macro-run [r]` work too, `@@` repeats the last macro, and a count repeats it.
   - The engine records every key in any mode, then drops the keys that stopped the recording: the binding, or the `:macro-record` command line.
@@ -365,7 +365,7 @@ Gaps:
   - `Y` yanks the selection to the primary selection.
   - `{`/`}` move by paragraph. `Return` in normal mode follows the link around a search match (`selection-follow`, which ends the find session so the match becomes the selection) or the focused link, and otherwise passes `Return` to the page.
 - ✅ **Greasemonkey** (2026-10-02):
-  - `hb_config::greasemonkey` parses the metadata block and matches URLs (Chrome match patterns plus `@include`/`@exclude` globs), with unit tests.
+  - `rt_config::greasemonkey` parses the metadata block and matches URLs (Chrome match patterns plus `@include`/`@exclude` globs), with unit tests.
   - The browser passes the scripts to each tab's renderer in `extra_info`. `:greasemonkey-reload` sends them as a process message.
   - The renderer runs them from `on_context_created`: `document-start` runs before the page's scripts, `document-end` waits for `DOMContentLoaded`, and `document-idle` waits for `load`.
   - Lists carry a generation number: CEF passes a browser's original `extra_info` to `on_browser_created` again on reload, which would otherwise undo a reload.
@@ -378,15 +378,15 @@ Gaps:
 - ✅ **Page search** (2026-10-02):
   - `/` and `?` put the prefix on the command line. The engine turns `/text` into `Command::Search` on `Return`, and into incremental searches while typing (`search.incremental`); Escape clears the highlights.
   - `n`/`N` are `:search-next`/`:search-prev` and take a count.
-  - `hb-cef/src/search.rs` uses `BrowserHost::Find` and a `FindHandler`, which reports "Match i of n" or "not found".
+  - `rt-cef/src/search.rs` uses `BrowserHost::Find` and a `FindHandler`, which reports "Match i of n" or "not found".
   - In this CEF build `find_next = false` never activates or scrolls to a match. Every call passes `true`; repeating the same text first calls `StopFinding(clear_selection)`, so it starts again from the top.
   - `search.ignore_case` is `smart`, `always` or `never`. Chromium always wraps around.
   - A smoke step checks that `/needle` scrolls to the first match and `n` to the second.
-- ✅ **`:navigate`** (2026-10-02): `up`, `increment` and `decrement` are pure URL functions in `hb_core::url` (unit tested: query and fragment first, leading zeros kept, the host never touched). `prev`/`next` use `js/navigate.js`: `rel` links first, then link text matching qutebrowser's default `hints.prev_regexes`/`hints.next_regexes`. These are bound to `gu gU [[ ]] {{ }} Ctrl-a Ctrl-x` as in qutebrowser and covered by a smoke step. The regexes aren't settings yet.
+- ✅ **`:navigate`** (2026-10-02): `up`, `increment` and `decrement` are pure URL functions in `rt_core::url` (unit tested: query and fragment first, leading zeros kept, the host never touched). `prev`/`next` use `js/navigate.js`: `rel` links first, then link text matching qutebrowser's default `hints.prev_regexes`/`hints.next_regexes`. These are bound to `gu gU [[ ]] {{ }} Ctrl-a Ctrl-x` as in qutebrowser and covered by a smoke step. The regexes aren't settings yet.
 
 ### M10 — Packaging
 - Linux tarball / AppImage / AUR / Nix; then macOS app bundle (`bundle-cef-app`) and Windows.
-- ✅ **Tarball and AppImage** (2026-10-02): `scripts/package-linux.sh [--appimage]` stages the stripped binary and CEF runtime. The AppImage adds `packaging/hackers-browser.{desktop,svg}` and an `AppRun`, and is built by appimagetool 1.9.1 (pinned and checksum-verified; it fetches its runtime itself). `./task appimage` builds both locally, and `release.yml` publishes both.
+- ✅ **Tarball and AppImage** (2026-10-02): `scripts/package-linux.sh [--appimage]` stages the stripped binary and CEF runtime. The AppImage adds `packaging/riptide.{desktop,svg}` and an `AppRun`, and is built by appimagetool 1.9.1 (pinned and checksum-verified; it fetches its runtime itself). `./task appimage` builds both locally, and `release.yml` publishes both.
   - Tested locally: the 146 MB AppImage starts, opens a window under Xvfb, quits cleanly and unmounts.
   - Inside an AppImage `chrome-sandbox` can't be setuid, so the sandbox needs user namespaces (see the README).
   - Not done: AUR, Nix, the macOS app bundle and Windows packaging (none can be tested on this machine).
@@ -395,19 +395,19 @@ Gaps:
 Builds on the M5 Lua config API.
 
 Result:
-- The VM that ran `config.lua` is kept in a UI-thread `thread_local` (`hb_config::lua`, since `mlua::Lua` isn't `Send`). Callbacks get a `Context` (URL, title, mode, count) and return `Action`s (`Run(line)`, `Message`), which `hb-cef/src/lua.rs` carries out outside any shell borrow. A depth limit stops hooks that trigger each other.
-- `hb.bind(keys, function)` stores the function and binds `lua-call <id>`.
-- `hb.command(name, fn, description)` defines commands. The engine parses them as `Command::User`, accepts bindings to them and completes them next to built-ins; built-in names are refused.
-- `hb.on` supports `load_finished`, `url_changed`, `tab_opened` and `mode_changed`.
-- In callbacks, `hb.set` becomes a `:set`.
-- Unit tests in hb-config drive the VM without CEF (bindings, commands, hooks, errors with `config.lua:line`). A smoke step uses all three entry points.
+- The VM that ran `config.lua` is kept in a UI-thread `thread_local` (`rt_config::lua`, since `mlua::Lua` isn't `Send`). Callbacks get a `Context` (URL, title, mode, count) and return `Action`s (`Run(line)`, `Message`), which `rt-cef/src/lua.rs` carries out outside any shell borrow. A depth limit stops hooks that trigger each other.
+- `rt.bind(keys, function)` stores the function and binds `lua-call <id>`.
+- `rt.command(name, fn, description)` defines commands. The engine parses them as `Command::User`, accepts bindings to them and completes them next to built-ins; built-in names are refused.
+- `rt.on` supports `load_finished`, `url_changed`, `tab_opened` and `mode_changed`.
+- In callbacks, `rt.set` becomes a `:set`.
+- Unit tests in rt-config drive the VM without CEF (bindings, commands, hooks, errors with `config.lua:line`). A smoke step uses all three entry points.
 - Lua commands appear on the help page, after the built-in ones.
-- Not done: a sandbox for third-party scripts (only the user's own config runs), settings watchers, and Lua userscripts. `hb.tabs()` lists the window's tabs.
+- Not done: a sandbox for third-party scripts (only the user's own config runs), settings watchers, and Lua userscripts. `rt.tabs()` lists the window's tabs.
 
 Original plan:
-- Bind keys to Lua functions: `hb.bind("<Ctrl-g>", function() ... end)`.
-- Lua-defined commands: `hb.command("name", fn)`, with completion.
-- Event hooks: `hb.on("load_finished", fn)`, `hb.on("tab_opened", fn)`, mode changes.
+- Bind keys to Lua functions: `rt.bind("<Ctrl-g>", function() ... end)`.
+- Lua-defined commands: `rt.command("name", fn)`, with completion.
+- Event hooks: `rt.on("load_finished", fn)`, `rt.on("tab_opened", fn)`, mode changes.
 - A small runtime API: current tab URL and title, open URLs, run commands, show messages.
 - Userscripts written in Lua, alongside qutebrowser-compatible external userscripts (M9).
 - Decide on a sandbox for third-party scripts (e.g. no `io`/`os` unless allowed). The user's own `config.lua` stays fully trusted.
@@ -415,27 +415,27 @@ Original plan:
 ### M13 — Internal pages and a UI channel (foundation for M14 and M16) ✅ done 2026-10-02
 
 Result:
-- **Scheme:** `hb://` is registered as standard + secure + display-isolated and served from embedded files by `hb-cef/src/scheme.rs`. Responses carry a strict CSP (inline code only, no network), `nosniff` and `no-store`.
-- **UI pages:** the tab bar, status bar and overlay moved from `data:` URLs to `hb://ui/…`.
-- **Channel:** `hb.send(name, json)` exists only in `hb://ui/` frames. The browser re-checks the sending frame's URL itself, and `hb_core::ui_message` validates each message against a per-page allowlist (unit tested).
+- **Scheme:** `riptide://` is registered as standard + secure + display-isolated and served from embedded files by `rt-cef/src/scheme.rs`. Responses carry a strict CSP (inline code only, no network), `nosniff` and `no-store`.
+- **UI pages:** the tab bar, status bar and overlay moved from `data:` URLs to `riptide://ui/…`.
+- **Channel:** `rt.send(name, json)` exists only in `riptide://ui/` frames. The browser re-checks the sending frame's URL itself, and `rt_core::ui_message` validates each message against a per-page allowlist (unit tested).
 - **First message:** clicking a tab in the tab bar selects it.
 - **Isolation, as verified:**
-  - Web pages see no `window.hb`.
-  - An `hb://` iframe stays empty, and an `hb://` link does nothing; Chromium's display isolation refuses both.
-  - `:open hb://ui/…` and redirects to `hb://` are blocked by `OnBeforeBrowse`.
+  - Web pages see no `window.rt`.
+  - An `riptide://` iframe stays empty, and an `riptide://` link does nothing; Chromium's display isolation refuses both.
+  - `:open riptide://ui/…` and redirects to `riptide://` are blocked by `OnBeforeBrowse`.
   - A smoke test covers the first two.
 
 Original plan:
-- **`hb://` scheme:** register it with `CefSchemeRegistrar::AddCustomScheme` and serve it from embedded files through a `CefSchemeHandlerFactory`. Move the tab bar, status bar and overlay pages off `data:` URLs onto `hb://ui/...`.
-- **UI → Rust messages:** in the renderer's `OnContextCreated`, add a `window.hb.send(name, json)` function **only for frames whose URL is `hb://`**. Web pages never see it.
+- **`riptide://` scheme:** register it with `CefSchemeRegistrar::AddCustomScheme` and serve it from embedded files through a `CefSchemeHandlerFactory`. Move the tab bar, status bar and overlay pages off `data:` URLs onto `riptide://ui/...`.
+- **UI → Rust messages:** in the renderer's `OnContextCreated`, add a `window.rt.send(name, json)` function **only for frames whose URL is `riptide://`**. Web pages never see it.
   - The browser process accepts these messages only from our UI browsers, and still validates every field. This is the reverse of the eval channel, needed for clicks in the tab bar and for links on the help page.
-- Opening `hb://` from a web page (link, redirect, `window.open`) is blocked in `OnBeforeBrowse`. Only the user (`:open hb://help`) or the browser itself can open it.
+- Opening `riptide://` from a web page (link, redirect, `window.open`) is blocked in `OnBeforeBrowse`. Only the user (`:open riptide://help`) or the browser itself can open it.
 
 ### M14 — Tabs: pinned, mouse, favicons ✅ done 2026-10-02
 
 Result:
 - **Pinned tabs:** `TabList` keeps them first (unit tested: pinning, moves, inserts and removals stay outside or inside the block as they should). Added `:tab-pin` / `Ctrl-p`, `--force` for `tab-close`/`tab-only`, the `tabs.pinned.frozen` and `tabs.pinned.shrink` settings, and pin state in sessions (older session files still load).
-- **Mouse in the tab bar:** click, middle-click to close (pinned tabs refuse), wheel (`tabs.mousewheel_switching`) and drag to reorder, all as allowlisted `hb.send` messages. Drag uses pointer events rather than HTML5 drag and drop, so it never involves the OS or other applications.
+- **Mouse in the tab bar:** click, middle-click to close (pinned tabs refuse), wheel (`tabs.mousewheel_switching`) and drag to reorder, all as allowlisted `rt.send` messages. Drag uses pointer events rather than HTML5 drag and drop, so it never involves the OS or other applications.
 - **Favicons:** from `OnFaviconURLChange` and `DownloadImage` (32 px, at most 64 KB as PNG), shown per `tabs.favicons.show`.
 - **Bugs found on the way:**
   - The `cef` crate's `CefStringList::clone` copies the opaque C struct, so iterating a clone is always empty; we read the list through the C API instead. Worth reporting upstream.
@@ -469,7 +469,7 @@ Original plan:
 ### M15 — Commands from the terminal (single instance + IPC) ✅ done 2026-10-02 (Unix)
 
 Result:
-- **Code:** `hb_config::remote` (protocol, socket paths, client, server, argument handling; unit tested over a real socket) and `hb-cef/src/remote.rs`.
+- **Code:** `rt_config::remote` (protocol, socket paths, client, server, argument handling; unit tested over a real socket) and `rt-cef/src/remote.rs`.
 - **Startup:** before CEF starts, the browser tries the profile's socket. If an instance answers, it hands over its arguments (URLs per `new_instance_open_target` or `--target`, `:commands` run in order) and exits. Otherwise it binds the socket and serves it once CEF is up, posting each request to the UI thread and raising the window. A first instance also runs `:commands` given on its command line.
 - **Security:**
   - Socket in a `0700` directory, mode `0600`, one per data directory.
@@ -483,12 +483,12 @@ Not done:
 - Chromium exits on SIGTERM without our cleanup, leaving a stale socket that the next start replaces.
 
 Original plan:
-- **Behaviour:** `hackers-browser example.com` or `hackers-browser ':open -t example.com' ':tab-focus 1'`, run while the browser is already open, sends the URLs and commands to that instance and exits, like qutebrowser.
+- **Behaviour:** `riptide example.com` or `riptide ':open -t example.com' ':tab-focus 1'`, run while the browser is already open, sends the URLs and commands to that instance and exits, like qutebrowser.
   - A URL opens per `new_instance_open_target` (`tab`, `tab-bg`, `window`).
   - An argument starting with `:` runs as a command.
   - `--target` overrides the open target for one call.
 - **Transport:** a local socket per profile.
-  - On Unix, `$XDG_RUNTIME_DIR/hackers-browser/<hash of basedir>.sock`, or the data dir if `XDG_RUNTIME_DIR` isn't set. The directory is `0700` and the socket `0600`, and the server checks the peer's user id (`SO_PEERCRED` / `getpeereid`).
+  - On Unix, `$XDG_RUNTIME_DIR/riptide/<hash of basedir>.sock`, or the data dir if `XDG_RUNTIME_DIR` isn't set. The directory is `0700` and the socket `0600`, and the server checks the peer's user id (`SO_PEERCRED` / `getpeereid`).
   - On Windows, a named pipe restricted to the current user.
   - The [`interprocess`](https://crates.io/crates/interprocess) crate covers both. The protocol is versioned JSON lines (`{"version":1,"args":[…],"cwd":"…","target":…}`).
 - **Startup order:** check for a running instance before CEF initialises, because Chromium's profile lock would otherwise refuse the second process. Remove a stale socket left behind by a crash.
@@ -499,16 +499,16 @@ Original plan:
 ### M16 — Help pages ✅ done 2026-10-02
 
 Result:
-- **Data:** `hb_core::help::build` assembles commands (with the keys bound to them, including `cmd-set-text` prefills), settings (current value, default, type, and the file that set it) and per-mode bindings (with changed and removed ones marked) from the live registries. Unit tested.
-- **Page:** `hb-cef/src/help.rs` fills `ui/help.html` with that JSON and rebuilds it after every config load and `:set`/`:bind`. The scheme handler serves it from a shared `RwLock`.
+- **Data:** `rt_core::help::build` assembles commands (with the keys bound to them, including `cmd-set-text` prefills), settings (current value, default, type, and the file that set it) and per-mode bindings (with changed and removed ones marked) from the live registries. Unit tested.
+- **Page:** `rt-cef/src/help.rs` fills `ui/help.html` with that JSON and rebuilds it after every config load and `:set`/`:bind`. The scheme handler serves it from a shared `RwLock`.
 - **Look:** light/dark themes, sticky search (`/`), side navigation and anchors (`:help :open`, `:help hints.chars`, `:help bindings`, `:version`). Built with `textContent` only.
-- **Commands:** `:help [-t] [topic]`, `:version` and `F1`. `--version` now prints the git commit and CEF/Chromium versions (from `hb-cef/build.rs`).
+- **Commands:** `:help [-t] [topic]`, `:version` and `F1`. `--version` now prints the git commit and CEF/Chromium versions (from `rt-cef/build.rs`).
 - A smoke step opens `:help :open`.
 
 Done: Lua-defined commands are listed too (M12).
 
 Original plan:
-- **`:help [topic]`** opens `hb://help`, a set of pages generated from the live registries, so it is always current:
+- **`:help [topic]`** opens `riptide://help`, a set of pages generated from the live registries, so it is always current:
   - **commands:** name, arguments and description from `COMMANDS`, with any `config.lua`-defined commands added once M12 exists
   - **settings:** type, default, *current value* and where it was set (default, `config.toml`, `config.lua` or `:set`)
   - **key bindings:** per mode, including the user's bindings, with changes from the defaults marked
@@ -517,7 +517,7 @@ Original plan:
 - **Look:** clean and readable in light and dark themes (following `prefers-color-scheme`), keyboard-first.
   - `f` hints and `/` search work normally.
   - A search box filters commands and settings as you type, and the page works without a mouse.
-- `:version` (`hb://version`) shows the version, git commit, CEF/Chromium version, the paths from `--paths`, and the loaded config files.
+- `:version` (`riptide://version`) shows the version, git commit, CEF/Chromium version, the paths from `--paths`, and the loaded config files.
 - Bindings: `F1` and `:help`, as in qutebrowser.
 - **Tests:** the generated pages render without errors (a smoke step opens `:help` and checks the title). A unit test checks every command and setting appears.
 
@@ -534,7 +534,7 @@ Original plan:
 - **Settings:** `spellcheck.languages` (list, default empty, so spell checking is off). Applied live when changed.
 - **Dictionaries:**
   - Chromium downloads `.bdic` files from `redirector.gvt1.com` the first time a language is enabled. That is part of the M8 Google traffic review.
-  - Also offer `hackers-browser --install-dictionary en-US`, like qutebrowser's `dictcli`, which fetches from the Chromium dictionary repository and verifies a pinned checksum.
+  - Also offer `riptide --install-dictionary en-US`, like qutebrowser's `dictcli`, which fetches from the Chromium dictionary repository and verifies a pinned checksum.
   - Document both and let the user choose.
 - **Fixing words from the keyboard:**
   - `:spell-suggest` puts the suggestions for the misspelled word under the cursor in the completion popup (`Tab` to pick, `Return` to replace). It uses `CefContextMenuParams::GetDictionarySuggestions` / `BrowserHost::ReplaceMisspelling`, or a renderer query if the context-menu path needs a right-click.
@@ -545,19 +545,19 @@ Original plan:
 ### M18 — Versioning, changelog and CI
 - **One version for the whole workspace** (`workspace.package.version`), following semver. Stay on 0.x until the plan's core is done.
 - **The binary reports what it is:**
-  - `--version` prints e.g. `hackers-browser 0.4.0 (abc1234, CEF 154.0.32, Chromium 154.0.8037.58)`.
+  - `--version` prints e.g. `riptide 0.4.0 (abc1234, CEF 154.0.32, Chromium 154.0.8037.58)`.
   - The git commit comes from a `build.rs` (`git describe --always --dirty`), falling back to "unknown" in source tarballs.
   - CEF and Chromium versions come from `cef::sys` constants.
   - `:version` shows the same (M16).
 - **Changelog:** `CHANGELOG.md` generated by [git-cliff](https://git-cliff.org) from commit messages; cef-rs uses the same setup.
   - Releases are tagged `vX.Y.Z` and the release notes come from the changelog.
-  - In the browser, `:changelog` opens the bundled `CHANGELOG.md` (`hb://changelog`), and the first start after an upgrade shows "Updated to 0.5.0. :changelog for details" in the status bar.
+  - In the browser, `:changelog` opens the bundled `CHANGELOG.md` (`riptide://changelog`), and the first start after an upgrade shows "Updated to 0.5.0. :changelog for details" in the status bar.
 - **CI (GitHub Actions)** ✅ `check.yml` added 2026-10-02 (commit messages, Linux lint/tests/smoke, macOS and Windows build + unit tests).
 - ✅ **Done 2026-10-02:**
   - `cliff.toml` and `CHANGELOG.md`. Pre-Conventional "Add …/Scaffold …" commits are sorted under Features.
   - `scripts/git-cliff.sh` downloads a pinned, checksum-verified git-cliff, like `./task`. `./task changelog` regenerates the changelog.
   - `release.yml` runs on a `v*` tag: it checks the version, builds `--release`, and publishes `scripts/package-linux.sh`'s tarball with `SHA256SUMS` and `git-cliff --latest` notes. The libraries are stripped: CEF's `libcef.so` has debug info and goes from 1.4 GB to 260 MB, giving a 156 MB tarball.
-  - `:changelog [-t]` serves the bundled changelog at `hb://changelog/` through `hb_core::changelog::to_html`, a minimal, escaping Markdown renderer that is unit tested. The "Updated to X" notice compares `<data>/last-version`.
+  - `:changelog [-t]` serves the bundled changelog at `riptide://changelog/` through `rt_core::changelog::to_html`, a minimal, escaping Markdown renderer that is unit tested. The "Updated to X" notice compares `<data>/last-version`.
   - No release has been tagged yet; that's the maintainer's call. Running `release.yml` by hand is a dry run that keeps the files as a one-day artifact. Run 37088697211 (2026-10-02) built the tarball, the AppImage, `SHA256SUMS` and the notes (301 MB in total) with publishing skipped.
   - Not done: macOS and Windows release artifacts (M10).
 - **Commit messages:** Conventional Commits, decided 2026-10-02 and checked by `scripts/check-commits.sh` in CI and in the optional `./task hooks` git hook.
@@ -624,11 +624,11 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 
 - Pin `cef` crate to an exact version (e.g. `=154.3.0`).
 - CI job checks for new CEF releases weekly; upgrades go through a branch with smoke tests.
-- Keep CEF-specific code isolated in `hb-cef` so binding churn doesn't leak into core logic.
+- Keep CEF-specific code isolated in `rt-cef` so binding churn doesn't leak into core logic.
 
 ## Testing strategy
 
-- **Unit tests** in `hb-core`: key parsing, mode transitions, command parsing, config merging (the bulk of logic).
+- **Unit tests** in `rt-core`: key parsing, mode transitions, command parsing, config merging (the bulk of logic).
 - **JS tests** for the hint / insert-detection scripts (headless).
 - **Integration tests**: launch the browser against a local test server and drive it through a debug control channel (e.g. `--remote-debugging-port` + CDP) to assert behavior.
 

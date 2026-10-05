@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #061826;
+    --fg: #e9f7f6;
+    --insert-bg: #0d6e5a;
+    --passthrough-bg: #24418f;
+    --error-bg: #b8323f;
+    --warning-bg: #a8651a;
+    --private-bg: #3b4a5a;
+    --https: #2ec4b6;
+    --http: #e9f7f6;
+    --error-fg: #f4c56a;
+    --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font: var(--font);
+    user-select: none;
+    cursor: default;
+  }
+  #bar {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 4px;
+    white-space: pre;
+    gap: 1ch;
+  }
+  #bar.private { background: var(--private-bg); }
+  #bar.insert { background: var(--insert-bg); }
+  #bar.passthrough { background: var(--passthrough-bg); }
+  #bar.msg-error { background: var(--error-bg); }
+  #bar.msg-warning { background: var(--warning-bg); }
+  #left, #right { line-height: 1.5; }
+  #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
+  #right > span:empty { display: none; }
+  #url { overflow: hidden; text-overflow: ellipsis; }
+  /* Messages and the command line get priority over a long URL. */
+  #bar.busy #right { max-width: 40%; }
+  #url.https { color: var(--https); }
+  #url.http { color: var(--http); }
+  #url.error { color: var(--error-fg); }
+  .cursor { background: var(--fg); color: var(--bg); }
+</style>
+</head>
+<body>
+<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="downloads"></span><span id="muted"></span><span id="zoom"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function renderCommandLine(el, { text, cursor }) {
+    const chars = Array.from(text);
+    el.textContent = chars.slice(0, cursor).join("");
+    const caret = document.createElement("span");
+    caret.className = "cursor";
+    caret.textContent = chars[cursor] ?? " ";
+    el.append(caret, chars.slice(cursor + 1).join(""));
+  }
+
+  window.rtRender = (state) => {
+    const bar = $("bar");
+    const left = $("left");
+    bar.className = state.mode;
+    if (state.private) bar.classList.add("private");
+    if (state.command_line || state.message) bar.classList.add("busy");
+    if (state.command_line) {
+      renderCommandLine(left, state.command_line);
+    } else if (state.message) {
+      bar.classList.add(`msg-${state.message.level}`);
+      left.textContent = state.message.text;
+    } else if (state.mode === "normal") {
+      left.textContent = "";
+    } else {
+      left.textContent = `-- ${state.mode.toUpperCase()} MODE --`;
+    }
+    $("keys").textContent = state.keystring;
+    $("downloads").textContent = state.downloads;
+    $("muted").textContent = state.muted ? "[muted]" : "";
+    $("zoom").textContent = state.zoom === 100 ? "" : `[${state.zoom}%]`;
+    const url = $("url");
+    url.textContent = state.url;
+    url.className = state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http";
+    $("tabindex").textContent = `[${state.tab_index}/${state.tab_count}]`;
+    $("progress").textContent = state.progress == null ? "" : `[${Math.round(state.progress * 100)}%]`;
+  };
+</script>
+</body>
+</html>
