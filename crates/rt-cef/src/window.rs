@@ -23,16 +23,36 @@ thread_local! {
     static TABBAR_SIZE: Cell<(i32, i32)> = const { Cell::new((1, TABBAR_HEIGHT)) };
 }
 
-/// Put the tab bar on `position`'s side: top and bottom go in the window's
-/// column, left and right in the row that holds the page area.
-pub fn place_tabbar(
+/// Where the bars go: `tabs.position`, `tabs.width` and `statusbar.position`.
+#[derive(Clone, Default, PartialEq)]
+pub struct BarPlacement {
+    pub tabs: String,
+    pub tabs_width: i64,
+    pub statusbar: String,
+}
+
+impl BarPlacement {
+    pub fn from_settings(settings: &rt_core::settings::Settings) -> Self {
+        Self {
+            tabs: settings.str("tabs.position").to_string(),
+            tabs_width: settings.int("tabs.width"),
+            statusbar: settings.str("statusbar.position").to_string(),
+        }
+    }
+}
+
+/// Put the bars where `placement` says. Top and bottom bars go in the
+/// window's column, around the row that holds the page area; a left or
+/// right tab bar goes in that row. A top status bar sits above a top tab bar.
+pub fn arrange_bars(
     window: &Window,
     row: &Panel,
     tabbar: &BrowserView,
-    position: &str,
-    width: i32,
+    statusbar: &BrowserView,
+    placement: &BarPlacement,
 ) {
-    let vertical = matches!(position, "left" | "right");
+    let vertical = matches!(placement.tabs.as_str(), "left" | "right");
+    let width = placement.tabs_width as i32;
     TABBAR_SIZE.with(|size| {
         size.set(if vertical {
             (width, 1)
@@ -40,16 +60,24 @@ pub fn place_tabbar(
             (1, TABBAR_HEIGHT)
         })
     });
-    let mut view = View::from(tabbar);
-    if let Some(parent) = view.parent_view().and_then(|p| p.as_panel()) {
-        parent.remove_child_view(Some(&mut view));
+    let mut tabbar = View::from(tabbar);
+    let mut statusbar = View::from(statusbar);
+    for view in [&mut tabbar, &mut statusbar] {
+        if let Some(parent) = view.parent_view().and_then(|p| p.as_panel()) {
+            parent.remove_child_view(Some(view));
+        }
     }
-    match position {
-        "left" => row.add_child_view_at(Some(&mut view), 0),
-        "right" => row.add_child_view(Some(&mut view)),
-        // The window's children are now the row and the status bar.
-        "bottom" => window.add_child_view_at(Some(&mut view), 1),
-        _ => window.add_child_view_at(Some(&mut view), 0),
+    // The window's only child is now the row.
+    match placement.tabs.as_str() {
+        "left" => row.add_child_view_at(Some(&mut tabbar), 0),
+        "right" => row.add_child_view(Some(&mut tabbar)),
+        "bottom" => window.add_child_view(Some(&mut tabbar)),
+        _ => window.add_child_view_at(Some(&mut tabbar), 0),
+    }
+    if placement.statusbar == "top" {
+        window.add_child_view_at(Some(&mut statusbar), 0);
+    } else {
+        window.add_child_view(Some(&mut statusbar));
     }
     window.layout();
 }
@@ -178,9 +206,7 @@ wrap_window_delegate! {
                 layout.set_flex_for_view(Some(&mut content_view), 1);
             }
 
-            let mut statusbar_view = View::from(&statusbar);
-            statusbar_view.set_focusable(0);
-            window.add_child_view(Some(&mut statusbar_view));
+            View::from(&statusbar).set_focusable(0);
 
             let mut completion_view = View::from(&completion);
             completion_view.set_focusable(0);
@@ -205,13 +231,12 @@ wrap_window_delegate! {
             .unwrap_or(false);
 
             let placement = shell::with(|s| {
-                let settings = s.engine.settings();
-                let placement = (settings.str("tabs.position").to_string(), settings.int("tabs.width"));
-                s.tabbar_placement = placement.clone();
+                let placement = BarPlacement::from_settings(s.engine.settings());
+                s.bar_placement = placement.clone();
                 placement
             });
-            if let Some((position, width)) = placement {
-                place_tabbar(window, &row, &tabbar, &position, width as i32);
+            if let Some(placement) = placement {
+                arrange_bars(window, &row, &tabbar, &statusbar, &placement);
             }
 
             window.show();

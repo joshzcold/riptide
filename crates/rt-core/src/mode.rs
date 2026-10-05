@@ -81,3 +81,13 @@ impl FromStr for Mode {
             .ok_or_else(|| format!("unknown mode: {s}"))
     }
 }
+/// Whether `statusbar.show` wants the status bar visible. The command line
+/// and prompts are typed there, so it always shows for them.
+pub fn statusbar_visible(show: &str, mode: Mode, message: bool) -> bool {
+    let typing = matches!(mode, Mode::Command | Mode::Prompt | Mode::YesNo);
+    match show {
+        "never" => typing,
+        "in-mode" => typing || mode != Mode::Normal || message,
+        _ => true,
+    }
+}

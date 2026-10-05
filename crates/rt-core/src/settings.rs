@@ -438,6 +438,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once"
     ),
     def!(
+        "statusbar.position",
+        Kind::Enum(&["top", "bottom"]),
+        s("bottom"),
+        "Where the status bar is"
+    ),
+    def!(
+        "statusbar.show",
+        Kind::Enum(&["always", "never", "in-mode"]),
+        s("always"),
+        "When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode)"
+    ),
+    def!(
         "tabs.favicons.show",
         Kind::Enum(&["always", "never", "pinned"]),
         s("always"),

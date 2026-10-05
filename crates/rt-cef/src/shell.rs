@@ -73,9 +73,10 @@ pub struct WindowState {
     pub tabbar: Option<BrowserView>,
     /// The page area's row, which also holds a left or right tab bar.
     pub row: Option<Panel>,
-    /// The `tabs.position` and `tabs.width` the tab bar was last placed with.
-    pub tabbar_placement: (String, i64),
+    /// Where the bars were last put.
+    pub bar_placement: crate::window::BarPlacement,
     pub tabbar_shown: bool,
+    pub statusbar_shown: bool,
     /// For `tabs.show = switching`: the tab last shown, and when the bar hides again.
     last_tab_index: Option<usize>,
     switching_until: Option<std::time::Instant>,
@@ -106,8 +107,9 @@ impl WindowState {
             closed: Vec::new(),
             tabbar: None,
             row: None,
-            tabbar_placement: (String::new(), 0),
+            bar_placement: Default::default(),
             tabbar_shown: true,
+            statusbar_shown: true,
             last_tab_index: None,
             switching_until: None,
             statusbar: None,
@@ -656,6 +658,11 @@ pub fn current_session() -> rt_storage::Session {
 /// Chromium ignores input to a page while it shows a JavaScript dialog, so
 /// keys for prompts are taken from the status bar's browser instead.
 fn focus_for_prompt(prompting: bool) {
+    // statusbar.show may hide the bar outside prompts; it has to be shown
+    // before it can take focus.
+    if prompting {
+        refresh_ui();
+    }
     let Some((statusbar, tab)) = with(|s| {
         (
             s.statusbar.clone(),
@@ -728,18 +735,20 @@ struct UiUpdate {
     /// Message generation and timeout in milliseconds.
     expire_message: Option<(u64, i64)>,
     title: Option<(Window, String)>,
-    tabbar: Option<TabbarChange>,
+    bars: Option<BarsChange>,
     /// Refresh again after this many milliseconds (`tabs.show = switching`).
     refresh_after: Option<i64>,
 }
 
-struct TabbarChange {
+struct BarsChange {
     window: Window,
     row: Panel,
     tabbar: BrowserView,
-    /// New `tabs.position` and `tabs.width`, if they changed.
-    placement: Option<(String, i64)>,
-    visible: Option<bool>,
+    statusbar: BrowserView,
+    /// A new placement, if it changed.
+    placement: Option<crate::window::BarPlacement>,
+    tabbar_visible: Option<bool>,
+    statusbar_visible: Option<bool>,
 }
 
 /// Push engine and tab state to the tab bar, status bar and completion overlay.
@@ -774,19 +783,24 @@ fn apply_ui_update(update: UiUpdate) {
         let mut task = ExpireMessage::new(generation);
         post_delayed_task(ThreadId::UI, Some(&mut task), timeout);
     }
-    if let Some(change) = update.tabbar {
-        if let Some((position, width)) = &change.placement {
-            crate::window::place_tabbar(
+    if let Some(change) = update.bars {
+        if let Some(placement) = &change.placement {
+            crate::window::arrange_bars(
                 &change.window,
                 &change.row,
                 &change.tabbar,
-                position,
-                *width as i32,
+                &change.statusbar,
+                placement,
             );
         }
-        if let Some(visible) = change.visible {
+        if let Some(visible) = change.tabbar_visible {
             View::from(&change.tabbar).set_visible(visible.into());
         }
+        if let Some(visible) = change.statusbar_visible {
+            View::from(&change.statusbar).set_visible(visible.into());
+        }
+        // The overlay is anchored to the status bar.
+        position_overlay();
     }
     if let Some(delay) = update.refresh_after {
         let mut task = RefreshUi::new();
@@ -899,7 +913,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         s.last_tabbar = tabbar_json.clone();
         scripts.push((frame, tabbar_json));
     }
-    let (tabbar, refresh_after) = tabbar_change(s);
+    let (bars, refresh_after) = bars_change(s, status.mode, status.message.is_some());
     // Recomputed every time: `{mode}` changes without the tab bar changing.
     let mut title = None;
     if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
@@ -967,21 +981,20 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         overlay,
         expire_message,
         title,
-        tabbar,
+        bars,
         refresh_after,
     }
 }
 
-/// Where the tab bar should be and whether it should show, compared with
+/// Where the bars should be and whether they should show, compared with
 /// what was last applied. Also says when to check again after a tab switch.
-fn tabbar_change(s: &mut Shell) -> (Option<TabbarChange>, Option<i64>) {
+fn bars_change(s: &mut Shell, mode: Mode, message: bool) -> (Option<BarsChange>, Option<i64>) {
     let settings = s.engine.settings();
-    let placement = (
-        settings.str("tabs.position").to_string(),
-        settings.int("tabs.width"),
-    );
+    let placement = crate::window::BarPlacement::from_settings(settings);
     let show = settings.str("tabs.show").to_string();
     let delay = settings.int("tabs.show_switching_delay");
+    let statusbar_visible =
+        rt_core::mode::statusbar_visible(settings.str("statusbar.show"), mode, message);
     let now = std::time::Instant::now();
     let mut refresh_after = None;
     let index = s.tabs.current_index();
@@ -993,25 +1006,35 @@ fn tabbar_change(s: &mut Shell) -> (Option<TabbarChange>, Option<i64>) {
         s.last_tab_index = Some(index);
     }
     let switching = s.switching_until.is_some_and(|until| now < until);
-    let visible = rt_core::tabs::bar_visible(&show, s.tabs.len(), switching);
-    let placement = (placement != s.tabbar_placement).then(|| {
-        s.tabbar_placement = placement.clone();
+    let tabbar_visible = rt_core::tabs::bar_visible(&show, s.tabs.len(), switching);
+    let placement = (placement != s.bar_placement).then(|| {
+        s.bar_placement = placement.clone();
         placement
     });
-    let visible = (visible != s.tabbar_shown).then(|| {
-        s.tabbar_shown = visible;
-        visible
+    let tabbar_visible = (tabbar_visible != s.tabbar_shown).then(|| {
+        s.tabbar_shown = tabbar_visible;
+        tabbar_visible
     });
-    let change = match (s.window.clone(), s.row.clone(), s.tabbar.clone()) {
-        (Some(window), Some(row), Some(tabbar)) if placement.is_some() || visible.is_some() => {
-            Some(TabbarChange {
-                window,
-                row,
-                tabbar,
-                placement,
-                visible,
-            })
-        }
+    let statusbar_visible = (statusbar_visible != s.statusbar_shown).then(|| {
+        s.statusbar_shown = statusbar_visible;
+        statusbar_visible
+    });
+    let changed = placement.is_some() || tabbar_visible.is_some() || statusbar_visible.is_some();
+    let change = match (
+        s.window.clone(),
+        s.row.clone(),
+        s.tabbar.clone(),
+        s.statusbar.clone(),
+    ) {
+        (Some(window), Some(row), Some(tabbar), Some(statusbar)) if changed => Some(BarsChange {
+            window,
+            row,
+            tabbar,
+            statusbar,
+            placement,
+            tabbar_visible,
+            statusbar_visible,
+        }),
         _ => None,
     };
     (change, refresh_after)
@@ -1092,13 +1115,31 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + 1
 }
 
+/// Next to the status bar, on the page's side of it; at the page area's
+/// edge when the status bar is hidden.
 fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
-    let bar = View::from(s.statusbar.as_ref()?).bounds();
     let height = rows.min(OVERLAY_MAX_ROWS) as i32 * COMPLETION_ROW_HEIGHT;
+    let top = s.bar_placement.statusbar == "top";
+    let (x, width, edge) = if s.statusbar_shown {
+        let bar = View::from(s.statusbar.as_ref()?).bounds();
+        (
+            bar.x,
+            bar.width,
+            if top { bar.y + bar.height } else { bar.y },
+        )
+    } else {
+        let row = View::from(s.row.as_ref()?).bounds();
+        (
+            row.x,
+            row.width,
+            if top { row.y } else { row.y + row.height },
+        )
+    };
+    let y = if top { edge } else { edge - height };
     Some(Rect {
-        x: bar.x,
-        y: bar.y - height,
-        width: bar.width,
+        x,
+        y,
+        width,
         height,
     })
 }

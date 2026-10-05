@@ -688,8 +688,9 @@ step "tabs.position moves the tab bar to the side, tabs.show hides it"
 run "open file://$work/nav1.html"
 expect_title "nav1"
 # Each reading ends in its own tag, so a stale title isn't mistaken for it.
+# It's taken a moment later: typing the command shows a hidden status bar.
 size() {
-    run "jseval document.title = innerWidth + 'x' + innerHeight + ' $1'"
+    run "jseval setTimeout(() => document.title = innerWidth + 'x' + innerHeight + ' $1', 300)"
     for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == *" $1" ]] && break; sleep 0.1; done
     local t; t=$(page_title); echo "${t% *}"
 }
@@ -706,6 +707,18 @@ nap 0.5
 w=${top%x*}; h=${top#*x}
 [[ $left == "$((w - 200))x$((h + 20))" && $hidden == "${w}x$((h + 20))" ]] && pass ||
     fail "top '$top', left '$left', hidden '$hidden'"
+
+step "statusbar.show hides the status bar until a command is typed"
+run "set statusbar.show never"
+nap 0.5
+bare=$(size bare)
+xdotool key colon
+wait_mode command || true
+typing=$(mode)
+xdotool key Escape
+wait_mode normal || true
+run "set statusbar.show always"
+[[ $bare == "${w}x$((h + 20))" && $typing == command ]] && pass || fail "hidden '$bare', ':' gave mode '$typing'"
 
 step ":messages lists this session's messages"
 run "messages"
