@@ -47,6 +47,13 @@ use rt_config::{Cli, Paths};
 use rt_core::engine::Level;
 use rt_core::{Engine, Keymap};
 
+/// Set by `:restart`: start a new browser once this one has shut down.
+pub(crate) static RESTART: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// The session `:restart` saves and the new browser loads.
+pub(crate) const RESTART_SESSION: &str = "_restart";
+
 /// What the browser process needs once CEF is up.
 #[derive(Clone)]
 struct Startup {
@@ -321,5 +328,29 @@ pub fn run() -> i32 {
     }
     shutdown();
     remote::cleanup();
+    if RESTART.load(std::sync::atomic::Ordering::SeqCst) {
+        restart(&cli);
+    }
     0
+}
+
+/// Start the browser again with the same directories, restoring the session
+/// `:restart` saved.
+fn restart(cli: &Cli) {
+    let Ok(exe) = std::env::current_exe() else {
+        return eprintln!("riptide: can't find the program to restart");
+    };
+    let mut command = std::process::Command::new(exe);
+    if let Some(basedir) = &cli.basedir {
+        command.arg("--basedir").arg(basedir);
+    }
+    if cli.no_sandbox {
+        command.arg("--no-sandbox");
+    }
+    command
+        .arg(format!(":session-load {RESTART_SESSION}"))
+        .arg(format!(":session-delete {RESTART_SESSION}"));
+    if let Err(e) = command.spawn() {
+        eprintln!("riptide: can't restart: {e}");
+    }
 }

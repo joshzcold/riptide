@@ -114,7 +114,7 @@ impl Quickmarks {
         Ok(removed)
     }
 
-    fn save(&self) -> std::io::Result<()> {
+    pub fn save(&self) -> std::io::Result<()> {
         save_to(
             &self.path,
             self.marks.iter().map(|(n, u)| format!("{n} {u}")),
@@ -179,7 +179,7 @@ impl Bookmarks {
         Ok(removed)
     }
 
-    fn save(&self) -> std::io::Result<()> {
+    pub fn save(&self) -> std::io::Result<()> {
         save_to(
             &self.path,
             self.marks.iter().map(|(u, t)| {

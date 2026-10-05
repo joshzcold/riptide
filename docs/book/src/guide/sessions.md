@@ -41,3 +41,9 @@ Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the
 | `gb` / `gB` | Open a bookmark here / in a new tab |
 
 `:quickmark-add`, `:quickmark-del`, `:bookmark-add` and `:bookmark-del` do the same from the command line.
+
+`:bookmark-list` shows your quickmarks and bookmarks on a page (`-t` in a new tab). If you edit the `quickmarks` or `bookmarks/urls` files by hand, `:quickmarks-reload` (or `:bookmarks-reload`) reads them again. `:quickmark-save` writes the quickmarks file, although every change is saved anyway.
+
+## Restarting
+
+`:restart` saves your tabs, quits, and starts riptide again with the same config and data directories, then restores them. Use it after changing a setting that only applies at startup, like `colors.webpage.darkmode.enabled`.

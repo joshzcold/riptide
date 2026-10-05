@@ -31,11 +31,24 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         | Command::JsEval { .. }
         | Command::Home
         | Command::TabMute
+        | Command::DevToolsFocus
+        | Command::DebugDumpPage { .. }
+        | Command::DebugClearSslErrors
         | Command::Messages => {}
         _ => return false,
     }
     if let Command::Messages = command {
         show_messages();
+        return true;
+    }
+    if let Command::DebugClearSslErrors = command {
+        if let Some(context) = request_context_get_global_context() {
+            context.clear_certificate_exceptions(None);
+            shell::show_message(
+                Level::Info,
+                "Forgot the certificate errors allowed this session",
+            );
+        }
         return true;
     }
     if let Command::Fullscreen = command {
@@ -78,6 +91,33 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             .unwrap_or_default();
             let next = rt_core::zoom::step_in(&levels, current, if *out { -steps } else { steps });
             set_zoom(&browser, &host, next);
+        }
+        Command::DevToolsFocus => match crate::window::devtools_window(browser.identifier()) {
+            Some(window) => window.activate(),
+            None => shell::show_message(
+                Level::Error,
+                "This tab has no developer tools open; use :devtools",
+            ),
+        },
+        Command::DebugDumpPage { path } => {
+            let path = expand_home(path);
+            eval::eval(
+                &browser,
+                "document.documentElement.outerHTML",
+                move |result| {
+                    let saved = result
+                        .and_then(|html| std::fs::write(&path, html).map_err(|e| e.to_string()));
+                    match saved {
+                        Ok(()) => {
+                            shell::show_message(Level::Info, format!("Saved the page to {path}"))
+                        }
+                        Err(e) => {
+                            shell::show_message(Level::Error, format!("Can't save the page: {e}"))
+                        }
+                    }
+                    shell::refresh_ui();
+                },
+            );
         }
         Command::DevTools => {
             if host.has_dev_tools() != 0 {

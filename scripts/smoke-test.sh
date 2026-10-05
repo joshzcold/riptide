@@ -932,6 +932,21 @@ run "set tabs.wrap true"
 [[ $prev == nav1 && $next == nav2 && $no_wrap == nav1 ]] && pass ||
     fail "after closing with prev '$prev', with next '$next'; tab-prev without wrap '$no_wrap'"
 
+step ":bookmark-list, :debug-dump-page and :quickmarks-reload"
+run "bookmark-list -t"
+expect_title "Bookmarks"
+run "tab-close"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+run "debug-dump-page $work/dump.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/dump.html ]] && break; sleep 0.1; done
+echo "byhand file://$work/nav2.html" >>"$work/base/config/quickmarks"
+run "quickmarks-reload"
+run "quickmark-load byhand"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == nav2 ]] && break; sleep 0.1; done
+grep -q "<title>nav1</title>" "$work/dump.html" 2>/dev/null && [[ $(page_title) == nav2 ]] && pass ||
+    fail "dump: $(head -c 80 "$work/dump.html" 2>/dev/null); after quickmark-load: '$(page_title)'"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

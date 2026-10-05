@@ -49,6 +49,22 @@ impl Storage {
         };
         (storage, errors)
     }
+
+    /// Read the quickmarks and bookmarks files again, after editing them by hand.
+    pub fn reload_marks(&mut self, config_dir: &Path) -> Vec<String> {
+        let mut errors = Vec::new();
+        let quickmarks_path = config_dir.join("quickmarks");
+        match Quickmarks::load(&quickmarks_path) {
+            Ok(q) => self.quickmarks = q,
+            Err(e) => errors.push(format!("{}: {e}", quickmarks_path.display())),
+        }
+        let bookmarks_path = config_dir.join("bookmarks").join("urls");
+        match Bookmarks::load(&bookmarks_path) {
+            Ok(b) => self.bookmarks = b,
+            Err(e) => errors.push(format!("{}: {e}", bookmarks_path.display())),
+        }
+        errors
+    }
 }
 
 /// qutebrowser-style matching: every word appears somewhere in the fields,

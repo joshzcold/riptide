@@ -345,6 +345,24 @@ pub enum Command {
     },
     /// Open Chromium's developer tools for the current tab.
     DevTools,
+    /// Bring the current tab's developer tools window to the front.
+    DevToolsFocus,
+    /// List the quickmarks and bookmarks on a page.
+    BookmarkList {
+        tab: bool,
+    },
+    /// Write the quickmarks file now.
+    QuickmarkSave,
+    /// Read the quickmarks and bookmarks files again.
+    MarksReload,
+    /// Save the page's HTML to a file.
+    DebugDumpPage {
+        path: String,
+    },
+    /// Forget the certificate errors allowed this session.
+    DebugClearSslErrors,
+    /// Save the session, quit and start again.
+    Restart,
     /// Print the page, or save it as a PDF.
     Print {
         pdf: Option<String>,
@@ -760,6 +778,32 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("zoom-in", "Zoom in a level (+; a count zooms further)"),
     spec("zoom-out", "Zoom out a level (-)"),
+    spec(
+        "devtools-focus",
+        "Bring this tab's developer tools to the front",
+    ),
+    spec(
+        "bookmark-list",
+        "List quickmarks and bookmarks on a page: [-t] in a new tab",
+    ),
+    spec("quickmark-save", "Write the quickmarks file now"),
+    spec(
+        "quickmarks-reload",
+        "Read the quickmarks and bookmarks files again",
+    ),
+    spec(
+        "bookmarks-reload",
+        "Read the quickmarks and bookmarks files again",
+    ),
+    spec(
+        "debug-dump-page",
+        "Save the page's HTML to a file: :debug-dump-page <file>",
+    ),
+    spec(
+        "debug-clear-ssl-errors",
+        "Forget the certificate errors allowed this session",
+    ),
+    spec("restart", "Save the session, quit and start again"),
     spec("devtools", "Open the developer tools for this tab (wi)"),
     spec("print", "Print the page, or save it: :print [--pdf file]"),
     spec("fullscreen", "Toggle fullscreen (F11)"),
@@ -1345,6 +1389,17 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         },
         "zoom-in" => Command::ZoomStep { out: false },
         "zoom-out" => Command::ZoomStep { out: true },
+        "devtools-focus" => Command::DevToolsFocus,
+        "bookmark-list" => Command::BookmarkList {
+            tab: args.flag(&["-t", "--tab"]).is_some(),
+        },
+        "quickmark-save" => Command::QuickmarkSave,
+        "quickmarks-reload" | "bookmarks-reload" => Command::MarksReload,
+        "debug-dump-page" => Command::DebugDumpPage {
+            path: args.required("file")?.to_string(),
+        },
+        "debug-clear-ssl-errors" => Command::DebugClearSslErrors,
+        "restart" => Command::Restart,
         "devtools" => Command::DevTools,
         "print" => Command::Print {
             pdf: match args.flag(&["-p", "--pdf"]) {
@@ -2210,6 +2265,7 @@ mod tests {
             "navigate",
             "jseval",
             "screenshot",
+            "debug-dump-page",
             "cmd-later",
             "scroll-px",
             "config-unset",

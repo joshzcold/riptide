@@ -13,6 +13,8 @@
 | `:print --pdf ~/page.pdf` | Saves the page as a PDF, backgrounds included |
 | `:screenshot ~/shot.png` | Saves what the tab shows as an image; `.jpg` and `.webp` work too. It won't replace an existing file without `--force`. |
 | `gf`, `:view-source` | Shows the page's source in a new tab |
+| `:debug-dump-page ~/page.html` | Saves the page's current HTML, as scripts have changed it |
+| `wi`, `:devtools` | Opens or closes the developer tools; `:devtools-focus` brings them to the front |
 
 ## Spell checking
 

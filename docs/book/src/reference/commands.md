@@ -65,6 +65,14 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:zoom` | `=` | Set the zoom: :zoom [percent] (=; no value: zoom.default) |
 | `:zoom-in` | `+` | Zoom in a level (+; a count zooms further) |
 | `:zoom-out` | `-` | Zoom out a level (-) |
+| `:devtools-focus` |  | Bring this tab's developer tools to the front |
+| `:bookmark-list` |  | List quickmarks and bookmarks on a page: [-t] in a new tab |
+| `:quickmark-save` |  | Write the quickmarks file now |
+| `:quickmarks-reload` |  | Read the quickmarks and bookmarks files again |
+| `:bookmarks-reload` |  | Read the quickmarks and bookmarks files again |
+| `:debug-dump-page` |  | Save the page's HTML to a file: :debug-dump-page &lt;file&gt; |
+| `:debug-clear-ssl-errors` |  | Forget the certificate errors allowed this session |
+| `:restart` |  | Save the session, quit and start again |
 | `:devtools` | `wi` | Open the developer tools for this tab (wi) |
 | `:print` |  | Print the page, or save it: :print [--pdf file] |
 | `:fullscreen` | `<F11>` | Toggle fullscreen (F11) |

@@ -18,9 +18,17 @@ pub const TABBAR_HEIGHT: i32 = 20;
 const CHROME_BACKGROUND: u32 = 0xFF00_0000;
 
 thread_local! {
+    /// Open DevTools windows, by the browser id of the tab they inspect.
+    static DEVTOOLS_WINDOWS: std::cell::RefCell<std::collections::HashMap<i32, Window>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
     /// The tab bar's preferred size. CEF asks for it during layout, which
     /// can happen while the shell is borrowed, so it lives outside the shell.
     static TABBAR_SIZE: Cell<(i32, i32)> = const { Cell::new((1, TABBAR_HEIGHT)) };
+}
+
+/// The DevTools window inspecting browser `id`, if one is open.
+pub fn devtools_window(id: i32) -> Option<Window> {
+    DEVTOOLS_WINDOWS.with(|d| d.borrow().get(&id).cloned())
 }
 
 /// Where the bars go: `tabs.position`, `tabs.width` and `statusbar.position`.
@@ -417,8 +425,11 @@ wrap_browser_view_delegate! {
         ) -> ::std::os::raw::c_int {
             let Some(popup) = popup_browser_view else { return 0 };
             if is_devtools != 0 {
-                let mut delegate = DevToolsWindowDelegate::new(popup.clone());
-                window_create_top_level(Some(&mut delegate));
+                let inspected = browser_view.and_then(|v| v.browser()).map_or(0, |b| b.identifier());
+                let mut delegate = DevToolsWindowDelegate::new(popup.clone(), inspected);
+                if let Some(window) = window_create_top_level(Some(&mut delegate)) {
+                    DEVTOOLS_WINDOWS.with(|d| d.borrow_mut().insert(inspected, window));
+                }
                 return 1;
             }
             // The popup becomes a tab in its opener's window.
@@ -437,6 +448,8 @@ wrap_browser_view_delegate! {
 wrap_window_delegate! {
     struct DevToolsWindowDelegate {
         view: BrowserView,
+        // The tab being inspected, for `:devtools-focus`.
+        inspected: i32,
     }
 
     impl ViewDelegate {
@@ -459,11 +472,15 @@ wrap_window_delegate! {
         }
 
         fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
-            self.view
+            let closing = self
+                .view
                 .browser()
                 .and_then(|b| b.host())
-                .is_none_or(|h| h.try_close_browser() != 0)
-                .into()
+                .is_none_or(|h| h.try_close_browser() != 0);
+            if closing {
+                DEVTOOLS_WINDOWS.with(|d| d.borrow_mut().remove(&self.inspected));
+            }
+            closing.into()
         }
 
         fn window_runtime_style(&self) -> RuntimeStyle {

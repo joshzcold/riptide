@@ -536,6 +536,17 @@ fn run_command(command: Command, count: Option<u32>) {
         return;
     }
     match command {
+        Command::Restart => {
+            if let Err(e) = storage::save_session(crate::RESTART_SESSION) {
+                return show_message(
+                    Level::Error,
+                    format!("Can't save the session to restart: {e}"),
+                );
+            }
+            crate::RESTART.store(true, std::sync::atomic::Ordering::SeqCst);
+            with(|s| s.quit_confirmed = true);
+            return run_command(Command::Quit { save: false }, None);
+        }
         Command::Hint(request) => return hints::request(request),
         Command::Yank(what) => return yank(what, false),
         Command::YankPrimary(what) => return yank(what, true),

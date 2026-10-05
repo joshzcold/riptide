@@ -30,6 +30,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("history", "/") => Some((crate::help::history_page(), html)),
         ("messages", "/") => Some((crate::view::messages_page(), html)),
         ("config-diff", "/") => Some((crate::configcmd::diff_page(), html)),
+        ("bookmarks", "/") => Some((crate::storage::bookmarks_page(), html)),
         ("downloads", "/") => Some((crate::downloads::page(), html)),
         ("process", "/") => Some((crate::spawn::output_page(), html)),
         _ => None,

@@ -33,6 +33,63 @@ pub fn with<R>(f: impl FnOnce(&mut Storage) -> R) -> Option<R> {
     STORAGE.with(|s| s.try_borrow_mut().ok()?.as_mut().map(f))
 }
 
+/// `riptide://bookmarks/`, rebuilt each time `:bookmark-list` runs.
+static BOOKMARKS_PAGE: std::sync::RwLock<Option<std::sync::Arc<[u8]>>> =
+    std::sync::RwLock::new(None);
+
+pub fn bookmarks_page() -> std::sync::Arc<[u8]> {
+    BOOKMARKS_PAGE
+        .read()
+        .ok()
+        .and_then(|p| p.clone())
+        .unwrap_or_else(|| std::sync::Arc::from(&b""[..]))
+}
+
+fn publish_bookmarks() {
+    let escape = |t: &str| {
+        t.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    };
+    let row = |name: &str, url: &str| {
+        format!(
+            "<li><a href=\"{}\">{}</a> <span class=url>{}</span></li>",
+            escape(url),
+            escape(name),
+            escape(url)
+        )
+    };
+    let (quickmarks, bookmarks) = with(|s| {
+        let q: String = s.quickmarks.iter().map(|(n, u)| row(n, u)).collect();
+        let b: String = s
+            .bookmarks
+            .iter()
+            .map(|(u, t)| row(if t.is_empty() { u } else { t }, u))
+            .collect();
+        (q, b)
+    })
+    .unwrap_or_default();
+    let section = |title: &str, items: String| {
+        if items.is_empty() {
+            format!("<h2>{title}</h2><p class=none>None yet.</p>")
+        } else {
+            format!("<h2>{title}</h2><ul>{items}</ul>")
+        }
+    };
+    let html = format!(
+        "<!doctype html><html><head><meta charset=utf-8><title>Bookmarks</title><style>\
+         :root {{ color-scheme: light dark; }} body {{ margin: 1.5rem; font: 14px/1.6 system-ui, sans-serif; }} \
+         ul {{ list-style: none; padding: 0; }} .url, .none {{ color: gray; font-size: .9em; }}</style></head>\
+         <body><h1>Bookmarks</h1>{}{}</body></html>",
+        section("Quickmarks", quickmarks),
+        section("Bookmarks", bookmarks)
+    );
+    if let Ok(mut page) = BOOKMARKS_PAGE.write() {
+        *page = Some(std::sync::Arc::from(html.into_bytes()));
+    }
+}
+
 /// `:completion-item-del`: delete what a completion item stands for.
 pub fn delete_completion(item: &rt_core::completion::Completion) {
     let command = match item.category {
@@ -190,6 +247,34 @@ pub fn load_session(name: &str) -> Result<Session, String> {
 /// Carry out storage commands; returns false for anything else.
 pub fn run_command(command: &Command) -> bool {
     match command {
+        Command::QuickmarkSave => match with(|s| s.quickmarks.save()) {
+            Some(Ok(())) => shell::show_message(Level::Info, "Saved the quickmarks"),
+            Some(Err(e)) => {
+                shell::show_message(Level::Error, format!("Can't save the quickmarks: {e}"))
+            }
+            None => {}
+        },
+        Command::MarksReload => {
+            let Some(config_dir) = shell::with(|s| s.paths.config_dir.clone()) else {
+                return true;
+            };
+            match with(|s| s.reload_marks(&config_dir))
+                .unwrap_or_default()
+                .first()
+            {
+                None => shell::show_message(Level::Info, "Read the quickmarks and bookmarks again"),
+                Some(e) => shell::show_message(Level::Error, e.clone()),
+            }
+        }
+        Command::BookmarkList { tab } => {
+            publish_bookmarks();
+            let target = if *tab {
+                rt_core::command::OpenTarget::Tab
+            } else {
+                rt_core::command::OpenTarget::Current
+            };
+            shell::open(target, true, Some("riptide://bookmarks/".to_string()));
+        }
         Command::QuickmarkAdd { url, name } => {
             let result = with(|s| s.quickmarks.add(name, url)).unwrap_or(Ok(false));
             report(result.map(|replaced| {
