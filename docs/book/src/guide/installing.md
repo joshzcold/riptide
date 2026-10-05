@@ -10,6 +10,19 @@ The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/ni
 
 macOS and Windows builds compile and pass their unit tests, but can't run the browser yet; they need the app bundle and installer work that's still planned.
 
+## Arch Linux (AUR) and Nix
+
+Both repackage the release tarball. They become installable with the first release, which fills in the download's checksum.
+
+- **Arch Linux:** [`packaging/aur/PKGBUILD`](https://github.com/joshzcold/riptide/blob/main/packaging/aur/PKGBUILD) builds `riptide-bin`, which installs to `/opt/riptide` with `riptide` on your `PATH`, plus a desktop entry and icon. Build it with `makepkg -si` in that directory.
+- **Nix:** [`packaging/nix/package.nix`](https://github.com/joshzcold/riptide/blob/main/packaging/nix/package.nix) is a `callPackage` derivation that patches the binaries for NixOS. To try it with a tarball you built yourself:
+  ```sh
+  ./task package
+  nix-build -E 'with import <nixpkgs> {}; callPackage ./packaging/nix/package.nix {
+    src = ./dist/riptide-0.1.0-linux-x86_64.tar.gz; version = "0.1.0"; }'
+  ```
+  The Nix store can't hold a setuid sandbox helper, so the Nix package relies on user namespaces for the sandbox, which NixOS allows.
+
 ## Building from source
 
 Requirements: Rust 1.88+ (edition 2024).

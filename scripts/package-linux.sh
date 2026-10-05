@@ -39,7 +39,7 @@ for f in "${files[@]}"; do
     cp -a "$build/$f" "$stage/"
 done
 cp -a "$build/locales" "$stage/"
-cp LICENSE README.md CHANGELOG.md "$stage/"
+cp LICENSE README.md CHANGELOG.md packaging/riptide.desktop packaging/riptide.svg "$stage/"
 # CEF ships libcef.so with debug info (1.4 GB); stripped it is ~260 MB.
 strip "$stage/riptide" "$stage/libcef.so" "$stage/libvk_swiftshader.so"
 

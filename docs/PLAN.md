@@ -397,7 +397,11 @@ Gaps:
 - ✅ **Tarball and AppImage** (2026-10-02): `scripts/package-linux.sh [--appimage]` stages the stripped binary and CEF runtime. The AppImage adds `packaging/riptide.{desktop,svg}` and an `AppRun`, and is built by appimagetool 1.9.1 (pinned and checksum-verified; it fetches its runtime itself). `./task appimage` builds both locally, and `release.yml` publishes both.
   - Tested locally: the 146 MB AppImage starts, opens a window under Xvfb, quits cleanly and unmounts.
   - Inside an AppImage `chrome-sandbox` can't be setuid, so the sandbox needs user namespaces (see the README).
-  - Not done: AUR, Nix, the macOS app bundle and Windows packaging (none can be tested on this machine).
+  - ✅ **AUR and Nix** (2026-10-05): `packaging/aur/PKGBUILD` (`riptide-bin`) and `packaging/nix/package.nix` repackage the release tarball, which now includes `riptide.desktop` and `riptide.svg`.
+    - The Nix package uses `autoPatchelfHook`; every library CEF links is found. It builds from a local tarball, and the full smoke test passes against it.
+    - The PKGBUILD's `package()` was run against the same tarball (`makepkg` isn't on this machine). It installs to `/opt/riptide`, with a `/usr/bin` symlink, the desktop entry, the icon and a setuid `chrome-sandbox` fallback.
+    - **Waiting on the first release:** the checksums. They should also be updated by `release.yml`, and published to the AUR and as a root `flake.nix`.
+  - Not done: the macOS app bundle and Windows packaging (neither can be tested on this machine).
 
 ### M12 — Lua scripting ✅ mostly done 2026-10-02
 Builds on the M5 Lua config API.
