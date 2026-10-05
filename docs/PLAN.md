@@ -720,7 +720,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
       - A smoke step covers both.
     - `GM_xmlhttpRequest` through the browser process (cross-origin, so only for scripts that `@grant` it, and only to `@connect` hosts), `GM_openInTab`, the promise-based `GM.*` API, and `unsafeWindow`.
   - **Lua:** `rt.spawn(argv, opts)` with a callback for the output, so `config.lua` can do what a userscript does without a separate file.
-- **Config commands:** `config-list-add` and `remove`, `config-dict-add` and `remove`, `config-clear`, `config-diff`, `config-edit` (open the config in the editor), and `config-write-toml` (riptide's version of `config-write-py`).
+- ✅ **Config commands** (2026-10-05): `config-list-add` and `remove`, `config-dict-add [--replace]` and `remove`, `config-clear`, `config-diff` (a `riptide://config-diff/` page), `config-edit` (opens `config.lua` or `config.toml`, then reloads it), and `config-write-toml` (round-trip tested).
 - **Not planned:** `qt.*` (Qt only), `backend`, and the Python-only commands (`debug-pyeval`, `debug-all-objects`, `config-write-py`).
 - **Done when:** each item has a unit test where the logic is CEF-free and a smoke step where it's visible. The tiers set the order, and each group is its own commit.
 
