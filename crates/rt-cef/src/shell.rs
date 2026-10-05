@@ -489,6 +489,8 @@ pub fn apply(effects: Vec<Effect>) {
             Effect::ConfigChanged(op) => persist(op),
             Effect::PromptAnswered { id, answer } => crate::prompts::answered(id, answer),
             Effect::PassKey(key) => crate::client::send_to_page(key),
+            Effect::DeleteCompletion(item) => storage::delete_completion(&item),
+            Effect::YankText { text, primary } => clipboard::yank_to(&text, "text", primary),
         }
     }
     refresh_ui();

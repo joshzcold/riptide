@@ -720,6 +720,28 @@ wait_mode normal || true
 run "set statusbar.show always"
 [[ $bare == "${w}x$((h + 20))" && $typing == command ]] && pass || fail "hidden '$bare', ':' gave mode '$typing'"
 
+step "Ctrl-d deletes the selected history entry from :open completion"
+visits() {
+    python3 - "$work/base/data/history.sqlite" <<'PYQ'
+import sqlite3, sys
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+print(db.execute("SELECT COUNT(*) FROM completion WHERE url LIKE '%/second.html%'").fetchone()[0])
+PYQ
+}
+before=$(visits)
+xdotool key o
+wait_mode command || true
+xdotool type --delay 20 "second.html"
+nap 0.5
+xdotool key Tab
+nap 0.3
+xdotool key ctrl+d
+nap 0.5
+xdotool key Escape
+wait_mode normal || true
+after=$(visits)
+(( before > 0 )) && [[ $after == 0 ]] && pass || fail "entries for second.html: $before before, $after after"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

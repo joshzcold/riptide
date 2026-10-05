@@ -141,9 +141,11 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | Keys | Command |
 |---|---|
 | `<Backspace>` | `rl-backward-delete-char` |
+| `<Ctrl-C>` | `completion-item-yank --sel` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
 | `<Ctrl-b>` | `rl-backward-char` |
-| `<Ctrl-d>` | `rl-delete-char` |
+| `<Ctrl-c>` | `completion-item-yank` |
+| `<Ctrl-d>` | `completion-item-del` |
 | `<Ctrl-e>` | `rl-end-of-line` |
 | `<Ctrl-f>` | `rl-forward-char` |
 | `<Ctrl-h>` | `rl-backward-delete-char` |
@@ -183,7 +185,6 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
 | `<Ctrl-b>` | `rl-backward-char` |
-| `<Ctrl-d>` | `rl-delete-char` |
 | `<Ctrl-e>` | `rl-end-of-line` |
 | `<Ctrl-f>` | `rl-forward-char` |
 | `<Ctrl-h>` | `rl-backward-delete-char` |

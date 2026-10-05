@@ -38,6 +38,13 @@ pub enum Effect {
         url: Option<String>,
         target: HintTarget,
     },
+    /// Delete what this completion stands for (`:completion-item-del`).
+    DeleteCompletion(Completion),
+    /// Put text on the clipboard, or the primary selection.
+    YankText {
+        text: String,
+        primary: bool,
+    },
     /// A `:set`/`:bind`/`:unbind` succeeded; the host persists it.
     ConfigChanged(ConfigOp),
     /// The user answered (or cancelled) the prompt with this id.
@@ -363,6 +370,43 @@ impl Engine {
         source: impl Fn(CompletionKind, &str) -> Vec<Completion> + 'static,
     ) {
         self.completion_source = Some(Box::new(source));
+    }
+
+    /// Take the selected item out of the list and ask the host to delete
+    /// it. The next item takes its place, as if Tab had chosen it.
+    fn delete_completion(&mut self, effects: &mut Vec<Effect>) {
+        const DELETABLE: &[&str] = &["History", "Quickmarks", "Bookmarks", "Sessions", "Tabs"];
+        let Some(state) = self.completion.as_mut() else {
+            return;
+        };
+        let Some(index) = state.view.selected else {
+            self.show_message(Level::Error, "No completion is selected");
+            return;
+        };
+        let item = state.view.items[index].clone();
+        if !DELETABLE.contains(&item.category) {
+            let category = item.category.to_lowercase();
+            self.show_message(
+                Level::Error,
+                format!("Can't delete {category} from completion"),
+            );
+            return;
+        }
+        state.view.items.remove(index);
+        let text = if state.view.items.is_empty() {
+            state.view.selected = None;
+            state.inserted = None;
+            state.base.clone()
+        } else {
+            let next = index.min(state.view.items.len() - 1);
+            state.view.selected = Some(next);
+            let text = completion::insert(&state.base, &state.view.items[next]);
+            state.inserted = Some(text.clone());
+            text
+        };
+        self.cmdline.set(&text);
+        self.dirty = true;
+        effects.push(Effect::DeleteCompletion(item));
     }
 
     fn focus_completion(&mut self, forward: bool) {
@@ -1175,6 +1219,19 @@ impl Engine {
                     self.show_message(Level::Error, "No command to repeat yet");
                 }
             },
+            Command::CompletionItemDel => self.delete_completion(effects),
+            Command::CompletionItemYank { sel } => {
+                let selected = self.completion.as_ref().and_then(|s| {
+                    let i = s.view.selected?;
+                    s.view.items.get(i).map(|item| item.name.clone())
+                });
+                match selected {
+                    Some(text) => effects.push(Effect::YankText { text, primary: sel }),
+                    None => {
+                        self.show_message(Level::Error, "No completion is selected");
+                    }
+                }
+            }
             Command::ClearKeychain => {
                 self.pending.clear();
                 self.count = None;
@@ -1800,6 +1857,57 @@ mod tests {
         );
         press(&mut e, "_position.related ");
         assert!(e.completions().items.is_empty());
+    }
+
+    #[test]
+    fn ctrl_d_deletes_the_selected_completion() {
+        let mut e = engine();
+        e.set_completion_source(|_, _| {
+            ["https://a.org/", "https://b.org/", "https://c.org/"]
+                .iter()
+                .map(|u| Completion {
+                    category: "History",
+                    name: u.to_string(),
+                    description: String::new(),
+                })
+                .collect()
+        });
+        press(&mut e, "o");
+        let out = press(&mut e, "<Ctrl-d>");
+        assert!(all_effects(&out).is_empty(), "nothing is selected yet");
+        press(&mut e, "<Tab><Tab>");
+        let out = press(&mut e, "<Ctrl-d>");
+        let deleted: Vec<_> = all_effects(&out)
+            .into_iter()
+            .filter_map(|e| match e {
+                Effect::DeleteCompletion(item) => Some(item.name),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(deleted, ["https://b.org/"]);
+        // The next item takes the deleted one's place, without asking the source again.
+        let view = e.completions();
+        assert_eq!(view.items.len(), 2);
+        assert_eq!(view.selected, Some(1));
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open https://c.org/"
+        );
+        let out = press(&mut e, "<Ctrl-c>");
+        assert!(all_effects(&out).contains(&Effect::YankText {
+            text: "https://c.org/".into(),
+            primary: false
+        }));
+    }
+
+    #[test]
+    fn commands_cant_be_deleted_from_completion() {
+        let mut e = engine();
+        press(&mut e, ":scr<Tab>");
+        let out = press(&mut e, "<Ctrl-d>");
+        assert!(all_effects(&out).is_empty());
+        assert!(e.status().message.unwrap().text.starts_with("Can't delete"));
+        assert_eq!(e.completions().items.len(), 5);
     }
 
     #[test]

@@ -222,6 +222,13 @@ pub enum Command {
         tab: bool,
     },
     CompletionFocus(FocusDirection),
+    /// Delete the selected completion: a history entry, quickmark,
+    /// bookmark or session, or close a tab.
+    CompletionItemDel,
+    /// Yank the selected completion's text (to the primary selection with `sel`).
+    CompletionItemYank {
+        sel: bool,
+    },
     /// Answer the active prompt; `value` is yes/no for y/n questions.
     PromptAccept {
         value: Option<bool>,
@@ -758,6 +765,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     hidden(
         "completion-item-focus",
         "Select the next or previous completion",
+    ),
+    spec(
+        "completion-item-del",
+        "Delete the selected completion: history entry, quickmark, bookmark or session, or close the tab (Ctrl-d)",
+    ),
+    spec(
+        "completion-item-yank",
+        "Yank the selected completion's text: [--sel] for the primary selection (Ctrl-c)",
     ),
     hidden("prompt-accept", "Answer the prompt: [--save] [yes|no]"),
     hidden("command-accept", "Execute the command line"),
@@ -1343,6 +1358,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             "prev" => FocusDirection::Prev,
             other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
         }),
+        "completion-item-del" => Command::CompletionItemDel,
+        "completion-item-yank" => Command::CompletionItemYank {
+            sel: args.flag(&["-s", "--sel"]).is_some(),
+        },
         "prompt-accept" => {
             let save = args.flag(&["-s", "--save"]).is_some();
             let value = match args.optional() {

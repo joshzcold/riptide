@@ -86,6 +86,8 @@ In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` comp
 
 The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 
+To clean up what completion offers, select an entry with `Tab` and press `Ctrl-d` (`:completion-item-del`). It deletes history entries, quickmarks, bookmarks and sessions, and closes tabs listed by `T`. `Ctrl-c` (`:completion-item-yank`) copies the selected entry, and `Ctrl-Shift-c` copies it to the primary selection.
+
 Every command is listed in the [commands reference](../reference/commands.md). `.` repeats the last command, and `:messages` shows earlier status bar messages.
 
 ## The status bar

@@ -172,6 +172,17 @@ impl History {
             .execute_batch("DELETE FROM visits; DELETE FROM completion; VACUUM;")
     }
 
+    /// Forget every visit to `url`. Returns whether there were any.
+    pub fn delete_url(&self, url: &str) -> rusqlite::Result<bool> {
+        let visits = self
+            .conn
+            .execute("DELETE FROM visits WHERE url = ?1", [url])?;
+        let entries = self
+            .conn
+            .execute("DELETE FROM completion WHERE url = ?1", [url])?;
+        Ok(visits + entries > 0)
+    }
+
     pub fn visit_count(&self) -> rusqlite::Result<i64> {
         self.conn
             .query_row("SELECT COUNT(*) FROM visits", [], |row| row.get(0))
@@ -249,6 +260,18 @@ mod tests {
         // An empty title on a later visit keeps the earlier one.
         assert_eq!(all[0].title, "Rust");
         assert_eq!(h.visit_count().unwrap(), 4);
+    }
+
+    #[test]
+    fn delete_url_forgets_one_page() {
+        let h = History::open_in_memory().unwrap();
+        h.add_visit("https://a.org/", "A", 1).unwrap();
+        h.add_visit("https://a.org/", "A", 2).unwrap();
+        h.add_visit("https://b.org/", "B", 3).unwrap();
+        assert!(h.delete_url("https://a.org/").unwrap());
+        assert_eq!(urls(&h.search("", 10).unwrap()), ["https://b.org/"]);
+        assert_eq!(h.visit_count().unwrap(), 1);
+        assert!(!h.delete_url("https://a.org/").unwrap());
     }
 
     #[test]

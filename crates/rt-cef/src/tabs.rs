@@ -196,6 +196,33 @@ fn switch_to(index: usize, force: bool) {
     shell::apply(effects);
 }
 
+/// Close the tab a `window/tab` label (from tab completion) names, in
+/// whichever window it is.
+pub fn close_label(label: &str) {
+    let Some((window, tab)) = label.split_once('/').and_then(|(w, t)| {
+        Some((
+            w.trim().parse::<usize>().ok()?,
+            t.trim().parse::<usize>().ok()?,
+        ))
+    }) else {
+        return;
+    };
+    let Some(Some(previous)) = shell::with(|s| {
+        let index = open_window_index(s, window)?;
+        Some(std::mem::replace(&mut s.active, index))
+    }) else {
+        return;
+    };
+    if let Some(index) = tab.checked_sub(1) {
+        close(index);
+    }
+    shell::with(|s| {
+        if previous < s.windows.len() {
+            s.active = previous;
+        }
+    });
+}
+
 /// Close a tab. Closing the last one follows `tabs.last_close`.
 pub fn close(index: usize) {
     if shell::with(|s| s.tabs.len() <= 1).unwrap_or(true) {

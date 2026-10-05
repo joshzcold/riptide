@@ -33,6 +33,46 @@ pub fn with<R>(f: impl FnOnce(&mut Storage) -> R) -> Option<R> {
     STORAGE.with(|s| s.try_borrow_mut().ok()?.as_mut().map(f))
 }
 
+/// `:completion-item-del`: delete what a completion item stands for.
+pub fn delete_completion(item: &rt_core::completion::Completion) {
+    let command = match item.category {
+        "History" => {
+            match with(|s| s.history.as_ref().map(|h| h.delete_url(&item.name))).flatten() {
+                Some(Ok(_)) => {
+                    shell::show_message(Level::Info, format!("Deleted {} from history", item.name))
+                }
+                Some(Err(e)) => {
+                    shell::show_message(Level::Error, format!("Could not delete from history: {e}"))
+                }
+                None => {}
+            }
+            return;
+        }
+        "Tabs" => return crate::tabs::close_label(&item.name),
+        // `:open` lists quickmarks by URL with the name as the description.
+        "Quickmarks" => {
+            let is_name =
+                with(|s| s.quickmarks.iter().any(|(name, _)| *name == item.name)).unwrap_or(false);
+            let name = if is_name {
+                &item.name
+            } else {
+                &item.description
+            };
+            Command::QuickmarkDel {
+                name: Some(name.clone()),
+            }
+        }
+        "Bookmarks" => Command::BookmarkDel {
+            url: Some(item.name.clone()),
+        },
+        "Sessions" => Command::SessionDelete {
+            name: item.name.clone(),
+        },
+        _ => return,
+    };
+    run_command(&command);
+}
+
 /// Mirror `completion.web_history.max_items`, which the source can't read itself.
 pub fn set_history_limit(limit: i64) {
     HISTORY_LIMIT.with(|l| l.set(limit.max(0) as usize));
