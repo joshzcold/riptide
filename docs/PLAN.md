@@ -660,6 +660,19 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `:restart` (save the session, then re-exec), `:report`, `debug-keytester`, `debug-dump-page`, `debug-log-filter`, `debug-clear-ssl-errors`, `devtools-focus`, `selection-drop`.
   - Bookmarks and quickmarks: `bookmark-list`, `quickmark-save`, `bookmarks-reload`, `quickmarks-reload`.
   - Missing readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word`, `rl-yank`, and the `move-to-*-block` set.
+- **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, 15 of qutebrowser's 17 `QUTE_*` variables with `QUTE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
+  - **Environment:** add `QUTE_CURRENT_URL` (the page's URL when `QUTE_URL` is a hinted link) and `QUTE_SELECTED_HTML`. Also set `RIPTIDE_*` copies of every variable, so new scripts don't need qutebrowser's names.
+  - **qutebrowser's bundled userscripts** (`misc/userscripts`, 28 scripts) — tier 1:
+    - Check that the popular ones run unchanged: qute-pass, qute-bitwarden, qute-keepassxc, password_fill, view_in_mpv, readability, format_json, open_download, qr.
+    - Fix whatever differs; most just need the environment and FIFO commands to match.
+    - Don't copy them into the repo (their licenses differ). Instead, document which work and add a smoke step that runs one through `QUTE_FIFO`.
+  - **Editor:**
+    - Tier 1: `edit-text` as qutebrowser's current name for `:open-editor`, which stays as an alias; `edit-url` (with `--tab`, `--bg`, `--window`, `--private`, `--related`); and `cmd-edit` (edit the command line, run it on save).
+    - `editor.encoding`, `editor.remove_file`.
+  - **Greasemonkey:**
+    - Tier 1: `@require`, fetched once into the data directory and pinned to the URL. Also `GM_setValue`, `getValue`, `deleteValue` and `listValues`, stored per script.
+    - `GM_xmlhttpRequest` through the browser process (cross-origin, so only for scripts that `@grant` it, and only to `@connect` hosts), `GM_openInTab`, the promise-based `GM.*` API, and `unsafeWindow`.
+  - **Lua:** `rt.spawn(argv, opts)` with a callback for the output, so `config.lua` can do what a userscript does without a separate file.
 - **Config commands:** `config-list-add` and `remove`, `config-dict-add` and `remove`, `config-clear`, `config-diff`, `config-edit` (open the config in the editor), and `config-write-toml` (riptide's version of `config-write-py`).
 - **Not planned:** `qt.*` (Qt only), `backend`, and the Python-only commands (`debug-pyeval`, `debug-all-objects`, `config-write-py`).
 - **Done when:** each item has a unit test where the logic is CEF-free and a smoke step where it's visible. The tiers set the order, and each group is its own commit.
