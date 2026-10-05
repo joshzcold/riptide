@@ -1069,7 +1069,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 ## Chromium update cadence
 
 - Pin `cef` crate to an exact version (e.g. `=154.3.0`).
-- CI job checks for new CEF releases weekly; upgrades go through a branch with smoke tests.
+- CI job checks for new CEF releases weekly; upgrades go through a branch with smoke tests. ✅ `cef-update.yml` (2026-10-05) opens an "Update CEF to X" issue when crates.io has a newer `cef` crate; the first run will find 154.4.0+154.0.33.
 - Keep CEF-specific code isolated in `rt-cef` so binding churn doesn't leak into core logic.
 
 ## Testing strategy

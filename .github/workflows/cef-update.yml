@@ -1,0 +1,47 @@
+name: cef update
+
+# Once a week, compare the pinned `cef` crate (Cargo.lock) with the newest
+# release on crates.io, and open an issue when there's a newer one. Upgrading
+# stays a deliberate change on a branch, with the e2e and smoke tests (see
+# "Chromium update cadence" in docs/PLAN.md).
+on:
+  schedule:
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: check for a new CEF
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare with crates.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned=$(awk '/^name = "cef"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
+          latest=$(curl -fsSL -H 'User-Agent: riptide-cef-update (github.com/joshzcold/riptide)' \
+            https://crates.io/api/v1/crates/cef | jq -r '.crate.max_stable_version')
+          echo "pinned $pinned, latest $latest"
+          if [[ -z $latest || $latest == null || $latest == "$pinned" ]]; then
+            exit 0
+          fi
+          title="Update CEF to $latest"
+          if gh issue list --state open --search "\"$title\" in:title" --json title --jq '.[].title' | grep -qxF "$title"; then
+            echo "an issue for $latest is already open"
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$(cat <<EOF
+          A newer \`cef\` crate is out: **$latest** (riptide pins $pinned).
+
+          - Release notes: https://github.com/tauri-apps/cef-rs/releases
+          - To upgrade: on a branch, set \`cef = { version = "=$latest" … }\` in \`Cargo.toml\`, run \`cargo update -p cef -p cef-dll-sys\` and \`./task setup\`, then \`./task check\` (lint, unit, e2e and smoke tests).
+          - Watch for API changes in the generated bindings, and note the new Chromium version in the changelog.
+
+          Opened by the weekly \`cef-update\` workflow.
+          EOF
+          )"

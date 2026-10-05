@@ -1,0 +1,14 @@
+# Keep the GitHub Actions the workflows use up to date. Cargo dependencies
+# aren't here: CEF is pinned on purpose (cef-update.yml watches it), and the
+# rest are updated by hand with `cargo update`.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]

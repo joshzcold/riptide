@@ -73,7 +73,9 @@ When the logic isn't specific to CEF and other crates could use it, it goes in `
 | [actionlint](https://github.com/rhysd/actionlint) | `.github/workflows/*.yml`, including ShellCheck on their `run:` blocks | — |
 | [cargo-deny](https://embarkstudios.github.io/cargo-deny/) | Dependency licenses (each must be GPL-3.0-compatible), RustSec security advisories, yanked crates, and where crates come from | [`deny.toml`](https://github.com/joshzcold/riptide/blob/main/deny.toml) |
 
-A dependency with a license that isn't in `deny.toml` fails the check. Add the license only after checking that it's compatible with GPL-3.0. A new security advisory fails CI until the crate is updated, or until the advisory is listed in `deny.toml`'s `ignore`, with a reason.
+A dependency with a license that isn't in `deny.toml` fails the check. Add the license only after checking that it's compatible with GPL-3.0.
+
+Security advisories aren't part of `./task lint`, because a new one can appear any day without anything in the repository changing. [`.github/workflows/audit.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/audit.yml) checks them daily and whenever `Cargo.lock` or `deny.toml` changes; run it yourself with `scripts/tool.sh cargo-deny check advisories`. A failing advisory is fixed by updating the crate, or listed in `deny.toml`'s `ignore` with a reason.
 
 ## Testing by hand
 
@@ -93,3 +95,12 @@ The [local-testing skill](https://github.com/joshzcold/riptide/blob/main/.claude
 macOS and Windows are built and unit-tested but can't run the browser yet; packaging (M10) adds the app bundle and installer they need.
 
 [`.github/workflows/docs.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/docs.yml) publishes the book to GitHub Pages on every push to `main`, and checks its external links weekly.
+
+Other scheduled jobs:
+
+| Workflow | When | Does |
+|---|---|---|
+| [`audit.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/audit.yml) | daily, and when `Cargo.lock` or `deny.toml` changes | RustSec security advisories (cargo-deny) |
+| [`cef-update.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/cef-update.yml) | weekly | Opens an "Update CEF to X" issue when crates.io has a newer `cef` than `Cargo.lock` pins |
+| [`nightly.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/nightly.yml) | daily | The rolling `nightly` pre-release (see [Releasing](releasing.md)) |
+| [Dependabot](https://github.com/joshzcold/riptide/blob/main/.github/dependabot.yml) | weekly | Pull requests that update the GitHub Actions the workflows use |

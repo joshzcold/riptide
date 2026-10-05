@@ -1,0 +1,26 @@
+name: audit
+
+# RustSec security advisories for our dependencies. A new advisory can appear
+# on any day without anything here changing, so this runs on a schedule (and
+# when the dependencies change) instead of failing every push in check.yml.
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  push:
+    branches: [main]
+    paths: [Cargo.lock, deny.toml]
+  pull_request:
+    paths: [Cargo.lock, deny.toml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    name: advisories
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check RustSec advisories
+        run: scripts/tool.sh cargo-deny check advisories
