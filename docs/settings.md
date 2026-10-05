@@ -31,6 +31,10 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
+| `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to |
+| `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |
+| `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line |
+| `fileselect.single_file.command` | string[] | `["xterm","-e","ranger","--choosefile={}"]` | Program that picks a file for fileselect.handler = external; {} is the file it writes the path to |
 | `hints.auto_follow` | always \| unique-match \| full-match \| never | `unique-match` | When a hint is followed without Return: when one is left (unique-match), only when its label is typed in full (full-match), always, or never |
 | `hints.auto_follow_timeout` | integer | `0` | Ignore keys for this many milliseconds after following a hint, so extra typing doesn't reach the page |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |

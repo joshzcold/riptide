@@ -25,6 +25,8 @@ enum State {
 struct Download {
     /// CEF's id for the item.
     id: u32,
+    /// Where it came from, for `:download-retry`.
+    url: String,
     path: PathBuf,
     percent: Option<i32>,
     state: State,
@@ -85,7 +87,13 @@ pub fn summary() -> String {
 }
 
 /// Start the download at `path`, confirming before overwriting a file.
-fn save_to(path: PathBuf, id: u32, callback: BeforeDownloadCallback, browser: Option<i32>) {
+fn save_to(
+    path: PathBuf,
+    id: u32,
+    url: String,
+    callback: BeforeDownloadCallback,
+    browser: Option<i32>,
+) {
     let begin = move |path: PathBuf| {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -94,6 +102,7 @@ fn save_to(path: PathBuf, id: u32, callback: BeforeDownloadCallback, browser: Op
         DOWNLOADS.with(|d| {
             d.borrow_mut().push(Download {
                 id,
+                url,
                 path,
                 percent: None,
                 state: State::Running,
@@ -147,13 +156,14 @@ wrap_download_handler! {
         ) -> ::std::os::raw::c_int {
             let (Some(item), Some(callback)) = (download_item, callback.map(|c| c.clone())) else { return 0 };
             let id = item.id();
+            let url = CefString::from(&item.url()).to_string();
             let browser = browser.map(|b| b.identifier());
             let name = sanitize_name(&suggested_name.map(CefString::to_string).unwrap_or_default());
             let dir = download_dir();
             let suggestion = unique_path(&dir, &name, &|p: &Path| p.exists());
             let ask = shell::with(|s| s.engine.settings().bool("downloads.location.prompt")).unwrap_or(true);
             if !ask {
-                save_to(suggestion, id, callback, browser);
+                save_to(suggestion, id, url, callback, browser);
                 return 1;
             }
             let default = suggestion.to_string_lossy().into_owned();
@@ -163,7 +173,7 @@ wrap_download_handler! {
                 if path.is_dir() {
                     path = path.join(&name);
                 }
-                save_to(path, id, callback, browser);
+                save_to(path, id, url, callback, browser);
             });
             1
         }
@@ -213,6 +223,16 @@ wrap_download_handler! {
 
 /// Downloads are numbered from 1 in the order they started, like qutebrowser.
 fn pick(count: Option<u32>, state: State) -> Result<usize, String> {
+    let what = if state == State::Running {
+        "running"
+    } else {
+        "finished"
+    };
+    pick_any(count, &[state], what)
+}
+
+/// The download numbered `count`, or the newest one, in one of `states`.
+fn pick_any(count: Option<u32>, states: &[State], what: &str) -> Result<usize, String> {
     DOWNLOADS.with(|d| {
         let d = d.borrow();
         match count {
@@ -221,25 +241,15 @@ fn pick(count: Option<u32>, state: State) -> Result<usize, String> {
                     .checked_sub(1)
                     .filter(|&i| i < d.len())
                     .ok_or(format!("There's no download {n}"))?;
-                if d[index].state != state {
-                    return Err(format!(
-                        "Download {n} is not {}",
-                        if state == State::Running {
-                            "running"
-                        } else {
-                            "finished"
-                        }
-                    ));
+                if !states.contains(&d[index].state) {
+                    return Err(format!("Download {n} is not {what}"));
                 }
                 Ok(index)
             }
             None => d
                 .iter()
-                .rposition(|d| d.state == state)
-                .ok_or_else(|| match state {
-                    State::Running => "No running downloads".to_string(),
-                    _ => "No finished downloads".to_string(),
-                }),
+                .rposition(|d| states.contains(&d.state))
+                .ok_or_else(|| format!("No {what} downloads")),
         }
     })
 }
@@ -293,6 +303,51 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                         Level::Error,
                         format!("Could not open {}: {e}", path.display()),
                     );
+                }
+            }
+            Err(e) => shell::show_message(Level::Error, e),
+        },
+        Command::DownloadRetry => match pick_any(
+            count,
+            &[State::Failed, State::Cancelled],
+            "failed or cancelled",
+        ) {
+            Ok(index) => {
+                let url = DOWNLOADS.with(|d| d.borrow_mut().remove(index).url);
+                start(&url);
+            }
+            Err(e) => shell::show_message(Level::Error, e),
+        },
+        Command::DownloadRemove { all: true } => {
+            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| d.state == State::Running));
+            publish();
+        }
+        Command::DownloadRemove { all: false } => {
+            let any = [State::Running, State::Done, State::Cancelled, State::Failed];
+            match pick_any(count, &any, "listed") {
+                Ok(index) => {
+                    let download = DOWNLOADS.with(|d| d.borrow_mut().remove(index));
+                    if let Some(callback) = download.callback {
+                        callback.cancel();
+                    }
+                    publish();
+                }
+                Err(e) => shell::show_message(Level::Error, e),
+            }
+        }
+        Command::DownloadDelete => match pick(count, State::Done) {
+            Ok(index) => {
+                let path = DOWNLOADS.with(|d| d.borrow()[index].path.clone());
+                match std::fs::remove_file(&path) {
+                    Ok(()) => {
+                        DOWNLOADS.with(|d| d.borrow_mut().remove(index));
+                        shell::show_message(Level::Info, format!("Deleted {}", path.display()));
+                        publish();
+                    }
+                    Err(e) => shell::show_message(
+                        Level::Error,
+                        format!("Could not delete {}: {e}", path.display()),
+                    ),
                 }
             }
             Err(e) => shell::show_message(Level::Error, e),

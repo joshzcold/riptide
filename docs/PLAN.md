@@ -664,7 +664,11 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
   - `url.auto_search` (naive, dns, schemeless, never), `url.open_base_url`, `url.incdec_segments`, `new_instance_open_target_window`.
 - **Downloads and files:**
-  - Tier 1: `download-retry`, `download-remove`, `download-delete`, and an external file picker (`fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`, e.g. yazi or ranger in a terminal), plus `prompt-fileselect-external`.
+  - ✅ Tier 1 (2026-10-05):
+    - `download-retry`, `download-remove [--all]` and `download-delete`.
+    - The external file picker: `fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`. CEF's `DialogHandler` hands upload fields to the program, and the callback waits on the UI thread while it runs.
+    - Smoke steps cover `download-delete` and the picker. `download-retry` isn't smoke tested (no failing download to retry).
+    - Still to do: `prompt-fileselect-external`, the picker for the download prompt.
   - `downloads.remove_finished`, `downloads.position`, `downloads.location.remember` and `suggestion`, `downloads.open_dispatcher`, `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
 - **Content** (most are Chromium prefs or switches; per-site where qutebrowser allows it):
   - ✅ Tier 1 (2026-10-05): `content.javascript.enabled` (per site), `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent` (per site).

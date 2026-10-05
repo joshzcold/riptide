@@ -486,6 +486,15 @@ pub enum Command {
     DownloadOpen,
     /// Forget finished, failed and cancelled downloads.
     DownloadClear,
+    /// Start a failed or cancelled download again.
+    DownloadRetry,
+    /// Take a download off the list, cancelling it if it's running; `all`
+    /// takes every finished one.
+    DownloadRemove {
+        all: bool,
+    },
+    /// Delete a finished download's file and take it off the list.
+    DownloadDelete,
     Quit {
         /// Save the open tabs as the default session first.
         save: bool,
@@ -789,6 +798,18 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Open a finished download (count: its number)",
     ),
     spec("download-clear", "Remove finished downloads from the list"),
+    spec(
+        "download-retry",
+        "Start a failed or cancelled download again (count: its number)",
+    ),
+    spec(
+        "download-remove",
+        "Take a download off the list, cancelling it if it runs (count: its number; --all: every finished one)",
+    ),
+    spec(
+        "download-delete",
+        "Delete a finished download's file and take it off the list (count: its number)",
+    ),
     spec(
         "downloads",
         "List this session's downloads and their progress",
@@ -1121,6 +1142,11 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         },
         "download-cancel" => Command::DownloadCancel,
         "download-open" => Command::DownloadOpen,
+        "download-retry" => Command::DownloadRetry,
+        "download-remove" => Command::DownloadRemove {
+            all: args.flag(&["-a", "--all"]).is_some(),
+        },
+        "download-delete" => Command::DownloadDelete,
         "download-clear" => Command::DownloadClear,
         "adblock-update" => Command::AdblockUpdate,
         "spawn" => {

@@ -49,9 +49,22 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 | `:download [url]` | Download a URL, or the current page |
 | `;d` | Hint a link to download |
 | `:download-cancel`, `:download-open` | The newest running / finished download, or the one given as a count (`2:download-open`) |
+| `:download-retry` | Start the newest failed or cancelled download again |
+| `:download-remove [--all]` | Take a download off the list, cancelling it if it's running; `--all` takes every finished one, like `:download-clear` |
+| `:download-delete` | Delete the newest finished download's file |
 | `:download-clear` | Forget finished downloads |
 | `:downloads` | A page listing this session's downloads with their numbers and progress |
 
 In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell.
 
 `:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
+
+## Choosing files to upload
+
+Upload fields open Chromium's file dialog. To use a terminal file manager instead, set `fileselect.handler = "external"`. Riptide runs the command for the field (`fileselect.single_file.command`, `fileselect.multiple_files.command` or `fileselect.folder.command`) with `{}` replaced by a file to write the chosen paths to, one per line. The defaults run ranger in xterm, as qutebrowser does. For yazi in foot:
+
+```toml
+fileselect.handler = "external"
+fileselect.single_file.command = ["foot", "yazi", "--chooser-file={}"]
+fileselect.multiple_files.command = ["foot", "yazi", "--chooser-file={}"]
+```

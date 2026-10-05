@@ -5,7 +5,8 @@
 //! so existing qutebrowser userscripts work. Commands written to `QUTE_FIFO`
 //! run when the script exits; it is a plain file on every platform.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command as Process, Stdio};
 use std::sync::{Arc, Mutex, RwLock};
@@ -42,6 +43,72 @@ enum Then {
     },
     /// Put the edited command line back, or run it (`:cmd-edit`).
     EditCommand { file: PathBuf, run: bool },
+    /// Answer file dialog `id` with the paths written to `file`.
+    FileSelect { file: PathBuf, id: u32 },
+}
+
+thread_local! {
+    /// File dialogs waiting for an external picker, by id. CEF callbacks stay
+    /// on the UI thread; only the id goes to the worker thread.
+    static FILE_DIALOGS: RefCell<HashMap<u32, FileDialogCallback>> = RefCell::new(HashMap::new());
+    static NEXT_DIALOG: Cell<u32> = const { Cell::new(1) };
+}
+
+/// `fileselect.handler = external`: run `template` (with `{}` replaced by a
+/// file to write the chosen paths to) and answer the dialog with them.
+pub fn pick_files(template: &[String], callback: FileDialogCallback) {
+    let started = temp_dir("fileselect").and_then(|dir| {
+        let file = dir.join("chosen.txt");
+        std::fs::write(&file, "")?;
+        Ok((dir, file))
+    });
+    let (dir, file) = match started {
+        Ok(v) => v,
+        Err(e) => {
+            callback.cancel();
+            return shell::show_message(Level::Error, format!("Can't start the file picker: {e}"));
+        }
+    };
+    let path = file.to_string_lossy();
+    let argv: Vec<String> = template.iter().map(|a| a.replace("{}", &path)).collect();
+    let Some((program, args)) = argv.split_first() else {
+        callback.cancel();
+        return shell::show_message(Level::Error, "The fileselect command is empty");
+    };
+    let id = NEXT_DIALOG.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    });
+    FILE_DIALOGS.with(|d| d.borrow_mut().insert(id, callback));
+    let mut process = Process::new(program);
+    process
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    run_in_background(process, Then::FileSelect { file, id }, Some(dir));
+}
+
+fn files_picked(file: &Path, id: u32, done: &Finished) {
+    let Some(callback) = FILE_DIALOGS.with(|d| d.borrow_mut().remove(&id)) else {
+        return;
+    };
+    if let Err(e) = &done.status {
+        shell::show_message(Level::Error, format!("Can't run the file picker: {e}"));
+    }
+    let chosen = std::fs::read_to_string(file).unwrap_or_default();
+    let mut paths = CefStringList::new();
+    let mut any = false;
+    for line in chosen.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        paths.append(line);
+        any = true;
+    }
+    if any {
+        callback.cont(Some(&mut paths));
+    } else {
+        callback.cancel();
+    }
 }
 
 struct Finished {
@@ -317,6 +384,7 @@ fn finished(then: Then, done: Finished) {
                 }
             }
         }
+        Then::FileSelect { file, id } => files_picked(&file, id, &done),
         Then::EditCommand { file, run } => {
             if let Some(text) = editor_result(&file, &done) {
                 let text = text.trim();

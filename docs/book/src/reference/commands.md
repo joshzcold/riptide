@@ -103,6 +103,9 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:download-cancel` |  | Cancel a download (count: its number) |
 | `:download-open` |  | Open a finished download (count: its number) |
 | `:download-clear` |  | Remove finished downloads from the list |
+| `:download-retry` |  | Start a failed or cancelled download again (count: its number) |
+| `:download-remove` |  | Take a download off the list, cancelling it if it runs (count: its number; --all: every finished one) |
+| `:download-delete` |  | Delete a finished download's file and take it off the list (count: its number) |
 | `:downloads` |  | List this session's downloads and their progress |
 | `:quit` | `<Ctrl-q>` `ZQ` `ZZ` | Quit the browser; --save keeps the tabs as the default session |
 | `:hint-follow` |  | Follow the hint with this label, or the match waiting for Return (Return in hint mode) |

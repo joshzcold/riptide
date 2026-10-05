@@ -503,6 +503,45 @@ pub static SETTINGS: &[SettingDef] = &[
         editor_command
     ),
     def!(
+        "fileselect.folder.command",
+        Kind::List,
+        Value::List(vec![
+            "xterm".to_string(),
+            "-e".to_string(),
+            "ranger".to_string(),
+            "--choosedir={}".to_string()
+        ]),
+        "Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to"
+    ),
+    def!(
+        "fileselect.handler",
+        Kind::Enum(&["default", "external"]),
+        s("default"),
+        "File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external)"
+    ),
+    def!(
+        "fileselect.multiple_files.command",
+        Kind::List,
+        Value::List(vec![
+            "xterm".to_string(),
+            "-e".to_string(),
+            "ranger".to_string(),
+            "--choosefiles={}".to_string()
+        ]),
+        "Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line"
+    ),
+    def!(
+        "fileselect.single_file.command",
+        Kind::List,
+        Value::List(vec![
+            "xterm".to_string(),
+            "-e".to_string(),
+            "ranger".to_string(),
+            "--choosefile={}".to_string()
+        ]),
+        "Program that picks a file for fileselect.handler = external; {} is the file it writes the path to"
+    ),
+    def!(
         "hints.auto_follow",
         Kind::Enum(&["always", "unique-match", "full-match", "never"]),
         s("unique-match"),

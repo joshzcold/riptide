@@ -59,6 +59,10 @@ wrap_client! {
             (self.role == Role::Tab).then(crate::dialogs::RtRequestHandler::new)
         }
 
+        fn dialog_handler(&self) -> Option<DialogHandler> {
+            (self.role == Role::Tab).then(crate::fileselect::RtDialogHandler::new)
+        }
+
         fn download_handler(&self) -> Option<DownloadHandler> {
             (self.role == Role::Tab).then(crate::downloads::RtDownloadHandler::new)
         }

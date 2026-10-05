@@ -11,6 +11,7 @@ mod dialogs;
 mod downloads;
 mod eval;
 mod favicons;
+mod fileselect;
 mod greasemonkey;
 mod help;
 mod hints;

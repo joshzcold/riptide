@@ -119,6 +119,18 @@ cat >"$work/frames.html" <<'EOF'
 <iframe style="width:400px;height:200px" srcdoc="<button style='margin:40px' onclick=&quot;parent.document.title = 'inner clicked ' + event.isTrusted&quot;>inside</button>"></iframe>
 EOF
 
+cat >"$work/upload.html" <<'EOF'
+<!doctype html><title>upload</title>
+<input type="file" id="f" style="position:fixed;top:0;left:0;width:300px;height:40px" onchange="document.title = 'picked=' + this.files[0].name">
+EOF
+# A file picker for fileselect.handler = external: it "chooses" chosen.txt.
+printf 'x\n' >"$work/chosen.txt"
+cat >"$work/picker.sh" <<EOF
+#!/bin/sh
+printf '%s\n' "$work/chosen.txt" >"\$1"
+EOF
+chmod +x "$work/picker.sh"
+
 cat >"$work/autofocus.html" <<'EOF'
 <!doctype html><title>autofocus</title><input autofocus>
 EOF
@@ -922,6 +934,23 @@ step ":downloads lists this session's downloads"
 run "downloads"
 expect_title "Downloads"
 run "tab-close"
+
+step ":download-delete deletes the newest finished download's file"
+run "download-delete"
+for _ in $(seq $((TIMEOUT * 10))); do [[ ! -e $work/dl/subdir/via-tab.txt ]] && break; sleep 0.1; done
+[[ ! -e $work/dl/subdir/via-tab.txt && -s $work/dl/saved.txt ]] && pass || fail "via-tab.txt still there, or saved.txt gone too"
+
+step "fileselect.handler = external answers upload fields with a picker program"
+run "set fileselect.handler external"
+run "set fileselect.single_file.command [\"$work/picker.sh\", \"{}\"]"
+run "open file://$work/upload.html"
+expect_title "upload"
+nap 0.3
+hint a
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == picked=* ]] && break; sleep 0.1; done
+picked=$(page_title)
+run "set fileselect.handler default"
+[[ $picked == picked=chosen.txt ]] && pass || fail "title was '$picked'"
 
 step "T picks a tab by title from completion"
 run "open -t file://$work/search.html"
