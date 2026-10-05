@@ -140,6 +140,10 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Alt-Backspace>` | `rl-backward-kill-word` |
+| `<Alt-b>` | `rl-backward-word` |
+| `<Alt-d>` | `rl-kill-word` |
+| `<Alt-f>` | `rl-forward-word` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-C>` | `completion-item-yank --sel` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
@@ -154,6 +158,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-p>` | `command-history-prev` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
 | `<Ctrl-w>` | `rl-rubout` |
+| `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
 | `<Down>` | `command-history-next` |
 | `<End>` | `rl-end-of-line` |
@@ -183,7 +188,11 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Alt-Backspace>` | `rl-backward-kill-word` |
+| `<Alt-b>` | `rl-backward-word` |
+| `<Alt-d>` | `rl-kill-word` |
 | `<Alt-e>` | `prompt-fileselect-external` |
+| `<Alt-f>` | `rl-forward-word` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
 | `<Ctrl-b>` | `rl-backward-char` |
@@ -193,6 +202,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-k>` | `rl-kill-line` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
 | `<Ctrl-w>` | `rl-filename-rubout` |
+| `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
 | `<End>` | `rl-end-of-line` |
 | `<Escape>` | `mode-leave` |
@@ -243,12 +253,15 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 |---|---|
 | `$` | `move-to-end-of-line` |
 | `0` | `move-to-start-of-line` |
+| `<Ctrl-Space>` | `selection-drop` |
 | `<Escape>` | `mode-leave` |
 | `<Return>` | `yank selection` |
 | `<Space>` | `selection-toggle` |
 | `G` | `move-to-end-of-document` |
 | `V` | `selection-toggle --line` |
 | `Y` | `yank -s selection` |
+| `[` | `move-to-start-of-prev-block` |
+| `]` | `move-to-start-of-next-block` |
 | `b` | `move-to-prev-word` |
 | `e` | `move-to-end-of-word` |
 | `gg` | `move-to-start-of-document` |
@@ -260,5 +273,5 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `v` | `selection-toggle` |
 | `w` | `move-to-next-word` |
 | `y` | `yank selection` |
-| `{` | `move-to-prev-block` |
-| `}` | `move-to-next-block` |
+| `{` | `move-to-end-of-prev-block` |
+| `}` | `move-to-end-of-next-block` |

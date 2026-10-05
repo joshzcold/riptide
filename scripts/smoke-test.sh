@@ -135,6 +135,12 @@ cat >"$work/autofocus.html" <<'EOF'
 <!doctype html><title>autofocus</title><input autofocus>
 EOF
 
+cat >"$work/blocks.html" <<'EOF'
+<!doctype html><title>blocks</title>
+<p style="font-size:20px">First block here.</p><p style="font-size:20px">Second block here.</p><p style="font-size:20px">Third block.</p>
+<script>document.addEventListener('selectionchange', () => { const s = String(getSelection()); if (s) document.title = 'sel=' + s; });</script>
+EOF
+
 cat >"$work/links.html" <<'EOF'
 <!doctype html><title>links</title>
 <p><a href="#home" onclick="document.title='clicked home'">Home</a> <a href="#news" onclick="document.title='clicked news'">News</a>
@@ -631,6 +637,19 @@ xdotool key w w v e e
 expect_title "sel=brown fox"
 xdotool key Escape
 wait_mode normal || true
+
+step "caret mode: ] moves to the start of the next block"
+run "open file://$work/blocks.html"
+expect_title "blocks"
+nap 0.3
+xdotool key v
+wait_mode caret || true
+xdotool key bracketright v e
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == sel=* ]] && break; sleep 0.1; done
+block=$(page_title)
+xdotool key Escape
+wait_mode normal || true
+[[ $block == "sel=Second" ]] && pass || fail "selected '$block'"
 
 step "Greasemonkey scripts run at document-start and -end"
 run "open file://$work/gm.html"

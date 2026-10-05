@@ -81,6 +81,17 @@
           modify("forward", "word");
           modify("forward", "word");
           modify("backward", "word");
+        } else if (kind === "start-of-next-block") {
+          modify("forward", "paragraph");
+        } else if (kind === "end-of-next-block") {
+          modify("forward", "paragraph");
+          modify("forward", "paragraphboundary");
+        } else if (kind === "start-of-prev-block") {
+          modify("backward", "paragraphboundary");
+          modify("backward", "paragraph");
+        } else if (kind === "end-of-prev-block") {
+          modify("backward", "paragraph");
+          modify("forward", "paragraphboundary");
         } else {
           modify(direction, granularity);
         }
@@ -101,6 +112,12 @@
       }
       draw();
       return JSON.stringify(selecting);
+    },
+    drop() {
+      const s = sel();
+      if (s.focusNode) s.collapse(s.focusNode, s.focusOffset);
+      draw();
+      return "null";
     },
     reverse() {
       const s = sel();

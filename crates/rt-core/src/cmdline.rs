@@ -5,6 +5,8 @@ use crate::command::Readline;
 pub struct LineEditor {
     text: String,
     cursor: usize,
+    /// What the last kill deleted, for `rl-yank`.
+    killed: String,
 }
 
 impl LineEditor {
@@ -48,11 +50,54 @@ impl LineEditor {
                     self.delete_range(self.cursor, self.cursor + 1);
                 }
             }
-            Readline::UnixLineDiscard => self.delete_range(0, self.cursor),
-            Readline::KillLine => self.delete_range(self.cursor, self.len()),
+            Readline::UnixLineDiscard => self.kill(0, self.cursor),
+            Readline::KillLine => self.kill(self.cursor, self.len()),
             Readline::Rubout => self.rubout(char::is_whitespace),
             Readline::FilenameRubout => self.rubout(|c| c.is_whitespace() || c == '/' || c == '\\'),
+            Readline::BackwardWord => self.cursor = self.word_start(),
+            Readline::ForwardWord => self.cursor = self.word_end(),
+            Readline::KillWord => self.kill(self.cursor, self.word_end()),
+            Readline::BackwardKillWord => self.kill(self.word_start(), self.cursor),
+            Readline::Yank => {
+                for c in self.killed.clone().chars() {
+                    self.insert(c);
+                }
+            }
         }
+    }
+
+    /// Readline words: runs of letters and digits.
+    fn word_start(&self) -> usize {
+        let chars: Vec<char> = self.text.chars().collect();
+        let mut i = self.cursor;
+        while i > 0 && !chars[i - 1].is_alphanumeric() {
+            i -= 1;
+        }
+        while i > 0 && chars[i - 1].is_alphanumeric() {
+            i -= 1;
+        }
+        i
+    }
+
+    fn word_end(&self) -> usize {
+        let chars: Vec<char> = self.text.chars().collect();
+        let mut i = self.cursor;
+        while i < chars.len() && !chars[i].is_alphanumeric() {
+            i += 1;
+        }
+        while i < chars.len() && chars[i].is_alphanumeric() {
+            i += 1;
+        }
+        i
+    }
+
+    /// Delete a range and keep it for `rl-yank`.
+    fn kill(&mut self, start: usize, end: usize) {
+        if start < end {
+            let (a, b) = (self.byte_index(start), self.byte_index(end));
+            self.killed = self.text[a..b].to_string();
+        }
+        self.delete_range(start, end);
     }
 
     /// Delete separators before the cursor, then back to the next separator.
@@ -65,7 +110,7 @@ impl LineEditor {
         while start > 0 && !is_separator(chars[start - 1]) {
             start -= 1;
         }
-        self.delete_range(start, self.cursor);
+        self.kill(start, self.cursor);
     }
 
     fn len(&self) -> usize {
@@ -210,5 +255,27 @@ mod tests {
         assert_eq!(h.newer().as_deref(), Some(":open b"));
         assert_eq!(h.newer().as_deref(), Some(":open"));
         assert_eq!(h.newer(), None);
+    }
+
+    #[test]
+    fn words_and_yank() {
+        let mut e = LineEditor::default();
+        e.set("open -t foo-bar baz");
+        e.apply(Readline::BackwardWord);
+        assert_eq!(e.cursor(), 16);
+        e.apply(Readline::BackwardWord);
+        assert_eq!(e.cursor(), 12, "a hyphen ends a word");
+        e.apply(Readline::KillWord);
+        assert_eq!(e.text(), "open -t foo- baz");
+        e.apply(Readline::BeginningOfLine);
+        e.apply(Readline::ForwardWord);
+        assert_eq!(e.cursor(), 4);
+        e.apply(Readline::Yank);
+        assert_eq!(e.text(), "openbar -t foo- baz");
+        e.apply(Readline::EndOfLine);
+        e.apply(Readline::BackwardKillWord);
+        assert_eq!(e.text(), "openbar -t foo- ");
+        e.apply(Readline::Yank);
+        assert_eq!(e.text(), "openbar -t foo- baz");
     }
 }

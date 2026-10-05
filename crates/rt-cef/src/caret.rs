@@ -2,7 +2,6 @@
 //! `js/caret.js`, and yanks the selection.
 
 use rt_core::Command;
-use rt_core::command::CaretMove;
 use rt_core::engine::Level;
 
 use crate::{clipboard, eval, shell};
@@ -38,11 +37,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     match command {
         Command::CaretMove(movement) => {
             let (direction, granularity) = movement.js();
-            let kind = if *movement == CaretMove::NextWord {
-                "next-word"
-            } else {
-                ""
-            };
+            let kind = movement.kind();
             let count = count.unwrap_or(1).clamp(1, 10_000);
             call(
                 &format!("move('{direction}', '{granularity}', {count}, '{kind}')"),
@@ -51,6 +46,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         }
         Command::SelectionToggle { line } => call(&format!("toggle({line})"), |_| {}),
         Command::SelectionReverse => call("reverse()", |_| {}),
+        Command::SelectionDrop => call("drop()", |_| {}),
         _ => return false,
     }
     true

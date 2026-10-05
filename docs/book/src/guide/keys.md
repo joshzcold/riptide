@@ -57,7 +57,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Ctrl-a` / `Ctrl-x` | `navigate increment` / `decrement`: change the last number in the URL (`page/9` → `page/10`) |
 | `Return` / `Ctrl-Return` | `selection-follow`: follow the link a search found (or the focused link) here / in a new tab; otherwise the page gets the key |
 | `/` `?` then `n` `N` | Find text in the page forward / backward, then go to the next / previous match. Matches highlight as you type (`search.incremental`); case is ignored unless the text has a capital (`search.ignore_case`). `:search` with no text clears it. |
-| `v` / `V` | Caret mode: move with `h` `j` `k` `l` `w` `b` `e` `0` `$` `{` `}` `gg` `G`, select with `v` (or `V` for lines), swap the ends with `o`, yank with `y` (`Y`: to the primary selection), leave with `Escape` |
+| `v` / `V` | Caret mode: move with `h` `j` `k` `l` `w` `b` `e` `0` `$` `gg` `G`, and between blocks with `[` `]` (start of the previous/next) and `{` `}` (end of the previous/next). Select with `v` (or `V` for lines), drop the selection with `Ctrl-Space`, swap the ends with `o`, yank with `y` (`Y`: to the primary selection), leave with `Escape` |
 | `qa` … `q` / `@a` | Record a macro into register `a` / replay it (`@@` repeats the last one, `3@a` runs it three times). Keys typed into pages are replayed too. |
 | `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
@@ -131,7 +131,7 @@ keyhint.blacklist = ["<Ctrl-x>*", "g$"]
 
 In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from quickmarks, bookmarks and history (every typed word must match, in any order). `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
-The command line supports readline keys (`Ctrl-a/e/u/k/w/h`, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
+The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 
 To clean up what completion offers, select an entry with `Tab` and press `Ctrl-d` (`:completion-item-del`). It deletes history entries, quickmarks, bookmarks and sessions, and closes tabs listed by `T`. `Ctrl-c` (`:completion-item-yank`) copies the selected entry, and `Ctrl-Shift-c` copies it to the primary selection.
 

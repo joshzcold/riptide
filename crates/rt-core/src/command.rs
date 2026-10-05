@@ -35,6 +35,12 @@ pub enum Readline {
     Rubout,
     /// Delete back to the previous path separator, for file prompts.
     FilenameRubout,
+    BackwardWord,
+    ForwardWord,
+    KillWord,
+    BackwardKillWord,
+    /// Paste the text the last kill deleted.
+    Yank,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,10 +96,14 @@ pub enum CaretMove {
     EndOfDocument,
     PrevParagraph,
     NextParagraph,
+    StartOfNextBlock,
+    EndOfNextBlock,
+    StartOfPrevBlock,
+    EndOfPrevBlock,
 }
 
 impl CaretMove {
-    pub const ALL: [(&'static str, CaretMove); 13] = [
+    pub const ALL: [(&'static str, CaretMove); 17] = [
         ("move-to-next-char", CaretMove::NextChar),
         ("move-to-prev-char", CaretMove::PrevChar),
         ("move-to-next-line", CaretMove::NextLine),
@@ -107,6 +117,10 @@ impl CaretMove {
         ("move-to-end-of-document", CaretMove::EndOfDocument),
         ("move-to-prev-block", CaretMove::PrevParagraph),
         ("move-to-next-block", CaretMove::NextParagraph),
+        ("move-to-start-of-next-block", CaretMove::StartOfNextBlock),
+        ("move-to-end-of-next-block", CaretMove::EndOfNextBlock),
+        ("move-to-start-of-prev-block", CaretMove::StartOfPrevBlock),
+        ("move-to-end-of-prev-block", CaretMove::EndOfPrevBlock),
     ];
 
     /// The `Selection.modify` direction and granularity for this move.
@@ -124,6 +138,20 @@ impl CaretMove {
             CaretMove::EndOfDocument => ("forward", "documentboundary"),
             CaretMove::PrevParagraph => ("backward", "paragraph"),
             CaretMove::NextParagraph => ("forward", "paragraph"),
+            CaretMove::StartOfNextBlock | CaretMove::EndOfNextBlock => ("forward", "paragraph"),
+            CaretMove::StartOfPrevBlock | CaretMove::EndOfPrevBlock => ("backward", "paragraph"),
+        }
+    }
+
+    /// Moves `caret.js` composes from several steps.
+    pub fn kind(self) -> &'static str {
+        match self {
+            CaretMove::NextWord => "next-word",
+            CaretMove::StartOfNextBlock => "start-of-next-block",
+            CaretMove::EndOfNextBlock => "end-of-next-block",
+            CaretMove::StartOfPrevBlock => "start-of-prev-block",
+            CaretMove::EndOfPrevBlock => "end-of-prev-block",
+            _ => "",
         }
     }
 }
@@ -499,6 +527,8 @@ pub enum Command {
     },
     /// Swap the selection's anchor and focus.
     SelectionReverse,
+    /// Collapse the selection to the caret, staying in selection mode.
+    SelectionDrop,
     /// Start recording keys into `register`, or stop when already recording.
     MacroRecord {
         register: Option<char>,
@@ -852,6 +882,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     hidden("move-to-next-word", "Move the caret (caret mode)"),
     hidden("move-to-prev-word", "Move the caret (caret mode)"),
     hidden("move-to-end-of-word", "Move the caret (caret mode)"),
+    hidden("move-to-start-of-next-block", "Move the caret (caret mode)"),
+    hidden("move-to-end-of-next-block", "Move the caret (caret mode)"),
+    hidden("move-to-start-of-prev-block", "Move the caret (caret mode)"),
+    hidden("move-to-end-of-prev-block", "Move the caret (caret mode)"),
+    hidden(
+        "selection-drop",
+        "Drop the selection, staying in selection mode (caret mode)",
+    ),
     hidden("move-to-start-of-line", "Move the caret (caret mode)"),
     hidden("move-to-end-of-line", "Move the caret (caret mode)"),
     hidden("move-to-start-of-document", "Move the caret (caret mode)"),
@@ -938,6 +976,17 @@ pub const COMMANDS: &[CommandSpec] = &[
         "rl-filename-rubout",
         "Delete the path component before the cursor",
     ),
+    hidden("rl-backward-word", "Move cursor to the start of the word"),
+    hidden("rl-forward-word", "Move cursor past the end of the word"),
+    hidden(
+        "rl-kill-word",
+        "Delete from the cursor to the end of the word",
+    ),
+    hidden(
+        "rl-backward-kill-word",
+        "Delete from the start of the word to the cursor",
+    ),
+    hidden("rl-yank", "Paste the text the last delete removed"),
 ];
 
 /// Parse a full command line, which may chain commands with `;;`.
@@ -1520,6 +1569,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             line: args.flag(&["-l", "--line"]).is_some(),
         },
         "selection-reverse" => Command::SelectionReverse,
+        "selection-drop" => Command::SelectionDrop,
         name if name.starts_with("move-to-")
             && let Some((_, m)) = CaretMove::ALL.iter().find(|(n, _)| *n == name) =>
         {
@@ -1615,6 +1665,11 @@ fn parse_readline(name: &str) -> Option<Readline> {
         "kill-line" => Readline::KillLine,
         "rubout" => Readline::Rubout,
         "filename-rubout" => Readline::FilenameRubout,
+        "backward-word" => Readline::BackwardWord,
+        "forward-word" => Readline::ForwardWord,
+        "kill-word" => Readline::KillWord,
+        "backward-kill-word" => Readline::BackwardKillWord,
+        "yank" => Readline::Yank,
         _ => return None,
     })
 }

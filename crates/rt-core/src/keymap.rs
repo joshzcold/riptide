@@ -321,8 +321,11 @@ const CARET_DEFAULTS: &[(&str, &str)] = &[
     ("$", "move-to-end-of-line"),
     ("gg", "move-to-start-of-document"),
     ("G", "move-to-end-of-document"),
-    ("{", "move-to-prev-block"),
-    ("}", "move-to-next-block"),
+    ("[", "move-to-start-of-prev-block"),
+    ("]", "move-to-start-of-next-block"),
+    ("{", "move-to-end-of-prev-block"),
+    ("}", "move-to-end-of-next-block"),
+    ("<Ctrl-Space>", "selection-drop"),
     ("v", "selection-toggle"),
     ("<Space>", "selection-toggle"),
     ("V", "selection-toggle --line"),
@@ -359,6 +362,11 @@ const COMMAND_DEFAULTS: &[(&str, &str)] = &[
     ("<Ctrl-u>", "rl-unix-line-discard"),
     ("<Ctrl-k>", "rl-kill-line"),
     ("<Ctrl-w>", "rl-rubout"),
+    ("<Alt-b>", "rl-backward-word"),
+    ("<Alt-f>", "rl-forward-word"),
+    ("<Alt-d>", "rl-kill-word"),
+    ("<Alt-Backspace>", "rl-backward-kill-word"),
+    ("<Ctrl-y>", "rl-yank"),
 ];
 
 #[cfg(test)]

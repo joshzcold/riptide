@@ -697,9 +697,9 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `session.default_name`, `:save`, `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
 - **Tools:**
   - ✅ Tier 1 (2026-10-05): `:screenshot [--force] file`, through the DevTools protocol (`send_dev_tools_message` with `Page.captureScreenshot` and a `DevToolsMessageObserver`), which needs no Views API or DevTools window. The format follows the file extension (png, jpeg, webp). A smoke step checks the PNG signature.
-  - `:restart` (save the session, then re-exec), `:report`, `debug-keytester`, `debug-dump-page`, `debug-log-filter`, `debug-clear-ssl-errors`, `devtools-focus`, `selection-drop`.
+  - `:restart` (save the session, then re-exec), `:report`, `debug-keytester`, `debug-dump-page`, `debug-log-filter`, `debug-clear-ssl-errors`, `devtools-focus`.
   - Bookmarks and quickmarks: `bookmark-list`, `quickmark-save`, `bookmarks-reload`, `quickmarks-reload`.
-  - Missing readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word`, `rl-yank`, and the `move-to-*-block` set.
+  - ✅ (2026-10-05) Readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word` and `rl-yank` (with a kill buffer), the `move-to-{start,end}-of-{next,prev}-block` set on `[` `]` `{` `}` as in qutebrowser, and `selection-drop` (`Ctrl-Space`).
 - **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, 15 of qutebrowser's 17 `QUTE_*` variables with `QUTE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
   - ✅ **Environment** (2026-10-05): `QUTE_CURRENT_URL` (the page's URL when `QUTE_URL` is a hinted link), `QUTE_SELECTED_HTML`, and `RIPTIDE_*` copies of every variable.
   - ✅ **qutebrowser's bundled userscripts** (tier 1, 2026-10-05):
