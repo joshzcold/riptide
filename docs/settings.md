@@ -9,6 +9,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `aliases` | table<string, string> | `{"q":"quit","qa":"quit","wq":"quit --save"}` | Command aliases: name → command |
 | `auto_save.interval` | integer | `15000` | Milliseconds between crash-recovery saves of the open tabs (0 turns them off) |
 | `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
+| `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
 | `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode (takes effect after a restart) |
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
 | `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
@@ -34,6 +35,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `input.forward_unbound_keys` | all \| auto \| none | `auto` | Pass unbound keys to the page in normal mode (auto: all but plain letters and digits) |
 | `input.insert_mode.auto_enter` | boolean | `true` | Enter insert mode when an editable element gets focus |
 | `input.insert_mode.auto_leave` | boolean | `true` | Leave insert mode when focus leaves an editable element |
+| `input.insert_mode.auto_load` | boolean | `false` | Enter insert mode when a page focuses a text field by itself, as autofocus does on load |
 | `input.insert_mode.leave_on_load` | boolean | `true` | Leave insert mode when a new page starts loading |
 | `keyhint.blacklist` | string[] | `[]` | Key chains the key hint popup leaves out, as globs on the whole chain (e.g. g* for every chain starting with g) |
 | `keyhint.delay` | integer | `500` | How long after a partial key chain the popup listing its continuations appears, in milliseconds |

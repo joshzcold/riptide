@@ -665,12 +665,29 @@ impl Engine {
     }
 
     pub fn handle_key(&mut self, key: Key) -> KeyOutcome {
+        let key = self.map_key(key);
         if self.macros.replaying == 0
             && let Some((_, keys)) = &mut self.macros.recording
         {
             keys.push(key);
         }
         self.dispatch_key(key)
+    }
+
+    /// `bindings.key_mappings`: the key this one stands for.
+    fn map_key(&self, key: Key) -> Key {
+        let Some(mappings) = self.settings.map("bindings.key_mappings") else {
+            return key;
+        };
+        let single = |s: &str| match Key::parse_sequence(s).as_deref() {
+            Ok([k]) => Some(*k),
+            _ => None,
+        };
+        mappings
+            .iter()
+            .find(|(from, _)| single(from) == Some(key))
+            .and_then(|(_, to)| single(to))
+            .unwrap_or(key)
     }
 
     fn dispatch_key(&mut self, key: Key) -> KeyOutcome {
@@ -2231,6 +2248,31 @@ mod tests {
         .unwrap();
         press(&mut e, "g");
         assert!(e.keyhints().is_none(), "every g chain is blacklisted");
+    }
+
+    #[test]
+    fn key_mappings_apply_in_every_mode() {
+        let mut e = engine();
+        press(&mut e, "i");
+        assert_eq!(e.mode(), Mode::Insert);
+        press(&mut e, "<Ctrl-[>");
+        assert_eq!(e.mode(), Mode::Normal, "Ctrl-[ is Escape");
+        press(&mut e, ":open x");
+        let out = press(&mut e, "<Ctrl-m>");
+        assert_eq!(e.mode(), Mode::Normal, "Ctrl-m is Return");
+        assert!(!runs(&out).is_empty());
+        e.apply_config(&ConfigOp::Set {
+            name: "bindings.key_mappings".into(),
+            value: Value::Map([("x".to_string(), "j".to_string())].into()),
+        })
+        .unwrap();
+        assert_eq!(runs(&press(&mut e, "x")), runs(&press(&mut e, "j")));
+        assert!(
+            settings::find("bindings.key_mappings")
+                .unwrap()
+                .from_json(&serde_json::json!({"ab": "c"}))
+                .is_err()
+        );
     }
 
     #[test]

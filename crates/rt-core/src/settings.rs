@@ -249,6 +249,22 @@ fn statusbar_widgets(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+fn key_mappings(value: &Value) -> Result<(), String> {
+    let Value::Map(map) = value else {
+        return Ok(());
+    };
+    for (from, to) in map {
+        for keys in [from, to] {
+            match crate::key::Key::parse_sequence(keys) {
+                Ok(parsed) if parsed.len() == 1 => {}
+                Ok(_) => return Err(format!("{keys:?} must be a single key")),
+                Err(e) => return Err(format!("{keys:?}: {e}")),
+            }
+        }
+    }
+    Ok(())
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -300,6 +316,20 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(false),
         "Save the open tabs as the 'default' session on quit, and restore them at startup"
+    ),
+    def!(
+        "bindings.key_mappings",
+        Kind::Map,
+        map(&[
+            ("<Ctrl-[>", "<Escape>"),
+            ("<Ctrl-6>", "<Ctrl-^>"),
+            ("<Ctrl-m>", "<Return>"),
+            ("<Ctrl-j>", "<Return>"),
+            ("<Ctrl-i>", "<Tab>"),
+            ("<Shift-Return>", "<Return>"),
+        ]),
+        "Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape",
+        key_mappings
     ),
     def!(
         "colors.webpage.darkmode.enabled",
@@ -465,6 +495,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Leave insert mode when focus leaves an editable element"
+    ),
+    def!(
+        "input.insert_mode.auto_load",
+        Kind::Bool,
+        Value::Bool(false),
+        "Enter insert mode when a page focuses a text field by itself, as autofocus does on load"
     ),
     def!(
         "input.insert_mode.leave_on_load",

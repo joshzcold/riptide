@@ -112,10 +112,14 @@ wrap_client! {
             if self.role != Role::Tab || name != FOCUS_MESSAGE {
                 return 0;
             }
-            let editable = message.argument_list().is_some_and(|args| args.bool(0) != 0);
+            let args = message.argument_list();
+            let editable = args.as_ref().is_some_and(|a| a.bool(0) != 0);
+            let user = args.as_ref().is_none_or(|a| a.bool(1) != 0);
             // Background tabs can move focus too; only the visible one drives the mode.
+            // Focus the page moved by itself (autofocus) counts only with auto_load.
             let effects = shell::with_tab(browser, |s, _, current| {
-                if current { s.engine.focus_changed(editable) } else { Vec::new() }
+                let by_page = editable && !user && !s.engine.settings().bool("input.insert_mode.auto_load");
+                if current && !by_page { s.engine.focus_changed(editable) } else { Vec::new() }
             });
             if let Some(effects) = effects {
                 shell::apply(effects);

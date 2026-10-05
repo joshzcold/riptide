@@ -5,7 +5,9 @@ use std::cell::RefCell;
 use cef::*;
 use rt_config::greasemonkey::{RunAt, Script};
 
-/// Renderer → browser: focus moved; argument 0 is whether the new node is editable.
+/// Renderer → browser: focus moved. Argument 0 is whether the new node is
+/// editable, argument 1 whether a click or key just happened (rather than the
+/// page moving focus by itself, as autofocus does).
 pub const FOCUS_MESSAGE: &str = "rt.focus";
 /// Browser → renderer: evaluate argument 1 (code) in the frame; argument 0 is a request id.
 pub const EVAL_MESSAGE: &str = "rt.eval";
@@ -148,11 +150,14 @@ wrap_render_process_handler! {
             let editable = node.is_some_and(|n| n.is_editable() != 0);
             let frame = frame.map(|f| f.clone()).or_else(|| browser?.main_frame());
             let Some(frame) = frame else { return };
+            let user = !editable
+                || eval(&frame, &CefString::from(USER_ACTIVATION_JS)).as_deref() == Ok("true");
             let Some(mut message) = process_message_create(Some(&CefString::from(FOCUS_MESSAGE))) else {
                 return;
             };
             if let Some(args) = message.argument_list() {
                 args.set_bool(0, editable.into());
+                args.set_bool(1, user.into());
             }
             frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
         }
@@ -223,6 +228,8 @@ wrap_v8_handler! {
         }
     }
 }
+
+const USER_ACTIVATION_JS: &str = "String(!!navigator.userActivation?.isActive)";
 
 /// Evaluate `code` in the frame's main world. Replies come from this Rust code,
 /// not from page JavaScript, so a page cannot forge them.

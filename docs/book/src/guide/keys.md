@@ -70,6 +70,21 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
+## Insert mode and key mappings
+
+Clicking into a text field enters insert mode (`input.insert_mode.auto_enter`), and loading a new page leaves it (`input.insert_mode.leave_on_load`). A field the page focuses by itself, like a search box with `autofocus`, doesn't take insert mode unless you set `input.insert_mode.auto_load = true`. Your keys keep working in normal mode until you click or press `i`.
+
+`bindings.key_mappings` treats one key as another in every mode, before bindings are looked up. By default `Ctrl-[` is `Escape`, `Ctrl-m` and `Ctrl-j` are `Return`, `Ctrl-i` is `Tab` and `Ctrl-6` is `Ctrl-^`. To add your own, include the defaults you want to keep:
+
+```toml
+[bindings.key_mappings]
+"<Ctrl-[>" = "<Escape>"
+"<Ctrl-m>" = "<Return>"
+"<Ctrl-g>" = "<Escape>"
+```
+
+The mouse's back and forward buttons go back and forward.
+
 ## Hints
 
 `:hint [group] [target]` labels elements and acts on the one you pick. `f` is `:hint`, and `;y` is `:hint links yank`. The groups come from `hints.selectors`:

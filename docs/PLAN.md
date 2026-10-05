@@ -676,7 +676,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - Everything else: the PDF viewer (`content.pdfjs`), `content.prefers_reduced_motion`, `content.register_protocol_handler`, `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
   - `content.user_stylesheets` is part of M20.
 - **Input:**
-  - Tier 1: `input.insert_mode.auto_load`, `input.mouse.back_forward_buttons`, `bindings.key_mappings` (e.g. `<Ctrl-[>` → `<Escape>`).
+  - ✅ Tier 1 (2026-10-05):
+    - `bindings.key_mappings` (qutebrowser's defaults, applied in every mode before bindings).
+    - `input.insert_mode.auto_load`: the renderer now reports `navigator.userActivation` with each focus change, so a field the page focuses by itself no longer takes insert mode unless this is on.
+    - The mouse's back and forward buttons already work in Alloy windows (checked with X11 buttons 8 and 9). A setting to turn them off would need a page hook, so it isn't planned.
   - `input.partial_timeout`, `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`, `input.match_counts`, `input.mode_override`.
 - **Scrolling, search, zoom:** `scrolling.smooth`, `scrolling.bar`, `search.wrap`, `search.wrap_messages`, `zoom.levels`, `zoom.mouse_divider` (Ctrl+wheel), `zoom.text_only`.
 - **Sessions and window:**

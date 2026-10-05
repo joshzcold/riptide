@@ -117,6 +117,10 @@ cat >"$work/frames.html" <<'EOF'
 <iframe style="width:400px;height:200px" srcdoc="<button style='margin:40px' onclick=&quot;parent.document.title = 'inner clicked ' + event.isTrusted&quot;>inside</button>"></iframe>
 EOF
 
+cat >"$work/autofocus.html" <<'EOF'
+<!doctype html><title>autofocus</title><input autofocus>
+EOF
+
 cat >"$work/links.html" <<'EOF'
 <!doctype html><title>links</title>
 <p><a href="#home" onclick="document.title='clicked home'">Home</a> <a href="#news" onclick="document.title='clicked news'">News</a>
@@ -760,6 +764,20 @@ wait_mode command || true
 xdotool type --delay 20 "open draft"
 xdotool key ctrl+x
 expect_title "second"
+
+step "a field the page focuses on load doesn't take insert mode unless auto_load is on"
+run "open file://$work/autofocus.html"
+expect_title "autofocus"
+nap 0.5
+stayed=$(mode)
+run "set input.insert_mode.auto_load true"
+run "reload"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(mode) == insert ]] && break; sleep 0.1; done
+entered=$(mode)
+xdotool key Escape
+wait_mode normal || true
+run "set input.insert_mode.auto_load false"
+[[ $stayed == normal && $entered == insert ]] && pass || fail "default '$stayed', with auto_load '$entered'"
 
 step ":messages lists this session's messages"
 run "messages"
