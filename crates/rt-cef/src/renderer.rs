@@ -38,39 +38,41 @@ thread_local! {
 
 fn set_scripts(json: &str) {
     match serde_json::from_str::<Scripts>(json) {
-        Ok(Scripts {
-            generation,
-            scripts,
-        }) => SCRIPTS.with(|s| {
-            let mut s = s.borrow_mut();
-            // CEF hands a browser's original `extra_info` over again on
-            // reload, so keep a newer list from `:greasemonkey-reload`.
-            if generation >= s.0 {
-                *s = (generation, scripts);
-            }
-        }),
+        Ok(scripts) => SCRIPTS.with(|s| apply_scripts(&mut s.borrow_mut(), scripts)),
         Err(e) => tracing::warn!("bad greasemonkey scripts from the browser: {e}"),
+    }
+}
+
+/// CEF hands a browser's original `extra_info` over again on reload, so an
+/// older list never replaces a newer one from `:greasemonkey-reload`.
+fn apply_scripts(state: &mut (u64, Vec<Script>), update: Scripts) {
+    if update.generation >= state.0 {
+        *state = (update.generation, update.scripts);
     }
 }
 
 /// A script's stored values changed in another page.
 fn set_values(json: &str) {
-    #[derive(serde::Deserialize)]
-    struct Update {
-        generation: u64,
-        script: String,
-        values: serde_json::Map<String, serde_json::Value>,
-    }
-    let Ok(update) = serde_json::from_str::<Update>(json) else {
+    let Ok(update) = serde_json::from_str::<ValuesUpdate>(json) else {
         return;
     };
-    SCRIPTS.with(|s| {
-        let mut s = s.borrow_mut();
-        s.0 = s.0.max(update.generation);
-        if let Some(script) = s.1.iter_mut().find(|s| s.name == update.script) {
-            script.values = update.values;
-        }
-    });
+    SCRIPTS.with(|s| apply_values(&mut s.borrow_mut(), update));
+}
+
+#[derive(serde::Deserialize)]
+struct ValuesUpdate {
+    generation: u64,
+    script: String,
+    values: serde_json::Map<String, serde_json::Value>,
+}
+
+/// New values for one script. The generation moves forward, so the stale list
+/// a reload brings back can't overwrite them.
+fn apply_values(state: &mut (u64, Vec<Script>), update: ValuesUpdate) {
+    state.0 = state.0.max(update.generation);
+    if let Some(script) = state.1.iter_mut().find(|s| s.name == update.script) {
+        script.values = update.values;
+    }
 }
 
 /// Run the Greasemonkey scripts for this frame. `document-start` scripts run
@@ -361,4 +363,64 @@ fn send_result(frame: &Frame, id: i32, result: Result<String, String>) {
         args.set_string(2, Some(&CefString::from(text)));
     }
     frame.send_process_message(ProcessId::BROWSER, Some(&mut reply));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn script(name: &str) -> Script {
+        Script {
+            name: name.into(),
+            ..Script::default()
+        }
+    }
+
+    #[test]
+    fn an_older_script_list_never_replaces_a_newer_one() {
+        let mut state = (2, vec![script("new")]);
+        apply_scripts(
+            &mut state,
+            Scripts {
+                generation: 1,
+                scripts: vec![script("old")],
+            },
+        );
+        assert_eq!(state.1[0].name, "new");
+        apply_scripts(
+            &mut state,
+            Scripts {
+                generation: 3,
+                scripts: vec![script("newer")],
+            },
+        );
+        assert_eq!((state.0, state.1[0].name.as_str()), (3, "newer"));
+    }
+
+    #[test]
+    fn values_update_their_script_and_move_the_generation_on() {
+        let mut state = (1, vec![script("a"), script("b")]);
+        let values: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(r#"{"n": 2}"#).unwrap();
+        apply_values(
+            &mut state,
+            ValuesUpdate {
+                generation: 5,
+                script: "b".into(),
+                values: values.clone(),
+            },
+        );
+        assert_eq!(state.0, 5);
+        assert!(state.1[0].values.is_empty());
+        assert_eq!(state.1[1].values, values);
+        // A reload's original list (generation 1) is now ignored.
+        apply_scripts(
+            &mut state,
+            Scripts {
+                generation: 1,
+                scripts: vec![script("b")],
+            },
+        );
+        assert_eq!(state.1[1].values, values);
+    }
 }

@@ -72,21 +72,31 @@ pub fn running_count() -> usize {
 
 pub fn summary() -> String {
     DOWNLOADS.with(|d| {
-        let d = d.borrow();
-        let running: Vec<&Download> = d.iter().filter(|d| d.state == State::Running).collect();
-        if running.is_empty() {
-            return String::new();
-        }
-        let known: Vec<i32> = running.iter().filter_map(|d| d.percent).collect();
-        match known.is_empty() {
-            true => format!("↓{}", running.len()),
-            false => format!(
-                "↓{} {}%",
-                running.len(),
-                known.iter().sum::<i32>() / known.len() as i32
-            ),
-        }
+        let running: Vec<Option<i32>> = d
+            .borrow()
+            .iter()
+            .filter(|d| d.state == State::Running)
+            .map(|d| d.percent)
+            .collect();
+        summary_of(&running)
     })
+}
+
+/// `↓count` and the average of the known percentages, from the running
+/// downloads' progress; empty when nothing is running.
+fn summary_of(running: &[Option<i32>]) -> String {
+    if running.is_empty() {
+        return String::new();
+    }
+    let known: Vec<i32> = running.iter().flatten().copied().collect();
+    if known.is_empty() {
+        return format!("↓{}", running.len());
+    }
+    format!(
+        "↓{} {}%",
+        running.len(),
+        known.iter().sum::<i32>() / known.len() as i32
+    )
 }
 
 /// Start the download at `path`, confirming before overwriting a file.
@@ -553,6 +563,14 @@ mod tests {
             pick_from(&all, Some(0), &[Running], "running"),
             Err("There's no download 0".into())
         );
+    }
+
+    #[test]
+    fn the_summary_counts_running_downloads_and_averages_known_progress() {
+        assert_eq!(summary_of(&[]), "");
+        assert_eq!(summary_of(&[None, None]), "↓2");
+        assert_eq!(summary_of(&[Some(40), None, Some(60)]), "↓3 50%");
+        assert_eq!(summary_of(&[Some(41)]), "↓1 41%");
     }
 
     #[test]

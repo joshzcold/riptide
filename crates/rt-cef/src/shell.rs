@@ -688,21 +688,14 @@ pub fn current_session() -> rt_storage::Session {
                 .into_iter()
                 .map(|i| &s.windows[i])
                 .filter(|w| !w.private && w.window.is_some())
-                .map(|w| rt_storage::WindowState {
-                    active: w.tabs.current_index(),
-                    tabs: w
+                .filter_map(|w| {
+                    let tabs = w
                         .tabs
                         .iter()
                         .enumerate()
-                        .filter(|(_, t)| !t.url.is_empty())
-                        .map(|(i, t)| rt_storage::TabState {
-                            url: t.url.clone(),
-                            title: t.title.clone(),
-                            pinned: w.tabs.is_pinned(i),
-                        })
-                        .collect(),
+                        .map(|(i, t)| (t.url.as_str(), t.title.as_str(), w.tabs.is_pinned(i)));
+                    rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())
                 })
-                .filter(|w| !w.tabs.is_empty())
                 .collect(),
         }
     })

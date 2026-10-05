@@ -27,6 +27,33 @@ pub struct TabState {
     pub pinned: bool,
 }
 
+impl WindowState {
+    /// A window's tabs as `(url, title, pinned)`, with `current` the index of
+    /// the current one. Tabs without a URL yet (a popup still opening) are left
+    /// out, and `active` still points at the same tab. `None` if none are left.
+    pub fn from_tabs<'a>(
+        tabs: impl IntoIterator<Item = (&'a str, &'a str, bool)>,
+        current: usize,
+    ) -> Option<Self> {
+        let mut active = 0;
+        let mut kept = Vec::new();
+        for (i, (url, title, pinned)) in tabs.into_iter().enumerate() {
+            if url.is_empty() {
+                continue;
+            }
+            if i <= current {
+                active = kept.len();
+            }
+            kept.push(TabState {
+                url: url.to_string(),
+                title: title.to_string(),
+                pinned,
+            });
+        }
+        (!kept.is_empty()).then_some(Self { active, tabs: kept })
+    }
+}
+
 pub struct Sessions {
     dir: PathBuf,
 }
@@ -109,6 +136,35 @@ impl Sessions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn from_tabs_keeps_the_current_tab_when_earlier_ones_are_dropped() {
+        let tabs = [
+            ("a", "A", true),
+            ("", "", false),
+            ("c", "C", false),
+            ("d", "D", false),
+        ];
+        let window = WindowState::from_tabs(tabs, 2).unwrap();
+        let urls: Vec<&str> = window.tabs.iter().map(|t| t.url.as_str()).collect();
+        assert_eq!(urls, ["a", "c", "d"]);
+        assert_eq!(window.tabs[window.active].url, "c");
+        assert!(window.tabs[0].pinned);
+    }
+
+    #[test]
+    fn from_tabs_picks_the_nearest_earlier_tab_when_the_current_one_has_no_url() {
+        let tabs = [("a", "A", false), ("b", "B", false), ("", "", false)];
+        let window = WindowState::from_tabs(tabs, 2).unwrap();
+        assert_eq!(window.tabs[window.active].url, "b");
+        assert_eq!(WindowState::from_tabs([("", "", false)], 0), None);
+        assert_eq!(
+            WindowState::from_tabs([("", "", false), ("b", "B", false)], 0)
+                .unwrap()
+                .active,
+            0
+        );
+    }
 
     #[test]
     fn save_load_list_delete() {

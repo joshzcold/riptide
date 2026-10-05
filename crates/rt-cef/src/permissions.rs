@@ -18,6 +18,7 @@ thread_local! {
 }
 
 /// How a request ended.
+#[derive(Debug, PartialEq, Eq)]
 enum Outcome {
     Allow,
     /// The user chose to block (Chromium saves this for permission prompts).
@@ -73,27 +74,13 @@ fn resolve(
         message,
         kind,
         move |answer| {
-            let outcome = match answer {
-                PromptAnswer::Yes { remember } => {
-                    if remember {
-                        if !site {
-                            REMEMBERED
-                                .with(|r| r.borrow_mut().remember(&origin, bits, features, true));
-                        }
-                        save_for_site(&origin, bits, features, true);
-                    }
-                    Outcome::Allow
+            let (outcome, saved) = answer_outcome(&answer);
+            if let Some(allow) = saved {
+                if !site {
+                    REMEMBERED.with(|r| r.borrow_mut().remember(&origin, bits, features, allow));
                 }
-                PromptAnswer::No { remember: true } => {
-                    if !site {
-                        REMEMBERED
-                            .with(|r| r.borrow_mut().remember(&origin, bits, features, false));
-                    }
-                    save_for_site(&origin, bits, features, false);
-                    Outcome::Block
-                }
-                _ => Outcome::NotNow,
-            };
+                save_for_site(&origin, bits, features, allow);
+            }
             done(outcome);
         },
     );
@@ -103,14 +90,8 @@ fn resolve(
 /// An "always" answer becomes a per-site setting in `autoconfig.toml`, as in
 /// qutebrowser, so it survives restarts and can be changed with `:set -u`.
 fn save_for_site(origin: &str, bits: u32, features: &[Feature], allow: bool) {
-    let pattern = origin.trim_end_matches('/').to_string();
+    let (pattern, names) = site_settings(origin, bits, features);
     let value = rt_core::settings::Value::Str(allow.to_string());
-    let mut names: Vec<&str> = features
-        .iter()
-        .filter(|f| bits & f.bit != 0)
-        .filter_map(|f| f.setting)
-        .collect();
-    names.dedup();
     for name in names {
         let op = rt_core::config::ConfigOp::SetFor {
             pattern: pattern.clone(),
@@ -121,6 +102,31 @@ fn save_for_site(origin: &str, bits: u32, features: &[Feature], allow: bool) {
             shell::apply(vec![rt_core::Effect::ConfigChanged(op)]);
         }
     }
+}
+
+/// What an answer does, and whether it's kept ("always"): `Some(allow)`.
+fn answer_outcome(answer: &PromptAnswer) -> (Outcome, Option<bool>) {
+    match answer {
+        PromptAnswer::Yes { remember } => (Outcome::Allow, remember.then_some(true)),
+        PromptAnswer::No { remember: true } => (Outcome::Block, Some(false)),
+        _ => (Outcome::NotNow, None),
+    }
+}
+
+/// The `per_domain` pattern and the settings an "always" answer for the
+/// requested `bits` is saved as, each once.
+fn site_settings(origin: &str, bits: u32, features: &[Feature]) -> (String, Vec<&'static str>) {
+    let mut names: Vec<&'static str> = Vec::new();
+    for name in features
+        .iter()
+        .filter(|f| bits & f.bit != 0)
+        .filter_map(|f| f.setting)
+    {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    (origin.trim_end_matches('/').to_string(), names)
 }
 
 wrap_permission_handler! {
@@ -240,5 +246,50 @@ pub fn apply_site_settings(entries: Vec<(String, ContentSettingTypes, ContentSet
         if context.content_setting(Some(&url), Some(&url), kind) != value {
             context.set_content_setting(Some(&url), Some(&url), kind, value);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn answers_allow_block_or_wait() {
+        assert_eq!(
+            answer_outcome(&PromptAnswer::Yes { remember: false }),
+            (Outcome::Allow, None)
+        );
+        assert_eq!(
+            answer_outcome(&PromptAnswer::Yes { remember: true }),
+            (Outcome::Allow, Some(true))
+        );
+        assert_eq!(
+            answer_outcome(&PromptAnswer::No { remember: true }),
+            (Outcome::Block, Some(false))
+        );
+        assert_eq!(
+            answer_outcome(&PromptAnswer::No { remember: false }),
+            (Outcome::NotNow, None)
+        );
+        assert_eq!(
+            answer_outcome(&PromptAnswer::Cancelled),
+            (Outcome::NotNow, None)
+        );
+    }
+
+    #[test]
+    fn always_answers_save_each_requested_setting_once() {
+        // Desktop audio and screen share one setting.
+        let (pattern, names) = site_settings("https://meet.example/", 1 | 4 | 8, MEDIA_FEATURES);
+        assert_eq!(pattern, "https://meet.example");
+        assert_eq!(
+            names,
+            ["content.media.audio_capture", "content.desktop_capture"]
+        );
+        let (_, names) = site_settings("https://a.example/", 256, PROMPT_FEATURES);
+        assert_eq!(names, ["content.geolocation"]);
+        // The clipboard has no setting, so nothing is saved for it.
+        let (_, names) = site_settings("https://a.example/", 16, PROMPT_FEATURES);
+        assert!(names.is_empty());
     }
 }
