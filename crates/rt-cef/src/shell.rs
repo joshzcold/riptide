@@ -9,7 +9,6 @@ use rt_core::command::{Direction, OpenTarget, YankWhat};
 use rt_core::completion::CompletionView;
 use rt_core::engine::Level;
 use rt_core::tabs::{Position, TabList};
-use rt_core::url::fuzzy_url;
 use rt_core::{Command, Effect, Engine, Mode};
 use serde_json::json;
 
@@ -269,13 +268,17 @@ impl Shell {
 
     /// Turn `:open` text into a URL using the configured search engines.
     pub fn fuzzy_url(&self, input: &str) -> String {
-        let engines = self
-            .engine
-            .settings()
+        let settings = self.engine.settings();
+        let engines = settings
             .map("url.searchengines")
             .cloned()
             .unwrap_or_default();
-        fuzzy_url(input, &engines)
+        rt_core::url::fuzzy_url_with(
+            input,
+            &engines,
+            settings.str("url.auto_search"),
+            settings.bool("url.open_base_url"),
+        )
     }
 
     pub fn default_page(&self) -> String {

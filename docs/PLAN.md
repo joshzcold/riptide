@@ -662,7 +662,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `hints.min_chars`, `hints.scatter`, `hints.dictionary` (word hints), `hints.leave_on_load`, `hints.hide_unmatched_rapid_hints`, `hint-follow`, and `hints.next_regexes`/`prev_regexes` as real settings.
 - **URLs:**
   - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
-  - `url.auto_search` (naive, dns, schemeless, never), `url.open_base_url`, `url.incdec_segments`, `new_instance_open_target_window`.
+  - ✅ (2026-10-05) `url.auto_search` (naive, schemeless, never), `url.open_base_url` and `url.incdec_segments`, with e2e tests in `crates/rt-e2e/tests/urls.rs`. Not planned: the `dns` mode, which would block on a DNS lookup. Still to do: `new_instance_open_target_window`.
 - **Downloads and files:**
   - ✅ Tier 1 (2026-10-05):
     - `download-retry`, `download-remove [--all]` and `download-delete`.

@@ -84,7 +84,10 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.undo_stack_size` | integer | `100` | How many closed tabs u can reopen; 0 keeps none |
 | `tabs.width` | integer | `200` | Width of the tab bar in pixels when tabs.position is left or right |
 | `tabs.wrap` | boolean | `true` | Wrap around from the last tab to the first (and back) when switching tabs |
+| `url.auto_search` | naive \| schemeless \| never | `naive` | When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never |
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
+| `url.incdec_segments` | string[] | `["path","query"]` | Parts of the URL Ctrl-a and Ctrl-x change: host, port, path, query, anchor |
+| `url.open_base_url` | boolean | `false` | Open a search engine's home page when :open gets just its name |
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |
 | `url.yank_ignored_parameters` | string[] | `["ref","utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_name","fbclid","gclid"]` | Query parameters dropped when yanking a URL, such as tracking tags |

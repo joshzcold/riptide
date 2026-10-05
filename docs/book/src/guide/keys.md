@@ -70,6 +70,20 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `Escape` | Leave insert mode, or clear a pending key sequence |
 | `ZQ` `ZZ` `Ctrl-q` | `quit` |
 
+## Opening pages
+
+`o` (`:open`) takes an address or words to search for. Text that looks like an address (`example.org`, `localhost:8080`) opens; anything else goes to the `DEFAULT` search engine in `url.searchengines`. Start with an engine's name to use it instead:
+
+```toml
+[url.searchengines]
+DEFAULT = "https://duckduckgo.com/?q={}"
+w = "https://en.wikipedia.org/w/index.php?search={}"
+```
+
+`:open w riptide` searches Wikipedia. `url.auto_search` changes when text is searched: `schemeless` searches everything without `https://` or another scheme, and `never` opens it as an address unless it starts with an engine's name. With `url.open_base_url = true`, `:open w` alone opens Wikipedia's home page.
+
+`Ctrl-a` and `Ctrl-x` add or take one from the last number in the URL's path or query (`page/9` → `page/10`). `url.incdec_segments` picks which parts they look at: `host`, `port`, `path`, `query`, `anchor`.
+
 ## Searching, scrolling and zoom
 
 `/` and `?` search the page, and `n`/`N` move between matches. Searches go on from the top after the last match, saying so, unless you set `search.wrap = false` (they stop at the last match) or `search.wrap_messages = false` (they wrap quietly). `search.ignore_case` (`smart`, `always`, `never`) and `search.incremental` set how matching works.

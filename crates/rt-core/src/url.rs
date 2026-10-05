@@ -20,13 +20,42 @@ const KNOWN_SCHEMES: &[&str] = &[
 /// naming an engine in `engines` (e.g. `g rust`) picks that engine; otherwise
 /// the `DEFAULT` entry is used.
 pub fn fuzzy_url(input: &str, engines: &BTreeMap<String, String>) -> String {
+    fuzzy_url_with(input, engines, "naive", false)
+}
+
+/// [`fuzzy_url`] with `url.auto_search` (`naive`, `schemeless` or `never`)
+/// and `url.open_base_url`.
+pub fn fuzzy_url_with(
+    input: &str,
+    engines: &BTreeMap<String, String>,
+    auto_search: &str,
+    open_base_url: bool,
+) -> String {
     let input = input.trim();
     if has_known_scheme(input) {
         return input.to_string();
     }
-    if !input.contains(char::is_whitespace) && looks_like_host(input) {
+    if open_base_url
+        && input != "DEFAULT"
+        && let Some(engine) = engines.get(input)
+        && let Some((origin, _)) = split_origin(engine)
+    {
+        return format!("{origin}/");
+    }
+    let keyword = input
+        .split_once(char::is_whitespace)
+        .is_some_and(|(name, _)| name != "DEFAULT" && engines.contains_key(name));
+    let as_url = |input: &str| {
         let scheme = if is_local(input) { "http" } else { "https" };
-        return format!("{scheme}://{input}");
+        format!("{scheme}://{input}")
+    };
+    match auto_search {
+        "never" if !keyword => return as_url(input),
+        "schemeless" => {}
+        _ if !input.contains(char::is_whitespace) && looks_like_host(input) => {
+            return as_url(input);
+        }
+        _ => {}
     }
     let (engine, query) = match input.split_once(char::is_whitespace) {
         Some((name, rest)) if name != "DEFAULT" && engines.contains_key(name) => {
@@ -84,13 +113,52 @@ pub fn up(url: &str) -> Option<String> {
 
 /// Add `delta` to the last number in the path or query, keeping leading zeros.
 pub fn increment(url: &str, delta: i64) -> Option<String> {
-    let (origin, rest) = split_origin(url)?;
-    let rest_end = rest.find('#').unwrap_or(rest.len());
-    let digits_end = rest[..rest_end].rfind(|c: char| c.is_ascii_digit())? + 1;
-    let digits_start = rest[..digits_end]
-        .rfind(|c: char| !c.is_ascii_digit())
-        .map_or(0, |i| i + 1);
-    let number = &rest[digits_start..digits_end];
+    increment_in(url, delta, &["path", "query"])
+}
+
+/// Byte ranges of a URL's `host`, `port`, `path`, `query` and `anchor`.
+fn segments(url: &str) -> Option<Vec<(&'static str, std::ops::Range<usize>)>> {
+    let authority_start = url.find("://")? + 3;
+    let authority_end = url[authority_start..]
+        .find(['/', '?', '#'])
+        .map_or(url.len(), |i| authority_start + i);
+    let host_start = url[authority_start..authority_end]
+        .rfind('@')
+        .map_or(authority_start, |i| authority_start + i + 1);
+    let (host_end, port) = match url[host_start..authority_end].rfind(':') {
+        Some(i) => (host_start + i, host_start + i + 1..authority_end),
+        None => (authority_end, authority_end..authority_end),
+    };
+    let anchor_start = url.find('#').map_or(url.len(), |i| i + 1);
+    let query_end = url.find('#').unwrap_or(url.len());
+    let query_start = url[..query_end].find('?').map_or(query_end, |i| i + 1);
+    let path_end = url[..query_end].find('?').unwrap_or(query_end);
+    Some(vec![
+        ("host", host_start..host_end),
+        ("port", port),
+        ("path", authority_end..path_end),
+        ("query", query_start..query_end),
+        ("anchor", anchor_start..url.len()),
+    ])
+}
+
+/// [`increment`], changing the last number in the URL parts named in
+/// `allowed` (`url.incdec_segments`).
+pub fn increment_in(url: &str, delta: i64, allowed: &[&str]) -> Option<String> {
+    let segments = segments(url)?;
+    let (start, end) = segments
+        .iter()
+        .rev()
+        .filter(|(name, _)| allowed.contains(name))
+        .find_map(|(_, range)| {
+            let part = &url[range.clone()];
+            let end = part.rfind(|c: char| c.is_ascii_digit())? + 1;
+            let start = part[..end]
+                .rfind(|c: char| !c.is_ascii_digit())
+                .map_or(0, |i| i + 1);
+            Some((range.start + start, range.start + end))
+        })?;
+    let number = &url[start..end];
     let value = number.parse::<i64>().ok()?.checked_add(delta)?;
     if value < 0 {
         return None;
@@ -100,11 +168,7 @@ pub fn increment(url: &str, delta: i64) -> Option<String> {
     } else {
         0
     };
-    Some(format!(
-        "{origin}{}{value:0width$}{}",
-        &rest[..digits_start],
-        &rest[digits_end..]
-    ))
+    Some(format!("{}{value:0width$}{}", &url[..start], &url[end..]))
 }
 
 /// `*` matches any run of characters.
@@ -438,5 +502,60 @@ mod tests {
         assert_eq!(origin("http://user:pw@b.org").unwrap(), "http://b.org/");
         assert_eq!(origin("file:///tmp/x.html"), None);
         assert_eq!(origin("about:blank"), None);
+    }
+
+    #[test]
+    fn auto_search_modes() {
+        let engines: BTreeMap<String, String> = [
+            ("DEFAULT".to_string(), "https://ddg.co/?q={}".to_string()),
+            (
+                "g".to_string(),
+                "https://google.com/search?q={}".to_string(),
+            ),
+        ]
+        .into();
+        let open = |text, mode, base| fuzzy_url_with(text, &engines, mode, base);
+        assert_eq!(open("example.com", "naive", false), "https://example.com");
+        assert_eq!(
+            open("example.com", "schemeless", false),
+            "https://ddg.co/?q=example.com"
+        );
+        assert_eq!(
+            open("https://example.com", "schemeless", false),
+            "https://example.com"
+        );
+        assert_eq!(open("rust book", "never", false), "https://rust book");
+        assert_eq!(
+            open("g rust", "never", false),
+            "https://google.com/search?q=rust"
+        );
+        assert_eq!(open("g", "naive", true), "https://google.com/");
+        assert_eq!(open("g", "naive", false), "https://ddg.co/?q=g");
+    }
+
+    #[test]
+    fn increment_chooses_segments() {
+        let url = "https://cdn2.x.org:8080/page/3?n=7#s9";
+        assert_eq!(
+            increment_in(url, 1, &["path", "query"]).unwrap(),
+            "https://cdn2.x.org:8080/page/3?n=8#s9"
+        );
+        assert_eq!(
+            increment_in(url, 1, &["path"]).unwrap(),
+            "https://cdn2.x.org:8080/page/4?n=7#s9"
+        );
+        assert_eq!(
+            increment_in(url, 1, &["anchor"]).unwrap(),
+            "https://cdn2.x.org:8080/page/3?n=7#s10"
+        );
+        assert_eq!(
+            increment_in(url, 1, &["host"]).unwrap(),
+            "https://cdn3.x.org:8080/page/3?n=7#s9"
+        );
+        assert_eq!(
+            increment_in(url, -1, &["port"]).unwrap(),
+            "https://cdn2.x.org:8079/page/3?n=7#s9"
+        );
+        assert_eq!(increment_in("https://x.org/a", 1, &["path"]), None);
     }
 }

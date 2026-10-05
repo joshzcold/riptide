@@ -375,6 +375,17 @@ pub fn parse_height(text: &str) -> Option<Height> {
     }
 }
 
+fn incdec_segments(value: &Value) -> Result<(), String> {
+    const SEGMENTS: &[&str] = &["host", "port", "path", "query", "anchor"];
+    let Value::List(items) = value else {
+        return Ok(());
+    };
+    match items.iter().find(|i| !SEGMENTS.contains(&i.as_str())) {
+        Some(bad) => Err(format!("unknown part {bad:?}; use {}", SEGMENTS.join(", "))),
+        None => Ok(()),
+    }
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -950,10 +961,29 @@ pub static SETTINGS: &[SettingDef] = &[
         "Wrap around from the last tab to the first (and back) when switching tabs"
     ),
     def!(
+        "url.auto_search",
+        Kind::Enum(&["naive", "schemeless", "never"]),
+        s("naive"),
+        "When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never"
+    ),
+    def!(
         "url.default_page",
         Kind::Str,
         s(crate::url::DEFAULT_START_PAGE),
         "Page for :open without a URL"
+    ),
+    def!(
+        "url.incdec_segments",
+        Kind::List,
+        Value::List(vec!["path".to_string(), "query".to_string()]),
+        "Parts of the URL Ctrl-a and Ctrl-x change: host, port, path, query, anchor",
+        incdec_segments
+    ),
+    def!(
+        "url.open_base_url",
+        Kind::Bool,
+        Value::Bool(false),
+        "Open a search engine's home page when :open gets just its name"
     ),
     def!(
         "url.searchengines",

@@ -18,14 +18,16 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     } else {
         OpenTarget::Current
     };
-    let Some((url, browser)) = shell::with(|s| {
+    let Some((url, browser, segments)) = shell::with(|s| {
         (
             s.tabs.current().map(|t| t.url.clone()).unwrap_or_default(),
             s.current_browser(),
+            s.engine.settings().list("url.incdec_segments").to_vec(),
         )
     }) else {
         return true;
     };
+    let segments: Vec<&str> = segments.iter().map(String::as_str).collect();
     let steps = i64::from(count.unwrap_or(1).max(1));
     let go = |url: Option<String>, what: &str| match url {
         Some(url) => shell::open(target, true, Some(url)),
@@ -39,9 +41,12 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             }
             go(next, "parent URL");
         }
-        NavigateTo::Increment => go(rt_core::url::increment(&url, steps), "number in its URL"),
+        NavigateTo::Increment => go(
+            rt_core::url::increment_in(&url, steps, &segments),
+            "number in its URL",
+        ),
         NavigateTo::Decrement => go(
-            rt_core::url::increment(&url, -steps),
+            rt_core::url::increment_in(&url, -steps, &segments),
             "number above zero in its URL",
         ),
         NavigateTo::Prev | NavigateTo::Next => {
