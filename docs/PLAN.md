@@ -615,6 +615,136 @@ Work:
   - Windows/macOS builds would need VMP signing for many services.
 - **Before release, a qualified reviewer must check the licensing:** Google's Widevine terms for third-party browsers, and a GPL-3.0 application loading a proprietary CDM at runtime.
 
+### M19 — qutebrowser parity sweep
+
+On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`doc/help/commands.asciidoc`) and 354 settings (`doc/help/settings.asciidoc`). Riptide parses 127 commands. Most of what's missing is below, grouped by what users notice. **Tier 1** items come first because they matter in daily use.
+
+- **Tabs** (tier 1: position and visibility):
+  - `tabs.position` (top, bottom, left, right), so tabs can be vertical. `tabs.show` (always, never, multiple, switching) and `tabs.show_switching_delay`.
+  - `tabs.title.format` and `format_pinned` (fields such as `{index}`, `{audio}`, `{host}`, `{private}`), `tabs.title.alignment`, `tabs.width`, `min_width`, `max_width`.
+  - `tabs.select_on_remove`, `tabs.background`, `tabs.wrap`, `tabs.undo_stack_size`, and a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
+  - Middle-click to close (`tabs.close_mouse_button`, `close_mouse_button_on_bar`), `tabs.tooltips`, `tabs.tabs_are_windows`.
+- **Status bar** (tier 1): `statusbar.show` (always, never, in-mode), `statusbar.position`, `statusbar.padding`, and `statusbar.widgets`: url, scroll, scroll_raw, history, tabs, keypress, progress, search_match, clock, `text:…`.
+- **Key hints** (tier 1): a popup listing what a pending key chain can still become, after `keyhint.delay`, minus `keyhint.blacklist`.
+- **Completion:**
+  - Tier 1: `completion-item-del` (delete a history, quickmark, bookmark or session entry from the list) and `completion-item-yank`.
+  - `completion.height`, `shrink`, `show`, `open_categories` (order and which ones), `web_history.exclude`, `timestamp_format`, `min_chars`, `delay`, `use_best_match`, `quick`, and `cmd_history_max_items`.
+  - Command-line commands: `cmd-edit` (edit the line in `editor.command`), `cmd-repeat`, `cmd-repeat-last`, `cmd-run-with-count`.
+- **Hints:**
+  - Tier 1: `hints.auto_follow` (always, unique-match, full-match, never) and `auto_follow_timeout`, `hints.selectors` (custom groups, e.g. hint every `code` block), and rapid mode (`hint --rapid`).
+  - `hints.min_chars`, `hints.scatter`, `hints.dictionary` (word hints), `hints.leave_on_load`, `hints.hide_unmatched_rapid_hints`, `hint-follow`, and `hints.next_regexes`/`prev_regexes` as real settings.
+- **URLs:**
+  - Tier 1: `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `fbclid` and the like when yanking).
+  - `url.auto_search` (naive, dns, schemeless, never), `url.open_base_url`, `url.incdec_segments`, `new_instance_open_target_window`.
+- **Downloads and files:**
+  - Tier 1: `download-retry`, `download-remove`, `download-delete`, and an external file picker (`fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`, e.g. yazi or ranger in a terminal), plus `prompt-fileselect-external`.
+  - `downloads.remove_finished`, `downloads.position`, `downloads.location.remember` and `suggestion`, `downloads.open_dispatcher`, `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
+- **Content** (most are Chromium prefs or switches; per-site where qutebrowser allows it):
+  - Tier 1: `content.javascript.enabled`, `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent`.
+  - Other headers: `accept_language`, `do_not_track`, `referer`, `custom`.
+  - Media and images: `content.images`, `content.autoplay`, `content.webgl`, `content.mute`.
+  - Privacy and network: `content.proxy` (system, none, URL, PAC) and `proxy_dns_requests`, `content.webrtc_ip_handling_policy`, `content.canvas_reading`, `content.dns_prefetch`, `content.cache.size`.
+  - JavaScript permissions: `content.javascript.clipboard`, `can_open_tabs_automatically`, `can_close_tabs`.
+  - Notifications and logging: `content.notifications.presenter` and `show_origin`, `content.javascript.log` (into `:messages`).
+  - Everything else: the PDF viewer (`content.pdfjs`), `content.prefers_reduced_motion`, `content.register_protocol_handler`, `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
+  - `content.user_stylesheets` is part of M20.
+- **Input:**
+  - Tier 1: `input.insert_mode.auto_load`, `input.mouse.back_forward_buttons`, `bindings.key_mappings` (e.g. `<Ctrl-[>` → `<Escape>`).
+  - `input.partial_timeout`, `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`, `input.match_counts`, `input.mode_override`.
+- **Scrolling, search, zoom:** `scrolling.smooth`, `scrolling.bar`, `search.wrap`, `search.wrap_messages`, `zoom.levels`, `zoom.mouse_divider` (Ctrl+wheel), `zoom.text_only`.
+- **Sessions and window:**
+  - Tier 1: `session.lazy_restore` (don't load background tabs until they're shown) and `confirm_quit` (always, multiple-tabs, downloads, never).
+  - `session.default_name`, `:save`, `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
+- **Tools:**
+  - Tier 1: `:screenshot`, through the DevTools protocol (`execute_dev_tools_method("Page.captureScreenshot")`), which needs no Views API.
+  - `:restart` (save the session, then re-exec), `:report`, `debug-keytester`, `debug-dump-page`, `debug-log-filter`, `debug-clear-ssl-errors`, `devtools-focus`, `selection-drop`.
+  - Bookmarks and quickmarks: `bookmark-list`, `quickmark-save`, `bookmarks-reload`, `quickmarks-reload`.
+  - Missing readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word`, `rl-yank`, and the `move-to-*-block` set.
+- **Config commands:** `config-list-add` and `remove`, `config-dict-add` and `remove`, `config-clear`, `config-diff`, `config-edit` (open the config in the editor), and `config-write-toml` (riptide's version of `config-write-py`).
+- **Not planned:** `qt.*` (Qt only), `backend`, and the Python-only commands (`debug-pyeval`, `debug-all-objects`, `config-write-py`).
+- **Done when:** each item has a unit test where the logic is CEF-free and a smoke step where it's visible. The tiers set the order, and each group is its own commit.
+
+### M20 — Theming
+
+Today the bar colors are hardcoded CSS variables in each UI page; the Riptide palette landed on 2026-10-05.
+
+- **One token set:** named tokens (bg, fg, accent, selected, insert, passthrough, private, warning, error, https, http, hint fg/bg/border, prompt, completion, downloads, keyhint) feed every UI page as CSS variables. They're sent over the UI channel (M13), so a change applies live without reloading anything.
+- **Settings:**
+  - `colors.*` uses qutebrowser's names where they map (`colors.statusbar.insert.bg`, `colors.tabs.selected.odd.bg`, `colors.hints.bg`, `colors.completion.item.selected.bg`, `colors.messages.error.bg`, `colors.webpage.bg`…) and overrides the theme's tokens one by one.
+  - `fonts.*`: `fonts.default_family`, `fonts.default_size`, per-widget fonts, and the page fonts `fonts.web.family.*` and `fonts.web.size.*` (Chromium's `webkit.webprefs.fonts` prefs).
+- **Built-in themes:**
+  - `riptide` (dark, the default) and `riptide-light`, plus ports of gruvbox (dark and light), catppuccin (mocha and latte), nord, dracula, solarized (dark and light) and tokyo night.
+  - `:theme <name>` with completion and a live preview while picking.
+  - `ui.theme`, where `auto` follows the system's light or dark preference with a configurable pair.
+- **User themes:** `themes/<name>.toml` in the config directory (tokens plus optional overrides), or `rt.theme{…}` in Lua.
+- **Importers:** base16 scheme YAML, and simple qutebrowser theme files (only `c.colors.… = "…"` lines are read; no Python is run).
+- **Custom CSS:**
+  - `ui.css` in the config directory is added to every UI page, for anything tokens can't do (tab shape, padding, fonts).
+  - `content.user_stylesheets` applies files to web pages, and can be set per site with patterns.
+  - Both reload when the file changes.
+- **Pages:**
+  - `colors.webpage.bg` sets the background shown while a page loads, so dark themes don't flash white.
+  - The dark-mode setting becomes live and per site; today it's startup-only.
+- **Tests:** unit tests that every built-in theme defines every token with valid colors and passes a WCAG AA contrast check for its text pairs. A smoke step switches themes and reads a CSS variable from the status bar.
+
+### M21 — Interactive settings
+
+- **`riptide://settings` (`:settings`):** every setting grouped by section, with a search box (`/` focuses it). Each one shows its type, default, current value, where the value came from (default, `config.toml`, `config.lua`, `autoconfig.toml` or `:set`), and any per-site overrides.
+- **Editors by kind:** a toggle for true/false, a select for enums, a number field with its bounds, text, lists (add, remove, reorder), maps (key/value rows), and colors with a swatch and picker (shared with M20).
+- **Saving:**
+  - A change applies at once and is saved to `autoconfig.toml` through the UI-only channel.
+  - The Rust side validates it with the same parser as `:set`, and only riptide:// UI pages may send these messages.
+  - A setting that a config file also sets is marked "your config file sets this and wins at startup".
+  - Each setting has a reset button (`:config-unset`) and per-site override rows (pattern plus value).
+- **Keyboard first:** hints, `j`/`k`, `Return` to edit, `Escape` to leave a field.
+- **Keys tab:** bindings per mode with search. Rebind by pressing the new keys, unbind, and see conflicts with prefixes before they happen.
+- **Sites tab:** saved permission answers (camera, microphone, location, notifications, screen sharing) and certificate exceptions, each with revoke, and clearing cookies and site data per site.
+- **Command line:** `:set` completes values (enum choices, true/false, the current value prefilled), and `:set name?` shows the setting's help.
+- **Tests:** unit tests for the settings data model and for validating messages; a smoke step toggles a setting on the page and checks it's applied and saved.
+
+### M22 — Conference calls and screen sharing
+
+**Measured on 2026-10-05** (CEF 154, Alloy style, Xvfb, `http://127.0.0.1` test page):
+
+| Request | Result |
+|---|---|
+| `getDisplayMedia({video, audio})` | Our prompt asks "capture your desktop audio and capture your screen". Yes shares the **whole screen** (track label `Screen`, 1280×800) plus system audio. There's no picker and `displaySurface` is undefined. |
+| `getUserMedia` with `chromeMediaSource: 'desktop'`, `chromeMediaSourceId: 'window:<xid>:0'` | Whole screen; Alloy ignores the requested window. |
+| …`'screen:0:0'` | `NotReadableError: Could not start video source` |
+| …`chromeMediaSource: 'tab'` | `AbortError: Error starting tab capture` |
+| Chrome-style tab `BrowserView` in our Alloy window | Refused: "Cannot add Chrome style BrowserView to Alloy style Window" |
+| Chrome-style window with all views Chrome-style (naive switch) | Exits at startup with no error in either log. Not investigated. |
+
+So with Alloy, sharing one tab or one window isn't possible from the page side. Options, in order:
+
+1. **Chrome style for everything** (spike first, about a day). Chrome style brings Chrome's own picker (tab, window, screen), tab capture with "share this tab instead", tab audio, and the "sharing" bar.
+   - This reopens decision #2. Check what breaks: key handling (`on_pre_key_event`), popups as tabs, the UI pages, DevTools (simpler: it's Chrome style already), and Chrome UI we'd have to hide.
+   - Also find why the naive switch exits.
+2. **The desktop portal on Wayland.** Chromium's PipeWire capturer hands screen requests to xdg-desktop-portal, whose dialog picks a window or screen (not a tab). Check whether Alloy goes through it. On X11 there is no portal. Wayland can't be tested here yet (no compositor).
+3. **A small CEF patch** that lets `on_request_media_access_permission` return a chosen `DesktopMediaID`, plus a picker of our own. It means building CEF ourselves, so only if 1 fails, and it's worth proposing upstream.
+
+Whatever path wins:
+
+- **Picker UX:**
+  - A keyboard picker in the prompt area: tabs (title and favicon), windows, screens, thumbnails if available, and a "share audio" toggle.
+  - A sharing marker in the status bar and on the tab, `:share-stop`, and switching the shared source mid-call.
+  - Shared tabs stay highlighted in the tab bar.
+- **Calls keep running in the background:** check that a tab with live capture or WebRTC isn't throttled when hidden (timers, rendering), and exempt it if it is.
+- **Devices:**
+  - `:media-devices` picks the default camera, microphone and speaker, saved per site.
+  - The permission prompt names the device.
+  - Check echo cancellation and noise suppression with PipeWire and PulseAudio.
+- **Performance:** VA-API video decode and encode (this machine logs `vaInitialize failed` from mixed Nix and system Mesa libraries; check on a stock distro), and GPU use for background blur (WebGL; Xvfb blocklists it, real GPUs don't).
+- **While browsing other tabs:**
+  - Picture-in-picture (`:pip`, plus the Document Picture-in-Picture API if CEF supports it).
+  - A mute toggle that reaches the call tab from any tab, using the site's own shortcut sent through `fake-key` to that tab.
+  - Desktop notifications through `content.notifications.presenter` (libnotify).
+- **Indicators:** camera, microphone and screen in use, per tab, from our permission grants and the tracks' lifetimes, since Chrome's capture indicator isn't in Alloy.
+- **Tests:**
+  - A smoke step with a local WebRTC loopback page and fake devices (`--use-fake-device-for-media-stream`; test builds only).
+  - Once a picker exists, a check of `displaySurface` for each choice.
+  - A manual matrix before calling it done: Google Meet, Zoom (web), Microsoft Teams, Jitsi, Slack huddles, Discord and Whereby, each tested for camera, microphone, screen, window and tab share, and with the call in a background tab. Check each site's browser detection with our user agent.
+
 ### Deferred — proprietary codecs (H.264 / AAC)
 Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.
 
@@ -649,5 +779,6 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 2. **Platform priority:** Linux-only until M10, or keep macOS/Windows building in CI from the start?
 3. **UI overlay tech:** plain HTML/CSS/vanilla TS, or a small framework?
 4. **qutebrowser compatibility depth:** import qutebrowser `config.py` bindings, quickmarks, and bookmarks?
+5. **Alloy or Chrome style** (reopened by M22): Alloy can only share the whole screen. Chrome style would bring Chrome's tab/window/screen picker, at the cost of revisiting decision #2. The M22 spike decides.
 
 > Note: the project is GPL-3.0 (per `LICENSE`). Dependency licenses must stay GPL-compatible (CEF is BSD, adblock-rust is MPL-2.0 — both fine).
