@@ -456,7 +456,7 @@ expect_exit() {
 
 step ":help :open opens the generated help page"
 run "help :open"
-expect_title "riptide help"
+expect_title "Riptide help"
 
 step ":changelog opens the bundled changelog"
 run "changelog"
