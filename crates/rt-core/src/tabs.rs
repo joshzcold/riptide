@@ -229,6 +229,17 @@ pub fn resolve_index(number: i64, len: usize) -> Option<usize> {
     (0..len).contains(&index).then_some(index as usize)
 }
 
+/// Whether `tabs.show` wants the tab bar visible. `switching` is true
+/// while the delay after a tab switch hasn't run out.
+pub fn bar_visible(show: &str, tab_count: usize, switching: bool) -> bool {
+    match show {
+        "never" => false,
+        "multiple" => tab_count > 1,
+        "switching" => switching,
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,5 +410,15 @@ mod tests {
         assert_eq!(resolve_index(4, 3), None);
         assert_eq!(resolve_index(0, 3), None);
         assert_eq!(resolve_index(-4, 3), None);
+    }
+
+    #[test]
+    fn tab_bar_visibility_follows_tabs_show() {
+        assert!(bar_visible("always", 1, false));
+        assert!(!bar_visible("never", 5, true));
+        assert!(!bar_visible("multiple", 1, false));
+        assert!(bar_visible("multiple", 2, false));
+        assert!(bar_visible("switching", 3, true));
+        assert!(!bar_visible("switching", 3, false));
     }
 }

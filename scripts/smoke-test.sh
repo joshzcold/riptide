@@ -684,6 +684,29 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == z=100 ]] && break; sle
 reset=$(page_title)
 [[ $zoomed == z=125 && $reset == z=100 ]] && pass || fail "zoomed '$zoomed', reset '$reset'"
 
+step "tabs.position moves the tab bar to the side, tabs.show hides it"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+# Each reading ends in its own tag, so a stale title isn't mistaken for it.
+size() {
+    run "jseval document.title = innerWidth + 'x' + innerHeight + ' $1'"
+    for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == *" $1" ]] && break; sleep 0.1; done
+    local t; t=$(page_title); echo "${t% *}"
+}
+top=$(size top)
+run "set tabs.position left"
+nap 0.5
+left=$(size left)
+run "set tabs.position top"
+run "set tabs.show never"
+nap 0.5
+hidden=$(size hidden)
+run "set tabs.show always"
+nap 0.5
+w=${top%x*}; h=${top#*x}
+[[ $left == "$((w - 200))x$((h + 20))" && $hidden == "${w}x$((h + 20))" ]] && pass ||
+    fail "top '$top', left '$left', hidden '$hidden'"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

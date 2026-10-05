@@ -45,6 +45,10 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.new_position.unrelated` | prev \| next \| first \| last | `last` | Where other new tabs go (:open -t) |
 | `tabs.pinned.frozen` | boolean | `true` | Keep pinned tabs on their page: :open in a pinned tab opens a new tab |
 | `tabs.pinned.shrink` | boolean | `true` | Shrink pinned tabs to their icon and number |
+| `tabs.position` | top \| bottom \| left \| right | `top` | Where the tab bar is; left and right list the tabs vertically |
+| `tabs.show` | always \| never \| multiple \| switching | `always` | When to show the tab bar: always, never, with more than one tab, or briefly after switching tabs |
+| `tabs.show_switching_delay` | integer | `800` | How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds |
+| `tabs.width` | integer | `200` | Width of the tab bar in pixels when tabs.position is left or right |
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |

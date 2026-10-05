@@ -486,6 +486,33 @@ pub static SETTINGS: &[SettingDef] = &[
         "Shrink pinned tabs to their icon and number"
     ),
     def!(
+        "tabs.position",
+        Kind::Enum(&["top", "bottom", "left", "right"]),
+        s("top"),
+        "Where the tab bar is; left and right list the tabs vertically"
+    ),
+    def!(
+        "tabs.show",
+        Kind::Enum(&["always", "never", "multiple", "switching"]),
+        s("always"),
+        "When to show the tab bar: always, never, with more than one tab, or briefly after switching tabs"
+    ),
+    def!(
+        "tabs.show_switching_delay",
+        Kind::Int {
+            min: 0,
+            max: 60_000
+        },
+        Value::Int(800),
+        "How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds"
+    ),
+    def!(
+        "tabs.width",
+        Kind::Int { min: 50, max: 1000 },
+        Value::Int(200),
+        "Width of the tab bar in pixels when tabs.position is left or right"
+    ),
+    def!(
         "url.default_page",
         Kind::Str,
         s(crate::url::DEFAULT_START_PAGE),

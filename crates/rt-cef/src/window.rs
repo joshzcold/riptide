@@ -1,5 +1,8 @@
-//! The top-level window: tab bar, page area and status bar stacked
-//! vertically, plus a completion overlay that floats above the status bar.
+//! The top-level window: the page area and status bar stacked vertically,
+//! a tab bar on any side (`tabs.position`), and a completion overlay that
+//! floats above the status bar.
+
+use std::cell::Cell;
 
 use cef::*;
 use rt_core::tabs::Position;
@@ -13,6 +16,43 @@ use crate::ui;
 pub const STATUSBAR_HEIGHT: i32 = 20;
 pub const TABBAR_HEIGHT: i32 = 20;
 const CHROME_BACKGROUND: u32 = 0xFF00_0000;
+
+thread_local! {
+    /// The tab bar's preferred size. CEF asks for it during layout, which
+    /// can happen while the shell is borrowed, so it lives outside the shell.
+    static TABBAR_SIZE: Cell<(i32, i32)> = const { Cell::new((1, TABBAR_HEIGHT)) };
+}
+
+/// Put the tab bar on `position`'s side: top and bottom go in the window's
+/// column, left and right in the row that holds the page area.
+pub fn place_tabbar(
+    window: &Window,
+    row: &Panel,
+    tabbar: &BrowserView,
+    position: &str,
+    width: i32,
+) {
+    let vertical = matches!(position, "left" | "right");
+    TABBAR_SIZE.with(|size| {
+        size.set(if vertical {
+            (width, 1)
+        } else {
+            (1, TABBAR_HEIGHT)
+        })
+    });
+    let mut view = View::from(tabbar);
+    if let Some(parent) = view.parent_view().and_then(|p| p.as_panel()) {
+        parent.remove_child_view(Some(&mut view));
+    }
+    match position {
+        "left" => row.add_child_view_at(Some(&mut view), 0),
+        "right" => row.add_child_view(Some(&mut view)),
+        // The window's children are now the row and the status bar.
+        "bottom" => window.add_child_view_at(Some(&mut view), 1),
+        _ => window.add_child_view_at(Some(&mut view), 0),
+    }
+    window.layout();
+}
 
 /// Open a window with one tab per URL, or `url.start_pages` if none.
 /// `commands` (from the command line) run once the tabs are open. The first
@@ -100,8 +140,9 @@ wrap_window_delegate! {
     impl WindowDelegate {
         fn on_window_created(&self, window: Option<&mut Window>) {
             let Some(window) = window else { return };
-            let (Some(tabbar), Some(content), Some(statusbar), Some(completion)) = (
+            let (Some(tabbar), Some(row), Some(content), Some(statusbar), Some(completion)) = (
                 create_browser_view(Role::Tabbar, ui::TABBAR_URL),
+                panel_create(None),
                 panel_create(None),
                 create_browser_view(Role::Statusbar, ui::STATUSBAR_URL),
                 create_browser_view(Role::Completion, ui::COMPLETION_URL),
@@ -115,15 +156,25 @@ wrap_window_delegate! {
                 cross_axis_alignment: AxisAlignment::STRETCH,
                 ..Default::default()
             }));
-            let mut tabbar_view = View::from(&tabbar);
-            tabbar_view.set_focusable(0);
-            window.add_child_view(Some(&mut tabbar_view));
+            View::from(&tabbar).set_focusable(0);
+
+            // The row holds the page area, and the tab bar when it's on the left or right.
+            let row_layout = row.set_to_box_layout(Some(&BoxLayoutSettings {
+                horizontal: 1,
+                cross_axis_alignment: AxisAlignment::STRETCH,
+                ..Default::default()
+            }));
+            let mut row_view = View::from(&row);
+            window.add_child_view(Some(&mut row_view));
+            if let Some(layout) = layout {
+                layout.set_flex_for_view(Some(&mut row_view), 1);
+            }
 
             // All tab views share the content panel; only the current one is visible.
             content.set_to_fill_layout();
             let mut content_view = View::from(&content);
-            window.add_child_view(Some(&mut content_view));
-            if let Some(layout) = layout {
+            row.add_child_view(Some(&mut content_view));
+            if let Some(layout) = row_layout {
                 layout.set_flex_for_view(Some(&mut content_view), 1);
             }
 
@@ -145,12 +196,23 @@ wrap_window_delegate! {
                 s.window = Some(window.clone());
                 s.content = Some(content.clone());
                 s.tabbar = Some(tabbar.clone());
+                s.row = Some(row.clone());
                 s.statusbar = Some(statusbar.clone());
                 s.completion = Some(completion.clone());
                 s.overlay = overlay;
                 s.windows.len() == 1
             })
             .unwrap_or(false);
+
+            let placement = shell::with(|s| {
+                let settings = s.engine.settings();
+                let placement = (settings.str("tabs.position").to_string(), settings.int("tabs.width"));
+                s.tabbar_placement = placement.clone();
+                placement
+            });
+            if let Some((position, width)) = placement {
+                place_tabbar(window, &row, &tabbar, &position, width as i32);
+            }
 
             window.show();
             if let Some(session) = &self.session {
@@ -406,10 +468,10 @@ fn bar_size(role: Role) -> Size {
             width: 1,
             height: STATUSBAR_HEIGHT,
         },
-        Role::Tabbar => Size {
-            width: 1,
-            height: TABBAR_HEIGHT,
-        },
+        Role::Tabbar => {
+            let (width, height) = TABBAR_SIZE.with(Cell::get);
+            Size { width, height }
+        }
         _ => Size {
             width: 1,
             height: 1,

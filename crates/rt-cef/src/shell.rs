@@ -71,6 +71,14 @@ pub struct WindowState {
     /// Closed tabs as (index, url), newest last, for `undo`.
     pub closed: Vec<(usize, String)>,
     pub tabbar: Option<BrowserView>,
+    /// The page area's row, which also holds a left or right tab bar.
+    pub row: Option<Panel>,
+    /// The `tabs.position` and `tabs.width` the tab bar was last placed with.
+    pub tabbar_placement: (String, i64),
+    pub tabbar_shown: bool,
+    /// For `tabs.show = switching`: the tab last shown, and when the bar hides again.
+    last_tab_index: Option<usize>,
+    switching_until: Option<std::time::Instant>,
     pub statusbar: Option<BrowserView>,
     pub completion: Option<BrowserView>,
     pub overlay: Option<OverlayController>,
@@ -97,6 +105,11 @@ impl WindowState {
             tabs: TabList::default(),
             closed: Vec::new(),
             tabbar: None,
+            row: None,
+            tabbar_placement: (String::new(), 0),
+            tabbar_shown: true,
+            last_tab_index: None,
+            switching_until: None,
             statusbar: None,
             completion: None,
             overlay: None,
@@ -715,6 +728,18 @@ struct UiUpdate {
     /// Message generation and timeout in milliseconds.
     expire_message: Option<(u64, i64)>,
     title: Option<(Window, String)>,
+    tabbar: Option<TabbarChange>,
+    /// Refresh again after this many milliseconds (`tabs.show = switching`).
+    refresh_after: Option<i64>,
+}
+
+struct TabbarChange {
+    window: Window,
+    row: Panel,
+    tabbar: BrowserView,
+    /// New `tabs.position` and `tabs.width`, if they changed.
+    placement: Option<(String, i64)>,
+    visible: Option<bool>,
 }
 
 /// Push engine and tab state to the tab bar, status bar and completion overlay.
@@ -748,6 +773,24 @@ fn apply_ui_update(update: UiUpdate) {
     if let Some((generation, timeout)) = update.expire_message {
         let mut task = ExpireMessage::new(generation);
         post_delayed_task(ThreadId::UI, Some(&mut task), timeout);
+    }
+    if let Some(change) = update.tabbar {
+        if let Some((position, width)) = &change.placement {
+            crate::window::place_tabbar(
+                &change.window,
+                &change.row,
+                &change.tabbar,
+                position,
+                *width as i32,
+            );
+        }
+        if let Some(visible) = change.visible {
+            View::from(&change.tabbar).set_visible(visible.into());
+        }
+    }
+    if let Some(delay) = update.refresh_after {
+        let mut task = RefreshUi::new();
+        post_delayed_task(ThreadId::UI, Some(&mut task), delay);
     }
     if let Some((overlay, bounds)) = update.overlay {
         match bounds {
@@ -846,6 +889,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "tabs": tabs,
         "current": s.tabs.current_index(),
         "shrink": settings.bool("tabs.pinned.shrink"),
+        "vertical": matches!(settings.str("tabs.position"), "left" | "right"),
     })
     .to_string();
     if s.tabbar_ready
@@ -855,6 +899,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         s.last_tabbar = tabbar_json.clone();
         scripts.push((frame, tabbar_json));
     }
+    let (tabbar, refresh_after) = tabbar_change(s);
     // Recomputed every time: `{mode}` changes without the tab bar changing.
     let mut title = None;
     if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
@@ -922,6 +967,63 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         overlay,
         expire_message,
         title,
+        tabbar,
+        refresh_after,
+    }
+}
+
+/// Where the tab bar should be and whether it should show, compared with
+/// what was last applied. Also says when to check again after a tab switch.
+fn tabbar_change(s: &mut Shell) -> (Option<TabbarChange>, Option<i64>) {
+    let settings = s.engine.settings();
+    let placement = (
+        settings.str("tabs.position").to_string(),
+        settings.int("tabs.width"),
+    );
+    let show = settings.str("tabs.show").to_string();
+    let delay = settings.int("tabs.show_switching_delay");
+    let now = std::time::Instant::now();
+    let mut refresh_after = None;
+    let index = s.tabs.current_index();
+    if s.last_tab_index != Some(index) {
+        if s.last_tab_index.is_some() && show == "switching" {
+            s.switching_until = Some(now + std::time::Duration::from_millis(delay as u64));
+            refresh_after = Some(delay + 10);
+        }
+        s.last_tab_index = Some(index);
+    }
+    let switching = s.switching_until.is_some_and(|until| now < until);
+    let visible = rt_core::tabs::bar_visible(&show, s.tabs.len(), switching);
+    let placement = (placement != s.tabbar_placement).then(|| {
+        s.tabbar_placement = placement.clone();
+        placement
+    });
+    let visible = (visible != s.tabbar_shown).then(|| {
+        s.tabbar_shown = visible;
+        visible
+    });
+    let change = match (s.window.clone(), s.row.clone(), s.tabbar.clone()) {
+        (Some(window), Some(row), Some(tabbar)) if placement.is_some() || visible.is_some() => {
+            Some(TabbarChange {
+                window,
+                row,
+                tabbar,
+                placement,
+                visible,
+            })
+        }
+        _ => None,
+    };
+    (change, refresh_after)
+}
+
+wrap_task! {
+    struct RefreshUi {}
+
+    impl Task {
+        fn execute(&self) {
+            refresh_ui();
+        }
     }
 }
 

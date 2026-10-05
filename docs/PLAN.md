@@ -182,6 +182,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] History with completion (`:open` + `Tab`)
 - [x] Quickmarks and bookmarks in qutebrowser's file formats
 - [x] Crash-recovery autosave (`auto_save.interval`, `_autosave` removed on a clean exit) and a history page (`:history`, `riptide://history/`) (2026-10-02)
+- [ ] Recovery that survives signals, repeat crashes and crash loops; crashed-tab pages; crash reports by email or GitHub issue (M23)
 - [x] Importing qutebrowser's history.sqlite (`:history-import`, read-only, skips redirects and duplicates) (2026-10-02)
 - [x] Private windows (separate `CefRequestContext`) (2026-10-02)
 
@@ -620,7 +621,10 @@ Work:
 On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`doc/help/commands.asciidoc`) and 354 settings (`doc/help/settings.asciidoc`). Riptide parses 127 commands. Most of what's missing is below, grouped by what users notice. **Tier 1** items come first because they matter in daily use.
 
 - **Tabs** (tier 1: position and visibility):
-  - `tabs.position` (top, bottom, left, right), so tabs can be vertical. `tabs.show` (always, never, multiple, switching) and `tabs.show_switching_delay`.
+  - ✅ (2026-10-05) `tabs.position` (top, bottom, left, right) with `tabs.width` for vertical tabs, and `tabs.show` (always, never, multiple, switching) with `tabs.show_switching_delay`. All of them apply live.
+    - Layout: the window is a column (tab bar when top or bottom, a row, the status bar), and the row holds the page area plus a left or right tab bar. `window::place_tabbar` moves the tab bar's view between them.
+    - Its preferred size is kept outside the shell, because CEF asks for sizes during layout.
+    - The visibility rule (`rt_core::tabs::bar_visible`) is unit tested, and a smoke step checks the page's size with the bar on the left and hidden.
   - `tabs.title.format` and `format_pinned` (fields such as `{index}`, `{audio}`, `{host}`, `{private}`), `tabs.title.alignment`, `tabs.width`, `min_width`, `max_width`.
   - `tabs.select_on_remove`, `tabs.background`, `tabs.wrap`, `tabs.undo_stack_size`, and a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
   - Middle-click to close (`tabs.close_mouse_button`, `close_mouse_button_on_bar`), `tabs.tooltips`, `tabs.tabs_are_windows`.
@@ -773,6 +777,28 @@ Whatever path wins:
   - A smoke step with a local WebRTC loopback page and fake devices (`--use-fake-device-for-media-stream`; test builds only).
   - Once a picker exists, a check of `displaySurface` for each choice.
   - A manual matrix before calling it done: Google Meet, Zoom (web), Microsoft Teams, Jitsi, Slack huddles, Discord and Whereby, each tested for camera, microphone, screen, window and tab share, and with the call in a background tab. Check each site's browser detection with our user agent.
+
+### M23 — Crash recovery and crash reports
+
+**Today:** every `auto_save.interval` ms the open tabs are saved to the `_autosave` session. That file is deleted once `run_message_loop` returns, so if it's there at startup, the last run crashed. The tabs are then restored, or, if URLs were given on the command line, the user is pointed to `:session-load _autosave`. A tab saves only its URL, its title and whether it's pinned.
+
+- **Recovering open tabs:**
+  - **Signals count as clean exits:** SIGTERM and SIGINT (`pkill`, Ctrl-C, logout) appear to make Chromium shut down cleanly, so `run_message_loop` returns and `_autosave` is deleted. Unless `auto_save.session` is on, the tabs are then lost. Verify this, then save the session on signals instead of treating them as a normal quit.
+  - **The recovery copy gets overwritten:** after a crash, starting with URLs on the command line leaves the old tabs in `_autosave`, but the next autosave tick replaces them. At startup, rename the crashed autosave to a timestamped session (e.g. `_crashed-2026-10-05T10-34`), keep the last few, and list them in `:session-load` completion.
+  - **Crash loops:** if the restored tabs crash the browser again shortly after startup, don't restore them automatically the next time. Instead, show the crashed tabs on a `riptide://recover/` page where the user picks which ones to reopen, the way Firefox's "Restore Session" page works.
+  - **More state per tab:** save each tab's back/forward history and scroll position, so restoring doesn't drop where you were.
+  - **Crashed tabs:** there's no `on_render_process_terminated` handler, so a crashed or killed renderer leaves a dead tab. Show an error page in the tab with "reload" (`r`) and log the reason.
+- **Crash reports** (complements `:report` in M19):
+  - **Capture:**
+    - A Rust panic hook writes the message, backtrace and version (M18's `--version` string) to `<data>/crashes/<timestamp>.txt`.
+    - For native crashes in CEF, enable Crashpad to write minidumps locally with uploads off, and record the dump's path.
+  - **Offer after the crash:** at the next startup, the status bar says "riptide crashed last time: :crash-report". That command opens `riptide://crash/`, which shows the report and lets the user edit it, then send it one of two ways:
+    - **Email:** a `mailto:` link with the subject and body filled in. The address comes from a `crash_report.email` setting; with no address, the email button is hidden.
+    - **GitHub issue:** `https://github.com/joshzcold/riptide/issues/new?title=…&body=…`, filled in. Truncate the log so the URL stays under GitHub's ~8 KB limit, and tell the user to attach the full log or minidump by hand.
+  - **Privacy:** nothing is ever sent automatically. Reports leave out tab URLs and titles by default, and include them only if a checkbox is ticked. Log lines are shown before sending, because they can contain URLs.
+  - **Tests:**
+    - A test-build-only `:debug-crash` command (`panic`, `abort`, `renderer`) triggers each kind of crash.
+    - A smoke step checks that the next start offers the report and restores the tabs.
 
 ### Deferred — proprietary codecs (H.264 / AAC)
 Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.

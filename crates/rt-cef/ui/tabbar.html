@@ -49,6 +49,10 @@
   .error .indicator { background: var(--indicator-error); }
   .icon { width: 16px; height: 16px; flex-shrink: 0; }
   .title { overflow: hidden; text-overflow: ellipsis; }
+  /* tabs.position left or right: one tab per row, scrolling when they don't fit. */
+  .vertical #tabs { flex-direction: column; overflow-y: auto; scrollbar-width: none; }
+  .vertical .tab { flex: 0 0 auto; padding: 1px 4px 1px 0; }
+  .vertical .tab.drop-before { box-shadow: inset 0 3px 0 var(--drop-mark); }
 </style>
 </head>
 <body>
@@ -71,12 +75,13 @@
     if (e.button !== 0) return;
     const index = tabIndexAt(e.clientX, e.clientY);
     if (index === null) return;
-    press = { index, x: e.clientX, dragging: false };
+    press = { index, x: e.clientX, y: e.clientY, dragging: false };
     bar.setPointerCapture(e.pointerId);
   });
   bar.addEventListener("pointermove", (e) => {
     if (!press) return;
-    if (!press.dragging && Math.abs(e.clientX - press.x) < DRAG_THRESHOLD) return;
+    const moved = Math.max(Math.abs(e.clientX - press.x), Math.abs(e.clientY - press.y));
+    if (!press.dragging && moved < DRAG_THRESHOLD) return;
     press.dragging = true;
     clearMarks();
     const over = tabIndexAt(e.clientX, e.clientY);
@@ -138,8 +143,12 @@
     return el;
   }
 
-  window.rtRender = ({ tabs, current, shrink }) => {
-    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrink)));
+  window.rtRender = ({ tabs, current, shrink, vertical }) => {
+    document.body.classList.toggle("vertical", vertical);
+    // Shrinking pinned tabs saves width, which a vertical bar doesn't need.
+    const shrinkPinned = shrink && !vertical;
+    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrinkPinned)));
+    if (vertical) bar.children[current]?.scrollIntoView({ block: "nearest" });
   };
 </script>
 </body>
