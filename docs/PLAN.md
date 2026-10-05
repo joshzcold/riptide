@@ -638,8 +638,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - Layout: the window is a column (tab bar when top or bottom, a row, the status bar), and the row holds the page area plus a left or right tab bar. `window::place_tabbar` moves the tab bar's view between them.
     - Its preferred size is kept outside the shell, because CEF asks for sizes during layout.
     - The visibility rule (`rt_core::tabs::bar_visible`) is unit tested, and a smoke step checks the page's size with the bar on the left and hidden.
-  - `tabs.title.format` and `format_pinned` (fields such as `{index}`, `{audio}`, `{host}`, `{private}`), `tabs.title.alignment`, `tabs.width`, `min_width`, `max_width`.
-  - `tabs.select_on_remove`, `tabs.background`, `tabs.wrap`, `tabs.undo_stack_size`, and a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
+  - ✅ (2026-10-05) `tabs.title.format` and `format_pinned` (`{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}`, `{audio}`, `{private}`), formatted in `rt_core::title::tab_label`, and `tabs.tooltips`. Still to do: `tabs.title.alignment`, `min_width`, `max_width`.
+  - ✅ (2026-10-05) `tabs.select_on_remove` (next, prev, last-used), `tabs.wrap`, `tabs.undo_stack_size`. `tabs.background` isn't needed: Chromium's link dispositions already open middle-clicks in the background. Still to do: a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
   - Middle-click to close (`tabs.close_mouse_button`, `close_mouse_button_on_bar`), `tabs.tooltips`, `tabs.tabs_are_windows`.
 - **Status bar** (tier 1):
   - ✅ (2026-10-05) `statusbar.position` (top, bottom) and `statusbar.show`, where `never` still shows the bar while a command is typed or a prompt answered, and `in-mode` also outside normal mode and while a message is up. Both bars are arranged by `window::arrange_bars`, and the completion overlay opens on the page's side of the status bar.

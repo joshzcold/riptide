@@ -970,6 +970,12 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
 
     let settings = s.engine.settings();
     let favicons = settings.str("tabs.favicons.show");
+    let shrink = settings.bool("tabs.pinned.shrink")
+        && !matches!(settings.str("tabs.position"), "left" | "right");
+    let (format, format_pinned) = (
+        settings.str("tabs.title.format"),
+        settings.str("tabs.title.format_pinned"),
+    );
     let tabs: Vec<_> = s
         .tabs
         .iter()
@@ -977,7 +983,25 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         .map(|(i, t)| {
             let pinned = s.tabs.is_pinned(i);
             let show_icon = favicons == "always" || (favicons == "pinned" && pinned);
+            let template = if pinned && shrink {
+                format_pinned
+            } else {
+                format
+            };
+            let label = rt_core::title::tab_label(
+                template,
+                &rt_core::title::TabFields {
+                    index: i + 1,
+                    count: s.tabs.len(),
+                    title: &t.title,
+                    url: &t.url,
+                    progress: t.progress,
+                    muted: t.muted,
+                    private: s.private,
+                },
+            );
             json!({
+                "label": label,
                 "title": t.title,
                 "url": t.url,
                 "loading": t.progress.is_some(),
@@ -991,6 +1015,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "tabs": tabs,
         "current": s.tabs.current_index(),
         "shrink": settings.bool("tabs.pinned.shrink"),
+        "tooltips": settings.bool("tabs.tooltips"),
         "vertical": matches!(settings.str("tabs.position"), "left" | "right"),
     })
     .to_string();

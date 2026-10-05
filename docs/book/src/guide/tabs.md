@@ -10,11 +10,15 @@ Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shri
 
 The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close, scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
 
+Tab titles follow `tabs.title.format` (default `{audio}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab) and `{private}`. `tabs.tooltips = false` turns off the title-and-URL tooltip.
+
 `tabs.position` puts the bar at the `top`, `bottom`, `left` or `right` (a vertical list, `tabs.width` pixels wide), and `tabs.show` hides it: `always`, `never`, `multiple` (only with more than one tab) or `switching` (briefly after switching tabs).
 
 ## New tabs and popups
 
 Links that open new windows (`target=_blank`, `window.open`) open as tabs next to the current one, keeping `window.opener`. Closing the last tab is ignored, like qutebrowser.
+
+After you close the current tab, `tabs.select_on_remove` picks the next one to show: `next` (default), `prev`, or `last-used`. `J`/`K` wrap around from the last tab to the first unless `tabs.wrap = false`. `u` can reopen the last `tabs.undo_stack_size` closed tabs (100 by default).
 
 Where new tabs go is set by `tabs.new_position.related` (tabs opened from a page) and `tabs.new_position.unrelated` (everything else).
 

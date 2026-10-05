@@ -5,13 +5,11 @@ use cef::*;
 use rt_core::Command;
 use rt_core::command::{TabMoveTarget, TabTarget};
 use rt_core::engine::Level;
-use rt_core::tabs::{Position, resolve_index};
+use rt_core::tabs::{Position, SelectOnRemove, resolve_index};
 
 use crate::client::Role;
 use crate::shell::{self, Tab};
 use crate::window;
-
-const MAX_CLOSED_TABS: usize = 100;
 
 /// Carry out tab commands; returns false for commands that are not about tabs.
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {
@@ -93,7 +91,14 @@ pub fn cycle(forward: bool) {
     let enabled =
         shell::with(|s| s.engine.settings().bool("tabs.mousewheel_switching")).unwrap_or(false);
     if let Some(index) = enabled
-        .then(|| shell::with(|s| s.tabs.offset(if forward { 1 } else { -1 })))
+        .then(|| {
+            shell::with(|s| {
+                s.tabs.offset_wrapping(
+                    if forward { 1 } else { -1 },
+                    s.engine.settings().bool("tabs.wrap"),
+                )
+            })
+        })
         .flatten()
     {
         select(index);
@@ -149,7 +154,10 @@ pub fn select(index: usize) {
 }
 
 fn focus_offset(n: i64) {
-    if let Some(index) = shell::with(|s| s.tabs.offset(n)) {
+    if let Some(index) = shell::with(|s| {
+        s.tabs
+            .offset_wrapping(n, s.engine.settings().bool("tabs.wrap"))
+    }) {
         focus(index);
     }
 }
@@ -242,10 +250,12 @@ pub fn close(index: usize) {
     }
     let Some(Some((tab, was_current))) = shell::with(|s| {
         let was_current = index == s.tabs.current_index();
-        let tab = s.tabs.remove(index)?;
+        let select = SelectOnRemove::from_setting(s.engine.settings().str("tabs.select_on_remove"));
+        let undo = s.engine.settings().int("tabs.undo_stack_size").max(0) as usize;
+        let tab = s.tabs.remove_selecting(index, select)?;
         if !tab.url.is_empty() {
             s.closed.push((index, tab.url.clone()));
-            if s.closed.len() > MAX_CLOSED_TABS {
+            if s.closed.len() > undo {
                 s.closed.remove(0);
             }
         }

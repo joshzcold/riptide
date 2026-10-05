@@ -66,9 +66,15 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.pinned.frozen` | boolean | `true` | Keep pinned tabs on their page: :open in a pinned tab opens a new tab |
 | `tabs.pinned.shrink` | boolean | `true` | Shrink pinned tabs to their icon and number |
 | `tabs.position` | top \| bottom \| left \| right | `top` | Where the tab bar is; left and right list the tabs vertically |
+| `tabs.select_on_remove` | next \| prev \| last-used | `next` | Which tab to show after closing the current one: the next, the previous, or the one used before |
 | `tabs.show` | always \| never \| multiple \| switching | `always` | When to show the tab bar: always, never, with more than one tab, or briefly after switching tabs |
 | `tabs.show_switching_delay` | integer | `800` | How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds |
+| `tabs.title.format` | string | `{audio}{index}: {current_title}` | Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {private} |
+| `tabs.title.format_pinned` | string | `{index}` | Titles of pinned tabs while tabs.pinned.shrink shrinks them; same fields as tabs.title.format |
+| `tabs.tooltips` | boolean | `true` | Show a tab's title and URL when the mouse rests on it |
+| `tabs.undo_stack_size` | integer | `100` | How many closed tabs u can reopen; 0 keeps none |
 | `tabs.width` | integer | `200` | Width of the tab bar in pixels when tabs.position is left or right |
+| `tabs.wrap` | boolean | `true` | Wrap around from the last tab to the first (and back) when switching tabs |
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |

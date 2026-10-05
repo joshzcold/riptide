@@ -199,6 +199,37 @@ impl<T> TabList<T> {
         (self.current as i64 + n).rem_euclid(len) as usize
     }
 
+    /// `n` tabs away, wrapping around the ends only if `wrap` (`tabs.wrap`).
+    pub fn offset_wrapping(&self, n: i64, wrap: bool) -> usize {
+        if wrap {
+            return self.offset(n);
+        }
+        let last = self.tabs.len().saturating_sub(1) as i64;
+        (self.current as i64 + n).clamp(0, last) as usize
+    }
+
+    /// Remove a tab and pick the next current one as `tabs.select_on_remove`
+    /// says, when the current tab is the one removed.
+    pub fn remove_selecting(&mut self, index: usize, select: SelectOnRemove) -> Option<T> {
+        let was_current = index == self.current;
+        let previous = self.previous;
+        let tab = self.remove(index)?;
+        if was_current && !self.tabs.is_empty() {
+            match select {
+                SelectOnRemove::Next => {}
+                SelectOnRemove::Prev => {
+                    self.current = index.saturating_sub(1).min(self.tabs.len() - 1)
+                }
+                SelectOnRemove::LastUsed => {
+                    if let Some(p) = previous.filter(|&p| p != index) {
+                        self.current = if p > index { p - 1 } else { p };
+                    }
+                }
+            }
+        }
+        Some(tab)
+    }
+
     /// Move the current tab to `to` (clamped to its block), keeping it focused.
     pub fn move_current(&mut self, to: usize) {
         self.move_tab(self.current, to);
@@ -227,6 +258,24 @@ pub fn resolve_index(number: i64, len: usize) -> Option<usize> {
         _ => return None,
     };
     (0..len).contains(&index).then_some(index as usize)
+}
+
+/// Which tab becomes current when the current one closes (`tabs.select_on_remove`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectOnRemove {
+    Next,
+    Prev,
+    LastUsed,
+}
+
+impl SelectOnRemove {
+    pub fn from_setting(value: &str) -> Self {
+        match value {
+            "prev" => Self::Prev,
+            "last-used" => Self::LastUsed,
+            _ => Self::Next,
+        }
+    }
 }
 
 /// Whether `tabs.show` wants the tab bar visible. `switching` is true
@@ -420,5 +469,38 @@ mod tests {
         assert!(bar_visible("multiple", 2, false));
         assert!(bar_visible("switching", 3, true));
         assert!(!bar_visible("switching", 3, false));
+    }
+
+    #[test]
+    fn select_on_remove_and_wrap() {
+        let tabs = |current: usize| {
+            let mut t = TabList::default();
+            for i in 0..4 {
+                t.insert(i, Position::Last, false);
+            }
+            t.focus(1);
+            t.focus(current);
+            t
+        };
+        let mut t = tabs(2);
+        t.remove_selecting(2, SelectOnRemove::Next);
+        assert_eq!(t.current().copied(), Some(3));
+        let mut t = tabs(2);
+        t.remove_selecting(2, SelectOnRemove::Prev);
+        assert_eq!(t.current().copied(), Some(1));
+        let mut t = tabs(3);
+        t.remove_selecting(3, SelectOnRemove::LastUsed);
+        assert_eq!(t.current().copied(), Some(1), "back to the tab used before");
+        let mut t = tabs(2);
+        t.remove_selecting(0, SelectOnRemove::Prev);
+        assert_eq!(
+            t.current().copied(),
+            Some(2),
+            "closing another tab keeps the current one"
+        );
+        let t = tabs(3);
+        assert_eq!(t.offset_wrapping(1, true), 0);
+        assert_eq!(t.offset_wrapping(1, false), 3);
+        assert_eq!(tabs(0).offset_wrapping(-1, false), 0);
     }
 }

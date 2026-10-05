@@ -754,6 +754,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where the tab bar is; left and right list the tabs vertically"
     ),
     def!(
+        "tabs.select_on_remove",
+        Kind::Enum(&["next", "prev", "last-used"]),
+        s("next"),
+        "Which tab to show after closing the current one: the next, the previous, or the one used before"
+    ),
+    def!(
         "tabs.show",
         Kind::Enum(&["always", "never", "multiple", "switching"]),
         s("always"),
@@ -769,10 +775,43 @@ pub static SETTINGS: &[SettingDef] = &[
         "How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds"
     ),
     def!(
+        "tabs.title.format",
+        Kind::Str,
+        s("{audio}{index}: {current_title}"),
+        "Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {private}"
+    ),
+    def!(
+        "tabs.title.format_pinned",
+        Kind::Str,
+        s("{index}"),
+        "Titles of pinned tabs while tabs.pinned.shrink shrinks them; same fields as tabs.title.format"
+    ),
+    def!(
+        "tabs.tooltips",
+        Kind::Bool,
+        Value::Bool(true),
+        "Show a tab's title and URL when the mouse rests on it"
+    ),
+    def!(
+        "tabs.undo_stack_size",
+        Kind::Int {
+            min: 0,
+            max: 10_000
+        },
+        Value::Int(100),
+        "How many closed tabs u can reopen; 0 keeps none"
+    ),
+    def!(
         "tabs.width",
         Kind::Int { min: 50, max: 1000 },
         Value::Int(200),
         "Width of the tab bar in pixels when tabs.position is left or right"
+    ),
+    def!(
+        "tabs.wrap",
+        Kind::Bool,
+        Value::Bool(true),
+        "Wrap around from the last tab to the first (and back) when switching tabs"
     ),
     def!(
         "url.default_page",

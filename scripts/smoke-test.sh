@@ -873,6 +873,38 @@ grep -q 'window.title_format' "$work/base/config/config.toml" 2>/dev/null && pas
 # Later steps restart the browser; keep the config they expect.
 rm -f "$work/base/config/config.toml"
 
+step "tabs.select_on_remove and tabs.wrap"
+three_tabs() {
+    run "tab-only"
+    run "open file://$work/nav1.html"
+    expect_title "nav1"
+    run "open -t file://$work/second.html"
+    expect_title "second"
+    run "open -t file://$work/nav2.html"
+    expect_title "nav2"
+    run "tab-focus 2"
+    expect_title "second"
+}
+run "set tabs.select_on_remove prev"
+three_tabs
+run "tab-close"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) != second ]] && break; sleep 0.1; done
+prev=$(page_title)
+run "set tabs.select_on_remove next"
+three_tabs
+run "tab-close"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) != second ]] && break; sleep 0.1; done
+next=$(page_title)
+run "set tabs.wrap false"
+run "tab-focus 1"
+expect_title "nav1"
+run "tab-prev"
+nap 0.5
+no_wrap=$(page_title)
+run "set tabs.wrap true"
+[[ $prev == nav1 && $next == nav2 && $no_wrap == nav1 ]] && pass ||
+    fail "after closing with prev '$prev', with next '$next'; tab-prev without wrap '$no_wrap'"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

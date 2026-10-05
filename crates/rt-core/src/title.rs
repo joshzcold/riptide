@@ -15,6 +15,39 @@ pub fn format(template: &str, title: &str, url: &str, mode: &str) -> String {
         .replace("{mode}", mode)
 }
 
+/// A tab's label for `tabs.title.format` and `tabs.title.format_pinned`:
+/// `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`,
+/// `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` when muted) and
+/// `{private}` (`[Private] ` in private windows).
+pub struct TabFields<'a> {
+    pub index: usize,
+    pub count: usize,
+    pub title: &'a str,
+    pub url: &'a str,
+    pub progress: Option<f64>,
+    pub muted: bool,
+    pub private: bool,
+}
+
+pub fn tab_label(template: &str, f: &TabFields) -> String {
+    let current = if f.title.is_empty() { f.url } else { f.title };
+    let width = f.count.to_string().len();
+    template
+        .replace("{index}", &f.index.to_string())
+        .replace("{aligned_index}", &format!("{:>width$}", f.index))
+        .replace("{current_title}", current)
+        .replace("{current_url}", f.url)
+        .replace("{host}", crate::url::host(f.url))
+        .replace(
+            "{perc}",
+            &f.progress
+                .map(|p| format!("[{}%] ", (p * 100.0).round()))
+                .unwrap_or_default(),
+        )
+        .replace("{audio}", if f.muted { "[M] " } else { "" })
+        .replace("{private}", if f.private { "[Private] " } else { "" })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -46,5 +79,27 @@ mod tests {
             "insert|x.org|https://x.org:8080/p?q"
         );
         assert_eq!(format("{host}", "", "about:blank", "normal"), "");
+    }
+
+    #[test]
+    fn tab_labels() {
+        let f = TabFields {
+            index: 3,
+            count: 12,
+            title: "Rust",
+            url: "https://rust-lang.org/learn",
+            progress: Some(0.42),
+            muted: true,
+            private: false,
+        };
+        assert_eq!(
+            tab_label("{audio}{index}: {current_title}", &f),
+            "[M] 3: Rust"
+        );
+        assert_eq!(
+            tab_label("{aligned_index} {host} {perc}", &f),
+            " 3 rust-lang.org [42%] "
+        );
+        assert_eq!(tab_label("{index}", &f), "3");
     }
 }

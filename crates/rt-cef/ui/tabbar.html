@@ -108,7 +108,7 @@
     send("cycle-tab", { forward: e.deltaY > 0 });
   }, { passive: false });
 
-  function tabElement(tab, i, current, shrink) {
+  function tabElement(tab, i, current, shrink, tooltips) {
     const el = document.createElement("div");
     el.className = "tab";
     if (i === current) el.classList.add("selected");
@@ -116,7 +116,7 @@
     if (tab.pinned && shrink) el.classList.add("shrunk");
     if (tab.loading) el.classList.add("loading");
     if (tab.error) el.classList.add("error");
-    el.title = tab.title ? `${tab.title}\n${tab.url}` : tab.url;
+    if (tooltips) el.title = tab.title ? `${tab.title}\n${tab.url}` : tab.url;
 
     const indicator = document.createElement("span");
     indicator.className = "indicator";
@@ -131,8 +131,8 @@
     }
     const title = document.createElement("span");
     title.className = "title";
-    const name = tab.title || tab.url || "about:blank";
-    title.textContent = tab.pinned && shrink ? `${i + 1}` : `${i + 1}: ${name}`;
+    // tabs.title.format (or format_pinned), filled in by the browser.
+    title.textContent = tab.label;
     el.append(title);
 
     el.dataset.index = String(i);
@@ -143,11 +143,11 @@
     return el;
   }
 
-  window.rtRender = ({ tabs, current, shrink, vertical }) => {
+  window.rtRender = ({ tabs, current, shrink, vertical, tooltips }) => {
     document.body.classList.toggle("vertical", vertical);
     // Shrinking pinned tabs saves width, which a vertical bar doesn't need.
     const shrinkPinned = shrink && !vertical;
-    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrinkPinned)));
+    bar.replaceChildren(...tabs.map((tab, i) => tabElement(tab, i, current, shrinkPinned, tooltips)));
     if (vertical) bar.children[current]?.scrollIntoView({ block: "nearest" });
   };
 </script>
