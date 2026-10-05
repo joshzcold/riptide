@@ -17,7 +17,7 @@ rt-core = { path = "crates/rt-core" }
 rt-cef = { path = "crates/rt-cef" }
 rt-config = { path = "crates/rt-config" }
 rt-storage = { path = "crates/rt-storage" }
-cef = { version = "=154.3.0", default-features = false }
+cef = { version = "=154.4.0", default-features = false }
 # Without "single-thread" the engine is Send + Sync, for CEF's IO thread.
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 arboard = { version = "3.6", default-features = false }

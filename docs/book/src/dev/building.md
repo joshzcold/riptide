@@ -19,7 +19,7 @@ Logging goes to stderr and uses the `RT_LOG` filter, e.g. `RT_LOG=rt_cef=trace .
 ## Without Task
 
 ```sh
-git clone --depth 1 --branch cef-v154.3.0+154.0.32 https://github.com/tauri-apps/cef-rs /tmp/cef-rs
+git clone --depth 1 --branch cef-v154.4.0+154.0.33 https://github.com/tauri-apps/cef-rs /tmp/cef-rs
 (cd /tmp/cef-rs && cargo run -p export-cef-dir -- --force "$HOME/.local/share/cef")
 export CEF_PATH="$HOME/.local/share/cef"
 cargo build && ./target/debug/riptide
