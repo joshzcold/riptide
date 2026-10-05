@@ -980,8 +980,10 @@ Original plan:
     - The socket thread waits on a channel for the UI thread's answer.
     - There's no server-side `wait` request: the harness polls `state` instead.
   - **Harness:** `crates/rt-e2e` gives each test its own Xvfb (`-displayfd`), scratch `--basedir`, short `XDG_RUNTIME_DIR` (Unix socket paths must fit in ~108 bytes) and fixture HTTP server. It stops its process group and then the CEF helpers that carry its `--user-data-dir`, because the zygote leaves the group.
-  - **Tests:** 30 so far.
+  - **Tests:** 51 so far.
     - Areas: keys, modes, marks, macros, search, `]]`/`[[`, zoom, tabs, hints (including iframes and number hints), the command line and completion, prompts, `config.toml`/`config.lua`/`autoconfig.toml`, windows, private windows, sessions, and recovery after SIGKILL and SIGTERM.
+    - Since 2026-10-05, also: history completion and `:history-import`, the internal pages and their isolation from web pages, ad blocking (network and element hiding), permission prompts saved per site (allow and block), userscripts and their FIFO, hints running userscripts and programs, `:spawn -o`, the editor, Greasemonkey (`@run-at`, `GM_addStyle`, `GM_setValue`, `@require`), downloads (directory, path completion in the prompt, `:download-delete`), caret mode, and a second `riptide` invocation handing over its arguments.
+    - These were written in a separate git worktree (`.claude/worktrees/`), so test runs never build or start the main checkout's work in progress.
     - They're `#[ignore]`d so a workspace-wide `cargo test` never starts browsers. `./task e2e` and CI run them; each test binary takes about a second.
     - `state` lists hint labels with each element's text and URL, so `follow_hint` can click anything.
     - The harness can restart a profile, crash it (SIGKILL) or terminate it (SIGTERM).
@@ -989,7 +991,7 @@ Original plan:
     - ✅ A tab closed before its first page committed had an empty `url`, so `u` couldn't reopen it. `tabs::open` now records the URL it was asked for. Test: `u_reopens_a_tab_closed_before_its_page_loaded`.
     - Under load, keys sent to a page that has loaded but not painted are dropped, even though it reports focus and visibility. This is probably the "lost keys" gap in M14. The harness waits for two animation frames after each load.
   - **Next:**
-    - Port downloads, adblock, Greasemonkey, userscripts and the internal pages.
+    - Still only in the smoke test: the certificate prompt (needs an HTTPS fixture server), per-site user agents and JavaScript, `:screenshot`, upload fields with `fileselect.handler`, Alt-e in the download prompt, lazy session restore, `tabs.position`/`statusbar.show` layout, `confirm_quit`, and the editor round trips for `:edit-url` and `:cmd-edit`.
     - Delete the ported steps from `scripts/smoke-test.sh` once nobody else is editing it.
 
 #### Unit tests for the CEF layer

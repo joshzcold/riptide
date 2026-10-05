@@ -91,10 +91,17 @@ impl State {
 }
 
 /// Options for starting a [`Browser`]: `Browser::launch().lua("…").start("page.html")`.
+///
+/// Config and files may use `{server}` (the fixture server, e.g.
+/// `http://127.0.0.1:4321`), `{pages}` (the fixture directory) and
+/// `{scratch}` (an empty directory for the test's own files), which are only
+/// known once the test starts.
 #[derive(Default)]
 pub struct Launch {
     config_toml: Option<String>,
     config_lua: Option<String>,
+    /// `(path under the profile, contents, executable)`.
+    files: Vec<(String, String, bool)>,
 }
 
 impl Launch {
@@ -110,6 +117,18 @@ impl Launch {
         self
     }
 
+    /// A file in the profile, e.g. `data/greasemonkey/x.user.js`.
+    pub fn file(mut self, path: &str, contents: &str) -> Self {
+        self.files.push((path.into(), contents.into(), false));
+        self
+    }
+
+    /// An executable file in the profile, e.g. `config/userscripts/name`.
+    pub fn script(mut self, path: &str, contents: &str) -> Self {
+        self.files.push((path.into(), contents.into(), true));
+        self
+    }
+
     /// Start on `page` (a file in `pages/`) and wait until it has loaded.
     pub fn start(self, page: &str) -> Browser {
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -121,15 +140,31 @@ impl Launch {
         let base = dir.join("base");
         std::fs::create_dir_all(&run).unwrap();
         std::fs::create_dir_all(base.join("config")).unwrap();
+        std::fs::create_dir_all(dir.join("scratch")).unwrap();
         set_private(&run);
-        if let Some(text) = &self.config_toml {
-            std::fs::write(base.join("config/config.toml"), text).unwrap();
-        }
-        if let Some(text) = &self.config_lua {
-            std::fs::write(base.join("config/config.lua"), text).unwrap();
-        }
 
         let port = serve_pages();
+        let fill = |text: &str| {
+            text.replace("{server}", &format!("http://127.0.0.1:{port}"))
+                .replace("{pages}", &pages_dir().display().to_string())
+                .replace("{scratch}", &dir.join("scratch").display().to_string())
+        };
+        if let Some(text) = &self.config_toml {
+            std::fs::write(base.join("config/config.toml"), fill(text)).unwrap();
+        }
+        if let Some(text) = &self.config_lua {
+            std::fs::write(base.join("config/config.lua"), fill(text)).unwrap();
+        }
+        for (path, contents, executable) in &self.files {
+            let path = base.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, fill(contents)).unwrap();
+            if *executable {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+
         let (xvfb, display) = start_xvfb();
         let url = format!("http://127.0.0.1:{port}/{page}");
         let socket = remote::socket_path(&base.join("data"), Some(&run));
@@ -179,6 +214,41 @@ impl Browser {
     /// The profile's data directory (history, sessions, downloads…).
     pub fn data_dir(&self) -> PathBuf {
         self.dir.join("base/data")
+    }
+
+    /// The test's own directory, `{scratch}` in config and files.
+    pub fn scratch(&self) -> PathBuf {
+        self.dir.join("scratch")
+    }
+
+    /// Run `riptide args…` as a second invocation on the same profile, which
+    /// hands the arguments to this browser, and return how it exited.
+    pub fn invoke(&self, args: &[&str]) -> std::process::ExitStatus {
+        Command::new(binary())
+            .arg("--basedir")
+            .arg(self.dir.join("base"))
+            .args(args)
+            .env("DISPLAY", format!(":{}", self.display))
+            .env("XDG_RUNTIME_DIR", self.dir.join("run"))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("can't run riptide")
+    }
+
+    /// Poll until `path` exists and isn't empty, then return its contents.
+    pub fn wait_file(&self, path: &Path) -> String {
+        let start = Instant::now();
+        while start.elapsed() < TIMEOUT {
+            if let Ok(text) = std::fs::read_to_string(path)
+                && !text.is_empty()
+            {
+                return text;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("timed out waiting for {}", path.display());
     }
 
     /// Wait for the browser to exit by itself, e.g. after `:quit`.
@@ -438,6 +508,10 @@ fn binary() -> PathBuf {
     path
 }
 
+fn pages_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("pages")
+}
+
 fn set_private(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -475,7 +549,7 @@ fn start_xvfb() -> (Child, String) {
 fn serve_pages() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("pages");
+    let root = pages_dir();
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let root = root.clone();

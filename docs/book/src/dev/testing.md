@@ -36,7 +36,8 @@ fn d_closes_the_tab() {
 ```
 
 - **Wait, don't sleep:** `wait_until`, `wait_mode` and `wait_eval` poll until the state matches, and fail with the last state after 15 seconds. Use `s.tab().is_loaded(&url)` to wait for a page: a new tab knows its URL before it starts loading, so checking the URL alone isn't enough.
-- **Start options:** `Browser::launch().toml("…").lua("…").start("page.html")` writes `config.toml` and `config.lua` into the profile first.
+- **Start options:** `Browser::launch().toml("…").lua("…").file("data/greasemonkey/x.user.js", "…").script("config/userscripts/us", "…").start("page.html")` writes the profile before the browser starts (`script` makes the file executable). Config and files can use `{server}` (the fixture server), `{pages}` (the fixture directory) and `{scratch}` (an empty directory for the test's own files, also `b.scratch()`).
+- **Files and second invocations:** `wait_file(path)` polls until a file has content, e.g. a download or a userscript's output. `invoke(&[url, ":cmd"])` runs `riptide` again on the same profile, which hands its arguments to the running browser.
 - **Restarts:** `config_dir()` and `data_dir()` give the profile's paths. After `:quit` and `wait_exit()`, a `crash()` (SIGKILL) or a `terminate()` (SIGTERM), `restart()` starts the browser again on the same profile, for testing sessions and crash recovery.
 - **Hints:** `follow_hint("hint links tab", |h| h.url.as_deref() == Some(&url))` starts hints and presses the label of the element you pick by its text or link. `state().hints` lists the labels on screen.
 - **Painting:** `start()` and `open()` wait until the page has drawn a frame. Under load Chromium drops keys sent to a page that has loaded but not painted, so call `wait_painted()` after navigating some other way.

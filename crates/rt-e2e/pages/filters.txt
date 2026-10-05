@@ -1,0 +1,5 @@
+! test list
+/ads/banner.js
+##.ad-banner
+##.late-ad
+127.0.0.1##.local-ad

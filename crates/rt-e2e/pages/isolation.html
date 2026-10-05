@@ -1,0 +1,12 @@
+<!doctype html><title>isolation</title>
+<iframe id="f" src="riptide://ui/statusbar.html"></iframe>
+<script>
+setTimeout(() => {
+  let frame;
+  try {
+    const d = document.getElementById('f').contentDocument;
+    frame = d && d.getElementById('bar') ? 'ui-loaded' : 'empty';
+  } catch (e) { frame = 'cross-origin'; }
+  document.title = `rt=${typeof window.rt} frame=${frame}`;
+}, 1000);
+</script>

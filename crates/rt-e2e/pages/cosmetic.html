@@ -1,0 +1,8 @@
+<!doctype html><title>cosmetic</title>
+<div class="ad-banner">ad</div><div class="local-ad">ad</div><div class="content">text</div>
+<script>
+// An ad that arrives after the page has loaded.
+setTimeout(() => { const ad = document.createElement('div'); ad.className = 'late-ad'; document.body.append(ad); }, 1000);
+const shown = (c) => { const el = document.querySelector('.' + c); return el ? getComputedStyle(el).display : 'missing'; };
+setInterval(() => { document.title = `banner=${shown('ad-banner')} local=${shown('local-ad')} content=${shown('content')} late=${shown('late-ad')}`; }, 200);
+</script>
