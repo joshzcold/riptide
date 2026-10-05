@@ -4,6 +4,10 @@
 
 Each [GitHub release](https://github.com/joshzcold/riptide/releases) has a Linux x86_64 tarball (`riptide-X.Y.Z-linux-x86_64.tar.gz`) and an AppImage, with `SHA256SUMS`. Both contain the binary and the CEF runtime it needs. Unpack the tarball anywhere and run `riptide`, or make the AppImage executable and run it.
 
+To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify where it was built with `gh attestation verify <file> --repo joshzcold/riptide`.
+
+The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly) is rebuilt from `main` every night it changes. It has the newest features, and may be broken.
+
 macOS and Windows builds compile and pass their unit tests, but can't run the browser yet; they need the app bundle and installer work that's still planned.
 
 ## Building from source

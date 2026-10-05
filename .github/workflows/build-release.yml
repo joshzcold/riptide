@@ -1,0 +1,107 @@
+name: build release
+
+# Builds, packages and smoke-tests release artifacts; called by release.yml and
+# nightly.yml. Each platform uploads a `dist-<platform>` artifact.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit or tag to build
+        type: string
+        required: true
+      version:
+        description: Version in the file names, e.g. 0.2.0 or nightly-20261005-abc1234
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: linux (package, smoke test)
+    runs-on: ubuntu-24.04
+    env:
+      CEF_PATH: ${{ github.workspace }}/../cef
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Install CEF runtime libraries, Xvfb, xdotool and appimagetool's needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xdotool libnss3 libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+            libcups2t64 libpango-1.0-0 libcairo2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxrandr2 libxi6 libdrm2 libdbus-1-3 libfuse2t64 file
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache CEF binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CEF_PATH }}
+          key: cef-linux-${{ hashFiles('Cargo.lock') }}
+      - run: ./task setup
+      - run: cargo build --release --locked
+      - name: Package
+        run: scripts/package-linux.sh --appimage "${{ inputs.version }}"
+      # Ubuntu 24.04 blocks unprivileged user namespaces, which the sandbox needs.
+      - name: Allow user namespaces for the sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The full end-to-end suite against what users download, not the build tree.
+      - name: Smoke-test the tarball
+        env:
+          EXPECT_SANDBOX: "1"
+        run: |
+          mkdir -p "$RUNNER_TEMP/tarball"
+          tar -xzf dist/*.tar.gz -C "$RUNNER_TEMP/tarball"
+          BIN=$(echo "$RUNNER_TEMP"/tarball/riptide-*/riptide) scripts/smoke-test.sh
+      - name: Smoke-test the AppImage
+        run: |
+          # Extracted, so the test needs no FUSE and the browser isn't behind the AppImage runtime's process.
+          appimage=$(echo "$GITHUB_WORKSPACE"/dist/*.AppImage)
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
+          BIN=$RUNNER_TEMP/squashfs-root/AppRun scripts/smoke-test.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+          retention-days: 3
+
+  # Experimental: these can't run the browser yet (M10), so a failure here
+  # doesn't stop a release; the artifact is simply left out.
+  other:
+    name: ${{ matrix.os }} (experimental package)
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked
+      - name: Package
+        shell: bash
+        run: scripts/package-experimental.sh "${{ inputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.platform }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          retention-days: 3

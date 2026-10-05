@@ -48,3 +48,7 @@ commit_parsers = [
     { message = "^(Add|Scaffold) ", group = "<!-- 0 -->Features" },
     { message = ".*", skip = true },
 ]
+
+[bump]
+# The first release; later ones bump from the last tag (0.x: features bump the minor version).
+initial_tag = "v0.1.0"
