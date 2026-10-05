@@ -586,7 +586,13 @@ impl Engine {
         let mut session = if self.settings.str("hints.mode") == "number" {
             HintSession::new_numbers(request, items)
         } else {
-            HintSession::new(request, items, self.settings.str("hints.chars"))
+            HintSession::new_with(
+                request,
+                items,
+                self.settings.str("hints.chars"),
+                self.settings.int("hints.min_chars").max(1) as u32,
+                self.settings.bool("hints.scatter"),
+            )
         };
         session.auto_follow = AutoFollow::from_setting(self.settings.str("hints.auto_follow"));
         effects.push(Effect::ShowHints {
@@ -700,7 +706,8 @@ impl Engine {
         }
         let leave_insert =
             self.mode == Mode::Insert && self.settings.bool("input.insert_mode.leave_on_load");
-        if leave_insert || self.mode == Mode::Hint {
+        let leave_hints = self.mode == Mode::Hint && self.settings.bool("hints.leave_on_load");
+        if leave_insert || leave_hints {
             self.set_mode(Mode::Normal, &mut effects);
         }
         effects

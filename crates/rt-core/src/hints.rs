@@ -140,16 +140,24 @@ const NUMBER_CHARS: &str = "1234567890";
 /// as many labels as possible are one character shorter, and no label is a
 /// prefix of another.
 pub fn labels(count: usize, chars: &str) -> Vec<String> {
+    labels_with(count, chars, 1, true)
+}
+
+/// [`labels`] with `hints.min_chars` (no label shorter) and `hints.scatter`
+/// (spread labels over the alphabet, or hand them out in order).
+pub fn labels_with(count: usize, chars: &str, min_chars: u32, scatter_labels: bool) -> Vec<String> {
     let chars: Vec<char> = chars.chars().collect();
     let base = chars.len();
     if count == 0 || base < 2 {
         return Vec::new();
     }
-    let mut needed = 1u32;
+    let min_chars = min_chars.max(1);
+    let mut needed = min_chars;
     while base.pow(needed) < count {
         needed += 1;
     }
-    let short_count = if needed > 1 {
+    // Short labels are one character shorter; only if that's still long enough.
+    let short_count = if needed > min_chars {
         (base.pow(needed) - count) / base
     } else {
         0
@@ -160,7 +168,11 @@ pub fn labels(count: usize, chars: &str) -> Vec<String> {
         .collect();
     let start = short_count * base;
     labels.extend((start..start + long_count).map(|i| number_to_label(i, &chars, needed)));
-    scatter(labels, base)
+    if scatter_labels {
+        scatter(labels, base)
+    } else {
+        labels
+    }
 }
 
 fn number_to_label(mut number: usize, chars: &[char], digits: u32) -> String {
@@ -222,7 +234,18 @@ pub enum HintInput {
 
 impl HintSession {
     pub fn new(request: HintRequest, items: Vec<HintItem>, chars: &str) -> Self {
-        let labels = labels(items.len(), chars);
+        Self::new_with(request, items, chars, 1, true)
+    }
+
+    /// [`HintSession::new`] with `hints.min_chars` and `hints.scatter`.
+    pub fn new_with(
+        request: HintRequest,
+        items: Vec<HintItem>,
+        chars: &str,
+        min_chars: u32,
+        scatter: bool,
+    ) -> Self {
+        let labels = labels_with(items.len(), chars, min_chars, scatter);
         Self {
             request,
             items,
@@ -497,5 +520,19 @@ mod tests {
                 assert_eq!(s.ready, None, "backspace forgets the match");
             }
         }
+    }
+
+    #[test]
+    fn min_chars_and_scatter() {
+        let two = labels_with(3, "asd", 2, true);
+        assert_eq!(two.len(), 3);
+        assert!(two.iter().all(|l| l.chars().count() == 2), "{two:?}");
+        assert!(is_prefix_free(&two));
+        assert_eq!(labels_with(3, "asd", 1, false), ["a", "s", "d"]);
+        assert_eq!(
+            labels_with(5, "abc", 1, false),
+            ["a", "ba", "bb", "bc", "ca"]
+        );
+        assert_eq!(labels_with(5, "abc", 1, true), labels(5, "abc"));
     }
 }

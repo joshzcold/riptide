@@ -1,12 +1,12 @@
 // :navigate prev/next. Returns the URL of the page's previous or next link as
-// JSON (or null): rel links first, then links whose text looks right,
-// using qutebrowser's default hints.prev_regexes and hints.next_regexes.
-(function (which) {
+// JSON (or null): rel links first, then links whose text matches one of
+// `regexes` (hints.prev_regexes or hints.next_regexes), in order.
+(function (which, regexes) {
   const rel = document.querySelector(`link[rel~=${which}][href], a[rel~=${which}][href]`);
   if (rel) return JSON.stringify(rel.href);
-  const patterns = which === "next"
-    ? [/\bnext\b/i, /\bmore\b/i, /\bnewer\b/i, /\b[>→≫]\b/, /\b(>>|»)\b/, /\bcontinue\b/i]
-    : [/\bprev(ious)?\b/i, /\bback\b/i, /\bolder\b/i, /\b[<←≪]\b/, /\b(<<|«)\b/];
+  const patterns = regexes.flatMap((r) => {
+    try { return [new RegExp(r, "i")]; } catch (_) { return []; }
+  });
   const links = Array.from(document.querySelectorAll("a[href]"))
     .filter((a) => a.getClientRects().length && !a.href.startsWith("javascript:"));
   for (const pattern of patterns) {

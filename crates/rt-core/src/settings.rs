@@ -693,10 +693,53 @@ pub static SETTINGS: &[SettingDef] = &[
         hint_chars
     ),
     def!(
+        "hints.leave_on_load",
+        Kind::Bool,
+        Value::Bool(true),
+        "Leave hint mode when the page starts loading something new"
+    ),
+    def!(
+        "hints.min_chars",
+        Kind::Int { min: 1, max: 5 },
+        Value::Int(1),
+        "The shortest hint label, in characters"
+    ),
+    def!(
         "hints.mode",
         Kind::Enum(&["letter", "number"]),
         s("letter"),
         "letter: labels from hints.chars; number: numbered labels, and typing letters filters by text"
+    ),
+    def!(
+        "hints.next_regexes",
+        Kind::List,
+        Value::List(vec![
+            r"\bnext\b".to_string(),
+            r"\bmore\b".to_string(),
+            r"\bnewer\b".to_string(),
+            r"\b[>→≫]\b".to_string(),
+            r"\b(>>|»)\b".to_string(),
+            r"\bcontinue\b".to_string()
+        ]),
+        "Link texts ]] follows to the next page, as JavaScript regular expressions (case doesn't matter)"
+    ),
+    def!(
+        "hints.prev_regexes",
+        Kind::List,
+        Value::List(vec![
+            r"\bprev(ious)?\b".to_string(),
+            r"\bback\b".to_string(),
+            r"\bolder\b".to_string(),
+            r"\b[<←≪]\b".to_string(),
+            r"\b(<<|«)\b".to_string()
+        ]),
+        "Link texts [[ follows to the previous page, as JavaScript regular expressions (case doesn't matter)"
+    ),
+    def!(
+        "hints.scatter",
+        Kind::Bool,
+        Value::Bool(true),
+        "Spread hint labels over the alphabet so neighbours differ; false labels in order"
     ),
     def!(
         "hints.selectors",

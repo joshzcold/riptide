@@ -56,9 +56,13 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             } else {
                 "prev"
             };
+            let setting = format!("hints.{which}_regexes");
+            let regexes =
+                shell::with(|s| s.engine.settings().list(&setting).to_vec()).unwrap_or_default();
+            let regexes = serde_json::to_string(&regexes).unwrap_or_else(|_| "[]".into());
             eval::eval(
                 &browser,
-                &format!("{NAVIGATE_JS}('{which}')"),
+                &format!("{NAVIGATE_JS}('{which}', {regexes})"),
                 move |result| {
                     let url = result
                         .ok()

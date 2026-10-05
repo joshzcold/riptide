@@ -53,7 +53,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `` `a `` / `'a` | Set / jump to mark `a`: `a`–`z` remember this page's scroll position, `A`–`Z` also the page itself; `''` returns to where the last jump started |
 | `Ctrl-e` (insert mode) | `open-editor`: edit the text field in `editor.command` |
 | `gu` / `gU` | `navigate up`: one level up the URL, here / in a new tab (a count goes further) |
-| `[[` `]]` / `{{` `}}` | `navigate prev` / `next`: follow the page's previous/next link (`rel` links, or link text such as "Next »"), here / in a new tab |
+| `[[` `]]` / `{{` `}}` | `navigate prev` / `next`: follow the page's previous/next link (`rel` links, or link text matching `hints.prev_regexes` / `hints.next_regexes`, such as "Next »"), here / in a new tab |
 | `Ctrl-a` / `Ctrl-x` | `navigate increment` / `decrement`: change the last number in the URL (`page/9` → `page/10`) |
 | `Return` / `Ctrl-Return` | `selection-follow`: follow the link a search found (or the focused link) here / in a new tab; otherwise the page gets the key |
 | `/` `?` then `n` `N` | Find text in the page forward / backward, then go to the next / previous match. Matches highlight as you type (`search.incremental`); case is ignored unless the text has a capital (`search.ignore_case`). `:search` with no text clears it. |
@@ -128,6 +128,8 @@ When a hint is followed is set by `hints.auto_follow`:
 | `full-match` | Only when you type a whole label, not when number-mode text narrows to one |
 | `always` | Either way |
 | `never` | Only when you press `Return` (`:hint-follow`) |
+
+Labels use `hints.chars`. `hints.min_chars` makes them at least that long, and `hints.scatter = false` hands them out in order instead of spreading them over the alphabet. A page that starts loading ends hint mode unless `hints.leave_on_load = false`.
 
 `hints.auto_follow_timeout` ignores keys for a moment after a hint is followed, so a fast second keystroke doesn't land in the page. `:hint --rapid` (`;r`) keeps the labels up after each pick.
 
