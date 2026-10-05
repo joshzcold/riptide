@@ -1008,7 +1008,7 @@ Original plan:
 
 Each move adds tests, and the rule from `rt-core` applies: anything that can be decided without CEF is tested without CEF. Coverage is measured with `cargo llvm-cov`, reported in CI as a summary but not used as a gate.
 
-- ✅ **Started (2026-10-05):** `./task test` runs `rt-cef`'s unit tests too; they link CEF, so they run on Linux only. There are 18, up from 1.
+- ✅ **Started (2026-10-05):** `./task test` runs `rt-cef`'s unit tests too; they link CEF, so they run on Linux only. There are 23, up from 1, plus 2 in `rt-storage` for saving sessions.
   - **Pattern:** pure functions next to the CEF glue, tested in the same file. `rt-core` is only used when other crates could share the logic.
   - **Covered:**
     - tab bar slot and size (`window::BarPlacement`)
@@ -1020,10 +1020,19 @@ Each move adds tests, and the rule from `rt-core` applies: anything that can be 
     - which `riptide://` pages exist (`scheme`)
     - adblock request types (`adblock`)
     - the escaped error page (`ui`)
+    - what a permission answer does, and the per-site settings it saves, each once (`permissions`)
+    - the renderer's Greasemonkey script list and values, where an older list never replaces a newer one (`renderer`)
+    - the status bar's download summary (`downloads`)
+    - saving a window's tabs (`rt_storage::WindowState::from_tabs`)
   - **UI channel validation** was already in `rt_core::ui_message`, with tests.
   - **HTML escaping:** six copies of an HTML escape that covered different characters are now `rt_core::html::escape`.
-  - **Bug fixed:** "always" answers to a certificate prompt no longer save the URL's `user:password@` into `autoconfig.toml`.
-  - **Next:** permission decisions (`permissions.rs`), session conversion, download naming, and the renderer's message parsing. The completion overlay's position is in `shell.rs`, which is busy with completion work, so it comes later.
+  - **Bugs fixed:**
+    - "Always" answers to a certificate prompt no longer save the URL's `user:password@` into `autoconfig.toml`.
+    - A saved session no longer reopens on the wrong tab when a tab without a URL (a popup still opening) came before the current one.
+  - **Next:**
+    - the completion overlay's position, once the completion work in `shell.rs` settles
+    - the tab title format
+    - the hint and caret JavaScript's message handling
 
 #### Linting
 
