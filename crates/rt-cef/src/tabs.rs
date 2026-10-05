@@ -111,28 +111,28 @@ pub fn move_tab(from: usize, to: usize) {
 pub fn open(url: &str, position: Position, focus: bool) {
     match window::create_browser_view(Role::Tab, url) {
         Some(view) => {
-            add_view(view, position, focus);
+            // Known before the page commits, so closing it early can still be undone.
+            if let Some(index) = add_view(view, position, focus) {
+                shell::with(|s| s.tabs.get_mut(index).map(|tab| tab.url = url.to_string()));
+            }
             crate::lua::emit("tab_opened", &[("url", url)]);
         }
         None => shell::show_message(Level::Error, "Could not create a browser view"),
     }
 }
 
-/// Adopt a browser view (new or a CEF popup) as a tab.
-pub fn add_view(view: BrowserView, position: Position, focus_tab: bool) {
-    let Some(content) = shell::with(|s| s.content.clone()).flatten() else {
-        return;
-    };
+/// Adopt a browser view (new or a CEF popup) as a tab; returns its index.
+pub fn add_view(view: BrowserView, position: Position, focus_tab: bool) -> Option<usize> {
+    let content = shell::with(|s| s.content.clone()).flatten()?;
     let mut child = View::from(&view);
     child.set_visible(0);
     content.add_child_view(Some(&mut child));
-    let Some(index) = shell::with(|s| s.tabs.insert(Tab::new(view), position, false)) else {
-        return;
-    };
+    let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {
         switch_to(index, true);
     }
+    Some(index)
 }
 
 fn focus(index: usize) {
