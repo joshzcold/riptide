@@ -615,6 +615,26 @@ pub static SETTINGS: &[SettingDef] = &[
         "Pages opened at startup when no URL is given"
     ),
     def!(
+        "url.yank_ignored_parameters",
+        Kind::List,
+        Value::List(
+            [
+                "ref",
+                "utm_source",
+                "utm_medium",
+                "utm_campaign",
+                "utm_term",
+                "utm_content",
+                "utm_name",
+                "fbclid",
+                "gclid"
+            ]
+            .map(String::from)
+            .to_vec()
+        ),
+        "Query parameters dropped when yanking a URL, such as tracking tags"
+    ),
+    def!(
         "window.title_format",
         Kind::Str,
         s("{current_title}{title_sep}Riptide"),

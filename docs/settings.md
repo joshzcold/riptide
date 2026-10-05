@@ -57,5 +57,6 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |
+| `url.yank_ignored_parameters` | string[] | `["ref","utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_name","fbclid","gclid"]` | Query parameters dropped when yanking a URL, such as tracking tags |
 | `window.title_format` | string | `{current_title}{title_sep}Riptide` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
 | `zoom.default` | integer | `100` | Zoom in percent for pages, and what :zoom without a value resets to |

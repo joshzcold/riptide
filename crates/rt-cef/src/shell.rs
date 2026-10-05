@@ -707,7 +707,16 @@ fn yank(what: YankWhat, primary: bool) {
         return;
     };
     match what {
-        YankWhat::Url => clipboard::yank_to(&url, "URL", primary),
+        YankWhat::Url => {
+            let ignored = with(|s| {
+                s.engine
+                    .settings()
+                    .list("url.yank_ignored_parameters")
+                    .to_vec()
+            })
+            .unwrap_or_default();
+            clipboard::yank_to(&rt_core::url::strip_params(&url, &ignored), "URL", primary)
+        }
         YankWhat::Title => clipboard::yank_to(&title, "title", primary),
         YankWhat::Domain => match domain_of(&url) {
             Some(domain) => clipboard::yank_to(&domain, "domain", primary),

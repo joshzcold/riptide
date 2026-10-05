@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use cef::*;
 use rt_core::Command;
+use rt_core::command::OpenTarget;
 use rt_core::engine::Level;
 
 use crate::{eval, shell};
@@ -33,6 +34,14 @@ enum Then {
         id: u64,
         file: PathBuf,
     },
+    /// Open the edited file's text as a URL (`:edit-url`).
+    EditUrl {
+        file: PathBuf,
+        target: OpenTarget,
+        related: bool,
+    },
+    /// Put the edited command line back, or run it (`:cmd-edit`).
+    EditCommand { file: PathBuf, run: bool },
 }
 
 struct Finished {
@@ -68,6 +77,42 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             }
         }
         Command::OpenEditor => open_editor(),
+        Command::EditUrl {
+            target,
+            related,
+            url,
+        } => {
+            let url = url
+                .clone()
+                .or_else(|| shell::with(|s| s.tabs.current().map(|t| t.url.clone())).flatten())
+                .unwrap_or_default();
+            let (target, related) = (*target, *related);
+            start_editor(&url, 1, 1, "url", |file| Then::EditUrl {
+                file,
+                target,
+                related,
+            });
+        }
+        Command::CmdEdit { run } => {
+            let text = shell::with(|s| s.engine.status().command_line.map(|c| c.text)).flatten();
+            let Some(text) = text else {
+                shell::show_message(
+                    Level::Error,
+                    "There's no command line to edit; bind :cmd-edit in command mode",
+                );
+                return true;
+            };
+            // The command line comes back when the editor closes.
+            if let Some(effects) = shell::with(|s| s.engine.execute_str("mode-leave", None)) {
+                shell::apply(effects);
+            }
+            let run = *run;
+            let column = text.chars().count() + 1;
+            start_editor(&text, 1, column, "cmd", |file| Then::EditCommand {
+                file,
+                run,
+            });
+        }
         _ => return false,
     }
     true
@@ -258,6 +303,36 @@ fn finished(then: Then, done: Finished) {
             report(&program, verbose, output_messages, fifo.as_deref(), &done)
         }
         Then::Edit { browser, id, file } => edited(browser, id, &file, &done),
+        Then::EditUrl {
+            file,
+            target,
+            related,
+        } => {
+            if let Some(text) = editor_result(&file, &done) {
+                let url = text.trim();
+                if url.is_empty() {
+                    shell::show_message(Level::Error, "The URL is empty; nothing opened");
+                } else {
+                    shell::open(target, related, Some(url.to_string()));
+                }
+            }
+        }
+        Then::EditCommand { file, run } => {
+            if let Some(text) = editor_result(&file, &done) {
+                let text = text.trim();
+                let line = text.strip_prefix(':').unwrap_or(text);
+                let command = if run {
+                    line.to_string()
+                } else {
+                    format!("cmd-set-text :{line}")
+                };
+                if !line.is_empty()
+                    && let Some(effects) = shell::with(|s| s.engine.execute_str(&command, None))
+                {
+                    shell::apply(effects);
+                }
+            }
+        }
     }
     if let Some(dir) = &done.temp_dir {
         let _ = std::fs::remove_dir_all(dir);
@@ -324,15 +399,9 @@ struct Field {
 }
 
 fn open_editor() {
-    let Some((browser, template)) = shell::with(|s| {
-        (
-            s.current_browser(),
-            s.engine.settings().list("editor.command").to_vec(),
-        )
-    }) else {
+    let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
         return;
     };
-    let Some(browser) = browser else { return };
     let target = browser.clone();
     let code = format!("{EDITOR_JS}\nwindow.__rtEditor.take()");
     eval::eval(&browser, &code, move |result| {
@@ -344,43 +413,70 @@ fn open_editor() {
             shell::show_message(Level::Error, "No text field is focused");
             return shell::refresh_ui();
         };
-        let started = temp_dir("editor").and_then(|dir| {
-            let file = dir.join("field.txt");
-            std::fs::write(&file, &field.text)?;
-            Ok((dir, file))
+        let (browser, id) = (target.identifier(), field.id);
+        start_editor(&field.text, field.line, field.column, "field", |file| {
+            Then::Edit { browser, id, file }
         });
-        let (dir, file) = match started {
-            Ok(v) => v,
-            Err(e) => {
-                shell::show_message(Level::Error, format!("Can't start the editor: {e}"));
-                return shell::refresh_ui();
-            }
-        };
-        let argv = rt_core::settings::editor_argv(
-            &template,
-            &file.to_string_lossy(),
-            field.line,
-            field.column,
-        );
-        let Some((program, args)) = argv.split_first() else {
-            return;
-        };
-        let mut process = Process::new(program);
-        process
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped());
-        run_in_background(
-            process,
-            Then::Edit {
-                browser: target.identifier(),
-                id: field.id,
-                file,
-            },
-            Some(dir),
-        );
     });
+}
+
+/// Open `text` in `editor.command`, with the cursor at `line`:`column`.
+/// `then` says what to do with the file once the editor exits.
+fn start_editor(
+    text: &str,
+    line: usize,
+    column: usize,
+    kind: &str,
+    then: impl FnOnce(PathBuf) -> Then,
+) {
+    let template =
+        shell::with(|s| s.engine.settings().list("editor.command").to_vec()).unwrap_or_default();
+    let started = temp_dir(kind).and_then(|dir| {
+        let file = dir.join(format!("{kind}.txt"));
+        std::fs::write(&file, text)?;
+        Ok((dir, file))
+    });
+    let (dir, file) = match started {
+        Ok(v) => v,
+        Err(e) => return shell::show_message(Level::Error, format!("Can't start the editor: {e}")),
+    };
+    let argv = rt_core::settings::editor_argv(&template, &file.to_string_lossy(), line, column);
+    let Some((program, args)) = argv.split_first() else {
+        return shell::show_message(Level::Error, "editor.command is empty");
+    };
+    let mut process = Process::new(program);
+    process
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    run_in_background(process, then(file), Some(dir));
+}
+
+/// The edited text, or `None` (with a message) if the editor failed.
+fn editor_result(file: &Path, done: &Finished) -> Option<String> {
+    match &done.status {
+        Ok(Some(0)) => {}
+        Ok(code) => {
+            let code = code.map_or("a signal".to_string(), |c| format!("status {c}"));
+            shell::show_message(
+                Level::Error,
+                format!("The editor exited with {code}; nothing changed"),
+            );
+            return None;
+        }
+        Err(e) => {
+            shell::show_message(Level::Error, format!("Can't run the editor: {e}"));
+            return None;
+        }
+    }
+    match std::fs::read_to_string(file) {
+        Ok(text) => Some(text),
+        Err(e) => {
+            shell::show_message(Level::Error, format!("Can't read the edited text: {e}"));
+            None
+        }
+    }
 }
 
 fn edited(browser: i32, id: u64, file: &Path, done: &Finished) {
@@ -394,22 +490,8 @@ fn edited(browser: i32, id: u64, file: &Path, done: &Finished) {
     let Some(browser) = browser else {
         return shell::show_message(Level::Error, "The tab with the text field is gone");
     };
-    match &done.status {
-        Ok(Some(0)) => {}
-        Ok(code) => {
-            let code = code.map_or("a signal".to_string(), |c| format!("status {c}"));
-            return shell::show_message(
-                Level::Error,
-                format!("The editor exited with {code}; text not changed"),
-            );
-        }
-        Err(e) => return shell::show_message(Level::Error, format!("Can't run the editor: {e}")),
-    }
-    let text = match std::fs::read_to_string(file) {
-        Ok(text) => text,
-        Err(e) => {
-            return shell::show_message(Level::Error, format!("Can't read the edited text: {e}"));
-        }
+    let Some(text) = editor_result(file, done) else {
+        return;
     };
     // Editors add a final newline; a one-line field shouldn't get it.
     let text = text.strip_suffix('\n').unwrap_or(&text).to_string();

@@ -331,6 +331,16 @@ pub enum Command {
     Messages,
     /// Run the last command again (`.`).
     RepeatCommand,
+    /// Edit `url` (or the current page's) in `editor.command`, then open it.
+    EditUrl {
+        target: OpenTarget,
+        related: bool,
+        url: Option<String>,
+    },
+    /// Edit the command line in `editor.command`, then put it back, or run it.
+    CmdEdit {
+        run: bool,
+    },
     /// Scroll by pixels.
     ScrollPx {
         x: i64,
@@ -626,7 +636,19 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "open-editor",
-        "Edit the focused text field in editor.command",
+        "Edit the focused text field in editor.command (also :edit-text)",
+    ),
+    spec(
+        "edit-text",
+        "Edit the focused text field in editor.command (qutebrowser's name for :open-editor)",
+    ),
+    spec(
+        "edit-url",
+        "Edit the page's URL in editor.command, then open it: [-t|-b|-w|-p] [-r] [url]",
+    ),
+    spec(
+        "cmd-edit",
+        "Edit the command line in editor.command, then put it back: [--run] runs it instead",
     ),
     spec(
         "greasemonkey-reload",
@@ -1124,7 +1146,19 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 argv,
             }
         }
-        "open-editor" => Command::OpenEditor,
+        "open-editor" | "edit-text" => Command::OpenEditor,
+        "edit-url" => {
+            let (target, related) = args.open_target();
+            let url = args.rest();
+            Command::EditUrl {
+                target,
+                related,
+                url: (!url.is_empty()).then(|| url.to_string()),
+            }
+        }
+        "cmd-edit" => Command::CmdEdit {
+            run: args.flag(&["-r", "--run"]).is_some(),
+        },
         "greasemonkey-reload" => Command::GreasemonkeyReload,
         "prompt-complete" => Command::PromptComplete,
         "downloads" => Command::Downloads,

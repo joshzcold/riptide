@@ -261,9 +261,14 @@ cat >"$work/base/config/userscripts/us" <<EOF
 printf '%s|%s' "\$QUTE_URL" "\$QUTE_MODE" >"$work/us.out"
 echo "open -t file://$work/second.html" >>"\$QUTE_FIFO"
 EOF
-cat >"$work/editor.sh" <<'EOF'
+# :edit-url gets a URL back; text fields get fixed text.
+cat >"$work/editor.sh" <<EOF
 #!/bin/sh
-printf 'edited text\n' >"$1"
+case "\$1" in
+    *url.txt) printf 'file://$work/nav2.html\n' >"\$1" ;;
+    *cmd.txt) printf ':open file://$work/second.html\n' >"\$1" ;;
+    *) printf 'edited text\n' >"\$1" ;;
+esac
 EOF
 chmod +x "$work/base/config/userscripts/us" "$work/editor.sh"
 # Greasemonkey scripts for gm.html only: one before the page's scripts, one after.
@@ -289,6 +294,7 @@ echo "smoke-test on $DISPLAY"
 mkdir -p "$work/base/config"
 cat >"$work/base/config/config.lua" <<EOF
 rt.bind("X", "open -t file://$work/second.html")
+rt.bind("<Ctrl-x>", "cmd-edit --run", "command")
 c.downloads.location.directory = "$work/dl"
 c.downloads.location.prompt = false
 c.window.title_format = "{mode}::{current_title}"
@@ -741,6 +747,19 @@ xdotool key Escape
 wait_mode normal || true
 after=$(visits)
 (( before > 0 )) && [[ $after == 0 ]] && pass || fail "entries for second.html: $before before, $after after"
+
+step ":edit-url opens the URL the editor wrote"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+run "edit-url"
+expect_title "nav2"
+
+step ":cmd-edit --run runs the command line the editor wrote"
+xdotool key colon
+wait_mode command || true
+xdotool type --delay 20 "open draft"
+xdotool key ctrl+x
+expect_title "second"
 
 step ":messages lists this session's messages"
 run "messages"

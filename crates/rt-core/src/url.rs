@@ -108,6 +108,35 @@ pub fn increment(url: &str, delta: i64) -> Option<String> {
 }
 
 /// `*` matches any run of characters.
+/// `url` without the query parameters named in `ignored` (e.g. `utm_source`),
+/// for `url.yank_ignored_parameters`. Everything else is kept as written.
+pub fn strip_params(url: &str, ignored: &[String]) -> String {
+    let (before_fragment, fragment) = match url.split_once('#') {
+        Some((b, f)) => (b, Some(f)),
+        None => (url, None),
+    };
+    let Some((base, query)) = before_fragment.split_once('?') else {
+        return url.to_string();
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|pair| {
+            let name = pair.split_once('=').map_or(*pair, |(n, _)| n);
+            !pair.is_empty() && !ignored.iter().any(|i| i == name)
+        })
+        .collect();
+    let mut out = base.to_string();
+    if !kept.is_empty() {
+        out.push('?');
+        out.push_str(&kept.join("&"));
+    }
+    if let Some(fragment) = fragment {
+        out.push('#');
+        out.push_str(fragment);
+    }
+    out
+}
+
 pub fn glob(pattern: &str, text: &str) -> bool {
     let parts: Vec<&str> = pattern.split('*').collect();
     let (first, rest) = parts.split_first().expect("split yields at least one part");
@@ -365,5 +394,25 @@ mod tests {
         assert_eq!(fuzzy("c++"), "https://duckduckgo.com/?q=c%2B%2B");
         assert_eq!(fuzzy("v1.2"), "https://duckduckgo.com/?q=v1.2");
         assert_eq!(fuzzy("hello"), "https://duckduckgo.com/?q=hello");
+    }
+
+    #[test]
+    fn strips_tracking_parameters() {
+        let ignored: Vec<String> = ["utm_source", "ref"].map(String::from).to_vec();
+        let strip = |u| strip_params(u, &ignored);
+        assert_eq!(
+            strip("https://x.org/a?utm_source=tw&id=3&ref=hn#top"),
+            "https://x.org/a?id=3#top"
+        );
+        assert_eq!(strip("https://x.org/a?utm_source=tw"), "https://x.org/a");
+        assert_eq!(strip("https://x.org/a?id=3"), "https://x.org/a?id=3");
+        assert_eq!(
+            strip("https://x.org/a#utm_source=x"),
+            "https://x.org/a#utm_source=x"
+        );
+        assert_eq!(
+            strip("https://x.org/a?flag&utm_source"),
+            "https://x.org/a?flag"
+        );
     }
 }

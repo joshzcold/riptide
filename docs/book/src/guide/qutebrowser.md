@@ -25,7 +25,7 @@ Riptide doesn't run `config.py`. Write `config.toml` for plain settings and bind
 | `c.auto_save.session = True` | `c.auto_save.session = true` |
 | `c.editor.command = ["kitty", "-e", "nvim", "{}"]` | `c.editor.command = { "kitty", "-e", "nvim", "{file}" }` |
 | `config.bind("J", "tab-prev")` | `rt.bind("J", "tab-prev")` |
-| `config.bind("<Ctrl-e>", "edit-text", mode="insert")` | `rt.bind("<Ctrl-e>", "open-editor", "insert")` |
+| `config.bind("<Ctrl-e>", "edit-text", mode="insert")` | `rt.bind("<Ctrl-e>", "edit-text", "insert")` (`open-editor` is the same command) |
 | `c.aliases["w"] = "session-save"` | `local a = rt.get("aliases"); a.w = "session-save"; c.aliases = a` |
 | `config.set("content.geolocation", True, "https://example.com")` | `rt.set("content.geolocation", "true", "https://example.com")` |
 | `if platform.system() == "Darwin":` | `if rt.platform == "macos" then … end` |

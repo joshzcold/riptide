@@ -53,7 +53,10 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:spell-replace` |  | Replace the misspelled word: :spell-replace &lt;word&gt; |
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |
-| `:open-editor` |  | Edit the focused text field in editor.command |
+| `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
+| `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |
+| `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |
+| `:cmd-edit` |  | Edit the command line in editor.command, then put it back: [--run] runs it instead |
 | `:greasemonkey-reload` |  | Read the scripts in the greasemonkey directories again |
 | `:close` |  | Close the current window (:quit closes all of them) |
 | `:tab-select` | `T` | Go to a tab in any window: :tab-select &lt;window/tab \| text&gt; (T) |
