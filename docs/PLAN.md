@@ -711,7 +711,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
       - All three share one editor helper, and each has a smoke step.
     - `editor.encoding`, `editor.remove_file`.
   - **Greasemonkey:**
-    - Tier 1: `@require`, fetched once into the data directory and pinned to the URL. Also `GM_setValue`, `getValue`, `deleteValue` and `listValues`, stored per script.
+    - ✅ Tier 1 (2026-10-05): `@require`, fetched once into `<data>/greasemonkey-data/requires/` and keyed by the URL. Also `GM_setValue`, `getValue`, `deleteValue` and `listValues`, with promise versions under `GM.*`, stored per script in `<data>/greasemonkey-data/values/`.
+      - The setter is a native function passed to the script as an argument, never through a global, so pages can't reach it.
+      - Value updates carry the browser's script generation, so a reload's original `extra_info` doesn't bring back old values.
+      - A smoke step covers both.
     - `GM_xmlhttpRequest` through the browser process (cross-origin, so only for scripts that `@grant` it, and only to `@connect` hosts), `GM_openInTab`, the promise-based `GM.*` API, and `unsafeWindow`.
   - **Lua:** `rt.spawn(argv, opts)` with a callback for the output, so `config.lua` can do what a userscript does without a separate file.
 - **Config commands:** `config-list-add` and `remove`, `config-dict-add` and `remove`, `config-clear`, `config-diff`, `config-edit` (open the config in the editor), and `config-write-toml` (riptide's version of `config-write-py`).

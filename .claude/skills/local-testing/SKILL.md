@@ -65,6 +65,7 @@ Useful checks:
 
 - **`xdotool search --sync` can abort with `BadWindow`** when one of Chromium's short-lived helper windows disappears mid-search. Poll `xdotool search --name … 2>/dev/null` in a loop instead (the smoke test's `find_window`).
 - **A `pkill -f` pattern that appears in your own command line kills your own shell.** Kill by PID wherever you can.
+- **Other sessions may be testing at the same time** (for example the `crates/rt-e2e` harness, which starts its own `Xvfb -displayfd … -nolisten tcp` and riptide instances with `/tmp/rt-e2e-*` profiles). Their command lines can contain yours, so never stop Xvfb or riptide by matching a command line. Record the PID when you start each process and kill exactly that PID.
 - **Keys sent right as a tab opened from a typed `:open -t` finishes loading can be lost** under Xvfb, before CEF sees them (see the M14 notes in docs/PLAN.md). Pause 0.3 s after such a step, or retry the first key until the mode changes (the smoke test's `run` retries `:`).
 - **Windows stack at the origin without a window manager.** Focus the one you want with `xdotool windowfocus --sync`; `import -window` of a covered window may fail.
 - **Driving the browser without keys:** `./target/debug/riptide --basedir "$B" ':some-command'` runs a command in the running test instance (insert mode included), which avoids key-timing problems entirely.

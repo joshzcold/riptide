@@ -32,6 +32,15 @@ pub struct Script {
     /// `@noframes`: only in the top-level page.
     pub no_frames: bool,
     pub code: String,
+    /// `@require` URLs, run before the script.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    /// The downloaded `@require` code, filled in by [`load`].
+    #[serde(default)]
+    pub required_code: String,
+    /// What `GM_setValue` stored, filled in by [`load`].
+    #[serde(default)]
+    pub values: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Script {
@@ -71,6 +80,7 @@ impl Script {
                 "include" => script.includes.push(value),
                 "exclude" | "exclude-match" => script.excludes.push(value),
                 "noframes" => script.no_frames = true,
+                "require" => script.requires.push(value),
                 "run-at" => {
                     script.run_at = match value.as_str() {
                         "document-start" => RunAt::Start,
@@ -111,7 +121,53 @@ pub fn dirs(paths: &Paths) -> [PathBuf; 2] {
     ]
 }
 
-/// Every script in the greasemonkey directories, sorted by file name.
+/// Downloaded `@require` files and `GM_setValue` values. Kept outside the
+/// script directories, which load every `.js` file as a script.
+fn data_dir(paths: &Paths) -> PathBuf {
+    paths.data_dir.join("greasemonkey-data")
+}
+
+/// Where the code for an `@require` URL is kept.
+pub fn require_path(paths: &Paths, url: &str) -> PathBuf {
+    // FNV-1a: a stable file name for the URL.
+    let hash = url.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    data_dir(paths)
+        .join("requires")
+        .join(format!("{hash:016x}.js"))
+}
+
+/// Where a script's `GM_setValue` values are kept, by script name.
+pub fn values_path(paths: &Paths, script: &str) -> PathBuf {
+    let safe: String = script
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    data_dir(paths).join("values").join(format!("{safe}.json"))
+}
+
+/// `@require` URLs no script has downloaded yet.
+pub fn missing_requires(paths: &Paths, scripts: &[Script]) -> Vec<String> {
+    let mut missing: Vec<String> = scripts
+        .iter()
+        .flat_map(|s| &s.requires)
+        .filter(|url| !require_path(paths, url).exists())
+        .cloned()
+        .collect();
+    missing.sort();
+    missing.dedup();
+    missing
+}
+
+/// Every script in the greasemonkey directories, sorted by file name, with
+/// its downloaded `@require` code and stored values.
 pub fn load(paths: &Paths) -> (Vec<Script>, Vec<String>) {
     let mut files: Vec<PathBuf> = dirs(paths)
         .iter()
@@ -126,7 +182,20 @@ pub fn load(paths: &Paths) -> (Vec<Script>, Vec<String>) {
     let scripts = files
         .iter()
         .filter_map(|path| match std::fs::read_to_string(path) {
-            Ok(code) => Some(Script::parse(&file_name(path), &code)),
+            Ok(code) => {
+                let mut script = Script::parse(&file_name(path), &code);
+                for url in &script.requires {
+                    if let Ok(code) = std::fs::read_to_string(require_path(paths, url)) {
+                        script.required_code.push_str(&code);
+                        script.required_code.push_str(";\n");
+                    }
+                }
+                script.values = std::fs::read_to_string(values_path(paths, &script.name))
+                    .ok()
+                    .and_then(|text| serde_json::from_str(&text).ok())
+                    .unwrap_or_default();
+                Some(script)
+            }
             Err(e) => {
                 errors.push(format!("{}: {e}", path.display()));
                 None
@@ -196,11 +265,27 @@ document.body.style.background = 'black';
         std::fs::write(data.join("b.user.js"), "1").unwrap();
         std::fs::write(config.join("a.js"), "2").unwrap();
         std::fs::write(config.join("notes.txt"), "x").unwrap();
+        let lib = "https://cdn.example/lib.js";
+        std::fs::write(
+            config.join("c.js"),
+            format!("// ==UserScript==\n// @require {lib}\n// @require https://cdn.example/missing.js\n// ==/UserScript==\n3"),
+        )
+        .unwrap();
+        std::fs::create_dir_all(require_path(&paths, lib).parent().unwrap()).unwrap();
+        std::fs::write(require_path(&paths, lib), "var lib = 1").unwrap();
+        std::fs::create_dir_all(values_path(&paths, "c").parent().unwrap()).unwrap();
+        std::fs::write(values_path(&paths, "c"), r#"{"seen": 2}"#).unwrap();
         let (scripts, errors) = load(&paths);
         assert!(errors.is_empty());
         assert_eq!(
             scripts.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
-            ["a", "b"]
+            ["a", "b", "c"]
+        );
+        assert_eq!(scripts[2].required_code, "var lib = 1;\n");
+        assert_eq!(scripts[2].values["seen"], 2);
+        assert_eq!(
+            missing_requires(&paths, &scripts),
+            ["https://cdn.example/missing.js"]
         );
         std::fs::remove_dir_all(&base).unwrap();
     }

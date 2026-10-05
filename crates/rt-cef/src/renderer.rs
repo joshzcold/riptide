@@ -18,6 +18,12 @@ pub const UI_MESSAGE: &str = "rt.ui";
 /// Browser → renderer: the Greasemonkey scripts as JSON (argument 0). New
 /// browsers get the same JSON in their `extra_info` under this key.
 pub const GREASEMONKEY_MESSAGE: &str = "rt.greasemonkey";
+/// Browser → renderer: a script's `GM_setValue` values changed; argument 0
+/// is `{script, values}` as JSON.
+pub const GM_VALUES_MESSAGE: &str = "rt.gm-values";
+/// Renderer → browser: `GM_setValue`; arguments are the script name, the
+/// key, and the value as JSON (empty to delete it).
+pub const GM_SET_MESSAGE: &str = "rt.gm-set";
 
 /// The scripts, numbered so a renderer can tell which list is newest.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -47,6 +53,26 @@ fn set_scripts(json: &str) {
     }
 }
 
+/// A script's stored values changed in another page.
+fn set_values(json: &str) {
+    #[derive(serde::Deserialize)]
+    struct Update {
+        generation: u64,
+        script: String,
+        values: serde_json::Map<String, serde_json::Value>,
+    }
+    let Ok(update) = serde_json::from_str::<Update>(json) else {
+        return;
+    };
+    SCRIPTS.with(|s| {
+        let mut s = s.borrow_mut();
+        s.0 = s.0.max(update.generation);
+        if let Some(script) = s.1.iter_mut().find(|s| s.name == update.script) {
+            script.values = update.values;
+        }
+    });
+}
+
 /// Run the Greasemonkey scripts for this frame. `document-start` scripts run
 /// now, before the page's own; the others wait for their event.
 fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
@@ -61,17 +87,25 @@ fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
                 "scriptHandler": "riptide",
                 "version": env!("CARGO_PKG_VERSION"),
             });
+            let values = serde_json::Value::Object(script.values.clone());
             let body = format!(
-                "(function () {{\n\
-                 const GM_info = {info};\n\
+                "const GM_info = {info};\n\
                  const unsafeWindow = window;\n\
                  const GM_addStyle = (css) => {{ const s = document.createElement('style'); \
                  s.textContent = css; (document.head || document.documentElement).appendChild(s); return s; }};\n\
-                 const GM = {{ info: GM_info, addStyle: GM_addStyle }};\n\
-                 {code}\n}})();",
+                 const __rtValues = {values};\n\
+                 const GM_getValue = (k, d) => Object.prototype.hasOwnProperty.call(__rtValues, k) ? __rtValues[k] : d;\n\
+                 const GM_setValue = (k, v) => {{ __rtValues[k] = v; __rtSet(String(k), JSON.stringify(v) ?? 'null'); }};\n\
+                 const GM_deleteValue = (k) => {{ delete __rtValues[k]; __rtSet(String(k), ''); }};\n\
+                 const GM_listValues = () => Object.keys(__rtValues);\n\
+                 const GM = {{ info: GM_info, addStyle: GM_addStyle, \
+                 getValue: async (k, d) => GM_getValue(k, d), setValue: async (k, v) => GM_setValue(k, v), \
+                 deleteValue: async (k) => GM_deleteValue(k), listValues: async () => GM_listValues() }};\n\
+                 {required}\n{code}",
+                required = script.required_code,
                 code = script.code
             );
-            let code = match script.run_at {
+            let run = match script.run_at {
                 RunAt::Start => body,
                 RunAt::End => format!(
                     "document.addEventListener('DOMContentLoaded', () => {{ {body} }}, {{ once: true }});"
@@ -80,17 +114,27 @@ fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
                     "addEventListener('load', () => setTimeout(() => {{ {body} }}, 0), {{ once: true }});"
                 ),
             };
+            // The setter is passed in as an argument rather than through a
+            // global, so the page can't reach it.
+            let code = format!("(function (__rtSet) {{\n{run}\n}})");
             let name = CefString::from(format!("greasemonkey:{}", script.name).as_str());
             let mut retval = None;
             let mut exception = None;
             context.enter();
-            let ok = context.eval(
+            let mut ok = context.eval(
                 Some(&CefString::from(code.as_str())),
                 Some(&name),
                 0,
                 Some(&mut retval),
                 Some(&mut exception),
             );
+            let mut handler = RtGmSetHandler::new(script.name.clone());
+            let setter = v8_value_create_function(Some(&CefString::from("GM_setValue")), Some(&mut handler));
+            if ok != 0
+                && let (Some(function), Some(setter)) = (retval, setter)
+            {
+                ok = function.execute_function(None, Some(&[Some(setter)])).is_some().into();
+            }
             context.exit();
             if ok == 0 {
                 let message = exception.map(|e| CefString::from(&e.message()).to_string());
@@ -177,6 +221,12 @@ wrap_render_process_handler! {
                 }
                 return 1;
             }
+            if name == GM_VALUES_MESSAGE {
+                if let Some(args) = message.argument_list() {
+                    set_values(&CefString::from(&args.string(0)).to_string());
+                }
+                return 1;
+            }
             if name != EVAL_MESSAGE {
                 return 0;
             }
@@ -221,6 +271,44 @@ wrap_v8_handler! {
                 if let Some(args) = message.argument_list() {
                     args.set_string(0, Some(&name));
                     args.set_string(1, Some(&payload));
+                }
+                frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
+            }
+            1
+        }
+    }
+}
+
+// `GM_setValue` / `GM_deleteValue` for one script: tell the browser.
+wrap_v8_handler! {
+    struct RtGmSetHandler {
+        script: String,
+    }
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let text = |i: usize| {
+                arguments?
+                    .get(i)?
+                    .as_ref()
+                    .filter(|v| v.is_string() != 0)
+                    .map(|v| CefString::from(&v.string_value()))
+            };
+            let (Some(key), Some(value)) = (text(0), text(1)) else { return 1 };
+            let frame = v8_context_get_current_context().and_then(|c| c.frame());
+            let message = process_message_create(Some(&CefString::from(GM_SET_MESSAGE)));
+            if let (Some(frame), Some(mut message)) = (frame, message) {
+                if let Some(args) = message.argument_list() {
+                    args.set_string(0, Some(&CefString::from(self.script.as_str())));
+                    args.set_string(1, Some(&key));
+                    args.set_string(2, Some(&value));
                 }
                 frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
             }

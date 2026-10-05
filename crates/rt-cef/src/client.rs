@@ -94,6 +94,14 @@ wrap_client! {
                 }
                 return 1;
             }
+            if name == crate::renderer::GM_SET_MESSAGE {
+                if let Some(args) = message.argument_list() {
+                    let text = |i| CefString::from(&args.string(i)).to_string();
+                    let value = text(2);
+                    crate::greasemonkey::set_value(&text(0), &text(1), Some(value.as_str()).filter(|v| !v.is_empty()));
+                }
+                return 1;
+            }
             if name == UI_MESSAGE {
                 // Trust the browser process's view of the frame, not the page.
                 let url = frame.map(|f| CefString::from(&f.url()).to_string()).unwrap_or_default();

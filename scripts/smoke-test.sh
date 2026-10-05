@@ -313,6 +313,21 @@ cat >"$work/base/data/greasemonkey/end.user.js" <<'EOF'
 GM_addStyle('body { color: rgb(1, 2, 3); }');
 document.title += ' end=' + getComputedStyle(document.body).color;
 EOF
+# Values that persist between page loads, and a library from @require.
+echo "var rtLib = 'loaded';" >"$work/http/lib.js"
+cat >"$work/gmvalues.html" <<'EOF'
+<!doctype html><title>gmvalues</title>
+EOF
+cat >"$work/base/data/greasemonkey/values.user.js" <<EOF
+// ==UserScript==
+// @name    Counter
+// @include file://*/gmvalues.html
+// @require http://127.0.0.1:$(cat "$work/port")/lib.js
+// ==/UserScript==
+const n = GM_getValue('n', 0) + 1;
+GM_setValue('n', n);
+document.title = 'gm n=' + n + ' lib=' + (typeof rtLib === 'undefined' ? 'no' : rtLib);
+EOF
 
 echo "smoke-test on $DISPLAY"
 # A private basedir keeps the test away from the real config and profile.
@@ -838,6 +853,15 @@ nap 0.5
 same=$(stat -c %s "$work/shot.png" 2>/dev/null || echo 0)
 [[ $signature == 89504e470d0a1a0a && $size -gt 1000 && $same == "$size" ]] && pass ||
     fail "signature '$signature', size $size, after a second try $same"
+
+step "Greasemonkey: GM_setValue persists between loads, @require runs first"
+run "open file://$work/gmvalues.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == gm* ]] && break; sleep 0.1; done
+first=$(page_title)
+run "reload"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "gm n=2"* ]] && break; sleep 0.1; done
+second=$(page_title)
+[[ $first == "gm n=1 lib=loaded" && $second == "gm n=2 lib=loaded" ]] && pass || fail "first '$first', second '$second'"
 
 step ":messages lists this session's messages"
 run "messages"
