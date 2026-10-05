@@ -90,11 +90,14 @@ tasks:
       - cargo fmt
 
   lint:
-    desc: Check formatting and run clippy
+    desc: Formatting, clippy, ShellCheck, actionlint and cargo-deny (licenses, advisories, sources)
     deps: [setup]
     cmds:
       - cargo fmt --check
       - cargo clippy --all-targets -- -D warnings
+      - scripts/tool.sh shellcheck scripts/*.sh task
+      - scripts/tool.sh actionlint
+      - scripts/tool.sh cargo-deny check --hide-inclusion-graph
 
   check:
     desc: Everything CI would run - lint, unit tests, smoke test

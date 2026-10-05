@@ -3,6 +3,8 @@
 # title is set to "{mode}::{page title}", so the test can wait for the
 # browser's mode before each key instead of guessing with sleeps, and the test
 # pages report their state through document.title.
+# pass only echoes, so "check && pass || fail" never runs fail after a pass.
+# shellcheck disable=SC2015
 set -euo pipefail
 
 BIN=${BIN:-target/debug/riptide}
@@ -197,7 +199,8 @@ SERVER
 tls_pid=$!
 for _ in $(seq 50); do [[ -s $work/tls-port ]] && break; sleep 0.1; done
 http="http://127.0.0.1:$(cat "$work/port")"
-export DISPLAY=":$(cat "$work/display")"
+display=$(cat "$work/display")
+export DISPLAY=":$display"
 
 failures=0
 step() { printf '  %-56s' "$1"; }
@@ -355,12 +358,12 @@ nap 0.5
 title=$(page_title)
 [[ $title =~ ^s=([0-9]+)\ k=3\  && ${BASH_REMATCH[1]} -gt 3000 ]] && pass || fail "title was '$title'"
 
-# Waits for the page's scroll position to satisfy a test, e.g. "-gt 3000".
+# Waits for the page's scroll position to satisfy a test, e.g. -gt 3000.
 expect_scroll() {
     local title=""
     for _ in $(seq $((TIMEOUT * 10))); do
         title=$(page_title)
-        [[ $title =~ ^s=([0-9]+)\  ]] && (( BASH_REMATCH[1] $1 )) && { pass; return; }
+        [[ $title =~ ^s=([0-9]+)\  ]] && test "${BASH_REMATCH[1]}" "$1" "$2" && { pass; return; }
         sleep 0.1
     done
     fail "title was '$title'"
@@ -370,16 +373,16 @@ step "\`a sets a mark and 'a jumps back to it"
 xdotool key grave a g g
 nap 0.3
 xdotool key apostrophe a
-expect_scroll "> 3000"
+expect_scroll -gt 3000
 step "'' returns to where the jump started"
 xdotool key apostrophe apostrophe
-expect_scroll "== 0"
+expect_scroll -eq 0
 
 step "qa records a macro and @a replays it"
 xdotool key q a 5 j q g g
 nap 0.3
 xdotool key at a
-expect_scroll "== 200"
+expect_scroll -eq 200
 
 # Matches the first page's title whatever its scroll state.
 expect_first_page() {

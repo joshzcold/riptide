@@ -6,6 +6,6 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org), whic
 
 ## Before you push
 
-- `./task check` runs everything CI does: formatting, clippy, unit tests and the smoke test.
+- `./task check` runs everything CI does: the [linters](testing.md#linters), unit tests and the smoke test.
 - Generated files must be current: `UPDATE_LUA_TYPES=1 cargo test -p rt-config` rewrites `docs/lua/rt.meta.lua`, `docs/settings.md` and the generated reference pages after you add or change a command, setting or default binding.
 - User-visible changes need documentation in the same change; see [Writing documentation](docs.md).

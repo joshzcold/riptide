@@ -4,10 +4,23 @@
 |---|---|
 | `./task test` | Unit tests for `rt-core`, `rt-config` and `rt-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
 | `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
-| `./task lint` | `cargo fmt --check` and `clippy -D warnings` |
+| `./task lint` | `cargo fmt --check`, `clippy -D warnings`, ShellCheck on the scripts, actionlint on the workflows, and cargo-deny (below) |
 | `./task check` | All of the above |
 
 The smoke test uses a temporary profile, so it never touches your browsing data.
+
+## Linters
+
+`./task lint` runs pinned versions of each tool through [`scripts/tool.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/tool.sh), which downloads them into `.bin/` and checks their checksums. That way a new upstream release never adds warnings to CI without warning. To upgrade one, change its version and checksums there.
+
+| Tool | Checks | Config |
+|---|---|---|
+| rustfmt, clippy | Rust formatting and lints, with warnings as errors | — |
+| [ShellCheck](https://www.shellcheck.net) | `scripts/*.sh` and `task` | `# shellcheck disable=…` comments, each with its reason |
+| [actionlint](https://github.com/rhysd/actionlint) | `.github/workflows/*.yml`, including ShellCheck on their `run:` blocks | — |
+| [cargo-deny](https://embarkstudios.github.io/cargo-deny/) | Dependency licenses (each must be GPL-3.0-compatible), RustSec security advisories, yanked crates, and where crates come from | [`deny.toml`](https://github.com/joshzcold/riptide/blob/main/deny.toml) |
+
+A dependency with a license that isn't in `deny.toml` fails the check. Add the license only after checking that it's compatible with GPL-3.0. A new security advisory fails CI until the crate is updated, or until the advisory is listed in `deny.toml`'s `ignore`, with a reason.
 
 ## Testing by hand
 

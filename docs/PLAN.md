@@ -985,6 +985,10 @@ Each move adds tests, and the rule from `rt-core` applies: anything that can be 
 - Every tool is pinned and checksum-verified in `scripts/` (or `cargo install --locked` with a cached binary). `./task lint` runs all of them, and so does CI.
 - `./task hooks` gains an optional pre-push hook that runs `./task lint`.
 - Order: actionlint, ShellCheck and cargo-deny first, since they're quick wins with real findings. Then `[workspace.lints]`, then Biome, fixing what each one finds in the same change.
+- ✅ **Quick wins done (2026-10-05):** `scripts/tool.sh` pins actionlint 1.7.12, ShellCheck 0.11.0 and cargo-deny 0.20.2 with checksums, and `./task lint` (so CI too) runs all three.
+  - **ShellCheck** found a `(( … $1 ))` test in `expect_scroll` that it couldn't parse (now `test "$value" -gt 3000`) and an `export` that hid a failed `cat`. Its 20 notes about `check && pass || fail` are disabled for the smoke test, with a reason: `pass` only echoes.
+  - **actionlint** is clean. It had already caught a glob used as a command while the release workflow was written.
+  - **cargo-deny:** `deny.toml` allows only GPL-3.0-compatible licenses, and all 239 crates in `Cargo.lock` pass. RustSec advisories and sources are clean. Duplicate versions only warn. The crates are now `publish = false`, which lets the path dependencies between them pass the wildcard check.
 
 #### Order of work
 1. Linting quick wins (above).

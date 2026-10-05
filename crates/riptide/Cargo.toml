@@ -2,6 +2,7 @@
 name = "riptide"
 description = "Riptide: surf the web really fast, with vim-like keys, on CEF"
 version.workspace = true
+publish.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

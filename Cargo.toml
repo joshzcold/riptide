@@ -4,6 +4,8 @@ members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.0"
+# Not on crates.io; also lets cargo-deny accept the path dependencies between crates.
+publish = false
 edition = "2024"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
