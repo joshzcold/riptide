@@ -150,6 +150,12 @@ cat >"$work/http/adblock.html" <<'EOF'
 EOF
 echo "blocked = 'yes';" >"$work/http/ads/banner.js"
 echo "allowed = 'yes';" >"$work/http/app.js"
+cat >"$work/http/cookie.html" <<'EOF'
+<!doctype html><title>cookie</title><script>document.cookie = 'a=1'; document.title = 'cookie=' + document.cookie;</script>
+EOF
+cat >"$work/http/ua.html" <<'EOF'
+<!doctype html><title>static</title><script>document.title = 'ua=' + navigator.userAgent;</script>
+EOF
 cat >"$work/http/geo.html" <<'EOF'
 <!doctype html><title>geo</title>
 <button onclick="navigator.geolocation.getCurrentPosition(() => { document.title = 'geo=ok'; }, (e) => { document.title = 'geo=' + (e.code === 1 ? 'denied' : 'allowed'); })">ask</button>
@@ -974,6 +980,36 @@ else
         fail "the private page is in history"
     fi
 fi
+
+step "per-site content.headers.user_agent and content.javascript.enabled"
+site="http://127.0.0.1:$(cat "$work/port")"
+run "open -t $site/ua.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == ua=* ]] && break; sleep 0.1; done
+default_ua=$(page_title)
+run "set -u $site content.headers.user_agent RiptideTest/1"
+run "reload"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == ua=RiptideTest/1 ]] && break; sleep 0.1; done
+custom_ua=$(page_title)
+run "set -u $site content.javascript.enabled false"
+run "reload"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == static ]] && break; sleep 0.1; done
+no_js=$(page_title)
+[[ $default_ua == ua=Mozilla* && $custom_ua == ua=RiptideTest/1 && $no_js == static ]] && pass ||
+    fail "default '$default_ua', custom '$custom_ua', without JavaScript '$no_js'"
+run "set -u $site content.javascript.enabled true"
+run "open $site/cookie.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == cookie=a=1 ]] && break; sleep 0.1; done
+stored=$(page_title)
+run "set content.cookies.accept never"
+run "reload"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "cookie=" ]] && break; sleep 0.1; done
+refused=$(page_title)
+run "set content.cookies.accept all"
+[[ $stored == cookie=a=1 && $refused == "cookie=" ]] && echo "  (cookies: ok)" || fail "cookies: allowed '$stored', never '$refused'"
+# The restart check below expects the search page in front.
+run "tab-close"
+run "tab-select search"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == search || $(page_title) == s=* ]] && break; sleep 0.1; done
 
 step ":wq with several tabs saves and exits cleanly"
 run "set auto_save.session true"

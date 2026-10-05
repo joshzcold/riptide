@@ -24,6 +24,22 @@ Chromium calls Google in the background. riptide turns off the calls that only s
 
 The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 
+## Cookies, JavaScript and the user agent
+
+| Setting | What it does |
+|---|---|
+| `content.cookies.accept` | `all` (default), `no-3rdparty` to refuse cookies from other sites embedded in a page, or `never` |
+| `content.cookies.store` | `false` makes every cookie last only until the browser closes |
+| `content.javascript.enabled` | `false` turns JavaScript off; set it per site to block or allow it on chosen sites only |
+| `content.headers.user_agent` | The user agent sites see, in requests and in `navigator.userAgent`; empty for Chromium's own. Set it per site for sites that check it |
+
+```toml
+content.cookies.accept = "no-3rdparty"
+
+[per_domain."*.example.org"]
+"content.javascript.enabled" = false
+```
+
 ## Private windows
 
 `:open -p url` opens a private window. Private windows share an in-memory profile: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray.

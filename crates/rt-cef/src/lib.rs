@@ -6,6 +6,7 @@ mod adblock;
 mod caret;
 mod client;
 mod clipboard;
+mod content;
 mod dialogs;
 mod downloads;
 mod eval;

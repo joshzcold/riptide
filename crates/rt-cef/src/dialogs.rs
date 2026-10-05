@@ -88,8 +88,8 @@ wrap_request_handler! {
         /// UI pages, and never because a site redirected there.
         fn on_before_browse(
             &self,
-            _browser: Option<&mut Browser>,
-            _frame: Option<&mut Frame>,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
             request: Option<&mut Request>,
             _user_gesture: ::std::os::raw::c_int,
             is_redirect: ::std::os::raw::c_int,
@@ -99,6 +99,10 @@ wrap_request_handler! {
                 || (is_redirect != 0 && url.starts_with("riptide://"));
             if blocked {
                 tracing::warn!("blocked navigation to {url}");
+            } else if let Some(browser) = browser
+                && frame.is_some_and(|f| f.is_main() != 0)
+            {
+                crate::content::before_navigation(browser, &url);
             }
             blocked.into()
         }

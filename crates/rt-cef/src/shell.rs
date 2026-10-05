@@ -421,6 +421,10 @@ fn apply_chromium_settings() {
         return;
     };
     crate::spell::apply(languages);
+    // Cloned so no CEF call happens while the shell is borrowed.
+    if let Some(settings) = with(|s| s.engine.settings().clone()) {
+        crate::content::apply_globals(&settings);
+    }
     crate::permissions::apply_site_settings(sites);
     let variant = match scheme.as_str() {
         "light" => ColorVariant::LIGHT,

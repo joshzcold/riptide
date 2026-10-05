@@ -193,6 +193,19 @@ pub fn pattern_matches(pattern: &str, url: &str) -> bool {
 }
 
 /// The host name of a URL, without user info or port; empty if it has none.
+/// `scheme://host[:port]/` for an http(s) URL, as Chromium's per-site
+/// content settings take it; `None` for anything else.
+pub fn origin(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    if !matches!(scheme, "http" | "https") {
+        return None;
+    }
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..end];
+    let authority = authority.rsplit_once('@').map_or(authority, |(_, a)| a);
+    (!authority.is_empty()).then(|| format!("{scheme}://{authority}/"))
+}
+
 pub fn host(url: &str) -> &str {
     let Some((_, rest)) = url.split_once("://") else {
         return "";
@@ -414,5 +427,16 @@ mod tests {
             strip("https://x.org/a?flag&utm_source"),
             "https://x.org/a?flag"
         );
+    }
+
+    #[test]
+    fn origins() {
+        assert_eq!(
+            origin("https://a.example.com:8443/x?y#z").unwrap(),
+            "https://a.example.com:8443/"
+        );
+        assert_eq!(origin("http://user:pw@b.org").unwrap(), "http://b.org/");
+        assert_eq!(origin("file:///tmp/x.html"), None);
+        assert_eq!(origin("about:blank"), None);
     }
 }

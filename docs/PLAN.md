@@ -667,7 +667,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - Tier 1: `download-retry`, `download-remove`, `download-delete`, and an external file picker (`fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`, e.g. yazi or ranger in a terminal), plus `prompt-fileselect-external`.
   - `downloads.remove_finished`, `downloads.position`, `downloads.location.remember` and `suggestion`, `downloads.open_dispatcher`, `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
 - **Content** (most are Chromium prefs or switches; per-site where qutebrowser allows it):
-  - Tier 1: `content.javascript.enabled`, `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent`.
+  - ✅ Tier 1 (2026-10-05): `content.javascript.enabled` (per site), `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent` (per site).
+    - JavaScript and cookies are Chromium content settings. Per-site values are resolved just before each navigation (`on_before_browse`) and set for that origin, so glob patterns work despite CEF taking exact URLs.
+    - The user agent is set per tab with the DevTools `Emulation.setUserAgentOverride`, which covers requests and `navigator.userAgent`.
+    - A smoke step covers all three.
   - Other headers: `accept_language`, `do_not_track`, `referer`, `custom`.
   - Media and images: `content.images`, `content.autoplay`, `content.webgl`, `content.mute`.
   - Privacy and network: `content.proxy` (system, none, URL, PAC) and `proxy_dns_requests`, `content.webrtc_ip_handling_policy`, `content.canvas_reading`, `content.dns_prefetch`, `content.cache.size`.

@@ -414,6 +414,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Sites where nothing is blocked, as host names; a host also covers its subdomains"
     ),
     def!(
+        "content.cookies.accept",
+        Kind::Enum(&["all", "no-3rdparty", "no-unknown-3rdparty", "never"]),
+        s("all"),
+        "Which cookies sites may set: all, none from other sites (no-3rdparty; no-unknown-3rdparty is the same here), or never"
+    ),
+    def!(
+        "content.cookies.store",
+        Kind::Bool,
+        Value::Bool(true),
+        "Keep cookies after the browser closes; false makes every cookie last only for the session"
+    ),
+    def!(
         "content.desktop_capture",
         Kind::Enum(ASK),
         s("ask"),
@@ -424,6 +436,18 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(ASK),
         s("ask"),
         "Let sites know your location: ask, true or false"
+    ),
+    def!(
+        "content.headers.user_agent",
+        Kind::Str,
+        s(""),
+        "User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site"
+    ),
+    def!(
+        "content.javascript.enabled",
+        Kind::Bool,
+        Value::Bool(true),
+        "Run JavaScript on pages; can be set per site"
     ),
     def!(
         "content.media.audio_capture",
@@ -774,6 +798,8 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.blocking.enabled",
     "content.desktop_capture",
     "content.geolocation",
+    "content.headers.user_agent",
+    "content.javascript.enabled",
     "content.media.audio_capture",
     "content.media.video_capture",
     "content.notifications.enabled",

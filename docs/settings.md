@@ -17,8 +17,12 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists) |
 | `content.blocking.enabled` | boolean | `true` | Block ads and trackers with the filter lists from content.blocking.adblock.lists |
 | `content.blocking.whitelist` | string[] | `[]` | Sites where nothing is blocked, as host names; a host also covers its subdomains |
+| `content.cookies.accept` | all \| no-3rdparty \| no-unknown-3rdparty \| never | `all` | Which cookies sites may set: all, none from other sites (no-3rdparty; no-unknown-3rdparty is the same here), or never |
+| `content.cookies.store` | boolean | `true` | Keep cookies after the browser closes; false makes every cookie last only for the session |
 | `content.desktop_capture` | ask \| true \| false | `ask` | Let sites capture your screen or desktop audio: ask, true or false |
 | `content.geolocation` | ask \| true \| false | `ask` | Let sites know your location: ask, true or false |
+| `content.headers.user_agent` | string | `` | User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site |
+| `content.javascript.enabled` | boolean | `true` | Run JavaScript on pages; can be set per site |
 | `content.media.audio_capture` | ask \| true \| false | `ask` | Let sites use your microphone: ask, true or false |
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |

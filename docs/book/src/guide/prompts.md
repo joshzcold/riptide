@@ -26,10 +26,11 @@ Untrusted TLS certificates (self-signed, expired, wrong host…) ask before the 
 
 ## Per-site settings
 
-The permission settings above, `content.tls.certificate_errors` and `content.blocking.enabled` can differ per site. The last matching pattern wins. Patterns are hosts (`example.com`, `*.example.com` for subdomains too), origins (`https://meet.example.com`) or match patterns (`*://*.example.com/app/*`):
+The permission settings above, `content.tls.certificate_errors`, `content.blocking.enabled`, `content.javascript.enabled` and `content.headers.user_agent` can differ per site. The last matching pattern wins. Patterns are hosts (`example.com`, `*.example.com` for subdomains too), origins (`https://meet.example.com`) or match patterns (`*://*.example.com/app/*`):
 
 ```sh
 :set -u https://meet.example.com content.media.video_capture true
+:set -u *.example.org content.javascript.enabled false
 ```
 ```toml
 [per_domain."*.example.com"]          # config.toml or autoconfig.toml
