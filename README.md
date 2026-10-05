@@ -37,7 +37,7 @@ Requirements: Rust 1.88+ (edition 2024).
 ```sh
 ./task setup          # once: download CEF (~1.5 GB) into $CEF_PATH, default ~/.local/share/cef
 ./task run            # build and launch; or: ./task run -- example.com
-./task check          # lint, unit tests and the smoke test (needs Xvfb and xdotool)
+./task check          # lint, unit, e2e and smoke tests (needs Xvfb and xdotool)
 ./task docs-serve     # preview the documentation at http://localhost:3000
 ```
 

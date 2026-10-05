@@ -992,7 +992,7 @@ Original plan:
     - Under load, keys sent to a page that has loaded but not painted are dropped, even though it reports focus and visibility. This is probably the "lost keys" gap in M14. The harness waits for two animation frames after each load.
   - **Next:**
     - The last batch added tabs (pinned, `select_on_remove`, `wrap`, `T`), macros typing into pages, caret blocks, `search.wrap`, `Return` on a search match, `preferred_color_scheme`, the bar layout (measured from the page's size), `:edit-url`, `:cmd-edit`, `Ctrl-d` in history completion, private history, lazy restore, `confirm_quit`, `:screenshot`, the config and debug commands, `hints.auto_follow`/`selectors`, Alt-e and external file pickers, per-site user agents and JavaScript, cookies, and the certificate prompt against a local HTTPS server.
-    - Cut `scripts/smoke-test.sh` down to what needs real X11 input (xdotool keys and clicks, window focus, the tab bar's mouse handling) and to checking the release packages. Everything else is now an e2e test. It's a shared file the feature work still edits, so do this when it pauses.
+    - ✅ `scripts/smoke-test.sh` is cut down from 1,205 lines (73 steps) to 283 lines (14 steps). What's left needs real X11 input (xdotool keys and clicks, window focus) or checks a release package: typing through a hinted field, a trusted click, tab keys, a `config.lua` binding, the bundled help page, a second window, and `:wq` with a restart. New behaviour gets an e2e test, never a smoke step.
 
 #### Unit tests for the CEF layer
 

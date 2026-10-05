@@ -4,7 +4,7 @@
 |---|---|
 | `./task test` | Unit tests for `rt-core`, `rt-config` and `rt-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
 | `./task e2e` | End-to-end tests in [`crates/rt-e2e`](#end-to-end-tests): real browsers, each on its own Xvfb display, driven through the test channel. `./task e2e -- tabs` runs only the tests whose names contain `tabs`. |
-| `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
+| `./task smoke` | A short check with real X11 input (xdotool keys and clicks, window focus) that the e2e tests can't give: typing into a field, a trusted click, tab keys, a second window, the bundled help page, and `:wq` with a restart. `build-release.yml` also runs it against the release packages. |
 | `./task lint` | `cargo fmt --check`, `clippy -D warnings`, ShellCheck on the scripts, actionlint on the workflows, and cargo-deny (below) |
 | `./task check` | All of the above |
 
