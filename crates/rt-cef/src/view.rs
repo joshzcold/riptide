@@ -107,12 +107,28 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                 shell::open(OpenTarget::Tab, true, Some(format!("view-source:{url}")));
             }
         }
-        Command::JsEval { code } => {
+        Command::JsEval { code, quiet, file } => {
+            let script;
+            let code = if *file {
+                match std::fs::read_to_string(expand_home(code)) {
+                    Ok(text) => {
+                        script = text;
+                        &script
+                    }
+                    Err(e) => {
+                        shell::show_message(Level::Error, format!("Can't read {code}: {e}"));
+                        return true;
+                    }
+                }
+            } else {
+                code
+            };
+            let quiet = *quiet;
             let code = format!(
                 "(() => {{ const r = eval({}); return r === undefined ? 'undefined' : String(r); }})()",
                 serde_json::to_string(code).unwrap_or_default()
             );
-            eval::eval(&browser, &code, |result| {
+            eval::eval(&browser, &code, move |result| {
                 let (level, text) = match result {
                     Ok(json) => (
                         Level::Info,
@@ -120,8 +136,10 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                     ),
                     Err(e) => (Level::Error, e),
                 };
-                shell::show_message(level, text);
-                shell::refresh_ui();
+                if !(quiet && level == Level::Info) {
+                    shell::show_message(level, text);
+                    shell::refresh_ui();
+                }
             });
         }
         Command::TabMute => {

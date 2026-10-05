@@ -698,11 +698,14 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - Bookmarks and quickmarks: `bookmark-list`, `quickmark-save`, `bookmarks-reload`, `quickmarks-reload`.
   - Missing readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word`, `rl-yank`, and the `move-to-*-block` set.
 - **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, 15 of qutebrowser's 17 `QUTE_*` variables with `QUTE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
-  - **Environment:** add `QUTE_CURRENT_URL` (the page's URL when `QUTE_URL` is a hinted link) and `QUTE_SELECTED_HTML`. Also set `RIPTIDE_*` copies of every variable, so new scripts don't need qutebrowser's names.
-  - **qutebrowser's bundled userscripts** (`misc/userscripts`, 28 scripts) — tier 1:
-    - Check that the popular ones run unchanged: qute-pass, qute-bitwarden, qute-keepassxc, password_fill, view_in_mpv, readability, format_json, open_download, qr.
-    - Fix whatever differs; most just need the environment and FIFO commands to match.
-    - Don't copy them into the repo (their licenses differ). Instead, document which work and add a smoke step that runs one through `QUTE_FIFO`.
+  - ✅ **Environment** (2026-10-05): `QUTE_CURRENT_URL` (the page's URL when `QUTE_URL` is a hinted link), `QUTE_SELECTED_HTML`, and `RIPTIDE_*` copies of every variable.
+  - ✅ **qutebrowser's bundled userscripts** (tier 1, 2026-10-05):
+    - Checked the variables and `QUTE_FIFO` commands of 18 of them against riptide, which turned up two fixes:
+      - One-word arguments are now unquoted as in qutebrowser (`message-info 'text'`, `fake-key \a`, `fake-key " "`), which the password scripts rely on.
+      - `jseval` takes `-q`, `-w <world>` and `-f`.
+    - `format_json` was run unchanged and works.
+    - The password scripts weren't run against a real store.
+    - `ripbang` needs `config-dict-add` (still to do).
   - **Editor:**
     - ✅ Tier 1 (2026-10-05):
       - `edit-text` as qutebrowser's current name for `:open-editor`, which stays as an alias.

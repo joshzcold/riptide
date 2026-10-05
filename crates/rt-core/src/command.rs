@@ -333,6 +333,10 @@ pub enum Command {
     /// Evaluate JavaScript in the page and show the result.
     JsEval {
         code: String,
+        /// `-q`: don't show the result.
+        quiet: bool,
+        /// `-f`: `code` is a file to read the script from.
+        file: bool,
     },
     /// Open the start page in the current tab.
     Home,
@@ -885,6 +889,16 @@ pub fn parse_line(line: &str) -> Result<Vec<Command>, CommandError> {
 }
 
 /// Parse one command, with or without a leading `:`.
+/// The text of a one-argument command. A single quoted or escaped word is
+/// unquoted the way qutebrowser does (`'two words'`, `\a`, `" "`), which
+/// userscripts rely on; anything else is kept as typed.
+fn text_arg(rest: &str) -> String {
+    match crate::shell_words::split(rest) {
+        Ok(words) if words.len() == 1 => words.into_iter().next().unwrap_or_default(),
+        _ => rest.to_string(),
+    }
+}
+
 pub fn parse(input: &str) -> Result<Command, CommandError> {
     let input = input.trim().trim_start_matches(':');
     let (name, rest) = match input.split_once(char::is_whitespace) {
@@ -1238,12 +1252,29 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "view-source" => Command::ViewSource,
         "jseval" => {
+            let (mut quiet, mut file) = (false, false);
+            while let Some(flag) = args.flag(&["-q", "--quiet", "-f", "--file", "-w", "--world"]) {
+                match flag {
+                    "-q" | "--quiet" => quiet = true,
+                    "-f" | "--file" => file = true,
+                    // Scripts always run in the page's main world here.
+                    _ => {
+                        args.required("world")?;
+                    }
+                }
+            }
             let code = args.rest();
             if code.is_empty() {
                 return Err(args.error("missing argument: code".to_string()));
             }
             Command::JsEval {
-                code: code.to_string(),
+                code: if file {
+                    text_arg(code)
+                } else {
+                    code.to_string()
+                },
+                quiet,
+                file,
             }
         }
         "home" => Command::Home,
@@ -1288,7 +1319,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             };
             Command::Message {
                 level,
-                text: text.to_string(),
+                text: text_arg(text),
             }
         }
         "clear-messages" => Command::ClearMessages,
@@ -1309,7 +1340,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 return Err(args.error("missing argument: text"));
             }
             Command::InsertText {
-                text: text.to_string(),
+                text: text_arg(text),
             }
         }
         "fake-key" => {
@@ -1318,11 +1349,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             if keys.is_empty() {
                 return Err(args.error("missing argument: keys"));
             }
-            crate::key::Key::parse_sequence(keys).map_err(|e| args.error(e.to_string()))?;
-            Command::FakeKey {
-                keys: keys.to_string(),
-                global,
-            }
+            let keys = text_arg(keys);
+            crate::key::Key::parse_sequence(&keys).map_err(|e| args.error(e.to_string()))?;
+            Command::FakeKey { keys, global }
         }
         "click-element" => {
             let filter = match args.required("filter")? {
@@ -1935,6 +1964,44 @@ mod tests {
             parse("set-cmd-text -s :open").unwrap(),
             parse("cmd-set-text -s :open").unwrap()
         );
+    }
+
+    #[test]
+    fn parses_what_qutebrowser_userscripts_send() {
+        // Lines as qute-pass, password_fill, view_in_mpv and qr write them to QUTE_FIFO.
+        assert_eq!(
+            parse("message-info 'Looking for password for https://x.org/...'").unwrap(),
+            Command::Message {
+                level: crate::engine::Level::Info,
+                text: "Looking for password for https://x.org/...".into()
+            }
+        );
+        assert_eq!(
+            parse("message-error don't panic").unwrap(),
+            Command::Message {
+                level: crate::engine::Level::Error,
+                text: "don't panic".into()
+            }
+        );
+        let fake = |line| match parse(line).unwrap() {
+            Command::FakeKey { keys, .. } => keys,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(fake(r"fake-key \a"), "a");
+        assert_eq!(fake(r#"fake-key " ""#), " ");
+        assert_eq!(fake("fake-key <Tab>"), "<Tab>");
+        assert_eq!(
+            parse("jseval -q -w main (function () { fill('x'); })();").unwrap(),
+            Command::JsEval {
+                code: "(function () { fill('x'); })();".into(),
+                quiet: true,
+                file: false
+            }
+        );
+        assert!(matches!(
+            parse(":open -t file:///tmp/qr.png"),
+            Ok(Command::Open { .. })
+        ));
     }
 
     #[test]

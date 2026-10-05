@@ -216,6 +216,8 @@ struct PageDump {
     text: String,
     selection: String,
     #[serde(default)]
+    selection_html: String,
+    #[serde(default)]
     user_agent: String,
 }
 
@@ -247,7 +249,8 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
     };
     let mut env = vec![
         ("QUTE_MODE", mode.to_string()),
-        ("QUTE_URL", hint_url.unwrap_or(url)),
+        ("QUTE_URL", hint_url.unwrap_or_else(|| url.clone())),
+        ("QUTE_CURRENT_URL", url),
         ("QUTE_TITLE", title),
         ("QUTE_TAB_INDEX", index.to_string()),
         ("QUTE_CONFIG_DIR", paths.config_dir.display().to_string()),
@@ -261,7 +264,10 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
     }
     let code = "JSON.stringify({ html: document.documentElement.outerHTML, \
                 text: document.body ? document.body.innerText : '', \
-                selection: String(getSelection()), user_agent: navigator.userAgent })";
+                selection: String(getSelection()), user_agent: navigator.userAgent, \
+                selection_html: (() => { const s = getSelection(), d = document.createElement('div'); \
+                for (let i = 0; i < s.rangeCount; i++) d.append(s.getRangeAt(i).cloneContents()); \
+                return d.innerHTML; })() })";
     let launch = move |dump: PageDump| {
         let dir = match temp_dir("userscript") {
             Ok(dir) => dir,
@@ -282,6 +288,7 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
         }
         let mut env = env;
         env.push(("QUTE_SELECTED_TEXT", dump.selection));
+        env.push(("QUTE_SELECTED_HTML", dump.selection_html));
         env.push(("QUTE_USER_AGENT", dump.user_agent));
         env.push(("QUTE_HTML", html.display().to_string()));
         env.push(("QUTE_TEXT", text.display().to_string()));
@@ -311,7 +318,16 @@ fn start(
         return;
     };
     let mut process = Process::new(program);
-    process.args(args).envs(env).stdin(Stdio::null());
+    // RIPTIDE_* copies, so new scripts needn't use qutebrowser's names.
+    let copies: Vec<(String, String)> = env
+        .iter()
+        .filter_map(|(k, v)| Some((format!("RIPTIDE_{}", k.strip_prefix("QUTE_")?), v.clone())))
+        .collect();
+    process
+        .args(args)
+        .envs(env)
+        .envs(copies)
+        .stdin(Stdio::null());
     if flags.detach {
         process.stdout(Stdio::null()).stderr(Stdio::null());
         match process.spawn() {
