@@ -319,7 +319,7 @@ pub enum Command {
         output_messages: bool,
         /// Show the program's output in a new tab.
         output: bool,
-        /// Set by hints: the URL a hinted userscript gets as `QUTE_URL`.
+        /// Set by hints: the URL a hinted userscript gets as `RIPTIDE_URL`.
         hint_url: Option<String>,
         /// Don't wait for the program or report on it.
         detach: bool,
@@ -2177,7 +2177,7 @@ mod tests {
 
     #[test]
     fn parses_what_qutebrowser_userscripts_send() {
-        // Lines as qute-pass, password_fill, view_in_mpv and qr write them to QUTE_FIFO.
+        // Lines as qute-pass, password_fill, view_in_mpv and qr write them to their FIFO.
         assert_eq!(
             parse("message-info 'Looking for password for https://x.org/...'").unwrap(),
             Command::Message {

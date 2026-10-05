@@ -5,8 +5,8 @@ use rt_e2e::Browser;
 
 /// Records what qutebrowser-style userscripts get, and opens a page through the FIFO.
 const USERSCRIPT: &str = r#"#!/bin/sh
-printf '%s|%s|%s|%s' "$QUTE_URL" "$QUTE_MODE" "$QUTE_CURRENT_URL" "$RIPTIDE_URL" >"{scratch}/us.out"
-echo "open -t {server}/second.html" >>"$QUTE_FIFO"
+printf '%s|%s|%s|%s' "$RIPTIDE_URL" "$RIPTIDE_MODE" "$RIPTIDE_CURRENT_URL" "${QUTE_URL:-}" >"{scratch}/us.out"
+echo "open -t {server}/second.html" >>"$RIPTIDE_FIFO"
 "#;
 
 #[test]
@@ -18,7 +18,7 @@ fn a_userscript_gets_qute_variables_and_runs_its_fifo_commands() {
     let page = b.url("page.html");
     b.run("spawn -u us");
     let out = b.wait_file(&b.scratch().join("us.out"));
-    assert_eq!(out, format!("{page}|command|{page}|{page}"));
+    assert_eq!(out, format!("{page}|command|{page}|"));
     let second = b.url("second.html");
     b.wait_until("the FIFO's :open ran", |s| s.tab().is_loaded(&second));
 }
@@ -32,7 +32,7 @@ fn hints_run_a_userscript_or_a_program_on_a_link() {
     let (nav1, nav2) = (b.url("nav1.html"), b.url("nav2.html"));
     b.follow_hint("hint links userscript us", |h| h.text.starts_with("next"));
     let out = b.wait_file(&b.scratch().join("us.out"));
-    assert_eq!(out, format!("{nav2}|hints|{nav1}|{nav2}"));
+    assert_eq!(out, format!("{nav2}|hints|{nav1}|"));
 
     b.open("nav1.html");
     let hinted = b.scratch().join("hinted");

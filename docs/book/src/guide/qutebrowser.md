@@ -34,6 +34,7 @@ Riptide doesn't run `config.py`. Write `config.toml` for plain settings and bind
 Things to check after translating:
 
 - **Unknown commands are rejected** when the config loads, with the file and line in the status bar. That's how you find commands riptide doesn't have yet; `:help` lists the ones it does.
+- **Userscripts** get `RIPTIDE_*` variables instead of `QUTE_*` (`RIPTIDE_URL`, `RIPTIDE_FIFO`…); see [Programs, userscripts and Greasemonkey](scripts.md).
 - **Editor placeholders:** qutebrowser's `{}` is `{file}` in `editor.command`, which also has `{line}`, `{column}` and `{column0}`.
 - **Settings that don't exist are errors too.** The [settings reference](../reference/settings.md) lists every one.
 

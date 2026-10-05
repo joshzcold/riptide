@@ -72,7 +72,7 @@ pub enum HintTarget {
     Download,
     /// Run a program with `{hint-url}` (or the URL appended).
     Spawn,
-    /// Run a userscript with `QUTE_URL` set to the URL.
+    /// Run a userscript with `RIPTIDE_URL` set to the URL.
     Userscript,
 }
 

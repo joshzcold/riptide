@@ -289,8 +289,8 @@ hint() {
 mkdir -p "$work/base/config/userscripts"
 cat >"$work/base/config/userscripts/us" <<EOF
 #!/bin/sh
-printf '%s|%s|%s|%s' "\$QUTE_URL" "\$QUTE_MODE" "\$QUTE_CURRENT_URL" "\$RIPTIDE_URL" >"$work/us.out"
-echo "open -t file://$work/second.html" >>"\$QUTE_FIFO"
+printf '%s|%s|%s|%s' "\$RIPTIDE_URL" "\$RIPTIDE_MODE" "\$RIPTIDE_CURRENT_URL" "\${QUTE_URL:-}" >"$work/us.out"
+echo "open -t file://$work/second.html" >>"\$RIPTIDE_FIFO"
 EOF
 # :edit-url gets a URL back; text fields get fixed text.
 cat >"$work/editor.sh" <<EOF
@@ -569,14 +569,14 @@ else
     pass
 fi
 
-step "a userscript gets QUTE_* and runs what it writes to QUTE_FIFO"
+step "a userscript gets RIPTIDE_* and runs what it writes to RIPTIDE_FIFO"
 run "spawn -u us"
 for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
 us=$(cat "$work/us.out" 2>/dev/null || true)
 if [[ $(page_title) != second ]]; then
     fail "the FIFO command didn't run; title was '$(name)'"
-elif [[ $us != "$http/geo.html|command|$http/geo.html|$http/geo.html" ]]; then
-    fail "QUTE_URL|QUTE_MODE|QUTE_CURRENT_URL|RIPTIDE_URL was '$us'"
+elif [[ $us != "$http/geo.html|command|$http/geo.html|" ]]; then
+    fail "RIPTIDE_URL|RIPTIDE_MODE|RIPTIDE_CURRENT_URL|QUTE_URL was '$us'"
 else
     pass
 fi
@@ -598,7 +598,7 @@ wait_mode hint || true
 xdotool key a
 for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/hinted ]] && break; sleep 0.1; done
 from_spawn=$(cat "$work/hinted" 2>/dev/null || true)
-if [[ $from_userscript != "file://$work/nav2.html|hints|file://$work/nav1.html|file://$work/nav2.html" ]]; then
+if [[ $from_userscript != "file://$work/nav2.html|hints|file://$work/nav1.html|" ]]; then
     fail "the userscript got '$from_userscript'"
 elif [[ $from_spawn != "file://$work/nav2.html" ]]; then
     fail ":spawn got '$from_spawn'"

@@ -1,8 +1,8 @@
 //! `:spawn`, userscripts and `:open-editor`. Programs run on a worker thread;
 //! their results come back to the UI thread as tasks.
 //!
-//! Userscripts get qutebrowser's environment (`QUTE_URL`, `QUTE_FIFO`, …),
-//! so existing qutebrowser userscripts work. Commands written to `QUTE_FIFO`
+//! Userscripts get `RIPTIDE_URL`, `RIPTIDE_FIFO` and the rest (qutebrowser's
+//! `QUTE_*` variables under riptide's names). Commands written to `RIPTIDE_FIFO`
 //! run when the script exits; it is a plain file on every platform.
 
 use std::cell::{Cell, RefCell};
@@ -224,7 +224,7 @@ struct PageDump {
 }
 
 /// `hint_url` is set for userscripts run from hints: they get the hinted URL
-/// as `QUTE_URL` and `QUTE_MODE=hints`, as in qutebrowser.
+/// as `RIPTIDE_URL` and `RIPTIDE_MODE=hints`.
 fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_url: Option<String>) {
     let Some((paths, url, title, index, browser, download_dir)) = shell::with(|s| {
         let tab = s.tabs.current();
@@ -250,19 +250,19 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
         "command"
     };
     let mut env = vec![
-        ("QUTE_MODE", mode.to_string()),
-        ("QUTE_URL", hint_url.unwrap_or_else(|| url.clone())),
-        ("QUTE_CURRENT_URL", url),
-        ("QUTE_TITLE", title),
-        ("QUTE_TAB_INDEX", index.to_string()),
-        ("QUTE_CONFIG_DIR", paths.config_dir.display().to_string()),
-        ("QUTE_DATA_DIR", paths.data_dir.display().to_string()),
-        ("QUTE_DOWNLOAD_DIR", download_dir.display().to_string()),
-        ("QUTE_VERSION", env!("CARGO_PKG_VERSION").to_string()),
-        ("QUTE_COMMANDLINE_TEXT", String::new()),
+        ("RIPTIDE_MODE", mode.to_string()),
+        ("RIPTIDE_URL", hint_url.unwrap_or_else(|| url.clone())),
+        ("RIPTIDE_CURRENT_URL", url),
+        ("RIPTIDE_TITLE", title),
+        ("RIPTIDE_TAB_INDEX", index.to_string()),
+        ("RIPTIDE_CONFIG_DIR", paths.config_dir.display().to_string()),
+        ("RIPTIDE_DATA_DIR", paths.data_dir.display().to_string()),
+        ("RIPTIDE_DOWNLOAD_DIR", download_dir.display().to_string()),
+        ("RIPTIDE_VERSION", env!("CARGO_PKG_VERSION").to_string()),
+        ("RIPTIDE_COMMANDLINE_TEXT", String::new()),
     ];
     if let Some(count) = count {
-        env.push(("QUTE_COUNT", count.to_string()));
+        env.push(("RIPTIDE_COUNT", count.to_string()));
     }
     let code = "JSON.stringify({ html: document.documentElement.outerHTML, \
                 text: document.body ? document.body.innerText : '', \
@@ -289,12 +289,12 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
             return shell::show_message(Level::Error, format!("Can't run userscript: {e}"));
         }
         let mut env = env;
-        env.push(("QUTE_SELECTED_TEXT", dump.selection));
-        env.push(("QUTE_SELECTED_HTML", dump.selection_html));
-        env.push(("QUTE_USER_AGENT", dump.user_agent));
-        env.push(("QUTE_HTML", html.display().to_string()));
-        env.push(("QUTE_TEXT", text.display().to_string()));
-        env.push(("QUTE_FIFO", fifo.display().to_string()));
+        env.push(("RIPTIDE_SELECTED_TEXT", dump.selection));
+        env.push(("RIPTIDE_SELECTED_HTML", dump.selection_html));
+        env.push(("RIPTIDE_USER_AGENT", dump.user_agent));
+        env.push(("RIPTIDE_HTML", html.display().to_string()));
+        env.push(("RIPTIDE_TEXT", text.display().to_string()));
+        env.push(("RIPTIDE_FIFO", fifo.display().to_string()));
         start(argv, env, flags, Some(fifo), Some(dir));
     };
     match browser {
@@ -320,15 +320,9 @@ fn start(
         return;
     };
     let mut process = Process::new(program);
-    // RIPTIDE_* copies, so new scripts needn't use qutebrowser's names.
-    let copies: Vec<(String, String)> = env
-        .iter()
-        .filter_map(|(k, v)| Some((format!("RIPTIDE_{}", k.strip_prefix("QUTE_")?), v.clone())))
-        .collect();
     process
         .args(args)
         .envs(env)
-        .envs(copies)
         .stdin(Stdio::null());
     if flags.detach {
         process.stdout(Stdio::null()).stderr(Stdio::null());
