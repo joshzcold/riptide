@@ -192,8 +192,20 @@ fn switch_to(index: usize, force: bool) {
     }
     if let Some((view, _)) = views.iter().find(|(_, visible)| *visible) {
         View::from(view).request_focus();
+        load_pending(view);
     }
     shell::apply(effects);
+}
+
+/// A lazily restored tab is shown for the first time: load its page.
+fn load_pending(view: &BrowserView) {
+    let Some(frame) = view.browser().and_then(|b| b.main_frame()) else {
+        return;
+    };
+    let url = shell::with(|s| s.tabs.current_mut()?.pending.take()).flatten();
+    if let Some(url) = url {
+        frame.load_url(Some(&CefString::from(url.as_str())));
+    }
 }
 
 /// Close the tab a `window/tab` label (from tab completion) names, in
@@ -278,8 +290,22 @@ pub fn restore_window(window: &rt_storage::WindowState) {
         return;
     }
     let old = shell::with(|s| s.tabs.len()).unwrap_or(0);
-    for tab in &window.tabs {
-        open(&tab.url, Position::Last, false);
+    let lazy = shell::with(|s| s.engine.settings().bool("session.lazy_restore")).unwrap_or(false);
+    let active = window.active.min(window.tabs.len() - 1);
+    for (i, tab) in window.tabs.iter().enumerate() {
+        if !lazy || i == active {
+            open(&tab.url, Position::Last, false);
+            continue;
+        }
+        open("about:blank", Position::Last, false);
+        shell::with(|s| {
+            let last = s.tabs.len().checked_sub(1)?;
+            let placeholder = s.tabs.get_mut(last)?;
+            placeholder.url = tab.url.clone();
+            placeholder.title = tab.title.clone();
+            placeholder.pending = Some(tab.url.clone());
+            Some(())
+        });
     }
     for _ in 0..old {
         close(0);

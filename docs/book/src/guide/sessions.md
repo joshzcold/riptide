@@ -15,6 +15,14 @@ Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, s
 
 `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions, and `:session-load` completes their names. `ZZ` or `:wq` saves the tabs as the `default` session and quits; `ZQ` quits without saving. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
+With `session.lazy_restore = true`, a restored session loads only the tab you're on. The others keep their titles in the tab bar and load when you first switch to them, which makes restoring many tabs fast.
+
+`confirm_quit` asks before `:quit`, or before closing the last window, quits the browser. List the reasons to ask: `multiple-tabs` (more than one tab is open), `downloads` (downloads are still running), `always`, or the default `never`:
+
+```toml
+confirm_quit = ["multiple-tabs", "downloads"]
+```
+
 ## Crash recovery
 
 Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. A normal exit deletes that save. If the browser crashed, the next start reopens those tabs; with URLs on the command line, it says where they are (`:session-load _autosave`).

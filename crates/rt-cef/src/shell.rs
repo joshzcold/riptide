@@ -42,6 +42,9 @@ pub struct Tab {
     pub search_match: Option<(i32, i32)>,
     /// How far down the page is scrolled, in percent; -1 when it all fits.
     pub scroll: Option<i32>,
+    /// `session.lazy_restore`: the URL to load when the tab is first shown.
+    /// Until then the tab shows `about:blank` but keeps `url` and `title`.
+    pub pending: Option<String>,
 }
 
 impl Tab {
@@ -61,6 +64,7 @@ impl Tab {
             can_go_forward: false,
             search_match: None,
             scroll: None,
+            pending: None,
         }
     }
 
@@ -164,6 +168,8 @@ pub struct Shell {
     pub suppress_char: bool,
     /// Browser id of the tab currently showing hint labels.
     pub hint_browser: Option<i32>,
+    /// The user said yes to `confirm_quit`; quitting goes ahead without asking again.
+    pub quit_confirmed: bool,
     /// When a hint was last followed, for `hints.auto_follow_timeout`.
     pub hint_followed_at: Option<std::time::Instant>,
     timed_message: u64,
@@ -207,6 +213,7 @@ impl Shell {
             hint_browser: None,
             timed_message: 0,
             hint_followed_at: None,
+            quit_confirmed: false,
             keyhint_chain: String::new(),
             keyhint_since: std::time::Instant::now(),
         }
@@ -593,6 +600,9 @@ fn run_command(command: Command, count: Option<u32>) {
             }
         }
         Command::Quit { save } => {
+            if !confirm_quit(move || run_command(Command::Quit { save }, None)) {
+                return;
+            }
             let save = with(|s| {
                 s.quitting = true;
                 save || s.save_session_on_quit || s.engine.settings().bool("auto_save.session")
@@ -704,6 +714,40 @@ fn focus_for_prompt(prompting: bool) {
     if !prompting && let Some(tab) = &tab {
         View::from(tab).request_focus();
     }
+}
+
+/// `confirm_quit`: true if quitting may go ahead now. Otherwise asks, and
+/// calls `quit` if the answer is yes.
+pub fn confirm_quit(quit: impl FnOnce() + 'static) -> bool {
+    let reason = with(|s| {
+        if s.quit_confirmed {
+            return None;
+        }
+        let tabs = s.windows.iter().map(|w| w.tabs.len()).sum();
+        let values = s.engine.settings().list("confirm_quit").to_vec();
+        rt_core::settings::confirm_quit_reason(&values, tabs, crate::downloads::running_count())
+    })
+    .flatten();
+    let Some(reason) = reason else {
+        return true;
+    };
+    crate::prompts::ask(
+        None,
+        crate::prompts::Scope::Other,
+        "Quit riptide?",
+        reason,
+        rt_core::prompt::PromptKind::YesNo {
+            default: false,
+            remember: rt_core::prompt::Remember::Never,
+        },
+        move |answer| {
+            if matches!(answer, rt_core::prompt::PromptAnswer::Yes { .. }) {
+                with(|s| s.quit_confirmed = true);
+                quit();
+            }
+        },
+    );
+    false
 }
 
 fn yank(what: YankWhat, primary: bool) {

@@ -683,7 +683,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `input.partial_timeout`, `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`, `input.match_counts`, `input.mode_override`.
 - **Scrolling, search, zoom:** `scrolling.smooth`, `scrolling.bar`, `search.wrap`, `search.wrap_messages`, `zoom.levels`, `zoom.mouse_divider` (Ctrl+wheel), `zoom.text_only`.
 - **Sessions and window:**
-  - Tier 1: `session.lazy_restore` (don't load background tabs until they're shown) and `confirm_quit` (always, multiple-tabs, downloads, never).
+  - ✅ Tier 1 (2026-10-05): `session.lazy_restore` (background tabs keep their URL and title and load when first shown) and `confirm_quit` (always, multiple-tabs, downloads, never; asked on `:quit` and when closing the last window), each with a smoke step.
   - `session.default_name`, `:save`, `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
 - **Tools:**
   - Tier 1: `:screenshot`, through the DevTools protocol (`execute_dev_tools_method("Page.captureScreenshot")`), which needs no Views API.

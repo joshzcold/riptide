@@ -310,7 +310,8 @@ wrap_display_handler! {
                 if current {
                     s.engine.set_url(&url);
                 }
-                s.tabs.get_mut(index).map(|tab| tab.url = url.clone())
+                // A lazily restored tab keeps its real URL until it loads it.
+                s.tabs.get_mut(index).filter(|tab| tab.pending.is_none()).map(|tab| tab.url = url.clone())
             });
             shell::refresh_ui();
             if changed.flatten().is_some() {
@@ -325,7 +326,7 @@ wrap_display_handler! {
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
             let url = shell::with_tab(browser, |s, index, _| {
-                let tab = s.tabs.get_mut(index)?;
+                let tab = s.tabs.get_mut(index).filter(|tab| tab.pending.is_none())?;
                 tab.title = title.clone();
                 Some(tab.url.clone())
             });
@@ -405,7 +406,8 @@ wrap_load_handler! {
                         let private = s.private;
                         let tab = s.tabs.get_mut(index)?;
                         // Private windows leave no history.
-                        let visit = (!tab.load_error && !private).then(|| (tab.url.clone(), tab.title.clone()));
+                        let visit = (!tab.load_error && !private && tab.pending.is_none())
+                            .then(|| (tab.url.clone(), tab.title.clone()));
                         Some((tab.pending_error.take(), visit))
                     });
                     let Some(Some((error, visit))) = done else { return };

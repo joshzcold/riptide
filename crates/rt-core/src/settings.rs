@@ -265,6 +265,39 @@ fn key_mappings(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+const CONFIRM_QUIT: &[&str] = &["always", "multiple-tabs", "downloads", "never"];
+
+fn confirm_quit(value: &Value) -> Result<(), String> {
+    let Value::List(values) = value else {
+        return Ok(());
+    };
+    match values.iter().find(|v| !CONFIRM_QUIT.contains(&v.as_str())) {
+        Some(v) => Err(format!(
+            "unknown value {v:?}; use {}",
+            CONFIRM_QUIT.join(", ")
+        )),
+        None => Ok(()),
+    }
+}
+
+/// Why quitting should be confirmed under `confirm_quit`, given the open
+/// tabs and running downloads; `None` to quit right away.
+pub fn confirm_quit_reason(values: &[String], tabs: usize, downloads: usize) -> Option<String> {
+    let has = |v: &str| values.iter().any(|x| x == v);
+    if has("downloads") && downloads > 0 {
+        let s = if downloads == 1 {
+            "download is"
+        } else {
+            "downloads are"
+        };
+        return Some(format!("{downloads} {s} still running"));
+    }
+    if has("multiple-tabs") && tabs > 1 {
+        return Some(format!("{tabs} tabs are open"));
+    }
+    has("always").then(|| "Quit riptide?".to_string())
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -351,6 +384,13 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         Value::Int(100),
         "How many history entries :open completion shows (0 turns history completion off)"
+    ),
+    def!(
+        "confirm_quit",
+        Kind::List,
+        Value::List(vec!["never".to_string()]),
+        "Ask before quitting: always, multiple-tabs (more than one tab open), downloads (downloads still running), or never",
+        confirm_quit
     ),
     def!(
         "content.blocking.adblock.lists",
@@ -549,6 +589,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Search while typing after / or ?"
+    ),
+    def!(
+        "session.lazy_restore",
+        Kind::Bool,
+        Value::Bool(false),
+        "When restoring a session, load background tabs only when they are first shown"
     ),
     def!(
         "spellcheck.languages",
@@ -979,6 +1025,28 @@ mod tests {
             find("hints.uppercase")
                 .unwrap()
                 .from_json(&json!("true"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn confirm_quit_reasons() {
+        let v = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(confirm_quit_reason(&v(&["never"]), 9, 9), None);
+        assert_eq!(confirm_quit_reason(&v(&["multiple-tabs"]), 1, 0), None);
+        assert_eq!(
+            confirm_quit_reason(&v(&["multiple-tabs"]), 3, 0).unwrap(),
+            "3 tabs are open"
+        );
+        assert_eq!(
+            confirm_quit_reason(&v(&["multiple-tabs", "downloads"]), 3, 1).unwrap(),
+            "1 download is still running"
+        );
+        assert!(confirm_quit_reason(&v(&["always"]), 1, 0).is_some());
+        assert!(
+            find("confirm_quit")
+                .unwrap()
+                .from_json(&json!(["sometimes"]))
                 .is_err()
         );
     }

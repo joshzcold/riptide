@@ -55,6 +55,16 @@ pub(crate) fn download_dir() -> PathBuf {
 }
 
 /// Status bar summary, e.g. `↓2 41%`.
+/// How many downloads are still running, for `confirm_quit`.
+pub fn running_count() -> usize {
+    DOWNLOADS.with(|d| {
+        d.borrow()
+            .iter()
+            .filter(|d| d.state == State::Running)
+            .count()
+    })
+}
+
 pub fn summary() -> String {
     DOWNLOADS.with(|d| {
         let d = d.borrow();

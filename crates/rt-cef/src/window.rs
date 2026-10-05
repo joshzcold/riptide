@@ -315,12 +315,31 @@ wrap_window_delegate! {
             shell::refresh_ui();
         }
 
-        fn can_close(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+        fn can_close(&self, window: Option<&mut Window>) -> ::std::os::raw::c_int {
             // Let every page run its unload handlers; CEF closes the window
             // once all of them agree. CEF may ask again while pages unload,
             // so save the session only the first time, and only when the
             // last window closes (`:quit` saves all windows itself).
             let id = self.id;
+            // Closing the last window quits, so confirm_quit may ask first.
+            let last = shell::with(|s| {
+                let index = s.window_index(id)?;
+                let open = s.windows.iter().filter(|w| !w.window_closing).count();
+                Some(!s.quitting && !s.windows[index].window_closing && open == 1)
+            })
+            .flatten()
+            .unwrap_or(false);
+            if last {
+                let window = window.map(|w| w.clone());
+                let go_ahead = shell::confirm_quit(move || {
+                    if let Some(window) = window {
+                        window.close();
+                    }
+                });
+                if !go_ahead {
+                    return 0;
+                }
+            }
             let save = shell::with(|s| {
                 let index = s.window_index(id)?;
                 let first = !s.windows[index].window_closing;

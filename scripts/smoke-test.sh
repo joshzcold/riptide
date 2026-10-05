@@ -782,6 +782,34 @@ wait_mode normal || true
 run "set input.insert_mode.auto_load false"
 [[ $stayed == normal && $entered == insert ]] && pass || fail "default '$stayed', with auto_load '$entered'"
 
+step "session.lazy_restore loads a background tab only when it's shown"
+lazy_visits() {
+    python3 - "$work/base/data/history.sqlite" <<'PYQ'
+import sqlite3, sys
+db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+print(db.execute("SELECT COUNT(*) FROM visits WHERE url LIKE '%second.html?lazy=1'").fetchone()[0])
+PYQ
+}
+run "tab-only"
+run "open file://$work/nav1.html"
+expect_title "nav1"
+run "open -t file://$work/second.html?lazy=1"
+expect_title "second"
+run "tab-focus 1"
+expect_title "nav1"
+run "session-save lazy"
+run "set session.lazy_restore true"
+run "session-load lazy"
+nap 1.5
+expect_title "nav1"
+before=$(lazy_visits)
+run "tab-focus 2"
+expect_title "second"
+nap 0.5
+after=$(lazy_visits)
+run "set session.lazy_restore false"
+[[ $before == 1 && $after == 2 ]] && pass || fail "visits to the background tab: $before before showing it, $after after"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"
@@ -947,9 +975,22 @@ browser_pid=$!
 window=$(find_window "^normal::search$")
 [[ -n $window ]] && pass || fail "no restored window"
 
-step ":quit exits cleanly"
+step "confirm_quit asks before quitting with several tabs; n keeps the browser"
 [[ -n $window ]] && xdotool windowfocus --sync "$window"
+run "set confirm_quit [\"multiple-tabs\"]"
 run "quit"
+wait_mode yesno || true
+asked=$(mode)
+xdotool key n
+wait_mode normal || true
+nap 0.5
+kill -0 "$browser_pid" 2>/dev/null && running=yes || running=no
+[[ $asked == yesno && $running == yes ]] && pass || fail "mode '$asked', still running: $running"
+
+step ":quit exits cleanly once confirmed"
+run "quit"
+wait_mode yesno || true
+xdotool key y
 expect_exit
 
 if (( failures > 0 )); then
