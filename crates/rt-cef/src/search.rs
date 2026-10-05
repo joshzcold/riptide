@@ -30,7 +30,13 @@ thread_local! {
 fn match_case(text: &str) -> bool {
     let mode = shell::with(|s| s.engine.settings().str("search.ignore_case").to_string())
         .unwrap_or_default();
-    match mode.as_str() {
+    case_sensitive(&mode, text)
+}
+
+/// `search.ignore_case`: `always`, `never`, or `smart` (case matters only
+/// when the text has a capital letter).
+fn case_sensitive(mode: &str, text: &str) -> bool {
+    match mode {
         "always" => false,
         "never" => true,
         _ => text.chars().any(char::is_uppercase),
@@ -199,5 +205,19 @@ wrap_find_handler! {
             }
             shell::refresh_ui();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smart_case_matters_only_with_a_capital() {
+        assert!(!case_sensitive("smart", "needle"));
+        assert!(case_sensitive("smart", "Needle"));
+        assert!(case_sensitive("smart", "ÉTÉ"));
+        assert!(!case_sensitive("always", "Needle"));
+        assert!(case_sensitive("never", "needle"));
     }
 }

@@ -9,6 +9,7 @@ pub mod config;
 pub mod engine;
 pub mod help;
 pub mod hints;
+pub mod html;
 pub mod key;
 pub mod keymap;
 pub mod mode;

@@ -122,7 +122,10 @@ mod tests {
 
     #[test]
     fn origins_are_scheme_host_and_port_without_user_info() {
-        assert_eq!(origin("https://a.example:8443/x?y#z"), "https://a.example:8443");
+        assert_eq!(
+            origin("https://a.example:8443/x?y#z"),
+            "https://a.example:8443"
+        );
         assert_eq!(origin("https://a.example"), "https://a.example");
         assert_eq!(origin("https://a.example?q"), "https://a.example");
         assert_eq!(origin("https://me:secret@a.example/x"), "https://a.example");

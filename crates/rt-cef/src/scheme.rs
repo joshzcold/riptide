@@ -156,3 +156,34 @@ wrap_resource_handler! {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ui_pages_are_served_with_their_html() {
+        for path in ["/tabbar.html", "/statusbar.html", "/completion.html"] {
+            let (body, mime) = page("ui", path).unwrap_or_else(|| panic!("{path}"));
+            assert_eq!(mime, "text/html");
+            assert!(
+                body.starts_with(b"<!doctype html>") || body.starts_with(b"<!DOCTYPE html>"),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn anything_else_is_not_found() {
+        for (host, path) in [
+            ("ui", "/"),
+            ("ui", "/../help/"),
+            ("ui", "/TABBAR.html"),
+            ("help", "/x"),
+            ("evil", "/"),
+            ("", "/"),
+        ] {
+            assert!(page(host, path).is_none(), "{host}{path}");
+        }
+    }
+}

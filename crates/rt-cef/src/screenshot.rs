@@ -69,7 +69,11 @@ pub fn run_command(command: &Command) -> bool {
 }
 
 fn expand_home(path: &str) -> PathBuf {
-    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
+    expand_home_in(path, std::env::var_os("HOME"))
+}
+
+fn expand_home_in(path: &str, home: Option<std::ffi::OsString>) -> PathBuf {
+    match (path.strip_prefix("~/"), home) {
         (Some(rest), Some(home)) => PathBuf::from(home).join(rest),
         _ => PathBuf::from(path),
     }
@@ -129,5 +133,31 @@ wrap_task! {
         fn execute(&self) {
             self.registration.borrow_mut().take();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tilde_slash_means_home() {
+        let home = Some(std::ffi::OsString::from("/home/u"));
+        assert_eq!(
+            expand_home_in("~/shot.png", home.clone()),
+            PathBuf::from("/home/u/shot.png")
+        );
+        assert_eq!(
+            expand_home_in("/tmp/shot.png", home.clone()),
+            PathBuf::from("/tmp/shot.png")
+        );
+        assert_eq!(
+            expand_home_in("~shot.png", home),
+            PathBuf::from("~shot.png")
+        );
+        assert_eq!(
+            expand_home_in("~/shot.png", None),
+            PathBuf::from("~/shot.png")
+        );
     }
 }

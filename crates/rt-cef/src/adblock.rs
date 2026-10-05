@@ -414,3 +414,25 @@ fn inject_css(browser: &Browser, css: &str) {
     );
     eval::eval(browser, &code, |_| {});
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn top_level_pages_are_never_checked() {
+        assert_eq!(kind(ResourceType::MAIN_FRAME), None);
+        assert_eq!(kind(ResourceType::NAVIGATION_PRELOAD_MAIN_FRAME), None);
+    }
+
+    #[test]
+    fn requests_map_to_filter_list_types() {
+        assert_eq!(kind(ResourceType::SUB_FRAME), Some("sub_frame"));
+        assert_eq!(kind(ResourceType::SCRIPT), Some("script"));
+        assert_eq!(kind(ResourceType::WORKER), Some("script"));
+        assert_eq!(kind(ResourceType::IMAGE), Some("image"));
+        assert_eq!(kind(ResourceType::FAVICON), Some("image"));
+        assert_eq!(kind(ResourceType::XHR), Some("xmlhttprequest"));
+        assert_eq!(kind(ResourceType::PREFETCH), Some("other"));
+    }
+}

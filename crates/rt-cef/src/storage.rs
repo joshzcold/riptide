@@ -48,12 +48,7 @@ pub fn bookmarks_page() -> std::sync::Arc<[u8]> {
 }
 
 fn publish_bookmarks() {
-    let escape = |t: &str| {
-        t.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
+    let escape = rt_core::html::escape;
     let row = |name: &str, url: &str| {
         format!(
             "<li><a href=\"{}\">{}</a> <span class=url>{}</span></li>",

@@ -15,6 +15,7 @@ use cef::*;
 use rt_core::Command;
 use rt_core::command::OpenTarget;
 use rt_core::engine::Level;
+use rt_core::html::escape;
 
 use crate::{eval, shell};
 
@@ -635,12 +636,6 @@ pub fn output_page() -> Arc<[u8]> {
         .unwrap_or_else(|| {
             Arc::from(&b"<!doctype html><title>Process output</title><p>Nothing has run yet."[..])
         })
-}
-
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
 }
 
 fn show_output(program: &str, done: &Finished) {

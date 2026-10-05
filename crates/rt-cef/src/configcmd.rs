@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use rt_core::Command;
 use rt_core::command::OpenTarget;
 use rt_core::engine::Level;
+use rt_core::html::escape;
 
 use crate::{shell, spawn};
 
@@ -49,12 +50,6 @@ pub fn run_command(command: &Command) -> bool {
         _ => return false,
     }
     true
-}
-
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
 }
 
 fn diff() {

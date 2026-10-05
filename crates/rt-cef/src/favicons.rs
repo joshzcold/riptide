@@ -112,14 +112,21 @@ mod tests {
     fn picks_the_first_fetchable_icon() {
         let urls = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
         assert_eq!(
-            pick_icon(urls(&["chrome://x/icon.png", "https://a.example/favicon.ico", "https://a.example/b.png"])),
+            pick_icon(urls(&[
+                "chrome://x/icon.png",
+                "https://a.example/favicon.ico",
+                "https://a.example/b.png"
+            ])),
             Some("https://a.example/favicon.ico".into())
         );
         assert_eq!(
             pick_icon(urls(&["data:image/png;base64,AAAA"])),
             Some("data:image/png;base64,AAAA".into())
         );
-        assert_eq!(pick_icon(urls(&["data:text/html,x", "file:///icon.png"])), None);
+        assert_eq!(
+            pick_icon(urls(&["data:text/html,x", "file:///icon.png"])),
+            None
+        );
         assert_eq!(pick_icon(Vec::new()), None);
     }
 

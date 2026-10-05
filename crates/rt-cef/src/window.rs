@@ -580,20 +580,44 @@ mod tests {
 
     #[test]
     fn tab_bar_slots() {
-        assert_eq!(placement("top", 200, "bottom").tab_bar_slot(), TabBarSlot::Top);
-        assert_eq!(placement("bottom", 200, "bottom").tab_bar_slot(), TabBarSlot::Bottom);
-        assert_eq!(placement("left", 200, "bottom").tab_bar_slot(), TabBarSlot::Left);
-        assert_eq!(placement("right", 200, "bottom").tab_bar_slot(), TabBarSlot::Right);
-        assert_eq!(placement("sideways", 200, "bottom").tab_bar_slot(), TabBarSlot::Top);
+        assert_eq!(
+            placement("top", 200, "bottom").tab_bar_slot(),
+            TabBarSlot::Top
+        );
+        assert_eq!(
+            placement("bottom", 200, "bottom").tab_bar_slot(),
+            TabBarSlot::Bottom
+        );
+        assert_eq!(
+            placement("left", 200, "bottom").tab_bar_slot(),
+            TabBarSlot::Left
+        );
+        assert_eq!(
+            placement("right", 200, "bottom").tab_bar_slot(),
+            TabBarSlot::Right
+        );
+        assert_eq!(
+            placement("sideways", 200, "bottom").tab_bar_slot(),
+            TabBarSlot::Top
+        );
     }
 
     #[test]
     fn a_side_tab_bar_is_tabs_width_wide_and_a_top_one_is_a_row() {
         assert_eq!(placement("left", 250, "bottom").tab_bar_size(), (250, 1));
         assert_eq!(placement("right", 0, "bottom").tab_bar_size(), (1, 1));
-        assert_eq!(placement("right", i64::MAX, "bottom").tab_bar_size(), (i32::MAX, 1));
-        assert_eq!(placement("top", 250, "bottom").tab_bar_size(), (1, TABBAR_HEIGHT));
-        assert_eq!(placement("bottom", 250, "bottom").tab_bar_size(), (1, TABBAR_HEIGHT));
+        assert_eq!(
+            placement("right", i64::MAX, "bottom").tab_bar_size(),
+            (i32::MAX, 1)
+        );
+        assert_eq!(
+            placement("top", 250, "bottom").tab_bar_size(),
+            (1, TABBAR_HEIGHT)
+        );
+        assert_eq!(
+            placement("bottom", 250, "bottom").tab_bar_size(),
+            (1, TABBAR_HEIGHT)
+        );
     }
 
     #[test]

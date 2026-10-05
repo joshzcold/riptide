@@ -13,8 +13,9 @@ use rt_core::prompt::{PromptAnswer, PromptKind, Remember};
 
 use crate::prompts::{self, Scope};
 use crate::shell;
+use rt_core::html::escape;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
     Running,
     Done,
@@ -264,25 +265,34 @@ fn pick(count: Option<u32>, state: State) -> Result<usize, String> {
 
 /// The download numbered `count`, or the newest one, in one of `states`.
 fn pick_any(count: Option<u32>, states: &[State], what: &str) -> Result<usize, String> {
-    DOWNLOADS.with(|d| {
-        let d = d.borrow();
-        match count {
-            Some(n) => {
-                let index = (n as usize)
-                    .checked_sub(1)
-                    .filter(|&i| i < d.len())
-                    .ok_or(format!("There's no download {n}"))?;
-                if !states.contains(&d[index].state) {
-                    return Err(format!("Download {n} is not {what}"));
-                }
-                Ok(index)
+    let all: Vec<State> = DOWNLOADS.with(|d| d.borrow().iter().map(|d| d.state).collect());
+    pick_from(&all, count, states, what)
+}
+
+/// The index of download number `count` (from 1) in `all`, or of the newest
+/// one, as long as it's in one of `states`.
+fn pick_from(
+    all: &[State],
+    count: Option<u32>,
+    states: &[State],
+    what: &str,
+) -> Result<usize, String> {
+    match count {
+        Some(n) => {
+            let index = (n as usize)
+                .checked_sub(1)
+                .filter(|&i| i < all.len())
+                .ok_or(format!("There's no download {n}"))?;
+            if !states.contains(&all[index]) {
+                return Err(format!("Download {n} is not {what}"));
             }
-            None => d
-                .iter()
-                .rposition(|d| states.contains(&d.state))
-                .ok_or_else(|| format!("No {what} downloads")),
+            Ok(index)
         }
-    })
+        None => all
+            .iter()
+            .rposition(|s| states.contains(s))
+            .ok_or_else(|| format!("No {what} downloads")),
+    }
 }
 
 /// Open a finished download with `downloads.open_dispatcher`, or the
@@ -460,13 +470,6 @@ pub fn page() -> Arc<[u8]> {
     })
 }
 
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 fn publish() {
     let (rows, running) = DOWNLOADS.with(|d| {
         let d = d.borrow();
@@ -528,3 +531,42 @@ const STYLE: &str = "
   .state { text-align: right; white-space: nowrap; }
   .empty, .help { color: var(--muted); }
 ";
+
+#[cfg(test)]
+mod tests {
+    use super::State::*;
+    use super::*;
+
+    #[test]
+    fn a_count_picks_that_download_if_its_in_the_right_state() {
+        let all = [Done, Running, Failed];
+        assert_eq!(pick_from(&all, Some(2), &[Running], "running"), Ok(1));
+        assert_eq!(
+            pick_from(&all, Some(1), &[Running], "running"),
+            Err("Download 1 is not running".into())
+        );
+        assert_eq!(
+            pick_from(&all, Some(4), &[Running], "running"),
+            Err("There's no download 4".into())
+        );
+        assert_eq!(
+            pick_from(&all, Some(0), &[Running], "running"),
+            Err("There's no download 0".into())
+        );
+    }
+
+    #[test]
+    fn no_count_picks_the_newest_in_the_right_state() {
+        let all = [Done, Running, Done, Cancelled];
+        assert_eq!(pick_from(&all, None, &[Done], "finished"), Ok(2));
+        assert_eq!(pick_from(&all, None, &[Done, Cancelled], "finished"), Ok(3));
+        assert_eq!(
+            pick_from(&all, None, &[Failed], "failed"),
+            Err("No failed downloads".into())
+        );
+        assert_eq!(
+            pick_from(&[], None, &[Done], "finished"),
+            Err("No finished downloads".into())
+        );
+    }
+}

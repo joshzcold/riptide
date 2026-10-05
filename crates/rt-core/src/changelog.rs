@@ -2,6 +2,8 @@
 //! subset of Markdown (headings, bullets, bold, code and links), so that is
 //! all this handles. Everything else is escaped text.
 
+use crate::html::escape;
+
 /// HTML for the changelog's body.
 pub fn to_html(markdown: &str) -> String {
     let mut html = String::new();
@@ -47,21 +49,6 @@ fn heading(line: &str) -> Option<(usize, &str)> {
     let level = line.bytes().take_while(|&b| b == b'#').count();
     let text = line.get(level..)?.strip_prefix(' ')?;
     (1..=4).contains(&level).then_some((level, text))
-}
-
-fn escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#39;"),
-            _ => out.push(c),
-        }
-    }
-    out
 }
 
 /// `**bold**`, `` `code` `` and `[text](https://…)`.

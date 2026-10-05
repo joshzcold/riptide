@@ -1,5 +1,6 @@
 //! Internal pages that make up the browser chrome.
 
+use rt_core::html::escape;
 use rt_core::ui_message::UiMessage;
 
 pub const TABBAR_HTML: &str = include_str!("../ui/tabbar.html");
@@ -36,9 +37,22 @@ pub fn error_page_js(url: &str, error: &str) -> String {
     format!("document.documentElement.innerHTML = {html};")
 }
 
-fn escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_error_page_escapes_the_url_and_error() {
+        let js = error_page_js("https://x.example/<script>", "it's \"bad\" & <b>");
+        assert!(
+            js.starts_with("document.documentElement.innerHTML = \""),
+            "{js}"
+        );
+        assert!(js.contains("https://x.example/&lt;script&gt;"), "{js}");
+        assert!(
+            js.contains("it&#39;s &quot;bad&quot; &amp; &lt;b&gt;"),
+            "{js}"
+        );
+        assert!(!js.contains("<script>"), "{js}");
+    }
 }
