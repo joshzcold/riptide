@@ -83,6 +83,14 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:clear-messages` |  | Take the messages off the screen |
 | `:config-cycle` |  | Cycle a setting: :config-cycle &lt;option&gt; [values…] (no values: toggle) |
 | `:config-unset` |  | Put a setting back to its default: :config-unset &lt;option&gt; |
+| `:config-list-add` |  | Add a value to a list setting: :config-list-add &lt;option&gt; &lt;value&gt; |
+| `:config-list-remove` |  | Remove a value from a list setting: :config-list-remove &lt;option&gt; &lt;value&gt; |
+| `:config-dict-add` |  | Set a key in a map setting: :config-dict-add [--replace] &lt;option&gt; &lt;key&gt; &lt;value&gt; |
+| `:config-dict-remove` |  | Remove a key from a map setting: :config-dict-remove &lt;option&gt; &lt;key&gt; |
+| `:config-clear` |  | Put every setting back to its default |
+| `:config-diff` |  | Show the settings that differ from their defaults |
+| `:config-edit` |  | Edit config.lua (or config.toml) in editor.command, then load it again |
+| `:config-write-toml` |  | Write the current settings to config.toml: [--force] replaces an existing one |
 | `:insert-text` |  | Type text into the focused field: :insert-text &lt;text&gt; |
 | `:fake-key` |  | Send keys to the page: :fake-key [-g] &lt;keys&gt; (-g: to the browser) |
 | `:click-element` |  | Click an element: :click-element id\|css\|focused [value] |

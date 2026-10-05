@@ -1253,6 +1253,63 @@ impl Engine {
                     self.set_command(Some(name), Some(values[next].clone()), None, effects);
                 }
             }
+            Command::ConfigListAdd { name, value } => {
+                if let Some(Value::List(mut list)) = self.setting_of_kind(&name, "list") {
+                    list.push(value);
+                    self.set_value(&name, Value::List(list), effects);
+                }
+            }
+            Command::ConfigListRemove { name, value } => {
+                if let Some(Value::List(mut list)) = self.setting_of_kind(&name, "list") {
+                    let before = list.len();
+                    list.retain(|v| *v != value);
+                    if list.len() == before {
+                        self.show_message(Level::Error, format!("{value:?} isn't in {name}"));
+                    } else {
+                        self.set_value(&name, Value::List(list), effects);
+                    }
+                }
+            }
+            Command::ConfigDictAdd {
+                name,
+                key,
+                value,
+                replace,
+            } => {
+                if let Some(Value::Map(mut map)) = self.setting_of_kind(&name, "map") {
+                    if map.contains_key(&key) && !replace {
+                        self.show_message(
+                            Level::Error,
+                            format!("{name} already has {key:?}; use --replace to change it"),
+                        );
+                    } else {
+                        map.insert(key, value);
+                        self.set_value(&name, Value::Map(map), effects);
+                    }
+                }
+            }
+            Command::ConfigDictRemove { name, key } => {
+                if let Some(Value::Map(mut map)) = self.setting_of_kind(&name, "map") {
+                    if map.remove(&key).is_none() {
+                        self.show_message(Level::Error, format!("{name} has no {key:?}"));
+                    } else {
+                        self.set_value(&name, Value::Map(map), effects);
+                    }
+                }
+            }
+            Command::ConfigClear => {
+                let changed = self.settings.changed();
+                for (name, _) in &changed {
+                    let _ = self.settings.unset(name);
+                    effects.push(Effect::ConfigChanged(ConfigOp::Unset {
+                        name: name.to_string(),
+                    }));
+                }
+                self.show_message(
+                    Level::Info,
+                    format!("Put {} setting(s) back to their defaults", changed.len()),
+                );
+            }
             Command::ConfigUnset { name } => match self.settings.unset(&name) {
                 Ok(()) => {
                     let value = self.settings.get(&name).map(ToString::to_string);
@@ -1310,6 +1367,46 @@ impl Engine {
                 self.dirty = true;
             }
             command => effects.push(Effect::Run { command, count }),
+        }
+    }
+
+    /// A setting's current value if it's a `list` or a `map`, as `kind` says;
+    /// otherwise shows why not.
+    fn setting_of_kind(&mut self, name: &str, kind: &str) -> Option<Value> {
+        let value = self.settings.get(name).cloned();
+        let fits = matches!(
+            (&value, kind),
+            (Some(Value::List(_)), "list") | (Some(Value::Map(_)), "map")
+        );
+        if !fits {
+            let what = if value.is_none() {
+                "no option".to_string()
+            } else {
+                format!("not a {kind} setting")
+            };
+            self.show_message(Level::Error, format!("{name}: {what}"));
+            return None;
+        }
+        value
+    }
+
+    /// Set `name` to `value`, checked like `:set`, and persist it.
+    fn set_value(&mut self, name: &str, value: Value, effects: &mut Vec<Effect>) {
+        let checked = settings::find(name)
+            .ok_or_else(|| format!("No option {name:?}"))
+            .and_then(|def| def.from_json(&value.to_json()));
+        match checked {
+            Ok(value) => {
+                let _ = self.settings.set(name, value.clone());
+                self.show_message(Level::Info, format!("{name} = {value}"));
+                effects.push(Effect::ConfigChanged(ConfigOp::Set {
+                    name: name.to_string(),
+                    value,
+                }));
+            }
+            Err(e) => {
+                self.show_message(Level::Error, e);
+            }
         }
     }
 
@@ -2330,6 +2427,70 @@ mod tests {
             runs(&press(&mut e, ".")),
             vec![(Command::Reload { force: false }, None)]
         );
+    }
+
+    #[test]
+    fn config_list_and_dict_commands() {
+        let mut e = engine();
+        press(
+            &mut e,
+            ":config-list-add url.start_pages https://a.org/<Return>",
+        );
+        assert_eq!(
+            e.settings().list("url.start_pages").last().unwrap(),
+            "https://a.org/"
+        );
+        press(
+            &mut e,
+            ":config-list-remove url.start_pages https://a.org/<Return>",
+        );
+        assert!(
+            !e.settings()
+                .list("url.start_pages")
+                .contains(&"https://a.org/".to_string())
+        );
+        press(
+            &mut e,
+            ":config-dict-add url.searchengines ddg https://duckduckgo.com/?q={}<Return>",
+        );
+        assert_eq!(
+            e.settings().map("url.searchengines").unwrap()["ddg"],
+            "https://duckduckgo.com/?q={}"
+        );
+        press(
+            &mut e,
+            ":config-dict-add url.searchengines ddg https://x.org/?q={}<Return>",
+        );
+        assert!(e.status().message.unwrap().text.contains("--replace"));
+        press(
+            &mut e,
+            ":config-dict-add url.searchengines ddg nope<Return>",
+        );
+        assert_eq!(
+            e.settings().map("url.searchengines").unwrap()["ddg"],
+            "https://duckduckgo.com/?q={}"
+        );
+        press(&mut e, ":config-dict-remove url.searchengines ddg<Return>");
+        assert!(
+            !e.settings()
+                .map("url.searchengines")
+                .unwrap()
+                .contains_key("ddg")
+        );
+        press(&mut e, ":config-list-add hints.chars x<Return>");
+        assert!(
+            e.status()
+                .message
+                .unwrap()
+                .text
+                .contains("not a list setting")
+        );
+        press(&mut e, ":set hints.chars qwer<Return>");
+        let out = press(&mut e, ":config-clear<Return>");
+        assert_eq!(e.settings().str("hints.chars"), "asdfghjkl");
+        assert!(config_changes(&out).contains(&ConfigOp::Unset {
+            name: "hints.chars".into()
+        }));
     }
 
     #[test]

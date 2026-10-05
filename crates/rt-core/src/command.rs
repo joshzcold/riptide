@@ -382,6 +382,38 @@ pub enum Command {
     ConfigUnset {
         name: String,
     },
+    /// Add `value` to a list setting.
+    ConfigListAdd {
+        name: String,
+        value: String,
+    },
+    /// Remove `value` from a list setting.
+    ConfigListRemove {
+        name: String,
+        value: String,
+    },
+    /// Set `key` in a map setting; an existing key needs `replace`.
+    ConfigDictAdd {
+        name: String,
+        key: String,
+        value: String,
+        replace: bool,
+    },
+    /// Remove `key` from a map setting.
+    ConfigDictRemove {
+        name: String,
+        key: String,
+    },
+    /// Put every setting back to its default.
+    ConfigClear,
+    /// Show the settings that differ from their defaults.
+    ConfigDiff,
+    /// Edit the config file in `editor.command`, then load it again.
+    ConfigEdit,
+    /// Write the current settings to `config.toml`.
+    ConfigWriteToml {
+        force: bool,
+    },
     /// Type text into the focused field.
     InsertText {
         text: String,
@@ -730,6 +762,35 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "config-unset",
         "Put a setting back to its default: :config-unset <option>",
+    ),
+    spec(
+        "config-list-add",
+        "Add a value to a list setting: :config-list-add <option> <value>",
+    ),
+    spec(
+        "config-list-remove",
+        "Remove a value from a list setting: :config-list-remove <option> <value>",
+    ),
+    spec(
+        "config-dict-add",
+        "Set a key in a map setting: :config-dict-add [--replace] <option> <key> <value>",
+    ),
+    spec(
+        "config-dict-remove",
+        "Remove a key from a map setting: :config-dict-remove <option> <key>",
+    ),
+    spec("config-clear", "Put every setting back to its default"),
+    spec(
+        "config-diff",
+        "Show the settings that differ from their defaults",
+    ),
+    spec(
+        "config-edit",
+        "Edit config.lua (or config.toml) in editor.command, then load it again",
+    ),
+    spec(
+        "config-write-toml",
+        "Write the current settings to config.toml: [--force] replaces an existing one",
     ),
     spec(
         "insert-text",
@@ -1333,6 +1394,44 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "config-unset" => Command::ConfigUnset {
             name: args.required("option")?.to_string(),
+        },
+        "config-list-add" | "config-list-remove" => {
+            let add = name == "config-list-add";
+            let name = args.required("option")?.to_string();
+            let value = text_arg(args.rest());
+            if value.is_empty() {
+                return Err(args.error("missing argument: value"));
+            }
+            if add {
+                Command::ConfigListAdd { name, value }
+            } else {
+                Command::ConfigListRemove { name, value }
+            }
+        }
+        "config-dict-add" => {
+            let replace = args.flag(&["-r", "--replace"]).is_some();
+            let name = args.required("option")?.to_string();
+            let key = args.required("key")?.to_string();
+            let value = text_arg(args.rest());
+            if value.is_empty() {
+                return Err(args.error("missing argument: value"));
+            }
+            Command::ConfigDictAdd {
+                name,
+                key,
+                value,
+                replace,
+            }
+        }
+        "config-dict-remove" => Command::ConfigDictRemove {
+            name: args.required("option")?.to_string(),
+            key: args.required("key")?.to_string(),
+        },
+        "config-clear" => Command::ConfigClear,
+        "config-diff" => Command::ConfigDiff,
+        "config-edit" => Command::ConfigEdit,
+        "config-write-toml" => Command::ConfigWriteToml {
+            force: args.flag(&["-f", "--force"]).is_some(),
         },
         "insert-text" => {
             let text = args.rest();
@@ -2059,6 +2158,10 @@ mod tests {
             "cmd-later",
             "scroll-px",
             "config-unset",
+            "config-list-add",
+            "config-list-remove",
+            "config-dict-add",
+            "config-dict-remove",
             "scroll-to-anchor",
             "message-info",
             "message-warning",

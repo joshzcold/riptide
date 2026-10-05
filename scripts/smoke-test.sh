@@ -863,6 +863,16 @@ for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == "gm n=2"* ]] && break;
 second=$(page_title)
 [[ $first == "gm n=1 lib=loaded" && $second == "gm n=2 lib=loaded" ]] && pass || fail "first '$first', second '$second'"
 
+step ":config-diff lists changed settings; :config-write-toml writes them"
+run "config-diff"
+expect_title "Changed settings"
+run "tab-close"
+run "config-write-toml"
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/base/config/config.toml ]] && break; sleep 0.1; done
+grep -q 'window.title_format' "$work/base/config/config.toml" 2>/dev/null && pass || fail "config.toml: $(cat "$work/base/config/config.toml" 2>/dev/null | head -5)"
+# Later steps restart the browser; keep the config they expect.
+rm -f "$work/base/config/config.toml"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

@@ -45,6 +45,8 @@ enum Then {
     EditCommand { file: PathBuf, run: bool },
     /// Answer file dialog `id` with the paths written to `file`.
     FileSelect { file: PathBuf, id: u32 },
+    /// Load the config again after `:config-edit`.
+    ConfigEdited { file: PathBuf },
 }
 
 thread_local! {
@@ -401,6 +403,13 @@ fn finished(then: Then, done: Finished) {
             }
         }
         Then::FileSelect { file, id } => files_picked(&file, id, &done),
+        Then::ConfigEdited { file } => {
+            if editor_result(&file, &done).is_some()
+                && let Some(effects) = shell::with(|s| s.engine.execute_str("config-source", None))
+            {
+                shell::apply(effects);
+            }
+        }
         Then::EditCommand { file, run } => {
             if let Some(text) = editor_result(&file, &done) {
                 let text = text.trim();
@@ -535,6 +544,23 @@ fn start_editor(
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
     run_in_background(process, then(file), Some(dir));
+}
+
+/// `:config-edit`: open `file` itself in `editor.command`, then reload the config.
+pub fn edit_config(file: PathBuf) {
+    let template =
+        shell::with(|s| s.engine.settings().list("editor.command").to_vec()).unwrap_or_default();
+    let argv = rt_core::settings::editor_argv(&template, &file.to_string_lossy(), 1, 1);
+    let Some((program, args)) = argv.split_first() else {
+        return shell::show_message(Level::Error, "editor.command is empty");
+    };
+    let mut process = Process::new(program);
+    process
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    run_in_background(process, Then::ConfigEdited { file }, None);
 }
 
 /// The edited text, or `None` (with a message) if the editor failed.

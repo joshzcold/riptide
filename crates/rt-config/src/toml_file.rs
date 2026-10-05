@@ -166,6 +166,35 @@ fn parse_bindings(
     }
 }
 
+/// `config.toml` text for every setting that differs from its default,
+/// plus per-site values, for `:config-write-toml`.
+pub fn write(settings: &rt_core::settings::Settings) -> String {
+    let mut table = toml::Table::new();
+    for (name, value) in settings.changed() {
+        if let Ok(value) = toml::Value::try_from(value.to_json()) {
+            table.insert(name.to_string(), value);
+        }
+    }
+    let mut per_domain = toml::Table::new();
+    for (pattern, name, value) in settings.all_overrides() {
+        let Ok(value) = toml::Value::try_from(value.to_json()) else {
+            continue;
+        };
+        if let Some(site) = per_domain
+            .entry(pattern)
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+            .as_table_mut()
+        {
+            site.insert(name.to_string(), value);
+        }
+    }
+    if !per_domain.is_empty() {
+        table.insert("per_domain".into(), toml::Value::Table(per_domain));
+    }
+    let body = toml::to_string(&table).unwrap_or_default();
+    format!("# Written by :config-write-toml from riptide's settings.\n\n{body}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +299,39 @@ mod tests {
         let (ops, errors) = parse("hints.chars = ", "config.toml");
         assert!(ops.is_empty());
         assert!(errors[0].starts_with("config.toml: "), "{errors:?}");
+    }
+
+    #[test]
+    fn writes_what_it_reads() {
+        let mut settings = rt_core::settings::Settings::default();
+        settings
+            .set("hints.chars", rt_core::settings::Value::Str("qwer".into()))
+            .unwrap();
+        settings
+            .set(
+                "url.start_pages",
+                rt_core::settings::Value::List(vec!["https://a.org/".into()]),
+            )
+            .unwrap();
+        settings
+            .set_for(
+                "*.example.com",
+                "content.javascript.enabled",
+                rt_core::settings::Value::Bool(false),
+            )
+            .unwrap();
+        let text = write(&settings);
+        let (ops, errors) = parse(&text, "config.toml");
+        assert!(errors.is_empty(), "{errors:?}\n{text}");
+        assert!(ops.contains(&ConfigOp::Set {
+            name: "hints.chars".into(),
+            value: rt_core::settings::Value::Str("qwer".into())
+        }));
+        assert!(ops.contains(&ConfigOp::SetFor {
+            pattern: "*.example.com".into(),
+            name: "content.javascript.enabled".into(),
+            value: rt_core::settings::Value::Bool(false)
+        }));
+        assert_eq!(ops.len(), 3, "{ops:?}");
     }
 }

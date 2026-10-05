@@ -915,6 +915,22 @@ impl Settings {
     }
 
     /// Every per-site value of `name`, as `(pattern, value)`.
+    /// Settings whose value differs from the default, sorted by name.
+    pub fn changed(&self) -> Vec<(&'static str, Value)> {
+        SETTINGS
+            .iter()
+            .filter_map(|def| {
+                let value = self.values.get(def.name)?;
+                (*value != def.default_value()).then(|| (def.name, value.clone()))
+            })
+            .collect()
+    }
+
+    /// Every per-site value, as (pattern, setting, value), in the order set.
+    pub fn all_overrides(&self) -> Vec<(String, &'static str, Value)> {
+        self.per_domain.clone()
+    }
+
     pub fn overrides(&self, name: &str) -> Vec<(String, Value)> {
         self.per_domain
             .iter()
