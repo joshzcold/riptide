@@ -774,6 +774,18 @@ pub static SETTINGS: &[SettingDef] = &[
         hint_chars
     ),
     def!(
+        "hints.dictionary",
+        Kind::Str,
+        s("/usr/share/dict/words"),
+        "Word list for hints.mode = word, one word per line"
+    ),
+    def!(
+        "hints.hide_unmatched_rapid_hints",
+        Kind::Bool,
+        Value::Bool(true),
+        "In rapid hint mode (:hint --rapid), hide the labels that don't match what's typed"
+    ),
+    def!(
         "hints.leave_on_load",
         Kind::Bool,
         Value::Bool(true),
@@ -787,9 +799,9 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "hints.mode",
-        Kind::Enum(&["letter", "number"]),
+        Kind::Enum(&["letter", "number", "word"]),
         s("letter"),
-        "letter: labels from hints.chars; number: numbered labels, and typing letters filters by text"
+        "letter: labels from hints.chars; number: numbered labels, and typing letters filters by text; word: dictionary words from each link's text"
     ),
     def!(
         "hints.next_regexes",

@@ -123,6 +123,8 @@ pub struct Engine {
     completion_source: Option<completion::Source>,
     completion: Option<CompletionState>,
     hints: Option<HintSession>,
+    /// Words for `hints.mode = word`, from `hints.dictionary`.
+    hint_words: std::rc::Rc<[String]>,
     prompts: VecDeque<Prompt>,
     prompt_editor: LineEditor,
     /// The mode to return to once the prompt queue is empty.
@@ -204,6 +206,7 @@ impl Engine {
             completion_source: None,
             completion: None,
             hints: None,
+            hint_words: std::rc::Rc::from(Vec::new()),
             prompts: VecDeque::new(),
             prompt_editor: LineEditor::default(),
             mode_before_prompt: Mode::Normal,
@@ -614,6 +617,11 @@ impl Engine {
         self.primary = Some(Box::new(reader));
     }
 
+    /// The words `hints.mode = word` labels with.
+    pub fn set_hint_words(&mut self, words: std::rc::Rc<[String]>) {
+        self.hint_words = words;
+    }
+
     /// Begin hint mode once the page has reported its hintable elements.
     pub fn start_hints(&mut self, request: HintRequest, items: Vec<HintItem>) -> Vec<Effect> {
         let mut effects = Vec::new();
@@ -621,8 +629,17 @@ impl Engine {
             self.show_message(Level::Info, "No elements found");
             return effects;
         }
-        let mut session = if self.settings.str("hints.mode") == "number" {
+        let mode = self.settings.str("hints.mode").to_string();
+        if mode == "word" && self.hint_words.is_empty() {
+            self.show_message(
+                Level::Warning,
+                "hints.dictionary has no usable words; using letter hints",
+            );
+        }
+        let mut session = if mode == "number" {
             HintSession::new_numbers(request, items)
+        } else if mode == "word" && !self.hint_words.is_empty() {
+            HintSession::new_words(request, items, &self.hint_words)
         } else {
             HintSession::new_with(
                 request,
@@ -2440,6 +2457,25 @@ mod tests {
         press(&mut e, "<Escape>");
         assert_eq!(e.mode(), Mode::Normal);
         assert!(e.hints.is_none());
+    }
+
+    #[test]
+    fn word_hints_need_a_dictionary() {
+        let mut e = engine();
+        set(&mut e, "hints.mode", Value::Str("word".into()));
+        e.start_hints(hint_request(HintTarget::Current, false, None), items(2));
+        assert_eq!(e.hint_session().unwrap().labels, ["a", "s"]);
+        assert!(
+            e.status()
+                .message
+                .unwrap()
+                .text
+                .contains("hints.dictionary")
+        );
+        press(&mut e, "<Escape>");
+        e.set_hint_words(std::rc::Rc::from(vec!["go".to_string(), "up".to_string()]));
+        e.start_hints(hint_request(HintTarget::Current, false, None), items(2));
+        assert_eq!(e.hint_session().unwrap().labels, ["go", "up"]);
     }
 
     #[test]

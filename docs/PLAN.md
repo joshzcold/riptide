@@ -665,7 +665,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - `hints.auto_follow` (always, unique-match, full-match, never), with `hint-follow` on `Return`, and `hints.auto_follow_timeout`.
     - `hints.selectors`: user groups are merged over the built-in all, links, images, media and inputs.
     - Rapid mode (`hint --rapid`) was already done.
-  - ✅ (2026-10-05) `hints.min_chars`, `hints.scatter`, `hints.leave_on_load`, and `hints.next_regexes`/`prev_regexes` as settings (passed to `navigate.js`), with e2e tests in `crates/rt-e2e/tests/hint_settings.rs`. `hint-follow` was already done. Still to do: `hints.dictionary` (word hints) and `hints.hide_unmatched_rapid_hints`.
+  - ✅ (2026-10-05) `hints.min_chars`, `hints.scatter`, `hints.leave_on_load`, and `hints.next_regexes`/`prev_regexes` as settings (passed to `navigate.js`), with e2e tests in `crates/rt-e2e/tests/hint_settings.rs`. `hint-follow` was already done.
+  - ✅ (2026-10-05) `hints.mode = word` with `hints.dictionary` (labels from each link's own words, prefix-free, shortest dictionary words as a fallback) and `hints.hide_unmatched_rapid_hints`.
 - **URLs:**
   - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
   - ✅ (2026-10-05) `url.auto_search` (naive, schemeless, never), `url.open_base_url` and `url.incdec_segments`, with e2e tests in `crates/rt-e2e/tests/urls.rs`. Not planned: the `dns` mode, which would block on a DNS lookup. Still to do: `new_instance_open_target_window`.

@@ -131,6 +131,8 @@ When a hint is followed is set by `hints.auto_follow`:
 
 Labels use `hints.chars`. `hints.min_chars` makes them at least that long, and `hints.scatter = false` hands them out in order instead of spreading them over the alphabet. A page that starts loading ends hint mode unless `hints.leave_on_load = false`.
 
+`hints.mode = "word"` labels each link with a word from its own text or URL, so you type `news` for a News link. Words come from `hints.dictionary` (default `/usr/share/dict/words`); links without a usable word get the shortest unused one. In rapid mode (`:hint --rapid`), `hints.hide_unmatched_rapid_hints = false` keeps the labels you're not typing on screen.
+
 `hints.auto_follow_timeout` ignores keys for a moment after a hint is followed, so a fast second keystroke doesn't land in the page. `:hint --rapid` (`;r`) keeps the labels up after each pick.
 
 ## Key hints

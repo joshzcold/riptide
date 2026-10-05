@@ -32,3 +32,26 @@ fn hints_next_regexes_choose_the_next_link() {
     b.keys("]]");
     b.wait_until("the Weiter link is followed", |s| s.tab().url == next);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn hints_mode_word_labels_links_with_their_own_words() {
+    let b = Browser::launch()
+        .toml("\"hints.mode\" = \"word\"\n\"hints.dictionary\" = \"{scratch}/words\"\n")
+        .start("links.html");
+    std::fs::write(
+        b.scratch().join("words"),
+        "home\nnews\nabout\nsecond\nzap\n",
+    )
+    .unwrap();
+    b.keys("f");
+    let s = b.wait_until("hints are shown", |s| {
+        s.mode == "hint" && !s.hints.is_empty()
+    });
+    let labels: Vec<&str> = s.hints.iter().map(|h| h.label.as_str()).collect();
+    assert_eq!(labels, ["home", "news", "about", "second"]);
+    b.keys("news");
+    b.wait_until("the News link is followed", |s| {
+        s.tab().title == "clicked news"
+    });
+}

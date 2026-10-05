@@ -58,6 +58,7 @@ pub fn request(request: HintRequest) {
                 text: i.text,
             })
             .collect();
+        load_dictionary();
         let effects = shell::with(|s| {
             // Ignore stale replies if the user switched tabs meanwhile.
             if s.current_browser().map(|b| b.identifier()) != Some(id) {
@@ -68,6 +69,42 @@ pub fn request(request: HintRequest) {
         });
         shell::apply(effects.unwrap_or_default());
     });
+}
+
+thread_local! {
+    /// The `hints.dictionary` last read, by path.
+    static DICTIONARY: std::cell::RefCell<Option<(String, std::rc::Rc<[String]>)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Read `hints.dictionary` for word hints, once per path.
+fn load_dictionary() {
+    let Some(path) = shell::with(|s| {
+        let settings = s.engine.settings();
+        (settings.str("hints.mode") == "word").then(|| settings.str("hints.dictionary").to_string())
+    })
+    .flatten() else {
+        return;
+    };
+    let words = DICTIONARY.with(|d| {
+        let mut d = d.borrow_mut();
+        if let Some((loaded, words)) = d.as_ref()
+            && *loaded == path
+        {
+            return words.clone();
+        }
+        let path_buf = crate::screenshot::expand_home(&path);
+        let words: std::rc::Rc<[String]> = match std::fs::read_to_string(&path_buf) {
+            Ok(text) => rt_core::hints::dictionary_words(&text).into(),
+            Err(e) => {
+                tracing::warn!(%e, path, "can't read hints.dictionary");
+                Vec::new().into()
+            }
+        };
+        *d = Some((path, words.clone()));
+        words
+    });
+    shell::with(|s| s.engine.set_hint_words(words));
 }
 
 fn hint_browser() -> Option<Browser> {
@@ -102,7 +139,13 @@ pub fn show(labels: &[String]) {
 }
 
 pub fn filter(typed: &str) {
-    call("filter", &serde_json::to_string(typed).unwrap_or_default());
+    let hide = shell::with(|s| {
+        let rapid = s.engine.hint_session().is_some_and(|h| h.request.rapid);
+        !rapid || s.engine.settings().bool("hints.hide_unmatched_rapid_hints")
+    })
+    .unwrap_or(true);
+    let typed = serde_json::to_string(typed).unwrap_or_default();
+    call("filter", &format!("{typed}, {hide}"));
 }
 
 pub fn clear() {

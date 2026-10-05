@@ -68,7 +68,7 @@ pub fn run_command(command: &Command) -> bool {
     true
 }
 
-fn expand_home(path: &str) -> PathBuf {
+pub(crate) fn expand_home(path: &str) -> PathBuf {
     expand_home_in(path, std::env::var_os("HOME"))
 }
 

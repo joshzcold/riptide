@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::str::FromStr;
 
@@ -277,6 +278,14 @@ impl HintSession {
         }
     }
 
+    /// `hints.mode = word`: labels are words from `dictionary`.
+    pub fn new_words(request: HintRequest, items: Vec<HintItem>, dictionary: &[String]) -> Self {
+        let mut session = Self::new(request, Vec::new(), DEFAULT_HINT_CHARS);
+        session.labels = word_labels(&items, dictionary);
+        session.items = items;
+        session
+    }
+
     /// qutebrowser's `hints.mode = number`.
     pub fn new_numbers(request: HintRequest, items: Vec<HintItem>) -> Self {
         let mut session = Self::new(request, items, NUMBER_CHARS);
@@ -356,6 +365,62 @@ impl HintSession {
         self.relabel();
         HintInput::Relabeled
     }
+}
+
+/// The words of a `hints.dictionary` file that make usable labels:
+/// lowercase letters only, at least two, shortest first.
+pub fn dictionary_words(text: &str) -> Vec<String> {
+    let mut words: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|w| w.len() >= 2 && w.bytes().all(|b| b.is_ascii_lowercase()))
+        .map(String::from)
+        .collect();
+    words.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+    words.dedup();
+    words
+}
+
+/// The words in an element's text and URL, lowercased.
+fn words_of(item: &HintItem) -> Vec<String> {
+    let url = item.url.as_deref().unwrap_or_default();
+    // Skip the scheme and host words that every link on a site shares.
+    let path = url.split_once("://").map_or(url, |(_, rest)| {
+        rest.split_once('/').map_or("", |(_, path)| path)
+    });
+    item.text
+        .split(|c: char| !c.is_alphabetic())
+        .chain(path.split(|c: char| !c.is_ascii_alphabetic()))
+        .filter(|w| w.len() >= 2)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// qutebrowser's word hints: a dictionary word from each element's text or
+/// URL, or else the shortest unused one. No label is a prefix of another,
+/// so typing a whole word always picks it.
+pub fn word_labels(items: &[HintItem], dictionary: &[String]) -> Vec<String> {
+    let known: HashSet<&str> = dictionary.iter().map(String::as_str).collect();
+    let mut used: Vec<String> = Vec::new();
+    let clashes = |used: &[String], w: &str| {
+        used.iter()
+            .any(|u| u.starts_with(w) || w.starts_with(u.as_str()))
+    };
+    let mut spare = dictionary.iter();
+    items
+        .iter()
+        .map(|item| {
+            let label = words_of(item)
+                .into_iter()
+                .find(|w| known.contains(w.as_str()) && !clashes(&used, w))
+                .or_else(|| spare.by_ref().find(|w| !clashes(&used, w)).cloned())
+                .unwrap_or_default();
+            if !label.is_empty() {
+                used.push(label.clone());
+            }
+            label
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -534,5 +599,28 @@ mod tests {
             ["a", "ba", "bb", "bc", "ca"]
         );
         assert_eq!(labels_with(5, "abc", 1, true), labels(5, "abc"));
+    }
+
+    fn link(text: &str, url: &str) -> HintItem {
+        HintItem {
+            url: Some(url.into()),
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn word_labels_come_from_the_text_then_the_dictionary() {
+        let dictionary = dictionary_words("Zebra\nhome\nnews\nx\ngo\nhelp\nnewsletter\n");
+        assert_eq!(dictionary, ["go", "help", "home", "news", "newsletter"]);
+        let items = [
+            link("Home", "https://a.org/"),
+            link("Newsletter sign-up", "https://a.org/subscribe"),
+            link("Latest news", "https://a.org/latest"),
+            link("", "https://a.org/help"),
+            link("???", "https://a.org/"),
+        ];
+        let labels = word_labels(&items, &dictionary);
+        // "news" is a prefix of "newsletter", taken first, so it can't be used.
+        assert_eq!(labels, ["home", "newsletter", "go", "help", ""]);
     }
 }

@@ -57,9 +57,11 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `hints.auto_follow` | always \| unique-match \| full-match \| never | `unique-match` | When a hint is followed without Return: when one is left (unique-match), only when its label is typed in full (full-match), always, or never |
 | `hints.auto_follow_timeout` | integer | `0` | Ignore keys for this many milliseconds after following a hint, so extra typing doesn't reach the page |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |
+| `hints.dictionary` | string | `/usr/share/dict/words` | Word list for hints.mode = word, one word per line |
+| `hints.hide_unmatched_rapid_hints` | boolean | `true` | In rapid hint mode (:hint --rapid), hide the labels that don't match what's typed |
 | `hints.leave_on_load` | boolean | `true` | Leave hint mode when the page starts loading something new |
 | `hints.min_chars` | integer | `1` | The shortest hint label, in characters |
-| `hints.mode` | letter \| number | `letter` | letter: labels from hints.chars; number: numbered labels, and typing letters filters by text |
+| `hints.mode` | letter \| number \| word | `letter` | letter: labels from hints.chars; number: numbered labels, and typing letters filters by text; word: dictionary words from each link's text |
 | `hints.next_regexes` | string[] | `["\\bnext\\b","\\bmore\\b","\\bnewer\\b","\\b[>→≫]\\b","\\b(>>\|»)\\b","\\bcontinue\\b"]` | Link texts ]] follows to the next page, as JavaScript regular expressions (case doesn't matter) |
 | `hints.prev_regexes` | string[] | `["\\bprev(ious)?\\b","\\bback\\b","\\bolder\\b","\\b[<←≪]\\b","\\b(<<\|«)\\b"]` | Link texts [[ follows to the previous page, as JavaScript regular expressions (case doesn't matter) |
 | `hints.scatter` | boolean | `true` | Spread hint labels over the alphabet so neighbours differ; false labels in order |

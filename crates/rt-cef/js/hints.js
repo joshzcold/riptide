@@ -140,12 +140,16 @@
       return "";
     },
 
-    filter(typed) {
+    // `hide` is false for rapid hints with hints.hide_unmatched_rapid_hints off.
+    filter(typed, hide = true) {
       for (const { text, label } of labels) {
         if (!label) continue;
         const match = text.startsWith(typed);
-        label.style.display = match ? "" : "none";
-        if (!match) continue;
+        label.style.display = match || !hide ? "" : "none";
+        if (!match) {
+          label.replaceChildren(text);
+          continue;
+        }
         const done = document.createElement("span");
         done.className = "matched";
         done.textContent = typed;
