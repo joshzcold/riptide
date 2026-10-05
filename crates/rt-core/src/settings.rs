@@ -202,6 +202,40 @@ fn search_engines(value: &Value) -> Result<(), String> {
     }
 }
 
+/// What `statusbar.widgets` can show, besides `clock[:format]` and `text:…`.
+pub const STATUSBAR_WIDGETS: &[&str] = &[
+    "keypress",
+    "downloads",
+    "muted",
+    "zoom",
+    "search_match",
+    "url",
+    "scroll",
+    "scroll_raw",
+    "history",
+    "tabs",
+    "progress",
+];
+
+fn statusbar_widgets(value: &Value) -> Result<(), String> {
+    let Value::List(widgets) = value else {
+        return Ok(());
+    };
+    for widget in widgets {
+        let known = STATUSBAR_WIDGETS.contains(&widget.as_str())
+            || widget == "clock"
+            || widget.starts_with("clock:")
+            || widget.starts_with("text:");
+        if !known {
+            return Err(format!(
+                "unknown widget {widget:?}; use {}, clock[:format] or text:…",
+                STATUSBAR_WIDGETS.join(", ")
+            ));
+        }
+    }
+    Ok(())
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -448,6 +482,28 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["always", "never", "in-mode"]),
         s("always"),
         "When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode)"
+    ),
+    def!(
+        "statusbar.widgets",
+        Kind::List,
+        Value::List(
+            [
+                "keypress",
+                "downloads",
+                "muted",
+                "zoom",
+                "search_match",
+                "url",
+                "scroll",
+                "history",
+                "tabs",
+                "progress"
+            ]
+            .map(String::from)
+            .to_vec()
+        ),
+        "What the right side of the status bar shows, in order: keypress, downloads, muted, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
+        statusbar_widgets
     ),
     def!(
         "tabs.favicons.show",
@@ -791,6 +847,13 @@ mod tests {
                 .from_json(&json!("explode"))
                 .is_err()
         );
+        let widgets = find("statusbar.widgets").unwrap();
+        assert!(
+            widgets
+                .from_json(&json!(["url", "clock:%H:%M", "text:hi"]))
+                .is_ok()
+        );
+        assert!(widgets.from_json(&json!(["url", "weather"])).is_err());
         let engines = find("url.searchengines").unwrap();
         assert!(
             engines

@@ -26,6 +26,7 @@ mod search;
 mod shell;
 mod spawn;
 mod spell;
+mod statusbar;
 mod storage;
 mod tabs;
 mod tls;
@@ -128,6 +129,7 @@ wrap_browser_process_handler! {
                 }
             }
             remote::listen();
+            statusbar::start();
         }
     }
 }

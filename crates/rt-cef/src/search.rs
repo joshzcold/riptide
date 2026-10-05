@@ -136,7 +136,7 @@ wrap_find_handler! {
     impl FindHandler {
         fn on_find_result(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             _identifier: ::std::os::raw::c_int,
             count: ::std::os::raw::c_int,
             _selection_rect: Option<&Rect>,
@@ -150,6 +150,13 @@ wrap_find_handler! {
                 let mut l = l.borrow_mut();
                 (l.text.clone(), std::mem::take(&mut l.report))
             });
+            let found = (!text.is_empty() && count > 0).then_some((active_match_ordinal, count));
+            shell::with_tab(browser, |s, index, _| {
+                if let Some(tab) = s.tabs.get_mut(index) {
+                    tab.search_match = found;
+                }
+            });
+            shell::refresh_ui();
             if text.is_empty() || !report {
                 return;
             }

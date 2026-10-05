@@ -43,17 +43,17 @@
   #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
   #right > span:empty { display: none; }
-  #url { overflow: hidden; text-overflow: ellipsis; }
+  .url { overflow: hidden; text-overflow: ellipsis; }
   /* Messages and the command line get priority over a long URL. */
   #bar.busy #right { max-width: 40%; }
-  #url.https { color: var(--https); }
-  #url.http { color: var(--http); }
-  #url.error { color: var(--error-fg); }
+  .url.https { color: var(--https); }
+  .url.http { color: var(--http); }
+  .url.error { color: var(--error-fg); }
   .cursor { background: var(--fg); color: var(--bg); }
 </style>
 </head>
 <body>
-<div id="bar"><span id="left"></span><span id="right"><span id="keys"></span><span id="downloads"></span><span id="muted"></span><span id="zoom"></span><span id="url"></span><span id="tabindex"></span><span id="progress"></span></span></div>
+<div id="bar"><span id="left"></span><span id="right"></span></div>
 <script>
   const $ = (id) => document.getElementById(id);
 
@@ -65,6 +65,71 @@
     caret.textContent = chars[cursor] ?? " ";
     el.append(caret, chars.slice(cursor + 1).join(""));
   }
+
+  // A subset of strftime for the clock widget: %H %I %M %S %p %a %A %b %B %d %m %y %Y %%.
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December"];
+  const pad = (n) => String(n).padStart(2, "0");
+  function strftime(format, d) {
+    return format.replace(/%([HIMSpaAbBdmyY%])/g, (_, c) => ({
+      H: pad(d.getHours()), I: pad(d.getHours() % 12 || 12), M: pad(d.getMinutes()),
+      S: pad(d.getSeconds()), p: d.getHours() < 12 ? "AM" : "PM",
+      a: DAYS[d.getDay()].slice(0, 3), A: DAYS[d.getDay()],
+      b: MONTHS[d.getMonth()].slice(0, 3), B: MONTHS[d.getMonth()],
+      d: pad(d.getDate()), m: pad(d.getMonth() + 1), y: pad(d.getFullYear() % 100),
+      Y: String(d.getFullYear()), "%": "%",
+    })[c]);
+  }
+
+  function scrollText(scroll) {
+    if (scroll == null) return "";
+    if (scroll < 0) return "[All]";
+    if (scroll === 0) return "[Top]";
+    if (scroll === 100) return "[Bot]";
+    return `[${scroll}%]`;
+  }
+
+  // One span per widget, in statusbar.widgets order; empty ones are hidden by CSS.
+  function widget(name, state) {
+    const el = document.createElement("span");
+    const text = (t) => { el.textContent = t; return el; };
+    if (name.startsWith("text:")) return text(name.slice(5));
+    if (name === "clock" || name.startsWith("clock:")) {
+      el.className = "clock";
+      el.dataset.format = name.startsWith("clock:") ? name.slice(6) : "%H:%M";
+      return text(strftime(el.dataset.format, new Date()));
+    }
+    switch (name) {
+      case "keypress": return text(state.keystring);
+      case "downloads": return text(state.downloads);
+      case "muted": return text(state.muted ? "[muted]" : "");
+      case "zoom": return text(state.zoom === 100 ? "" : `[${state.zoom}%]`);
+      case "search_match":
+        return text(state.search_match ? `Match [${state.search_match[0]}/${state.search_match[1]}]` : "");
+      case "url":
+        el.className = "url " + (state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http");
+        return text(state.url);
+      case "scroll": return text(scrollText(state.scroll));
+      case "scroll_raw": return text(state.scroll == null ? "" : `[${Math.max(0, state.scroll)}]`);
+      case "history": {
+        const marks = (state.back ? "<" : "") + (state.forward ? ">" : "");
+        return text(marks ? `[${marks}]` : "");
+      }
+      case "tabs": return text(`[${state.tab_index}/${state.tab_count}]`);
+      case "progress": return text(state.progress == null ? "" : `[${Math.round(state.progress * 100)}%]`);
+      default: return text("");
+    }
+  }
+
+  function renderWidgets(state) {
+    $("right").replaceChildren(...(state.widgets || []).map((name) => widget(name, state)));
+  }
+
+  // Clocks tick on their own between updates.
+  setInterval(() => {
+    for (const el of document.querySelectorAll(".clock")) el.textContent = strftime(el.dataset.format, new Date());
+  }, 1000);
 
   window.rtRender = (state) => {
     const bar = $("bar");
@@ -82,15 +147,7 @@
     } else {
       left.textContent = `-- ${state.mode.toUpperCase()} MODE --`;
     }
-    $("keys").textContent = state.keystring;
-    $("downloads").textContent = state.downloads;
-    $("muted").textContent = state.muted ? "[muted]" : "";
-    $("zoom").textContent = state.zoom === 100 ? "" : `[${state.zoom}%]`;
-    const url = $("url");
-    url.textContent = state.url;
-    url.className = state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http";
-    $("tabindex").textContent = `[${state.tab_index}/${state.tab_count}]`;
-    $("progress").textContent = state.progress == null ? "" : `[${Math.round(state.progress * 100)}%]`;
+    renderWidgets(state);
   };
 </script>
 </body>

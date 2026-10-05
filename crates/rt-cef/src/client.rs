@@ -348,14 +348,18 @@ wrap_load_handler! {
             &self,
             browser: Option<&mut Browser>,
             is_loading: ::std::os::raw::c_int,
-            _can_go_back: ::std::os::raw::c_int,
-            _can_go_forward: ::std::os::raw::c_int,
+            can_go_back: ::std::os::raw::c_int,
+            can_go_forward: ::std::os::raw::c_int,
         ) {
             if self.role != Role::Tab {
                 return;
             }
             let effects = shell::with_tab(browser, |s, index, current| {
                 let tab = s.tabs.get_mut(index)?;
+                tab.can_go_back = can_go_back != 0;
+                tab.can_go_forward = can_go_forward != 0;
+                tab.search_match = None;
+                tab.scroll = None;
                 if is_loading == 0 {
                     tab.progress = None;
                     return None;
