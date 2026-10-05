@@ -2,7 +2,7 @@
 
 | Command | What it runs |
 |---|---|
-| `./task test` | Unit tests for `rt-core`, `rt-config` and `rt-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
+| `./task test` | Unit tests for `rt-core`, `rt-config`, `rt-storage`, `rt-adblock` and `rt-cef` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions, and the CEF layer's decisions); no browser needed. `rt-cef`'s tests link CEF, so they run on Linux only. |
 | `./task e2e` | End-to-end tests in [`crates/rt-e2e`](#end-to-end-tests): real browsers, each on its own Xvfb display, driven through the test channel. `./task e2e -- tabs` runs only the tests whose names contain `tabs`. |
 | `./task smoke` | A short check with real X11 input (xdotool keys and clicks, window focus) that the e2e tests can't give: typing into a field, a trusted click, tab keys, a second window, the bundled help page, and `:wq` with a restart. `build-release.yml` also runs it against the release packages. |
 | `./task lint` | `cargo fmt --check`, `clippy -D warnings`, ShellCheck on the scripts, actionlint on the workflows, and cargo-deny (below) |
@@ -44,6 +44,23 @@ fn d_closes_the_tab() {
 - **Every test is `#[ignore]`d,** so a plain `cargo test` never starts browsers. `./task e2e` runs them with `--ignored`, two at a time (`E2E_THREADS` changes that).
 - **Clicks that should count as the user's go through hints** (`follow_hint`). Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
 - **The smoke test stays** for what needs real X11 input (xdotool) and for checking the release packages. New behaviour gets an e2e test.
+
+## Unit tests in the CEF layer
+
+Code in `crates/rt-cef` that decides something without needing CEF, such as where the tab bar goes, what a setting says to do, or which download a count means, is written as a plain function next to the code that uses it, and tested there. The CEF callback then only gathers its inputs and acts on the answer:
+
+```rust
+fn decide(setting: &str) -> Decision { … }        // pure, tested in this file
+
+pub fn certificate_error(…, callback: Callback) -> bool {
+    match decide(&setting) {                        // CEF glue around it
+        Decision::Load => callback.cont(),
+        …
+    }
+}
+```
+
+When the logic isn't specific to CEF and other crates could use it, it goes in `rt-core` instead (for example `rt_core::html::escape`).
 
 ## Linters
 

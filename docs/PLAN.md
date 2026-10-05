@@ -1007,6 +1007,23 @@ Original plan:
 
 Each move adds tests, and the rule from `rt-core` applies: anything that can be decided without CEF is tested without CEF. Coverage is measured with `cargo llvm-cov`, reported in CI as a summary but not used as a gate.
 
+- ✅ **Started (2026-10-05):** `./task test` runs `rt-cef`'s unit tests too; they link CEF, so they run on Linux only. There are 18, up from 1.
+  - **Pattern:** pure functions next to the CEF glue, tested in the same file. `rt-core` is only used when other crates could share the logic.
+  - **Covered:**
+    - tab bar slot and size (`window::BarPlacement`)
+    - the certificate setting's decision and error descriptions (`tls`)
+    - favicon choice and the HTTP statuses accepted (`favicons`)
+    - smart-case search (`search`)
+    - picking a download by number (`downloads`)
+    - `~/` in `:screenshot` paths
+    - which `riptide://` pages exist (`scheme`)
+    - adblock request types (`adblock`)
+    - the escaped error page (`ui`)
+  - **UI channel validation** was already in `rt_core::ui_message`, with tests.
+  - **HTML escaping:** six copies of an HTML escape that covered different characters are now `rt_core::html::escape`.
+  - **Bug fixed:** "always" answers to a certificate prompt no longer save the URL's `user:password@` into `autoconfig.toml`.
+  - **Next:** permission decisions (`permissions.rs`), session conversion, download naming, and the renderer's message parsing. The completion overlay's position is in `shell.rs`, which is busy with completion work, so it comes later.
+
 #### Linting
 
 | Tool | Checks | Notes |
