@@ -138,6 +138,12 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Favicons in the tab bar (M14); not yet in completion
 - [x] Multiple windows (2026-10-02)
 - [x] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Each tab stores the mode it was left in; with `restore`, switching back brings insert or passthrough mode back (2026-10-02). Hints, the caret and the like end on any switch; the command line and prompts stay.
+- [ ] **Closing a pinned tab asks instead of refusing.** Today `d`, `Ctrl-w`, `:tab-close` and a middle-click on a pinned tab only show "Tab is pinned! Use :tab-close --force to close it" (`tabs::close_unless_pinned`).
+  - Ask "Close pinned tab <title>?" as a yes/no prompt, defaulting to no so a stray `Return` keeps the tab; `y` closes it.
+  - `--force` still closes without asking. `tabs.pinned.close` (`ask`, the default; `refuse`, today's behaviour and qutebrowser's; or `close`) chooses what happens.
+  - `:tab-only` keeps pinned tabs as it does now, without asking about each one.
+  - `u` should reopen the tab pinned: today `closed` remembers only the index and URL.
+  - **Tests:** a smoke step: `d` on a pinned tab asks, `n` keeps it, `d` then `y` closes it, and `u` brings it back pinned.
 
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
@@ -561,7 +567,13 @@ Original plan:
   - `release.yml` runs on a `v*` tag: it checks the version, builds `--release`, and publishes `scripts/package-linux.sh`'s tarball with `SHA256SUMS` and `git-cliff --latest` notes. The libraries are stripped: CEF's `libcef.so` has debug info and goes from 1.4 GB to 260 MB, giving a 156 MB tarball.
   - `:changelog [-t]` serves the bundled changelog at `riptide://changelog/` through `rt_core::changelog::to_html`, a minimal, escaping Markdown renderer that is unit tested. The "Updated to X" notice compares `<data>/last-version`.
   - No release has been tagged yet; that's the maintainer's call. Running `release.yml` by hand is a dry run that keeps the files as a one-day artifact. Run 37088697211 (2026-10-02) built the tarball, the AppImage, `SHA256SUMS` and the notes (301 MB in total) with publishing skipped.
-  - Not done: macOS and Windows release artifacts (M10).
+  - ~~Not done: macOS and Windows release artifacts (M10).~~ Experimental packages since 2026-10-05 (below).
+- ✅ **Release automation** (2026-10-05):
+  - **One-click releases:** `release.yml` is started from Actions. It works out the version with `git-cliff --bumped-version` (`[bump] initial_tag = "v0.1.0"` in `cliff.toml`), or takes one you type. It then commits `chore(release): vX.Y.Z` with `Cargo.toml`, `Cargo.lock` and `CHANGELOG.md`, and pushes the commit and the tag together (`--atomic`). Build and publish follow in the same run, because a tag pushed with the workflow's own token doesn't trigger other workflows. Dry run is the default; pushing a tag by hand still works.
+  - **Shared builds:** `build-release.yml` (`workflow_call`) builds for releases and nightlies alike. On Linux it runs the full smoke test against the unpacked tarball and the extracted AppImage before anything is published. macOS and Windows build experimental packages (`scripts/package-experimental.sh`, with `continue-on-error`).
+  - **Nightlies:** `nightly.yml` runs at 07:00 UTC when `main` has changed, and replaces the rolling `nightly` pre-release.
+  - **Provenance:** releases and nightlies get `SHA256SUMS` and `actions/attest-build-provenance` attestations (`gh attestation verify`).
+  - Not done: macOS signing and notarization, and a Windows installer (M10). Packages for AUR and Nix. A weekly check for new CEF releases.
 - **Commit messages:** Conventional Commits, decided 2026-10-02 and checked by `scripts/check-commits.sh` in CI and in the optional `./task hooks` git hook.
 - Original CI plan:
   - `check.yml` on every push/PR runs `./task lint test smoke` on Ubuntu, with Xvfb and the CEF download cached by version.
@@ -876,6 +888,101 @@ Original plan:
   - `./task check` builds the book and fails on stale generated pages or broken internal links.
   - Every command and setting has a reference entry; this is the existing unit test, extended.
 
+### M25 — Permission requests as a floating card
+
+**Today:** a site's request for the camera, microphone, location, notifications or screen capture, and certificate warnings, take the same docked one-line prompt above the status bar as `confirm()` and download paths (M7). It's easy to miss, especially when the status bar is hidden (`statusbar.show`), it doesn't say clearly what is being asked for, and it can only be answered from the keyboard.
+
+- **A floating card** over the top of the page, below the tab bar, the way Chrome and Firefox place theirs:
+  - The site's origin, in large text, with its favicon; it can't be hidden or restyled away (see M20).
+  - What it wants, as an icon and a word for each: camera, microphone, location, notifications, screen.
+  - The answers as keys and buttons: `y` Allow once, `A` Always allow, `n` Not now, `N` Always block. Buttons work with the mouse, unlike the docked prompt.
+  - A short line about what "always" means, e.g. "saved for meet.example.com in autoconfig.toml".
+- **Behaviour:**
+  - The card belongs to its tab. Switching tabs hides it, and coming back shows it again. A tab with a waiting request gets a badge in the tab bar, so it can't be forgotten.
+  - Keys go to the card while it's shown in the current tab (the existing `yesno` mode), and `Escape` means "not now", as today.
+  - Several requests from one page are combined into one card ("camera and microphone"), as they are now.
+  - Other prompts (JavaScript dialogs, logins, download paths) stay docked, or follow M20's `prompt.position`.
+- **Building it:**
+  - The card is a `riptide://ui/permission.html` page in its own overlay view, placed by `window::arrange_bars`. The view grows to fit its content, as M20 plans for every UI page.
+  - It talks to Rust over the UI channel (M13): only `answer(id, choice)` is allowed, and the browser checks the id against the waiting prompt.
+  - `rt_core::prompt` gains a `Permission { origin, features }` kind, so the UI can draw icons instead of parsing a message.
+- **Afterwards:**
+  - A `riptide://permissions` page lists the saved answers per site and can revoke them. This also closes M7's "no command to reset per-site permissions" gap.
+  - Pairs with M22's indicators for camera, microphone and screen in use.
+- **Tests:**
+  - Unit tests for the new prompt kind and for combining features.
+  - A smoke step: a `getUserMedia` request shows the card; `y` grants it, and a page script sees the stream start; switching tabs and back keeps the card; `N` saves a block in `autoconfig.toml`.
+
+### M26 — Testing and linting
+
+**Today (2026-10-05):**
+- **Unit tests:** about 200 run with `./task test`: 141 in `rt-core`, 46 in `rt-config`, 13 in `rt-storage` and 6 in `rt-adblock`. They cover keys, modes, commands, settings, config files, paths, storage and filter lists. `rt-cef` is the largest crate (about 16,500 lines) and has 1 test. `riptide` has none.
+- **End to end:** `scripts/smoke-test.sh` is one 875-line bash script of 59 steps. It drives the real browser on Xvfb with xdotool and reads state back through the window title (`{mode}::{page title}`). It runs on every push and, since the release workflow, against the packaged tarball and AppImage. It covers a lot, but it runs in order, so one failure hides the rest. Its waits are tuned by hand (`SLOW`), it's hard to run one step on its own, and assertions are limited to what fits in a title.
+- **Linting:** `cargo fmt --check` and `clippy --all-targets -D warnings` run in CI, and the commit-message check. Nothing checks the JavaScript (`crates/rt-cef/js/`, 6 files), the UI pages (`crates/rt-cef/ui/`, 7 files), the shell scripts or the workflows. Dependency licenses and security advisories aren't checked either.
+
+#### End-to-end options
+
+| Option | How it drives the browser | Strengths | Weaknesses |
+|---|---|---|---|
+| **A. Keep growing the bash smoke test** | xdotool keys on Xvfb, state from the window title | Real X11 input through the whole stack. Already works and runs on packages. | Serial, timing-tuned and flaky by nature. Hard to assert anything rich or to run one test. Bash doesn't scale. |
+| **B. Chrome DevTools Protocol** (`--remote-debugging-port`, from Rust with `chromiumoxide` or Python with Playwright's `connect_over_cdp`) | CDP input events and DOM queries | Rich page assertions, screenshots, network interception, an ecosystem we don't have to build. | CDP input goes to the page and probably skips CEF's `OnPreKeyEvent`, so it doesn't test our key handling (needs a spike). It can't see our UI views as one browser. The debugging port has to stay off in normal builds. |
+| **C. Our own test channel** (recommended backbone) | The M15 command socket, extended with test-only requests: send keys into the same path as `OnPreKeyEvent`, run commands, and query state as JSON (mode, tabs, URLs, titles, status bar text, completion, prompts, messages) | Deterministic: no xdotool timing, and waits poll real state. Tests are Rust (`cargo test`), each in its own browser and display, so they run in parallel and one at a time. Assertions are as rich as the state we expose. | Keys enter just above X11, so the real input layer needs a few xdotool tests of its own. The test-only requests must not exist in release builds. |
+| **D. UI pages and page scripts outside CEF** | Playwright or headless Chrome on `ui/*.html` and `js/*.js` with fixture pages and a fake `rt.send` | Fast, precise tests for hint collection, caret movement and tab bar rendering. | Another toolchain (Node or Python plus a browser download). Doesn't test the CEF integration. |
+| **E. Screenshots** | `Page.captureScreenshot` (the planned `:screenshot`) compared against expected layout boxes | Catches layout breakage (M20 theming, vertical tabs, prompt placement). | Pixel comparisons are brittle; only layout boxes are stable enough to assert. |
+
+**Recommendation:** C as the backbone, with A cut down to a thin "real input" suite, and E added for layout once M20 lands. Page scripts are tested through C with fixture pages, which avoids D's extra toolchain; revisit D if JS logic grows. B is worth a one-day spike in case CDP input does reach `OnPreKeyEvent`, because it would then give DOM assertions for free.
+
+#### Plan
+
+- **Test channel (C):**
+  - Behind a `test-control` cargo feature, which release builds (`build-release.yml`) don't enable. A unit test checks the release build refuses the requests.
+  - Socket requests: `keys` (a key string such as `5j` or `<Ctrl-w>`, fed to the engine as `OnPreKeyEvent` would), `run` (a command line), `state` (JSON for mode, windows, tabs, URLs, titles, status bar, completion, prompts and messages), `eval` (JavaScript in a tab, through the existing eval channel), and `wait` (until a condition on `state` holds, with a timeout).
+- **Harness:** a new `crates/rt-e2e` test crate.
+  - A `Browser` fixture that starts `riptide --basedir <tempdir>` on its own Xvfb display (`-displayfd`, as the smoke test does). It serves fixture pages from a local HTTP server, connects to the socket, and kills only its own processes on drop (see the local-testing skill).
+  - Helpers that poll: `b.keys("f")`, `b.wait_mode("hint")`, `b.state().tabs`.
+  - Fixture pages live in `crates/rt-e2e/pages/`.
+  - `./task e2e` runs the suite, and CI runs it on Linux in a new job. On failure, the browser log and a screenshot are uploaded as an artifact.
+- **Migration:** move smoke steps into `rt-e2e` area by area: modes and keys, tabs, hints, command line and completion, prompts and permissions, downloads, sessions and crash recovery, config and Lua, private windows, adblock. Each moved area is deleted from the bash script.
+- **What stays in the smoke test:** about 10 steps of real input (typing into a field, `Escape`, a mouse click, the tab bar's mouse handling). It's still the test that `build-release.yml` runs against the packages.
+- **New coverage the channel makes possible:** M23's crash recovery (kill -9 the browser and check the tabs come back), the pinned-tab prompt, M25's permission card, per-tab modes, and multiple windows.
+- **Later:** run the same suite on macOS and Windows once M10 makes them run.
+
+#### Unit tests for the CEF layer
+
+`rt-cef` mixes logic that has nothing to do with CEF into its handlers. Move that logic into pure functions, in `rt-core` where it isn't CEF-specific, and test it:
+- Bar layout (`window::arrange_bars`: positions for every `tabs.position` and `statusbar.position`).
+- UI channel validation: which page may send which message.
+- Permission decisions and the remembered answers.
+- Session conversion (tabs to `Session` and back, pinned state).
+- Download naming and the prompt flow.
+- Favicon caching rules.
+- The renderer's message parsing.
+
+Each move adds tests, and the rule from `rt-core` applies: anything that can be decided without CEF is tested without CEF. Coverage is measured with `cargo llvm-cov`, reported in CI as a summary but not used as a gate.
+
+#### Linting
+
+| Tool | Checks | Notes |
+|---|---|---|
+| `cargo fmt`, `clippy -D warnings` | Rust | Already in CI. Add `[workspace.lints]` in `Cargo.toml` so every crate shares one set, e.g. `unsafe_op_in_unsafe_fn`, `clippy::dbg_macro`, `clippy::todo`, `clippy::unwrap_used` in non-test code of `rt-core`. |
+| [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) | Dependency licenses (all must be GPL-3.0-compatible), RustSec advisories, banned and duplicate crates, sources | Most valuable addition: riptide is GPL-3.0 and ships its dependencies. |
+| [Biome](https://biomejs.dev) | Lints and formats `js/*.js` and the scripts in `ui/*.html` | A single pinned binary with no Node project, the same pattern as mdBook and git-cliff. |
+| [ShellCheck](https://www.shellcheck.net) | `scripts/*.sh`, `task` | The smoke test and the packaging scripts are bash. |
+| [actionlint](https://github.com/rhysd/actionlint) | `.github/workflows/*.yml`, including ShellCheck on `run:` blocks | It already found one problem in the release workflow while that was being written. |
+| [typos](https://github.com/crate-ci/typos) | Spelling in code, docs and commit messages | Cheap, and has few false positives. |
+| lychee | Links in the docs | Already in CI (M24). |
+
+- Every tool is pinned and checksum-verified in `scripts/` (or `cargo install --locked` with a cached binary). `./task lint` runs all of them, and so does CI.
+- `./task hooks` gains an optional pre-push hook that runs `./task lint`.
+- Order: actionlint, ShellCheck and cargo-deny first, since they're quick wins with real findings. Then `[workspace.lints]`, then Biome, fixing what each one finds in the same change.
+
+#### Order of work
+1. Linting quick wins (above).
+2. The test channel and `rt-e2e` with a handful of ported steps, to prove the design.
+3. Move `rt-cef` logic into tested functions, starting with layout and the UI channel, alongside feature work.
+4. Port the rest of the smoke test area by area, then cut it down to the real-input suite.
+5. Screenshots for layout (with M20), and the CDP spike.
+
 ### Deferred — proprietary codecs (H.264 / AAC)
 Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.
 
@@ -892,6 +999,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 - **Unit tests** in `rt-core`: key parsing, mode transitions, command parsing, config merging (the bulk of logic).
 - **JS tests** for the hint / insert-detection scripts (headless).
 - **Integration tests**: launch the browser against a local test server and drive it through a debug control channel (e.g. `--remote-debugging-port` + CDP) to assert behavior.
+- **Status and plan (2026-10-05):** see M26. Unit tests cover `rt-core`, `rt-config`, `rt-storage` and `rt-adblock`; the end-to-end suite is `scripts/smoke-test.sh` (59 steps); M26 plans a Rust e2e harness on a test-only control channel, unit tests for the CEF layer, and more linters.
 
 ## Risks
 
