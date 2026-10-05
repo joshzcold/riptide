@@ -573,6 +573,24 @@ pub static SETTINGS: &[SettingDef] = &[
         "User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site"
     ),
     def!(
+        "content.images",
+        Kind::Bool,
+        Value::Bool(true),
+        "Load images; can be set per site"
+    ),
+    def!(
+        "content.javascript.can_open_tabs_automatically",
+        Kind::Bool,
+        Value::Bool(false),
+        "Let pages open tabs and windows without a click (popups); can be set per site"
+    ),
+    def!(
+        "content.javascript.clipboard",
+        Kind::Enum(&["none", "access", "access-paste"]),
+        s("access"),
+        "What pages may do with the clipboard: nothing, copy with a click (access), or also read it (access-paste); can be set per site"
+    ),
+    def!(
         "content.javascript.enabled",
         Kind::Bool,
         Value::Bool(true),
@@ -591,10 +609,22 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites use your camera: ask, true or false"
     ),
     def!(
+        "content.mute",
+        Kind::Bool,
+        Value::Bool(false),
+        "Mute pages; can be set per site"
+    ),
+    def!(
         "content.notifications.enabled",
         Kind::Enum(ASK),
         s("ask"),
         "Let sites show notifications: ask, true or false"
+    ),
+    def!(
+        "content.register_protocol_handler",
+        Kind::Enum(&["ask", "true", "false"]),
+        s("ask"),
+        "Let sites register as handlers for links like mailto:; can be set per site"
     ),
     def!(
         "content.tls.certificate_errors",
@@ -1125,7 +1155,12 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.desktop_capture",
     "content.geolocation",
     "content.headers.user_agent",
+    "content.images",
+    "content.javascript.can_open_tabs_automatically",
+    "content.javascript.clipboard",
     "content.javascript.enabled",
+    "content.mute",
+    "content.register_protocol_handler",
     "content.media.audio_capture",
     "content.media.video_capture",
     "content.notifications.enabled",

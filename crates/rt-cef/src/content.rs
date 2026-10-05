@@ -1,21 +1,66 @@
-//! Content settings that map onto Chromium: JavaScript, cookies and the
-//! user agent. Globals apply when settings change; per-site values apply
-//! just before each navigation, so URL patterns work too.
+//! Content settings that map onto Chromium: JavaScript, images, sound,
+//! popups, clipboard, protocol handlers, cookies and the user agent.
+//! Globals apply when settings change; per-site values apply just before
+//! each navigation, so URL patterns work too.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use cef::*;
-use rt_core::settings::Settings;
+use rt_core::settings::{Settings, Value};
 
 use crate::shell;
 
+/// Settings that are one Chromium content setting each, with how a value
+/// maps to Chromium's.
+const SITE_SETTINGS: &[(&str, ContentSettingTypes)] = &[
+    (
+        "content.javascript.enabled",
+        ContentSettingTypes::JAVASCRIPT,
+    ),
+    ("content.images", ContentSettingTypes::IMAGES),
+    ("content.mute", ContentSettingTypes::SOUND),
+    (
+        "content.javascript.can_open_tabs_automatically",
+        ContentSettingTypes::POPUPS,
+    ),
+    (
+        "content.javascript.clipboard",
+        ContentSettingTypes::CLIPBOARD_READ_WRITE,
+    ),
+    (
+        "content.register_protocol_handler",
+        ContentSettingTypes::PROTOCOL_HANDLERS,
+    ),
+];
+
+fn chromium_value(name: &str, value: &Value) -> ContentSettingValues {
+    let on = match value {
+        Value::Bool(b) => *b,
+        Value::Str(s) => match s.as_str() {
+            "true" | "access-paste" => true,
+            "ask" | "access" => return ContentSettingValues::ASK,
+            _ => false,
+        },
+        _ => return ContentSettingValues::DEFAULT,
+    };
+    // content.mute is the other way round: true blocks sound.
+    let allow = if name == "content.mute" { !on } else { on };
+    if allow {
+        ContentSettingValues::ALLOW
+    } else {
+        ContentSettingValues::BLOCK
+    }
+}
+
 #[derive(Default)]
 struct State {
-    /// The global values last given to Chromium.
-    applied: Option<(bool, String, bool)>,
-    /// Origins given their own JavaScript setting, to undo when no override matches.
-    javascript_origins: HashSet<String>,
+    /// The global values last given to Chromium, by setting.
+    applied: HashMap<&'static str, String>,
+    /// The cookie settings last given to Chromium.
+    cookies: Option<(String, bool)>,
+    /// (setting, origin) pairs given their own value, to undo when no override matches.
+    site_values: HashSet<(&'static str, String)>,
     /// The user agent last set per browser id ("" is Chromium's own).
     user_agents: HashMap<i32, String>,
 }
@@ -24,41 +69,37 @@ thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
-/// Apply `content.javascript.enabled`, `content.cookies.accept` and
-/// `content.cookies.store` as Chromium's defaults.
+/// Apply the content settings as Chromium's defaults for every site.
 pub fn apply_globals(settings: &Settings) {
-    let wanted = (
-        settings.bool("content.javascript.enabled"),
-        settings.str("content.cookies.accept").to_string(),
-        settings.bool("content.cookies.store"),
-    );
-    if STATE.with(|s| s.borrow().applied.as_ref() == Some(&wanted)) {
-        return;
-    }
     let Some(context) = request_context_get_global_context() else {
         return;
     };
-    let (javascript, accept, store) = &wanted;
-    // Empty URLs set the default for every site.
-    let allow = |on: bool| {
-        if on {
-            ContentSettingValues::ALLOW
-        } else {
-            ContentSettingValues::BLOCK
+    for (name, kind) in SITE_SETTINGS {
+        let Some(value) = settings.get(name) else {
+            continue;
+        };
+        let text = value.to_string();
+        if STATE.with(|s| s.borrow().applied.get(name) == Some(&text)) {
+            continue;
         }
-    };
-    context.set_content_setting(
-        None,
-        None,
-        ContentSettingTypes::JAVASCRIPT,
-        allow(*javascript),
+        // Empty URLs set the default for every site.
+        context.set_content_setting(None, None, *kind, chromium_value(name, value));
+        STATE.with(|s| s.borrow_mut().applied.insert(name, text));
+    }
+    let cookies = (
+        settings.str("content.cookies.accept").to_string(),
+        settings.bool("content.cookies.store"),
     );
-    let cookies = match (accept.as_str(), store) {
+    if STATE.with(|s| s.borrow().cookies.as_ref() == Some(&cookies)) {
+        return;
+    }
+    let (accept, store) = &cookies;
+    let value = match (accept.as_str(), store) {
         ("never", _) => ContentSettingValues::BLOCK,
         (_, false) => ContentSettingValues::SESSION_ONLY,
         _ => ContentSettingValues::ALLOW,
     };
-    context.set_content_setting(None, None, ContentSettingTypes::COOKIES, cookies);
+    context.set_content_setting(None, None, ContentSettingTypes::COOKIES, value);
     // 0: allow third-party cookies, 1: block them.
     let third_party = i32::from(matches!(
         accept.as_str(),
@@ -73,17 +114,33 @@ pub fn apply_globals(settings: &Settings) {
             tracing::warn!(%error, "could not set the third-party cookie preference");
         }
     }
-    STATE.with(|s| s.borrow_mut().applied = Some(wanted));
+    STATE.with(|s| s.borrow_mut().cookies = Some(cookies));
 }
 
-/// A tab is about to load `url`: give its site the JavaScript setting and
+/// A tab is about to load `url`: give its site the content settings and
 /// user agent the per-site settings ask for.
 pub fn before_navigation(browser: &Browser, url: &str) {
-    let Some((javascript, global_javascript, user_agent)) = shell::with(|s| {
+    let Some((site, user_agent)) = shell::with(|s| {
         let settings = s.engine.settings();
+        let site: Vec<(
+            &'static str,
+            ContentSettingTypes,
+            Option<ContentSettingValues>,
+        )> = SITE_SETTINGS
+            .iter()
+            .map(|(name, kind)| {
+                let here = settings.get_for(name, url);
+                let global = settings.get(name);
+                let differs = here != global;
+                (
+                    *name,
+                    *kind,
+                    here.filter(|_| differs).map(|v| chromium_value(name, v)),
+                )
+            })
+            .collect();
         (
-            settings.bool_for("content.javascript.enabled", url),
-            settings.bool("content.javascript.enabled"),
+            site,
             settings
                 .str_for("content.headers.user_agent", url)
                 .to_string(),
@@ -92,41 +149,41 @@ pub fn before_navigation(browser: &Browser, url: &str) {
         return;
     };
     if let Some(origin) = rt_core::url::origin(url) {
-        set_site_javascript(
-            &origin,
-            (javascript != global_javascript).then_some(javascript),
-        );
+        for (name, kind, value) in site {
+            set_site_value(name, kind, &origin, value);
+        }
     }
     set_user_agent(browser, &user_agent);
 }
 
-/// Give `origin` its own JavaScript setting, or (`None`) take it away.
-fn set_site_javascript(origin: &str, value: Option<bool>) {
-    let known = STATE.with(|s| s.borrow().javascript_origins.contains(origin));
+/// Give `origin` its own value for one content setting, or (`None`) take it away.
+fn set_site_value(
+    name: &'static str,
+    kind: ContentSettingTypes,
+    origin: &str,
+    value: Option<ContentSettingValues>,
+) {
+    let key = (name, origin.to_string());
+    let known = STATE.with(|s| s.borrow().site_values.contains(&key));
     if value.is_none() && !known {
         return;
     }
     let Some(context) = request_context_get_global_context() else {
         return;
     };
-    let setting = match value {
-        Some(true) => ContentSettingValues::ALLOW,
-        Some(false) => ContentSettingValues::BLOCK,
-        None => ContentSettingValues::DEFAULT,
-    };
     let url = CefString::from(origin);
     context.set_content_setting(
         Some(&url),
         Some(&url),
-        ContentSettingTypes::JAVASCRIPT,
-        setting,
+        kind,
+        value.unwrap_or(ContentSettingValues::DEFAULT),
     );
     STATE.with(|s| {
-        let origins = &mut s.borrow_mut().javascript_origins;
+        let set = &mut s.borrow_mut().site_values;
         if value.is_some() {
-            origins.insert(origin.to_string());
+            set.insert(key);
         } else {
-            origins.remove(origin);
+            set.remove(&key);
         }
     });
 }

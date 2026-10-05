@@ -676,11 +676,12 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - The user agent is set per tab with the DevTools `Emulation.setUserAgentOverride`, which covers requests and `navigator.userAgent`.
     - A smoke step covers all three.
   - Other headers: `accept_language`, `do_not_track`, `referer`, `custom`.
-  - Media and images: `content.images`, `content.autoplay`, `content.webgl`, `content.mute`.
+  - ✅ (2026-10-05) `content.images`, `content.mute`, `content.javascript.can_open_tabs_automatically`, `content.javascript.clipboard` and `content.register_protocol_handler`, all also per site. They share one table of Chromium content settings in `crates/rt-cef/src/content.rs`, with e2e tests in `crates/rt-e2e/tests/content_settings.rs`.
+  - Media: `content.autoplay`, `content.webgl`.
   - Privacy and network: `content.proxy` (system, none, URL, PAC) and `proxy_dns_requests`, `content.webrtc_ip_handling_policy`, `content.canvas_reading`, `content.dns_prefetch`, `content.cache.size`.
-  - JavaScript permissions: `content.javascript.clipboard`, `can_open_tabs_automatically`, `can_close_tabs`.
+  - JavaScript permissions: `content.javascript.can_close_tabs`.
   - Notifications and logging: `content.notifications.presenter` and `show_origin`, `content.javascript.log` (into `:messages`).
-  - Everything else: the PDF viewer (`content.pdfjs`), `content.prefers_reduced_motion`, `content.register_protocol_handler`, `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
+  - Everything else: the PDF viewer (`content.pdfjs`), `content.prefers_reduced_motion`, `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
   - `content.user_stylesheets` is part of M20.
 - **Input:**
   - ✅ Tier 1 (2026-10-05):

@@ -599,6 +599,7 @@ fn serve(mut stream: std::net::TcpStream, root: &Path) {
         Some("html") => "text/html; charset=utf-8",
         Some("js") => "text/javascript",
         Some("css") => "text/css",
+        Some("svg") => "image/svg+xml",
         _ => "text/plain",
     };
     let _ = write!(

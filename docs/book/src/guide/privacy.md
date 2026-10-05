@@ -24,7 +24,7 @@ Chromium calls Google in the background. riptide turns off the calls that only s
 
 The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 
-## Cookies, JavaScript and the user agent
+## Cookies, JavaScript, images and the user agent
 
 | Setting | What it does |
 |---|---|
@@ -32,12 +32,20 @@ The preferences are written into the profile (`Local State`, `Default/Preference
 | `content.cookies.store` | `false` makes every cookie last only until the browser closes |
 | `content.javascript.enabled` | `false` turns JavaScript off; set it per site to block or allow it on chosen sites only |
 | `content.headers.user_agent` | The user agent sites see, in requests and in `navigator.userAgent`; empty for Chromium's own. Set it per site for sites that check it |
+| `content.images` | `false` stops loading images |
+| `content.mute` | `true` mutes pages; `:tab-mute` mutes one tab instead |
+| `content.javascript.can_open_tabs_automatically` | `true` lets pages open tabs without a click (popups) |
+| `content.javascript.clipboard` | `none`, `access` (copy after a click, the default) or `access-paste` (read it too) |
+| `content.register_protocol_handler` | `ask` (default), `true` or `false` for sites that offer to handle links like `mailto:` |
+
+All but the cookie settings can also be set per site:
 
 ```toml
 content.cookies.accept = "no-3rdparty"
 
 [per_domain."*.example.org"]
 "content.javascript.enabled" = false
+"content.images" = false
 ```
 
 ## Private windows

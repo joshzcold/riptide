@@ -28,10 +28,15 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.desktop_capture` | ask \| true \| false | `ask` | Let sites capture your screen or desktop audio: ask, true or false |
 | `content.geolocation` | ask \| true \| false | `ask` | Let sites know your location: ask, true or false |
 | `content.headers.user_agent` | string | `` | User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site |
+| `content.images` | boolean | `true` | Load images; can be set per site |
+| `content.javascript.can_open_tabs_automatically` | boolean | `false` | Let pages open tabs and windows without a click (popups); can be set per site |
+| `content.javascript.clipboard` | none \| access \| access-paste | `access` | What pages may do with the clipboard: nothing, copy with a click (access), or also read it (access-paste); can be set per site |
 | `content.javascript.enabled` | boolean | `true` | Run JavaScript on pages; can be set per site |
 | `content.media.audio_capture` | ask \| true \| false | `ask` | Let sites use your microphone: ask, true or false |
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
+| `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
+| `content.register_protocol_handler` | ask \| true \| false | `ask` | Let sites register as handlers for links like mailto:; can be set per site |
 | `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
