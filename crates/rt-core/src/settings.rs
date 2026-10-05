@@ -621,6 +621,33 @@ pub static SETTINGS: &[SettingDef] = &[
         "Ask where to save each download (false saves straight to the directory)"
     ),
     def!(
+        "downloads.location.remember",
+        Kind::Bool,
+        Value::Bool(true),
+        "Start the save prompt in the folder the last download went to"
+    ),
+    def!(
+        "downloads.location.suggestion",
+        Kind::Enum(&["both", "path", "filename"]),
+        s("both"),
+        "What the save prompt starts with: the folder and file name (both), the folder (path), or the file name"
+    ),
+    def!(
+        "downloads.open_dispatcher",
+        Kind::Str,
+        s(""),
+        "Program that opens downloads (:download-open); {} is the file, or it's added at the end. Empty for the desktop's default"
+    ),
+    def!(
+        "downloads.remove_finished",
+        Kind::Int {
+            min: -1,
+            max: 86_400_000
+        },
+        Value::Int(-1),
+        "Take finished downloads off the list after this many milliseconds; -1 keeps them"
+    ),
+    def!(
         "editor.command",
         Kind::List,
         Value::List(

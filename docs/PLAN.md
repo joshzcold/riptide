@@ -669,7 +669,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - The external file picker: `fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`. CEF's `DialogHandler` hands upload fields to the program, and the callback waits on the UI thread while it runs.
     - Smoke steps cover `download-delete` and the picker. `download-retry` isn't smoke tested (no failing download to retry).
     - ✅ `prompt-fileselect-external` (`Alt-e` in a file prompt) fills the prompt with the folder `fileselect.folder.command` picks; smoke tested.
-  - `downloads.remove_finished`, `downloads.position`, `downloads.location.remember` and `suggestion`, `downloads.open_dispatcher`, `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
+  - ✅ (2026-10-05) `downloads.remove_finished`, `downloads.location.remember` and `suggestion`, and `downloads.open_dispatcher`, with e2e tests in `crates/rt-e2e/tests/download_settings.rs`. `downloads.position` doesn't apply: riptide has no downloads bar. Still to do: `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
 - **Content** (most are Chromium prefs or switches; per-site where qutebrowser allows it):
   - ✅ Tier 1 (2026-10-05): `content.javascript.enabled` (per site), `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent` (per site).
     - JavaScript and cookies are Chromium content settings. Per-site values are resolved just before each navigation (`on_before_browse`) and set for that origin, so glob patterns work despite CEF taking exact URLs.

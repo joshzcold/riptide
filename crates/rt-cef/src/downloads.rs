@@ -35,6 +35,8 @@ struct Download {
 
 thread_local! {
     static DOWNLOADS: RefCell<Vec<Download>> = const { RefCell::new(Vec::new()) };
+    /// The folder the last download was saved to, for `downloads.location.remember`.
+    static LAST_DIR: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
 }
 
 fn home() -> Option<PathBuf> {
@@ -159,19 +161,41 @@ wrap_download_handler! {
             let url = CefString::from(&item.url()).to_string();
             let browser = browser.map(|b| b.identifier());
             let name = sanitize_name(&suggested_name.map(CefString::to_string).unwrap_or_default());
-            let dir = download_dir();
+            let (ask, remember, suggest) = shell::with(|s| {
+                let settings = s.engine.settings();
+                (
+                    settings.bool("downloads.location.prompt"),
+                    settings.bool("downloads.location.remember"),
+                    settings.str("downloads.location.suggestion").to_string(),
+                )
+            })
+            .unwrap_or((true, true, "both".into()));
+            let dir = LAST_DIR
+                .with(|d| d.borrow().clone())
+                .filter(|d| remember && d.is_dir())
+                .unwrap_or_else(download_dir);
             let suggestion = unique_path(&dir, &name, &|p: &Path| p.exists());
-            let ask = shell::with(|s| s.engine.settings().bool("downloads.location.prompt")).unwrap_or(true);
             if !ask {
                 save_to(suggestion, id, url, callback, browser);
                 return 1;
             }
-            let default = suggestion.to_string_lossy().into_owned();
+            let default = match suggest.as_str() {
+                "path" => format!("{}/", dir.to_string_lossy().trim_end_matches('/')),
+                "filename" => suggestion.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                _ => suggestion.to_string_lossy().into_owned(),
+            };
             prompts::ask(browser, Scope::Other, "Save file to", name.clone(), PromptKind::Text { default, masked: false, path: true }, move |answer| {
                 let PromptAnswer::Text(text) = answer else { return };
                 let mut path = expand_home(text.trim(), home().as_deref());
+                // A bare file name goes in the folder the prompt was about.
+                if path.is_relative() {
+                    path = dir.join(path);
+                }
                 if path.is_dir() {
                     path = path.join(&name);
+                }
+                if let Some(parent) = path.parent() {
+                    LAST_DIR.with(|d| *d.borrow_mut() = Some(parent.to_path_buf()));
                 }
                 save_to(path, id, url, callback, browser);
             });
@@ -210,7 +234,14 @@ wrap_download_handler! {
                 changed.then(|| (state, download.path.clone()))
             });
             match finished {
-                Some((State::Done, path)) => shell::show_message(Level::Info, format!("Download finished: {}", path.display())),
+                Some((State::Done, path)) => {
+                    shell::show_message(Level::Info, format!("Download finished: {}", path.display()));
+                    let delay = shell::with(|s| s.engine.settings().int("downloads.remove_finished")).unwrap_or(-1);
+                    if delay >= 0 {
+                        let mut task = RemoveFinished::new(id);
+                        post_delayed_task(ThreadId::UI, Some(&mut task), delay);
+                    }
+                }
                 Some((State::Cancelled, path)) => shell::show_message(Level::Warning, format!("Download cancelled: {}", path.display())),
                 Some((State::Failed, path)) => shell::show_message(Level::Error, format!("Download failed: {}", path.display())),
                 _ => {}
@@ -254,8 +285,32 @@ fn pick_any(count: Option<u32>, states: &[State], what: &str) -> Result<usize, S
     })
 }
 
-/// Open a file with the desktop's default application.
+/// Open a finished download with `downloads.open_dispatcher`, or the
+/// desktop's default application.
 fn open_with_system(path: &Path) -> std::io::Result<()> {
+    let dispatcher = shell::with(|s| {
+        s.engine
+            .settings()
+            .str("downloads.open_dispatcher")
+            .to_string()
+    })
+    .unwrap_or_default();
+    if !dispatcher.trim().is_empty() {
+        let file = path.to_string_lossy();
+        let mut argv = rt_core::shell_words::split(&dispatcher).map_err(std::io::Error::other)?;
+        if argv.iter().any(|a| a.contains("{}")) {
+            argv = argv.iter().map(|a| a.replace("{}", &file)).collect();
+        } else {
+            argv.push(file.into_owned());
+        }
+        let (program, args) = argv
+            .split_first()
+            .ok_or_else(|| std::io::Error::other("empty command"))?;
+        return std::process::Command::new(program)
+            .args(args)
+            .spawn()
+            .map(|_| ());
+    }
     let mut command = if cfg!(target_os = "macos") {
         std::process::Command::new("open")
     } else if cfg!(windows) {
@@ -266,6 +321,20 @@ fn open_with_system(path: &Path) -> std::io::Result<()> {
         std::process::Command::new("xdg-open")
     };
     command.arg(path).spawn().map(|_| ())
+}
+
+wrap_task! {
+    struct RemoveFinished {
+        id: u32,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| !(d.id == self.id && d.state == State::Done)));
+            publish();
+            shell::refresh_ui();
+        }
+    }
 }
 
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {

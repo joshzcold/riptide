@@ -36,6 +36,10 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
+| `downloads.location.remember` | boolean | `true` | Start the save prompt in the folder the last download went to |
+| `downloads.location.suggestion` | both \| path \| filename | `both` | What the save prompt starts with: the folder and file name (both), the folder (path), or the file name |
+| `downloads.open_dispatcher` | string | `` | Program that opens downloads (:download-open); {} is the file, or it's added at the end. Empty for the desktop's default |
+| `downloads.remove_finished` | integer | `-1` | Take finished downloads off the list after this many milliseconds; -1 keeps them |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
 | `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to |
 | `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |

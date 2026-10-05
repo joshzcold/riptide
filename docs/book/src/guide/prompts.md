@@ -57,7 +57,13 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 
 In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell, and `Alt-e` picks the folder with `fileselect.folder.command` (see below).
 
-`:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
+`:download-open` uses `downloads.open_dispatcher` if you set one (`{}` is the file, or it goes at the end), and the system's opener (`xdg-open`, `open` or `start`) otherwise.
+
+| Setting | What it does |
+|---|---|
+| `downloads.location.suggestion` | What the save prompt starts with: folder and name (`both`), the folder (`path`), or the name (`filename`; a bare name saves into the download folder) |
+| `downloads.location.remember` | Start the prompt in the folder the last download went to (on by default) |
+| `downloads.remove_finished` | Take finished downloads off the list after this many milliseconds (`-1`, the default, keeps them) |
 
 ## Choosing files to upload
 
