@@ -50,13 +50,16 @@ enum Then {
 thread_local! {
     /// File dialogs waiting for an external picker, by id. CEF callbacks stay
     /// on the UI thread; only the id goes to the worker thread.
-    static FILE_DIALOGS: RefCell<HashMap<u32, FileDialogCallback>> = RefCell::new(HashMap::new());
+    static FILE_DIALOGS: RefCell<HashMap<u32, Picked>> = RefCell::new(HashMap::new());
     static NEXT_DIALOG: Cell<u32> = const { Cell::new(1) };
 }
 
-/// `fileselect.handler = external`: run `template` (with `{}` replaced by a
-/// file to write the chosen paths to) and answer the dialog with them.
-pub fn pick_files(template: &[String], callback: FileDialogCallback) {
+/// What to do with the paths a picker chose (none if it was cancelled).
+type Picked = Box<dyn FnOnce(Vec<String>)>;
+
+/// Run a `fileselect.*.command` `template` (with `{}` replaced by a file to
+/// write the chosen paths to) and hand `picked` the paths.
+pub fn pick_files(template: &[String], picked: impl FnOnce(Vec<String>) + 'static) {
     let started = temp_dir("fileselect").and_then(|dir| {
         let file = dir.join("chosen.txt");
         std::fs::write(&file, "")?;
@@ -65,14 +68,14 @@ pub fn pick_files(template: &[String], callback: FileDialogCallback) {
     let (dir, file) = match started {
         Ok(v) => v,
         Err(e) => {
-            callback.cancel();
+            picked(Vec::new());
             return shell::show_message(Level::Error, format!("Can't start the file picker: {e}"));
         }
     };
     let path = file.to_string_lossy();
     let argv: Vec<String> = template.iter().map(|a| a.replace("{}", &path)).collect();
     let Some((program, args)) = argv.split_first() else {
-        callback.cancel();
+        picked(Vec::new());
         return shell::show_message(Level::Error, "The fileselect command is empty");
     };
     let id = NEXT_DIALOG.with(|n| {
@@ -80,7 +83,7 @@ pub fn pick_files(template: &[String], callback: FileDialogCallback) {
         n.set(id + 1);
         id
     });
-    FILE_DIALOGS.with(|d| d.borrow_mut().insert(id, callback));
+    FILE_DIALOGS.with(|d| d.borrow_mut().insert(id, Box::new(picked)));
     let mut process = Process::new(program);
     process
         .args(args)
@@ -91,24 +94,21 @@ pub fn pick_files(template: &[String], callback: FileDialogCallback) {
 }
 
 fn files_picked(file: &Path, id: u32, done: &Finished) {
-    let Some(callback) = FILE_DIALOGS.with(|d| d.borrow_mut().remove(&id)) else {
+    let Some(picked) = FILE_DIALOGS.with(|d| d.borrow_mut().remove(&id)) else {
         return;
     };
     if let Err(e) = &done.status {
         shell::show_message(Level::Error, format!("Can't run the file picker: {e}"));
     }
     let chosen = std::fs::read_to_string(file).unwrap_or_default();
-    let mut paths = CefStringList::new();
-    let mut any = false;
-    for line in chosen.lines().map(str::trim).filter(|l| !l.is_empty()) {
-        paths.append(line);
-        any = true;
-    }
-    if any {
-        callback.cont(Some(&mut paths));
-    } else {
-        callback.cancel();
-    }
+    picked(
+        chosen
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(String::from)
+            .collect(),
+    );
 }
 
 struct Finished {

@@ -222,6 +222,8 @@ pub enum Command {
         tab: bool,
     },
     CompletionFocus(FocusDirection),
+    /// Fill a file-name prompt with a folder from `fileselect.folder.command`.
+    PromptFileselectExternal,
     /// Follow the hint with this label, or the one waiting for Return.
     HintFollow {
         label: Option<String>,
@@ -821,6 +823,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     hidden(
         "completion-item-focus",
         "Select the next or previous completion",
+    ),
+    spec(
+        "prompt-fileselect-external",
+        "In a file prompt, pick the folder with fileselect.folder.command (Alt-e)",
     ),
     spec(
         "hint-follow",
@@ -1440,6 +1446,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
         }),
         "completion-item-del" => Command::CompletionItemDel,
+        "prompt-fileselect-external" => Command::PromptFileselectExternal,
         "hint-follow" => Command::HintFollow {
             label: args.optional().map(String::from),
         },

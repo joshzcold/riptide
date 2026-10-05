@@ -293,6 +293,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
 
 const PROMPT_DEFAULTS: &[(&str, &str)] = &[
     ("<Tab>", "prompt-complete"),
+    ("<Alt-e>", "prompt-fileselect-external"),
     ("<Ctrl-w>", "rl-filename-rubout"),
     ("<Return>", "prompt-accept"),
     ("<Escape>", "mode-leave"),

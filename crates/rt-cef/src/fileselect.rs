@@ -3,7 +3,32 @@
 
 use cef::*;
 
+use rt_core::Command;
+
 use crate::{shell, spawn};
+
+/// `:prompt-fileselect-external`: put the folder a picker chose into the
+/// file prompt.
+pub fn run_command(command: &Command) -> bool {
+    if *command != Command::PromptFileselectExternal {
+        return false;
+    }
+    let template = shell::with(|s| {
+        s.engine
+            .settings()
+            .list("fileselect.folder.command")
+            .to_vec()
+    })
+    .unwrap_or_default();
+    spawn::pick_files(&template, |paths| {
+        if let Some(folder) = paths.first() {
+            let text = format!("{}/", folder.trim_end_matches('/'));
+            shell::with(|s| s.engine.set_path_prompt_text(&text));
+            shell::refresh_ui();
+        }
+    });
+    true
+}
 
 wrap_dialog_handler! {
     pub struct RtDialogHandler {}
@@ -38,7 +63,16 @@ wrap_dialog_handler! {
             let (Some(template), Some(callback)) = (template, callback.map(|c| c.clone())) else {
                 return 0;
             };
-            spawn::pick_files(&template, callback);
+            spawn::pick_files(&template, move |paths| {
+                if paths.is_empty() {
+                    return callback.cancel();
+                }
+                let mut list = CefStringList::new();
+                for path in &paths {
+                    list.append(path);
+                }
+                callback.cont(Some(&mut list));
+            });
             1
         }
     }

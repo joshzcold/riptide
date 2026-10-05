@@ -55,7 +55,7 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 | `:download-clear` | Forget finished downloads |
 | `:downloads` | A page listing this session's downloads with their numbers and progress |
 
-In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell.
+In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell, and `Alt-e` picks the folder with `fileselect.folder.command` (see below).
 
 `:download-open` uses the system's opener (`xdg-open`, `open` or `start`).
 

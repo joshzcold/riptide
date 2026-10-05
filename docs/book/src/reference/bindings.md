@@ -183,6 +183,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Alt-e>` | `prompt-fileselect-external` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
 | `<Ctrl-b>` | `rl-backward-char` |

@@ -287,6 +287,11 @@ impl Engine {
         }
     }
 
+    /// The hints on screen, while in hint mode.
+    pub fn hint_session(&self) -> Option<&HintSession> {
+        self.hints.as_ref()
+    }
+
     /// What the pending keys can still become, for the key hint popup:
     /// the keys typed so far and `(the rest, command)` for each binding,
     /// minus chains matching `keyhint.blacklist`.
@@ -362,6 +367,22 @@ impl Engine {
             .as_ref()
             .map(|s| s.view.clone())
             .unwrap_or_default()
+    }
+
+    fn path_prompt(&self) -> bool {
+        matches!(
+            self.prompts.front().map(|p| &p.kind),
+            Some(PromptKind::Text { path: true, .. })
+        )
+    }
+
+    /// Replace the text of a file prompt, as `:prompt-fileselect-external`
+    /// does once the picker returns. Ignored if that prompt is gone.
+    pub fn set_path_prompt_text(&mut self, text: &str) {
+        if self.path_prompt() {
+            self.prompt_editor.set(text);
+            self.dirty = true;
+        }
     }
 
     /// Lets `:open`, `:quickmark-load` and friends complete from storage.
@@ -1109,6 +1130,15 @@ impl Engine {
                 self.set_mode(Mode::Normal, effects)
             }
             Command::PromptAccept { value, save } => self.accept_prompt(value, save, effects),
+            Command::PromptFileselectExternal if self.path_prompt() => {
+                effects.push(Effect::Run {
+                    command: Command::PromptFileselectExternal,
+                    count: None,
+                });
+            }
+            Command::PromptFileselectExternal => {
+                self.show_message(Level::Error, "This prompt doesn't ask for a file");
+            }
             Command::PromptComplete => {
                 let path = matches!(
                     self.prompts.front().map(|p| &p.kind),
@@ -2496,6 +2526,26 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn alt_e_asks_for_a_folder_in_file_prompts_only() {
+        let mut e = engine();
+        let text = |path| PromptKind::Text {
+            default: "~/x.txt".into(),
+            masked: false,
+            path,
+        };
+        e.push_prompt(prompt(1, text(true)));
+        let out = press(&mut e, "<Alt-e>");
+        assert_eq!(runs(&out), vec![(Command::PromptFileselectExternal, None)]);
+        e.set_path_prompt_text("/tmp/picked/");
+        assert_eq!(e.prompt_view().unwrap().input, "/tmp/picked/");
+        press(&mut e, "<Escape>");
+        e.push_prompt(prompt(2, text(false)));
+        assert!(runs(&press(&mut e, "<Alt-e>")).is_empty());
+        e.set_path_prompt_text("/nope");
+        assert_eq!(e.prompt_view().unwrap().input, "~/x.txt");
     }
 
     #[test]

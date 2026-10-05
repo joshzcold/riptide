@@ -128,7 +128,9 @@ pub fn set_value(script: &str, key: &str, value: Option<&str>) {
     let generation = publish();
     // Pages loading later in other renderers see the new values. The
     // generation stops a reload's original `extra_info` from undoing them.
-    let payload = serde_json::json!({ "generation": generation, "script": script, "values": values }).to_string();
+    let payload =
+        serde_json::json!({ "generation": generation, "script": script, "values": values })
+            .to_string();
     broadcast(GM_VALUES_MESSAGE, &payload);
 }
 

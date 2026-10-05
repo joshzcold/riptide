@@ -668,7 +668,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - `download-retry`, `download-remove [--all]` and `download-delete`.
     - The external file picker: `fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`. CEF's `DialogHandler` hands upload fields to the program, and the callback waits on the UI thread while it runs.
     - Smoke steps cover `download-delete` and the picker. `download-retry` isn't smoke tested (no failing download to retry).
-    - Still to do: `prompt-fileselect-external`, the picker for the download prompt.
+    - ✅ `prompt-fileselect-external` (`Alt-e` in a file prompt) fills the prompt with the folder `fileselect.folder.command` picks; smoke tested.
   - `downloads.remove_finished`, `downloads.position`, `downloads.location.remember` and `suggestion`, `downloads.open_dispatcher`, `downloads.prevent_mixed_content`, `prompt-open-download`, `prompt-yank`, `prompt-item-focus`.
 - **Content** (most are Chromium prefs or switches; per-site where qutebrowser allows it):
   - ✅ Tier 1 (2026-10-05): `content.javascript.enabled` (per site), `content.cookies.accept` (all, no-3rdparty, no-unknown-3rdparty, never) and `content.cookies.store`, and `content.headers.user_agent` (per site).

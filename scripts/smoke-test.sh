@@ -959,10 +959,30 @@ run "downloads"
 expect_title "Downloads"
 run "tab-close"
 
+step "Alt-e in the download prompt picks the folder with fileselect.folder.command"
+mkdir -p "$work/dl/picked"
+cat >"$work/folder-picker.sh" <<EOF
+#!/bin/sh
+printf '%s\n' "$work/dl/picked" >"\$1"
+EOF
+chmod +x "$work/folder-picker.sh"
+run "set fileselect.folder.command [\"$work/folder-picker.sh\", \"{}\"]"
+run "set downloads.location.prompt true"
+hint s
+wait_mode prompt || true
+xdotool key alt+e
+nap 1
+xdotool key Return
+for _ in $(seq $((TIMEOUT * 10))); do compgen -G "$work/dl/picked/saved*.txt" >/dev/null && break; sleep 0.1; done
+run "set downloads.location.prompt false"
+compgen -G "$work/dl/picked/saved*.txt" >/dev/null && pass || fail "nothing saved in $work/dl/picked"
+
 step ":download-delete deletes the newest finished download's file"
+# The newest finished download is the one Alt-e put in dl/picked.
 run "download-delete"
-for _ in $(seq $((TIMEOUT * 10))); do [[ ! -e $work/dl/subdir/via-tab.txt ]] && break; sleep 0.1; done
-[[ ! -e $work/dl/subdir/via-tab.txt && -s $work/dl/saved.txt ]] && pass || fail "via-tab.txt still there, or saved.txt gone too"
+for _ in $(seq $((TIMEOUT * 10))); do compgen -G "$work/dl/picked/saved*.txt" >/dev/null || break; sleep 0.1; done
+! compgen -G "$work/dl/picked/saved*.txt" >/dev/null && [[ -s $work/dl/subdir/via-tab.txt ]] && pass ||
+    fail "the picked download is still there, or via-tab.txt is gone too"
 
 step "fileselect.handler = external answers upload fields with a picker program"
 run "set fileselect.handler external"
