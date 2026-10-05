@@ -83,6 +83,7 @@ mod enabled {
         let view = shell::with(|s| match bar {
             "tabbar" => s.tabbar.clone(),
             "statusbar" => s.statusbar.clone(),
+            "completion" => s.completion.clone(),
             _ => None,
         })
         .flatten();

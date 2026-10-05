@@ -103,6 +103,8 @@ pub struct WindowState {
     pub window_closing: bool,
     last_status: String,
     last_tabbar: String,
+    /// The command line `completion.delay` is waiting on, and when it was typed.
+    completion_typed_at: Option<(String, std::time::Instant)>,
     last_title: String,
     /// What the overlay shows (a prompt or completions), to skip redraws.
     last_overlay: String,
@@ -134,6 +136,7 @@ impl WindowState {
             window_closing: false,
             last_status: String::new(),
             last_tabbar: String::new(),
+            completion_typed_at: None,
             last_title: String::new(),
             last_overlay: String::new(),
             last_overlay_rows: 0,
@@ -1070,9 +1073,26 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             let rows = prompt_rows(s, &prompt);
             (json!({ "kind": "prompt", "prompt": prompt }), rows)
         }
+        None if focused && completion_held(s, &mut keyhint_wait) => {
+            // completion.delay: keep what's shown until typing pauses.
+            (
+                serde_json::from_str(&s.last_overlay).unwrap_or_default(),
+                s.last_overlay_rows,
+            )
+        }
         None if focused => 'rows: {
             let max_rows = completion_max_rows(s);
-            let mut rows = completion_rows(&s.engine.completions(), max_rows);
+            let view = s.engine.completions();
+            let mut rows = completion_rows(&view, max_rows);
+            // completion.shrink = false keeps the list completion.height tall.
+            if !rows.is_empty() && !s.engine.settings().bool("completion.shrink") {
+                let count = max_rows.max(rows.len());
+                let format = s.engine.settings().str("completion.timestamp_format");
+                break 'rows (
+                    json!({ "kind": "rows", "rows": rows, "timestamp_format": format }),
+                    count,
+                );
+            }
             if rows.is_empty() {
                 let (hints, wait) = keyhints(s);
                 keyhint_wait = wait;
@@ -1090,7 +1110,11 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                     .collect();
             }
             let count = rows.len();
-            (json!({ "kind": "rows", "rows": rows }), count)
+            let format = s.engine.settings().str("completion.timestamp_format");
+            (
+                json!({ "kind": "rows", "rows": rows, "timestamp_format": format }),
+                count,
+            )
         }
         None => (json!({ "kind": "rows", "rows": [] }), 0),
     };
@@ -1206,6 +1230,37 @@ wrap_task! {
     }
 }
 
+/// Whether `completion.delay` still holds back new completions for what
+/// was typed; sets `wait` to when to look again.
+fn completion_held(s: &mut Shell, wait: &mut Option<i64>) -> bool {
+    let delay = s.engine.settings().int("completion.delay");
+    if delay <= 0 || !s.engine.completion_stale() || s.last_overlay.is_empty() {
+        s.completion_typed_at = None;
+        return false;
+    }
+    let text = s
+        .engine
+        .status()
+        .command_line
+        .map(|c| c.text)
+        .unwrap_or_default();
+    let since = match &s.completion_typed_at {
+        Some((typed, at)) if *typed == text => *at,
+        _ => {
+            let now = std::time::Instant::now();
+            s.completion_typed_at = Some((text, now));
+            now
+        }
+    };
+    let left = delay - since.elapsed().as_millis() as i64;
+    if left <= 0 {
+        s.completion_typed_at = None;
+        return false;
+    }
+    *wait = Some(left + 10);
+    true
+}
+
 /// How many rows the completion list may use, from `completion.height`.
 fn completion_max_rows(s: &Shell) -> usize {
     match rt_core::settings::parse_height(s.engine.settings().str("completion.height")) {
@@ -1241,6 +1296,7 @@ fn completion_rows(view: &CompletionView, max_rows: usize) -> Vec<serde_json::Va
             rows.push(json!({
                 "name": item.name,
                 "description": item.description,
+                "time": item.time,
                 "selected": view.selected == Some(i),
             }));
         }

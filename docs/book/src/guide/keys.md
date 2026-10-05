@@ -155,6 +155,11 @@ In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` comp
 | `completion.height` | Rows (`12`) or a share of the window (`50%`) |
 | `completion.min_chars` | Characters to type after the command before its arguments complete |
 | `completion.cmd_history_max_items` | How many command lines `Up` and `Down` remember |
+| `completion.shrink` | `false` keeps the list `completion.height` tall however few items it has |
+| `completion.timestamp_format` | When each history entry was last visited, e.g. `%d %b %H:%M`; empty hides it |
+| `completion.delay` | Milliseconds to wait after a key before updating the list, for slow history searches |
+| `completion.quick` | With one command or setting name left, `Tab` takes it and goes on to its arguments |
+| `completion.use_best_match` | `Return` on an unknown command runs the first one it starts, so `:rel` runs `:reload` |
  `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
 The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.

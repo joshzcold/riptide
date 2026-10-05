@@ -331,7 +331,7 @@ impl Browser {
             .unwrap_or_default())
     }
 
-    /// Evaluate JavaScript in the `tabbar` or `statusbar`; its value must be a string.
+    /// Evaluate JavaScript in the `tabbar`, `statusbar` or `completion` overlay; its value must be a string.
     pub fn eval_bar(&self, bar: &str, code: &str) -> String {
         self.request(TestRequest::EvalBar {
             code: code.into(),

@@ -20,7 +20,7 @@ Debug builds (and release builds with `--features test-control`) answer test req
 | `run` | Runs a command line, as `:` would. |
 | `state` | Returns JSON with the mode, windows, tabs (URL, title, pinned, loading, mode), the status bar, completion and the prompt. |
 | `eval` | Runs JavaScript in a tab and returns its string result. |
-| `evalbar` | Runs JavaScript in the window's `tabbar` or `statusbar` page (`Browser::eval_bar`). |
+| `evalbar` | Runs JavaScript in the window's `tabbar`, `statusbar` or `completion` overlay page (`Browser::eval_bar`). |
 
 `crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
 

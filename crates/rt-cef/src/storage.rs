@@ -176,6 +176,7 @@ pub fn set_title(url: &str, title: &str) {
 
 fn item(category: &'static str, name: &str, description: &str) -> Completion {
     Completion {
+        time: None,
         category,
         name: name.to_string(),
         description: description.to_string(),
@@ -272,7 +273,10 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                     Some(Ok(entries)) => entries
                         .iter()
                         .filter(|e| !exclude.iter().any(|glob| rt_core::url::glob(glob, &e.url)))
-                        .map(|e| item("History", &e.url, &e.title))
+                        .map(|e| Completion {
+                            time: Some(e.last_visit),
+                            ..item("History", &e.url, &e.title)
+                        })
                         .collect(),
                     Some(Err(e)) => {
                         tracing::warn!(%e, "history search failed");

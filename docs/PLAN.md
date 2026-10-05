@@ -657,7 +657,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `Engine::keyhints` and `Keymap::continuations` are unit tested; the layout was checked by screenshot.
 - **Completion:**
   - ✅ Tier 1 (2026-10-05): `completion-item-del` (`Ctrl-d`: delete a history, quickmark, bookmark or session entry, or close a tab) and `completion-item-yank` (`Ctrl-c`, `Ctrl-Shift-c` for the primary selection). A smoke step deletes a history entry and checks `history.sqlite`.
-  - ✅ (2026-10-05) `completion.height` (rows or a percentage), `show` (always, auto, never), `open_categories` (searchengines, quickmarks, bookmarks, history, filesystem, in order), `web_history.exclude`, `min_chars` and `cmd_history_max_items`, with e2e tests in `crates/rt-e2e/tests/completion.rs`. Still to do: `shrink`, `timestamp_format`, `delay`, `use_best_match`, `quick`.
+  - ✅ (2026-10-05) `completion.height` (rows or a percentage), `show` (always, auto, never), `open_categories` (searchengines, quickmarks, bookmarks, history, filesystem, in order), `web_history.exclude`, `min_chars` and `cmd_history_max_items`, with e2e tests in `crates/rt-e2e/tests/completion.rs`.
+  - ✅ (2026-10-05) `completion.shrink`, `timestamp_format` (history's last visit, formatted in the overlay), `delay` (held back in the shell until typing pauses), `use_best_match` and `quick` (only for items that start a new part, so URLs stay selected for `Ctrl-d`).
   - Command-line commands: ✅ `cmd-edit` (2026-10-05); still to do: `cmd-repeat`, `cmd-repeat-last`, `cmd-run-with-count`.
 - **Hints:**
   - ✅ Tier 1 (2026-10-05):

@@ -89,3 +89,78 @@ fn completion_lists_files_for_paths() {
     });
     assert_eq!(s.mode, "command");
 }
+
+/// Poll JavaScript in the completion overlay until `test` holds.
+fn wait_overlay(b: &Browser, code: &str, test: impl Fn(&str) -> bool) -> String {
+    let start = std::time::Instant::now();
+    loop {
+        let got = b.eval_bar("completion", code);
+        if test(&got) {
+            return got;
+        }
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "{code} is still {got:?}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+const LIST: &str = "document.getElementById('list').innerText";
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn completion_history_shows_when_it_was_visited() {
+    let b = Browser::launch()
+        .toml("completion.timestamp_format = \"visited %Y\"\n")
+        .start("page.html");
+    b.keys(":open page");
+    let year = wait_overlay(
+        &b,
+        "document.querySelector('.time')?.textContent ?? ''",
+        |t| !t.is_empty(),
+    );
+    let now = b.eval_bar("completion", "String(new Date().getFullYear())");
+    assert_eq!(year, format!("visited {now}"));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn completion_shrink_false_keeps_the_list_completion_height_tall() {
+    let b = Browser::launch()
+        .toml("completion.height = \"10\"\n")
+        .start("page.html");
+    let height = |b: &Browser| -> i64 {
+        b.keys(":open page");
+        wait_overlay(b, LIST, |t| t.contains("page.html"));
+        // Let the overlay take its new size.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let h = b
+            .eval_bar("completion", "String(innerHeight)")
+            .parse()
+            .unwrap();
+        b.keys("<Escape>");
+        b.wait_mode("normal");
+        h
+    };
+    let shrunk = height(&b);
+    b.run("set completion.shrink false");
+    let tall = height(&b);
+    assert!(tall > shrunk, "{tall} isn't taller than {shrunk}");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn completion_delay_waits_for_typing_to_pause() {
+    let b = Browser::launch()
+        .toml("completion.delay = 2000\n")
+        .start("page.html");
+    b.keys(":");
+    wait_overlay(&b, LIST, |t| t.contains("Commands"));
+    b.keys("open page");
+    let typed = std::time::Instant::now();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert!(
+        !b.eval_bar("completion", LIST).contains("page.html"),
+        "completions updated before the delay"
+    );
+    wait_overlay(&b, LIST, |t| t.contains("page.html"));
+    assert!(typed.elapsed() >= std::time::Duration::from_millis(1900));
+}

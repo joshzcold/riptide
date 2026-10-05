@@ -371,6 +371,7 @@ impl Engine {
                             category: "Commands",
                             name: n.clone(),
                             description: d.clone(),
+                            time: None,
                         }),
                 );
             }
@@ -469,8 +470,45 @@ impl Engine {
         state.view.selected = Some(next);
         let text = completion::insert(&state.base, &state.view.items[next]);
         state.inserted = Some(text.clone());
+        // completion.quick: a lone item that starts a new part (a command
+        // name, a setting) is taken, and the next part completes.
+        if len == 1 && text.ends_with(' ') && self.settings.bool("completion.quick") {
+            self.completion = None;
+        }
         self.cmdline.set(&text);
         self.dirty = true;
+    }
+
+    /// Whether the command line changed since completions were last computed,
+    /// so the host can hold them back for `completion.delay`.
+    pub fn completion_stale(&self) -> bool {
+        self.mode == Mode::Command
+            && self.completion.as_ref().is_some_and(|state| {
+                let text = self.cmdline.text();
+                state.base != text && state.inserted.as_deref() != Some(text)
+            })
+    }
+
+    /// `completion.use_best_match`: the first command, alias or user
+    /// command that starts with an unknown command name.
+    fn best_match(&self, line: &str) -> Option<String> {
+        let (name, rest) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+        let aliases = self.settings.map("aliases");
+        let known = command::COMMANDS.iter().any(|c| c.name == name)
+            || aliases.is_some_and(|a| a.contains_key(name))
+            || self.user_commands.iter().any(|(n, _)| n == name);
+        if name.is_empty() || known {
+            return None;
+        }
+        let found = command::COMMANDS
+            .iter()
+            .filter(|c| !c.hidden)
+            .map(|c| c.name.to_string())
+            .chain(aliases.into_iter().flat_map(|a| a.keys().cloned()))
+            .chain(self.user_commands.iter().map(|(n, _)| n.clone()))
+            .filter(|n| n.starts_with(name))
+            .min()?;
+        Some(format!("{found} {rest}").trim_end().to_string())
     }
 
     /// Queue a question; it shows once the ones before it are answered.
@@ -1208,7 +1246,13 @@ impl Engine {
                         count: None,
                     });
                 }
-                let line = text.strip_prefix(':').unwrap_or(&text);
+                let mut line = text.strip_prefix(':').unwrap_or(&text).to_string();
+                if self.settings.bool("completion.use_best_match")
+                    && let Some(best) = self.best_match(&line)
+                {
+                    line = best;
+                }
+                let line = line.as_str();
                 if repeatable(line) {
                     self.last_command = Some((line.to_string(), None));
                 }
@@ -2065,6 +2109,7 @@ mod tests {
             ["https://a.org/", "https://b.org/", "https://c.org/"]
                 .iter()
                 .map(|u| Completion {
+                    time: None,
                     category: "History",
                     name: u.to_string(),
                     description: String::new(),
@@ -2148,6 +2193,39 @@ mod tests {
     }
 
     #[test]
+    fn completion_quick_takes_a_lone_item_and_moves_on() {
+        let mut e = engine();
+        press(&mut e, ":tab-onl<Tab>");
+        assert_eq!(e.status().command_line.unwrap().text, ":tab-only ");
+        assert_eq!(
+            e.completions().selected,
+            None,
+            "the next part completes afresh"
+        );
+        press(&mut e, "<Escape>");
+        set(&mut e, "completion.quick", Value::Bool(false));
+        press(&mut e, ":tab-onl<Tab>");
+        assert_eq!(e.completions().selected, Some(0));
+    }
+
+    #[test]
+    fn use_best_match_runs_the_first_command_a_prefix_matches() {
+        let mut e = engine();
+        press(&mut e, ":relo<Return>");
+        assert!(e.status().message.unwrap().text.contains("no such command"));
+        set(&mut e, "completion.use_best_match", Value::Bool(true));
+        assert!(matches!(
+            runs(&press(&mut e, ":relo<Return>")).as_slice(),
+            [(Command::Reload { .. }, None)]
+        ));
+        // A known command name is left alone.
+        assert!(matches!(
+            runs(&press(&mut e, ":stop<Return>")).as_slice(),
+            [(Command::Stop, None)]
+        ));
+    }
+
+    #[test]
     fn command_history_is_capped() {
         let mut e = engine();
         set(&mut e, "completion.cmd_history_max_items", Value::Int(2));
@@ -2167,6 +2245,7 @@ mod tests {
                 .iter()
                 .filter(|u| u.contains(pattern))
                 .map(|u| Completion {
+                    time: None,
                     category: "History",
                     name: u.to_string(),
                     description: String::new(),

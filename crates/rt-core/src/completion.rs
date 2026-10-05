@@ -12,6 +12,9 @@ pub struct Completion {
     /// Inserted into the command line when chosen.
     pub name: String,
     pub description: String,
+    /// When a history entry was last visited, in seconds since the Unix epoch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<i64>,
 }
 
 /// Dynamic sources the browser layer provides.
@@ -79,6 +82,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
             .iter()
             .filter(|c| !c.hidden && c.name.starts_with(typed))
             .map(|c| Completion {
+                time: None,
                 category: "Commands",
                 name: c.name.to_string(),
                 description: c.description.to_string(),
@@ -94,6 +98,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
                 .iter()
                 .filter(|d| d.name.starts_with(parsed.pattern))
                 .map(|d| Completion {
+                    time: None,
                     category: "Settings",
                     name: d.name.to_string(),
                     description: d.description.to_string(),
@@ -128,6 +133,7 @@ mod tests {
 
     fn item(category: &'static str, name: &str) -> Completion {
         Completion {
+            time: None,
             category,
             name: name.into(),
             description: String::new(),

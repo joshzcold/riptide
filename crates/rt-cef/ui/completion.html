@@ -43,7 +43,9 @@
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
-  .desc { color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
+  .desc { flex: 1 1 auto; min-width: 0; color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
+  .time { flex-shrink: 0; padding-left: 2ch; color: var(--desc-fg); }
+  .row.selected .time { color: var(--selected-fg); }
   .prompt-message {
     padding: 0 4px;
     line-height: var(--row-height);
@@ -111,8 +113,24 @@
     list.replaceChildren(header, grid);
   }
 
-  // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows},
-  // where rows are {header}, {name, description, selected}, or {message, level}
+  // A subset of strftime for completion.timestamp_format, as in the status bar's clock.
+  const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December"];
+  const pad = (n) => String(n).padStart(2, "0");
+  function strftime(format, d) {
+    return format.replace(/%([HIMSpaAbBdmyY%])/g, (_, c) => ({
+      H: pad(d.getHours()), I: pad(d.getHours() % 12 || 12), M: pad(d.getMinutes()),
+      S: pad(d.getSeconds()), p: d.getHours() < 12 ? "AM" : "PM",
+      a: DAYS[d.getDay()].slice(0, 3), A: DAYS[d.getDay()],
+      b: MONTHS[d.getMonth()].slice(0, 3), B: MONTHS[d.getMonth()],
+      d: pad(d.getDate()), m: pad(d.getMonth() + 1), y: pad(d.getFullYear() % 100),
+      Y: String(d.getFullYear()), "%": "%",
+    })[c]);
+  }
+
+  // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format},
+  // where rows are {header}, {name, description, time, selected}, or {message, level}
   // for messages older than the one in the status bar.
   window.rtRender = (payload) => {
     const list = document.getElementById("list");
@@ -138,6 +156,12 @@
       desc.className = "desc";
       desc.textContent = row.description;
       el.append(name, desc);
+      if (row.time != null && payload.timestamp_format) {
+        const time = document.createElement("span");
+        time.className = "time";
+        time.textContent = strftime(payload.timestamp_format, new Date(row.time * 1000));
+        el.append(time);
+      }
       return el;
     }));
   };

@@ -474,6 +474,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "How many command lines Up and Down remember"
     ),
     def!(
+        "completion.delay",
+        Kind::Int { min: 0, max: 10000 },
+        Value::Int(0),
+        "Milliseconds to wait after a key press before updating completions"
+    ),
+    def!(
         "completion.height",
         Kind::Str,
         s("12"),
@@ -494,10 +500,34 @@ pub static SETTINGS: &[SettingDef] = &[
         open_categories
     ),
     def!(
+        "completion.quick",
+        Kind::Bool,
+        Value::Bool(true),
+        "When only one command or setting name is left, Tab takes it and moves on to completing the next part"
+    ),
+    def!(
         "completion.show",
         Kind::Enum(&["always", "auto", "never"]),
         s("always"),
         "When to show completions: always, only after pressing Tab (auto), or never"
+    ),
+    def!(
+        "completion.shrink",
+        Kind::Bool,
+        Value::Bool(true),
+        "Shrink the completion list to its items; false keeps it completion.height tall"
+    ),
+    def!(
+        "completion.timestamp_format",
+        Kind::Str,
+        s("%Y-%m-%d %H:%M"),
+        "strftime format of the last-visit time shown next to history completions; empty hides it"
+    ),
+    def!(
+        "completion.use_best_match",
+        Kind::Bool,
+        Value::Bool(false),
+        "Return runs the first command that starts with an unknown command name, so :rel runs :reload"
     ),
     def!(
         "completion.web_history.exclude",

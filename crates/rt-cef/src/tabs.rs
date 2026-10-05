@@ -452,6 +452,7 @@ pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
                 words.iter().all(|w| hay.contains(w.as_str()))
             })
             .map(|t| rt_core::completion::Completion {
+                time: None,
                 category: "Tabs",
                 name: format!("{}/{}", t.window, t.tab),
                 description: if t.title.is_empty() {
