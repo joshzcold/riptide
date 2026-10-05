@@ -698,7 +698,23 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
 - **Pages:**
   - `colors.webpage.bg` sets the background shown while a page loads, so dark themes don't flash white.
   - The dark-mode setting becomes live and per site; today it's startup-only.
-- **Tests:** unit tests that every built-in theme defines every token with valid colors and passes a WCAG AA contrast check for its text pairs. A smoke step switches themes and reads a CSS variable from the status bar.
+- **Size, shape and position.** Today each bar is a separate CEF view whose height is a Rust constant (`TABBAR_HEIGHT`, `STATUSBAR_HEIGHT`). The overlay that holds completion and prompts is sized as rows × a fixed row height. CSS alone can't resize any of them, so:
+  - **Pages report their size:** each UI page measures its content (fonts, padding, rows) and reports its height or width over the UI channel, and Rust lays the views out to match. Fonts, padding and `ui.css` then change real sizes, with no clipping.
+  - **Placement:**
+    - The tab bar goes top, bottom, left or right (`tabs.position`), with `tabs.width` for vertical tabs; the status bar goes top or bottom (`statusbar.position`); each can be hidden (`tabs.show`, `statusbar.show`).
+    - The overlay is either `docked` (full width above the status bar, as now and in qutebrowser) or `floating` (a centered box like a command palette). `ui.overlay.position`, `ui.overlay.width` and `completion.height` (rows or a percent) control it.
+  - **Shape:** padding, radius, borders and shadows come from tokens (`tabs.padding`, `tabs.indicator.width`, `statusbar.padding`, `hints.radius`, `hints.border`, `prompt.radius`) and from `ui.css` for anything beyond them. Tab-bar choices like tab width, min/max, title alignment and elision are settings (M19).
+  - **Hints:** labels are drawn in the page inside a shadow DOM. They take the theme tokens, `fonts.hints`, `hints.uppercase` and `hints.radius`, plus a `hints.css` file in the config directory for full control. The shadow DOM keeps the page's CSS out and our CSS in.
+  - **Window:** `window.hide_decoration` and `window.transparent` (M19).
+- **Dialogs and prompts.** JavaScript `alert`/`confirm`/`prompt`, leave-page warnings, HTTP logins, permission requests, certificate warnings and download prompts all use the prompt area in the overlay today (M7).
+  - **Style:** `colors.prompts.*` (fg, bg, border, selected), `fonts.prompts`, `prompt.radius`, and `ui.css`. Each kind of prompt gets a CSS class (`.prompt.alert`, `.prompt.auth`, `.prompt.permission`, `.prompt.certificate`, `.prompt.download`), so a theme can, for example, make certificate warnings red and loud.
+  - **Placement:** `prompt.position`, either `docked` (above the status bar, the default) or `center` (a modal box over the page, dimming it). `prompt.width` sets the width.
+  - **Content:** the asking site's origin is always shown and can't be styled away, because it's how users spot a spoofed dialog. A theme can reorder or restyle the key hints (`y: yes…`) but not hide the origin.
+  - **Mouse:** optional buttons for each answer (`prompt.buttons`), off by default, for mouse users and touch screens.
+- **Tests:**
+  - Unit tests that every built-in theme defines every token with valid colors and passes a WCAG AA contrast check for its text pairs.
+  - A smoke step switches themes and reads a CSS variable from the status bar.
+  - Smoke steps for layout: a bigger font grows the tab bar's view to fit, `tabs.position left` puts the tab bar beside the page, and `prompt.position center` centers a JavaScript `confirm()`. Screenshots are compared against the expected layout boxes, not pixels.
 
 ### M21 — Interactive settings
 
