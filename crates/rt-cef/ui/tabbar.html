@@ -8,8 +8,10 @@
     --odd-bg: #12364f;
     --even-bg: #164260;
     --fg: #e9f7f6;
-    --selected-bg: #2ec4b6;
-    --selected-fg: #061826;
+    /* The current tab is the darkest, marked by an accent line. */
+    --selected-bg: #04121c;
+    --selected-fg: #ffffff;
+    --selected-accent: #2ec4b6;
     --pinned-bg: #1b5e86;
     --indicator-loading: #8fe3dc;
     --indicator-error: #ff6b6b;
@@ -42,8 +44,15 @@
   .tab:nth-child(even) { background: var(--even-bg); }
   .tab.pinned { background: var(--pinned-bg); }
   .tab.shrunk { flex: 0 0 auto; }
-  .tab.selected { background: var(--selected-bg); color: var(--selected-fg); }
+  .tab.selected {
+    background: var(--selected-bg);
+    color: var(--selected-fg);
+    box-shadow: inset 0 -2px 0 var(--selected-accent);
+  }
   .tab.drop-before { box-shadow: inset 3px 0 0 var(--drop-mark); }
+  .tab.selected.drop-before {
+    box-shadow: inset 3px 0 0 var(--drop-mark), inset 0 -2px 0 var(--selected-accent);
+  }
   .indicator { width: 3px; align-self: stretch; flex-shrink: 0; }
   .loading .indicator { background: var(--indicator-loading); }
   .error .indicator { background: var(--indicator-error); }
@@ -53,6 +62,11 @@
   .vertical #tabs { flex-direction: column; overflow-y: auto; scrollbar-width: none; }
   .vertical .tab { flex: 0 0 auto; padding: 1px 4px 1px 0; }
   .vertical .tab.drop-before { box-shadow: inset 0 3px 0 var(--drop-mark); }
+  /* The left edge holds the loading indicator, so the accent goes on the right. */
+  .vertical .tab.selected { box-shadow: inset -3px 0 0 var(--selected-accent); }
+  .vertical .tab.selected.drop-before {
+    box-shadow: inset 0 3px 0 var(--drop-mark), inset -3px 0 0 var(--selected-accent);
+  }
 </style>
 </head>
 <body>
