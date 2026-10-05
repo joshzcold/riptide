@@ -14,6 +14,7 @@ pub mod greasemonkey;
 pub mod lua;
 pub mod lua_types;
 pub mod paths;
+pub mod reference;
 pub mod remote;
 pub mod sandbox;
 pub mod toml_file;

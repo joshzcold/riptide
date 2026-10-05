@@ -1,0 +1,18 @@
+[book]
+title = "Riptide"
+description = "A keyboard-driven browser with vim-like bindings, built on CEF and Rust"
+authors = ["Joshua Cold"]
+language = "en"
+src = "src"
+
+[output.html]
+site-url = "/riptide/"
+git-repository-url = "https://github.com/joshzcold/riptide"
+edit-url-template = "https://github.com/joshzcold/riptide/edit/main/docs/book/{path}"
+preferred-dark-theme = "navy"
+# Keep `--flag` and quotes as typed, so commands copy correctly.
+smart-punctuation = false
+
+[output.html.fold]
+enable = true
+level = 1

@@ -57,6 +57,16 @@ tasks:
     cmds:
       - scripts/git-cliff.sh -o CHANGELOG.md {{.CLI_ARGS}}
 
+  docs:
+    desc: Build the documentation website into docs/book/book/
+    cmds:
+      - scripts/mdbook.sh build docs/book
+
+  docs-serve:
+    desc: Serve the documentation website at http://localhost:3000, rebuilding on save
+    cmds:
+      - scripts/mdbook.sh serve docs/book {{.CLI_ARGS}}
+
   run:
     desc: 'Run the browser; pass a URL after --, e.g. task run -- example.com'
     deps: [setup]

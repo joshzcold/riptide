@@ -170,6 +170,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `riptide ':cmd' url` talks to the running instance (M15; Unix)
 - [x] Spell checking with keyboard-driven suggestions (M17)
 - [x] Versioned releases, `CHANGELOG.md`, CI on Linux/macOS/Windows (M18; Linux release artifacts only)
+- [x] Documentation website at https://joshzcold.github.io/riptide/ (mdBook, `docs/book/`), with agent skills for user and developer docs (M24)
 
 ### Extensibility
 - [x] Userscripts (spawned processes with `QUTE_URL`, `QUTE_FIFO`, etc.; keep env-var names for compatibility) (M9)
@@ -799,6 +800,74 @@ Whatever path wins:
   - **Tests:**
     - A test-build-only `:debug-crash` command (`panic`, `abort`, `renderer`) triggers each kind of crash.
     - A smoke step checks that the next start offers the report and restores the tabs.
+
+### M24 — Documentation website ✅ mostly done 2026-10-05
+
+Result:
+- **Book:** `docs/book/` (mdBook 0.5.4 through `scripts/mdbook.sh`, pinned and checksum-verified). It has a user guide (10 pages, including moving from qutebrowser), configuration, reference and developer guide parts, mostly moved out of the README. The README is now a 53-line landing page.
+- **Generated reference:** `rt_config::reference` writes `reference/commands.md` and `reference/bindings.md` from `rt_core::help::build` with the default config, and a unit test checks they're current (`UPDATE_LUA_TYPES=1 cargo test -p rt-config` regenerates them with the Lua types). The settings, Lua API, changelog and example-config pages include `docs/settings.md`, `docs/lua/rt.meta.lua`, `CHANGELOG.md` and `docs/config.example.*` directly.
+- **Tasks:** `./task docs` builds and `./task docs-serve` previews.
+- **Published** at <https://joshzcold.github.io/riptide/> once the repository went public (Pages source: GitHub Actions).
+- **CI:**
+  - A `docs` job in `check.yml` builds the book and checks internal links and anchors with lychee (offline).
+  - `docs.yml` deploys to GitHub Pages on pushes to `main` and checks external links weekly.
+- **Agents:** `.claude/skills/docs-user` and `docs-dev` hold the checklists, `docs/book/src/dev/docs.md` holds the rules, and `AGENTS.md` points to all three.
+- **Lessons:**
+  - mdBook's smart punctuation turns `--force` into an en dash, so it's off.
+  - `<text>` placeholders in command descriptions are escaped, or they render as HTML tags.
+  - lychee can't resolve the 404 page's root-relative links offline, so that page is excluded.
+
+Left:
+- **Version on the site:** the plan called for showing the version the site was built from; it doesn't yet.
+- **Links from `:help`:** `riptide://help` doesn't link to the guide pages yet.
+
+Original plan:
+
+**Today:**
+- The user documentation is the 386-line README (building, configuration, key bindings, testing, releases).
+- Reference material is generated from the live registries: `docs/settings.md`, `docs/lua/rt.meta.lua` and the in-browser `riptide://help`.
+- `docs/PLAN.md` is the only developer document.
+- There's no website.
+
+- **Framework: [mdBook](https://rust-lang.github.io/mdBook/)**, which the Rust Book, Cargo and the rustc dev guide all use.
+  - Plain Markdown and a single static binary, with no Node toolchain.
+  - Search, light and dark themes, and an "edit this page" link are built in.
+  - Zola is the alternative if we later want a separate marketing-style landing page; it isn't needed for docs.
+  - Pin and checksum the mdBook binary in `scripts/mdbook.sh`, as `scripts/git-cliff.sh` does, so `./task docs` needs nothing installed.
+- **Layout** (`docs/book/`, one book in two parts):
+  - **User guide:**
+    - Installing (tarball, AppImage, sandbox setup), first start, and moving over from qutebrowser (quickmarks, bookmarks, history import, translating `config.py` to `config.lua`)
+    - Modes, hints, tabs, sessions and crash recovery, downloads and permissions, userscripts and Greasemonkey, spell checking, Widevine, privacy and network traffic
+    - **Configuration:** the config files and their paths, then TOML, then Lua
+  - **Reference** (generated, never hand-edited):
+    - Every command, setting and default binding, and the Lua API
+    - All built from the same data as `riptide://help` (`rt_core::help::build`) and checked for staleness the way `docs/settings.md` is today
+    - The changelog is included from `CHANGELOG.md`.
+  - **Developer guide:**
+    - Building, crate layout and architecture, the CEF threading rules, and the UI channel
+    - Testing, including the local-testing rules
+    - Commit conventions, releasing, and updating CEF
+  - **The README shrinks** to a summary, a quick start and links to the site. PLAN.md stays in the repo and isn't published.
+- **GitHub Pages:**
+  - A `docs.yml` workflow builds the book on pushes to `main` and deploys it with `actions/upload-pages-artifact` and `actions/deploy-pages`, to `https://joshzcold.github.io/riptide/`.
+  - `check.yml` builds the book on every PR, so broken docs fail CI. It also checks links with [lychee](https://github.com/lycheeverse/lychee), external links weekly rather than per PR.
+  - The release workflow is unchanged; the site tracks `main` and shows the version it was built from. Versioned docs can wait until there's a 1.0.
+- **`:help` and the site share text:** command and setting descriptions stay in the registries (one source). `riptide://help` links to the matching website page for longer guides.
+- **Agent skills** (`.claude/skills/`, same format as `local-testing`), plus an `AGENTS.md` pointing to them for agents that don't read Claude skills:
+  - **`docs-user`:** when a change is visible to users (a new command, setting, binding, mode or behaviour):
+    - Update the matching user-guide page.
+    - Regenerate the reference rather than editing it.
+    - Add a qutebrowser note when behaviour differs.
+    - Style: second person, task-first, one example per feature, plain language.
+  - **`docs-dev`:** when a change affects how riptide is built, structured or tested (a new crate, a threading rule, a CEF pitfall, a test step):
+    - Update the developer guide.
+    - Record lessons learned there instead of only in PLAN.md.
+    - Style: explain why, with file paths and links to code.
+  - Both skills say how to build and preview (`./task docs`, `./task docs-serve`), that generated pages are never hand-edited, and that `./task check` must pass.
+  - Both list what doesn't need docs: refactors, internal-only fixes and test-only changes.
+- **Tests:**
+  - `./task check` builds the book and fails on stale generated pages or broken internal links.
+  - Every command and setting has a reference entry; this is the existing unit test, extended.
 
 ### Deferred — proprietary codecs (H.264 / AAC)
 Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.

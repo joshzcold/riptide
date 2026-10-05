@@ -1,0 +1,56 @@
+# Prompts, downloads and permissions
+
+## Prompts
+
+Everything that needs an answer appears above the status bar, one at a time:
+
+- JavaScript `alert`, `confirm`, `prompt` and leave-page warnings
+- HTTP logins (username, then a hidden password)
+- where to save a download
+- site permission requests (camera, microphone, location, notifications…)
+
+| Mode | Keys |
+|---|---|
+| prompt (text) | type, readline keys (`Ctrl-w` deletes one path component), `Return` accepts, `Escape` cancels |
+| yesno | `y` / `n`, `Return` (the default), `Escape` cancels |
+
+## Permissions
+
+For permission prompts:
+- `y` allows once and `n` (or `Escape`) means "not now".
+- `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, as in qutebrowser, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.
+
+The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture` and `content.desktop_capture` settings (`ask`, `true` or `false`) answer without asking.
+
+Untrusted TLS certificates (self-signed, expired, wrong host…) ask before the page loads: `y` loads it once, `A` always loads that site, `N` always blocks it. `content.tls.certificate_errors` (`ask`, `block` or `load-insecurely`) sets the default and can be set per site.
+
+## Per-site settings
+
+The permission settings above, `content.tls.certificate_errors` and `content.blocking.enabled` can differ per site. The last matching pattern wins. Patterns are hosts (`example.com`, `*.example.com` for subdomains too), origins (`https://meet.example.com`) or match patterns (`*://*.example.com/app/*`):
+
+```sh
+:set -u https://meet.example.com content.media.video_capture true
+```
+```toml
+[per_domain."*.example.com"]          # config.toml or autoconfig.toml
+"content.blocking.enabled" = false
+```
+```lua
+rt.set("content.geolocation", "false", "*.tracker.example")  -- config.lua
+```
+
+## Downloads
+
+Downloads go to `downloads.location.directory`, or the system Downloads folder if that's empty (on Linux, `XDG_DOWNLOAD_DIR` or `~/.config/user-dirs.dirs`). Server-suggested names are reduced to a plain file name, existing files get ` (1)` appended, and typing an existing path asks before overwriting. Set `downloads.location.prompt = false` to skip the question. The status bar shows `↓2 41%` while downloads run.
+
+| Command | |
+|---|---|
+| `:download [url]` | Download a URL, or the current page |
+| `;d` | Hint a link to download |
+| `:download-cancel`, `:download-open` | The newest running / finished download, or the one given as a count (`2:download-open`) |
+| `:download-clear` | Forget finished downloads |
+| `:downloads` | A page listing this session's downloads with their numbers and progress |
+
+In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell.
+
+`:download-open` uses the system's opener (`xdg-open`, `open` or `start`).

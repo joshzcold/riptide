@@ -92,3 +92,18 @@ jobs:
           [[ -f $bin.exe ]] && bin=$bin.exe
           "$bin" --version
           "$bin" --paths
+
+  docs:
+    name: docs (build, internal links)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the book
+        run: scripts/mdbook.sh build docs/book
+      # Offline: only links inside the book; docs.yml checks external ones weekly.
+      # 404.html links to the site root (/riptide/), which only exists once deployed.
+      - name: Check links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --include-fragments --no-progress --exclude-path '404\.html$' 'docs/book/book/**/*.html'
+          fail: true
