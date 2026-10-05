@@ -76,7 +76,7 @@ tasks:
   test:
     desc: Unit tests (everything except the CEF layer)
     cmds:
-      - cargo test --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock
+      - cargo test --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock -p rt-cef
 
   smoke:
     desc: Drive the real browser on a throwaway X display (needs Xvfb and xdotool)

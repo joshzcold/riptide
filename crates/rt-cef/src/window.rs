@@ -39,6 +39,15 @@ pub struct BarPlacement {
     pub statusbar: String,
 }
 
+/// Where the tab bar goes relative to the page area.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabBarSlot {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
 impl BarPlacement {
     pub fn from_settings(settings: &rt_core::settings::Settings) -> Self {
         Self {
@@ -46,6 +55,31 @@ impl BarPlacement {
             tabs_width: settings.int("tabs.width"),
             statusbar: settings.str("statusbar.position").to_string(),
         }
+    }
+
+    /// Unknown values fall back to the top, like the default.
+    pub fn tab_bar_slot(&self) -> TabBarSlot {
+        match self.tabs.as_str() {
+            "left" => TabBarSlot::Left,
+            "right" => TabBarSlot::Right,
+            "bottom" => TabBarSlot::Bottom,
+            _ => TabBarSlot::Top,
+        }
+    }
+
+    /// The tab bar's preferred size, where 1 means "stretch": a column
+    /// `tabs.width` wide beside the page, or a row `TABBAR_HEIGHT` high.
+    pub fn tab_bar_size(&self) -> (i32, i32) {
+        match self.tab_bar_slot() {
+            TabBarSlot::Left | TabBarSlot::Right => {
+                (i32::try_from(self.tabs_width).unwrap_or(i32::MAX).max(1), 1)
+            }
+            TabBarSlot::Top | TabBarSlot::Bottom => (1, TABBAR_HEIGHT),
+        }
+    }
+
+    pub fn statusbar_on_top(&self) -> bool {
+        self.statusbar == "top"
     }
 }
 
@@ -59,15 +93,7 @@ pub fn arrange_bars(
     statusbar: &BrowserView,
     placement: &BarPlacement,
 ) {
-    let vertical = matches!(placement.tabs.as_str(), "left" | "right");
-    let width = placement.tabs_width as i32;
-    TABBAR_SIZE.with(|size| {
-        size.set(if vertical {
-            (width, 1)
-        } else {
-            (1, TABBAR_HEIGHT)
-        })
-    });
+    TABBAR_SIZE.with(|size| size.set(placement.tab_bar_size()));
     let mut tabbar = View::from(tabbar);
     let mut statusbar = View::from(statusbar);
     for view in [&mut tabbar, &mut statusbar] {
@@ -76,13 +102,13 @@ pub fn arrange_bars(
         }
     }
     // The window's only child is now the row.
-    match placement.tabs.as_str() {
-        "left" => row.add_child_view_at(Some(&mut tabbar), 0),
-        "right" => row.add_child_view(Some(&mut tabbar)),
-        "bottom" => window.add_child_view(Some(&mut tabbar)),
-        _ => window.add_child_view_at(Some(&mut tabbar), 0),
+    match placement.tab_bar_slot() {
+        TabBarSlot::Left => row.add_child_view_at(Some(&mut tabbar), 0),
+        TabBarSlot::Right => row.add_child_view(Some(&mut tabbar)),
+        TabBarSlot::Bottom => window.add_child_view(Some(&mut tabbar)),
+        TabBarSlot::Top => window.add_child_view_at(Some(&mut tabbar), 0),
     }
-    if placement.statusbar == "top" {
+    if placement.statusbar_on_top() {
         window.add_child_view_at(Some(&mut statusbar), 0);
     } else {
         window.add_child_view(Some(&mut statusbar));
@@ -537,5 +563,44 @@ fn bar_size(role: Role) -> Size {
             width: 1,
             height: 1,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn placement(tabs: &str, width: i64, statusbar: &str) -> BarPlacement {
+        BarPlacement {
+            tabs: tabs.into(),
+            tabs_width: width,
+            statusbar: statusbar.into(),
+        }
+    }
+
+    #[test]
+    fn tab_bar_slots() {
+        assert_eq!(placement("top", 200, "bottom").tab_bar_slot(), TabBarSlot::Top);
+        assert_eq!(placement("bottom", 200, "bottom").tab_bar_slot(), TabBarSlot::Bottom);
+        assert_eq!(placement("left", 200, "bottom").tab_bar_slot(), TabBarSlot::Left);
+        assert_eq!(placement("right", 200, "bottom").tab_bar_slot(), TabBarSlot::Right);
+        assert_eq!(placement("sideways", 200, "bottom").tab_bar_slot(), TabBarSlot::Top);
+    }
+
+    #[test]
+    fn a_side_tab_bar_is_tabs_width_wide_and_a_top_one_is_a_row() {
+        assert_eq!(placement("left", 250, "bottom").tab_bar_size(), (250, 1));
+        assert_eq!(placement("right", 0, "bottom").tab_bar_size(), (1, 1));
+        assert_eq!(placement("right", i64::MAX, "bottom").tab_bar_size(), (i32::MAX, 1));
+        assert_eq!(placement("top", 250, "bottom").tab_bar_size(), (1, TABBAR_HEIGHT));
+        assert_eq!(placement("bottom", 250, "bottom").tab_bar_size(), (1, TABBAR_HEIGHT));
+    }
+
+    #[test]
+    fn defaults_put_tabs_on_top_and_the_status_bar_below() {
+        let defaults = BarPlacement::from_settings(&rt_core::settings::Settings::default());
+        assert_eq!(defaults.tab_bar_slot(), TabBarSlot::Top);
+        assert!(!defaults.statusbar_on_top());
+        assert!(placement("top", 200, "top").statusbar_on_top());
     }
 }

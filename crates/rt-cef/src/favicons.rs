@@ -30,13 +30,21 @@ pub fn read_list(list: &mut CefStringList) -> Vec<String> {
         .collect()
 }
 
+/// The first icon we can fetch: http(s) or an inline image, never another scheme.
+fn pick_icon(urls: Vec<String>) -> Option<String> {
+    urls.into_iter()
+        .find(|u| u.starts_with("http") || u.starts_with("data:image/"))
+}
+
+/// A download counts when it succeeded, or had no HTTP status (data: URLs).
+fn usable_status(code: i32) -> bool {
+    (200..300).contains(&code) || code == 0
+}
+
 /// A page announced its icons: fetch the first one, or clear it if none.
 pub fn changed(browser: &Browser, urls: Vec<String>) {
     let id = browser.identifier();
-    let Some(url) = urls
-        .into_iter()
-        .find(|u| u.starts_with("http") || u.starts_with("data:image/"))
-    else {
+    let Some(url) = pick_icon(urls) else {
         set(id, None);
         return;
     };
@@ -90,8 +98,36 @@ wrap_download_image_callback! {
             http_status_code: ::std::os::raw::c_int,
             image: Option<&mut Image>,
         ) {
-            let icon = image.filter(|_| (200..300).contains(&http_status_code) || http_status_code == 0);
+            let icon = image.filter(|_| usable_status(http_status_code));
             set(self.browser, icon.and_then(|i| png_data_url(i)));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picks_the_first_fetchable_icon() {
+        let urls = |list: &[&str]| list.iter().map(|s| s.to_string()).collect();
+        assert_eq!(
+            pick_icon(urls(&["chrome://x/icon.png", "https://a.example/favicon.ico", "https://a.example/b.png"])),
+            Some("https://a.example/favicon.ico".into())
+        );
+        assert_eq!(
+            pick_icon(urls(&["data:image/png;base64,AAAA"])),
+            Some("data:image/png;base64,AAAA".into())
+        );
+        assert_eq!(pick_icon(urls(&["data:text/html,x", "file:///icon.png"])), None);
+        assert_eq!(pick_icon(Vec::new()), None);
+    }
+
+    #[test]
+    fn only_successful_downloads_are_used() {
+        assert!(usable_status(200));
+        assert!(usable_status(0));
+        assert!(!usable_status(404));
+        assert!(!usable_status(301));
     }
 }
