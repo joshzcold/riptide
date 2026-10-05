@@ -8,10 +8,11 @@
     --odd-bg: #12364f;
     --even-bg: #164260;
     --fg: #e9f7f6;
-    /* The current tab is the darkest, marked by an accent line. */
+    /* The current tab is the darkest. Its accent line is the same color
+       unless colors.tabs.selected.accent sets one. */
     --selected-bg: #04121c;
     --selected-fg: #ffffff;
-    --selected-accent: #2ec4b6;
+    --selected-accent: var(--selected-bg);
     --pinned-bg: #1b5e86;
     --indicator-loading: #8fe3dc;
     --indicator-error: #ff6b6b;
@@ -161,11 +162,13 @@
     return el;
   }
 
-  window.rtRender = ({ tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button }) => {
+  window.rtRender = ({ tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button, selected_accent }) => {
     document.body.classList.toggle("vertical", vertical);
     const root = document.documentElement.style;
     root.setProperty("--title-align", alignment || "left");
     root.setProperty("--indicator-width", `${indicator_width ?? 3}px`);
+    // An invalid color is ignored by setProperty, leaving the default.
+    root.setProperty("--selected-accent", selected_accent || "var(--selected-bg)");
     root.setProperty("--tab-min-width", !vertical && min_width >= 0 ? `${min_width}px` : "0");
     root.setProperty("--tab-max-width", !vertical && max_width >= 0 ? `${max_width}px` : "none");
     // Shrinking pinned tabs saves width, which a vertical bar doesn't need.

@@ -453,6 +453,12 @@ pub static SETTINGS: &[SettingDef] = &[
         key_mappings
     ),
     def!(
+        "colors.tabs.selected.accent",
+        Kind::Str,
+        s(""),
+        "Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows"
+    ),
+    def!(
         "colors.webpage.darkmode.enabled",
         Kind::Bool,
         Value::Bool(false),

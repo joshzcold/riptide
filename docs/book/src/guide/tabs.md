@@ -10,6 +10,8 @@ Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shri
 
 The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
 
+The current tab is the darkest in the bar. To also underline it (or, in a vertical bar, mark its right edge), set `colors.tabs.selected.accent` to a CSS color, e.g. `:set colors.tabs.selected.accent #2ec4b6`; `:config-unset colors.tabs.selected.accent` removes the line again.
+
 Tab titles follow `tabs.title.format` (default `{audio}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab) and `{private}`. `tabs.tooltips = false` turns off the title-and-URL tooltip.
 
 In a top or bottom bar, tabs share the width evenly. `tabs.max_width` caps each tab and `tabs.min_width` keeps them from getting narrower; once they don't fit, the bar scrolls to keep the current tab in view. `tabs.title.alignment` (`left`, `center`, `right`) places the title, and `tabs.indicator.width` sets the loading indicator's width (`0` hides it):
