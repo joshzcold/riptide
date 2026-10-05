@@ -1,5 +1,5 @@
 //! Content settings that map onto Chromium: JavaScript, images, sound,
-//! popups, clipboard, protocol handlers, cookies and the user agent.
+//! popups, clipboard, cookies and the user agent.
 //! Globals apply when settings change; per-site values apply just before
 //! each navigation, so URL patterns work too.
 
@@ -28,10 +28,6 @@ const SITE_SETTINGS: &[(&str, ContentSettingTypes)] = &[
         "content.javascript.clipboard",
         ContentSettingTypes::CLIPBOARD_READ_WRITE,
     ),
-    (
-        "content.register_protocol_handler",
-        ContentSettingTypes::PROTOCOL_HANDLERS,
-    ),
 ];
 
 fn chromium_value(name: &str, value: &Value) -> ContentSettingValues {
@@ -57,6 +53,8 @@ fn chromium_value(name: &str, value: &Value) -> ContentSettingValues {
 struct State {
     /// The global values last given to Chromium, by setting.
     applied: HashMap<&'static str, String>,
+    /// Whether the protocol handler default stored by an earlier version is gone.
+    cleared_protocol_handlers: bool,
     /// The cookie settings last given to Chromium.
     cookies: Option<(String, bool)>,
     /// (setting, origin) pairs given their own value, to undo when no override matches.
@@ -74,6 +72,15 @@ pub fn apply_globals(settings: &Settings) {
     let Some(context) = request_context_get_global_context() else {
         return;
     };
+    // A stored PROTOCOL_HANDLERS default makes private windows crash a Chromium CHECK.
+    if !STATE.with(|s| std::mem::replace(&mut s.borrow_mut().cleared_protocol_handlers, true)) {
+        context.set_content_setting(
+            None,
+            None,
+            ContentSettingTypes::PROTOCOL_HANDLERS,
+            ContentSettingValues::DEFAULT,
+        );
+    }
     for (name, kind) in SITE_SETTINGS {
         let Some(value) = settings.get(name) else {
             continue;

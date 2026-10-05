@@ -36,7 +36,6 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
-| `content.register_protocol_handler` | ask \| true \| false | `ask` | Let sites register as handlers for links like mailto:; can be set per site |
 | `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |

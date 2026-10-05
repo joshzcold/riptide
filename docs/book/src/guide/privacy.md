@@ -36,7 +36,6 @@ The preferences are written into the profile (`Local State`, `Default/Preference
 | `content.mute` | `true` mutes pages; `:tab-mute` mutes one tab instead |
 | `content.javascript.can_open_tabs_automatically` | `true` lets pages open tabs without a click (popups) |
 | `content.javascript.clipboard` | `none`, `access` (copy after a click, the default) or `access-paste` (read it too) |
-| `content.register_protocol_handler` | `ask` (default), `true` or `false` for sites that offer to handle links like `mailto:` |
 
 All but the cookie settings can also be set per site:
 

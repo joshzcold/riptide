@@ -621,12 +621,6 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites show notifications: ask, true or false"
     ),
     def!(
-        "content.register_protocol_handler",
-        Kind::Enum(&["ask", "true", "false"]),
-        s("ask"),
-        "Let sites register as handlers for links like mailto:; can be set per site"
-    ),
-    def!(
         "content.tls.certificate_errors",
         Kind::Enum(&["ask", "block", "load-insecurely"]),
         s("ask"),
@@ -1160,7 +1154,6 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.javascript.clipboard",
     "content.javascript.enabled",
     "content.mute",
-    "content.register_protocol_handler",
     "content.media.audio_capture",
     "content.media.video_capture",
     "content.notifications.enabled",

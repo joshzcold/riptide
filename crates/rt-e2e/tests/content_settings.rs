@@ -28,3 +28,19 @@ fn content_settings_popups_need_can_open_tabs_automatically() {
     b.wait_until("the popup opens", |s| s.tabs().len() == 2);
 }
 
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_settings_leave_private_windows_working() {
+    let b = Browser::launch()
+        .toml(
+            "content.images = false\ncontent.mute = true\n\
+             content.javascript.can_open_tabs_automatically = true\n\
+             content.javascript.clipboard = \"access-paste\"\n",
+        )
+        .start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -p {second}"));
+    b.wait_until("the private window loads", |s| {
+        s.window().private && s.tab().is_loaded(&second)
+    });
+}

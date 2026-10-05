@@ -676,7 +676,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - The user agent is set per tab with the DevTools `Emulation.setUserAgentOverride`, which covers requests and `navigator.userAgent`.
     - A smoke step covers all three.
   - Other headers: `accept_language`, `do_not_track`, `referer`, `custom`.
-  - ✅ (2026-10-05) `content.images`, `content.mute`, `content.javascript.can_open_tabs_automatically`, `content.javascript.clipboard` and `content.register_protocol_handler`, all also per site. They share one table of Chromium content settings in `crates/rt-cef/src/content.rs`, with e2e tests in `crates/rt-e2e/tests/content_settings.rs`.
+  - ✅ (2026-10-05) `content.images`, `content.mute`, `content.javascript.can_open_tabs_automatically` and `content.javascript.clipboard`, all also per site. `content.register_protocol_handler` was dropped: any stored default for Chromium's `PROTOCOL_HANDLERS` setting fails a `CHECK` when a private window's off-the-record profile inherits it. They share one table of Chromium content settings in `crates/rt-cef/src/content.rs`, with e2e tests in `crates/rt-e2e/tests/content_settings.rs`.
   - Media: `content.autoplay`, `content.webgl`.
   - Privacy and network: `content.proxy` (system, none, URL, PAC) and `proxy_dns_requests`, `content.webrtc_ip_handling_policy`, `content.canvas_reading`, `content.dns_prefetch`, `content.cache.size`.
   - JavaScript permissions: `content.javascript.can_close_tabs`.
