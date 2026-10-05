@@ -629,7 +629,12 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `tabs.title.format` and `format_pinned` (fields such as `{index}`, `{audio}`, `{host}`, `{private}`), `tabs.title.alignment`, `tabs.width`, `min_width`, `max_width`.
   - `tabs.select_on_remove`, `tabs.background`, `tabs.wrap`, `tabs.undo_stack_size`, and a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
   - Middle-click to close (`tabs.close_mouse_button`, `close_mouse_button_on_bar`), `tabs.tooltips`, `tabs.tabs_are_windows`.
-- **Status bar** (tier 1): `statusbar.show` (always, never, in-mode), `statusbar.position`, `statusbar.padding`, and `statusbar.widgets`: url, scroll, scroll_raw, history, tabs, keypress, progress, search_match, clock, `text:…`.
+- **Status bar** (tier 1):
+  - ✅ (2026-10-05) `statusbar.position` (top, bottom) and `statusbar.show`, where `never` still shows the bar while a command is typed or a prompt answered, and `in-mode` also outside normal mode and while a message is up. Both bars are arranged by `window::arrange_bars`, and the completion overlay opens on the page's side of the status bar.
+  - ✅ (2026-10-05) `statusbar.widgets` with qutebrowser's names (keypress, search_match, url, scroll, scroll_raw, history, tabs, progress, `clock[:format]`, `text:…`) plus downloads, muted and zoom. Unknown names are rejected.
+    - `scroll` reads the current tab's position twice a second while the widget is shown, rather than giving pages a hook that would let them detect the browser.
+    - The smoke test can't read the status bar's text, so the widgets were checked by screenshot.
+  - `statusbar.padding` waits for M20's measured bar sizes.
 - **Key hints** (tier 1): a popup listing what a pending key chain can still become, after `keyhint.delay`, minus `keyhint.blacklist`.
 - **Completion:**
   - Tier 1: `completion-item-del` (delete a history, quickmark, bookmark or session entry from the list) and `completion-item-yank`.
