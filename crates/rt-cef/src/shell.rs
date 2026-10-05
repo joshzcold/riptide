@@ -525,6 +525,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::lua::run_command(&command, count)
         || crate::view::run_command(&command, count)
         || crate::actions::run_command(&command)
+        || crate::screenshot::run_command(&command)
     {
         return;
     }

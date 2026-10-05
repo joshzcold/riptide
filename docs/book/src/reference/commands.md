@@ -68,6 +68,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:devtools` | `wi` | Open the developer tools for this tab (wi) |
 | `:print` |  | Print the page, or save it: :print [--pdf file] |
 | `:fullscreen` | `<F11>` | Toggle fullscreen (F11) |
+| `:screenshot` |  | Save what the tab shows as an image: :screenshot [--force] file (.png, .jpg or .webp) |
 | `:view-source` | `gf` | Show the page source in a new tab (gf) |
 | `:jseval` |  | Evaluate a JavaScript expression in the page: :jseval &lt;code&gt; |
 | `:home` |  | Open the start page |

@@ -1949,7 +1949,7 @@ mod tests {
         let out = press(&mut e, "<Ctrl-d>");
         assert!(all_effects(&out).is_empty());
         assert!(e.status().message.unwrap().text.starts_with("Can't delete"));
-        assert_eq!(e.completions().items.len(), 5);
+        assert_eq!(e.completions().items.len(), 6);
     }
 
     #[test]
@@ -2035,6 +2035,7 @@ mod tests {
                 "scroll",
                 "scroll-page",
                 "scroll-to-perc",
+                "screenshot",
                 "scroll-px",
                 "scroll-to-anchor"
             ]

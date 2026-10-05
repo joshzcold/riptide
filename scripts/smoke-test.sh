@@ -810,6 +810,17 @@ after=$(lazy_visits)
 run "set session.lazy_restore false"
 [[ $before == 1 && $after == 2 ]] && pass || fail "visits to the background tab: $before before showing it, $after after"
 
+step ":screenshot saves the tab as a PNG and won't overwrite without --force"
+run "screenshot $work/shot.png"
+for _ in $(seq $((TIMEOUT * 10))); do [[ -s $work/shot.png ]] && break; sleep 0.1; done
+signature=$(head -c 8 "$work/shot.png" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+size=$(stat -c %s "$work/shot.png" 2>/dev/null || echo 0)
+run "screenshot $work/shot.png"
+nap 0.5
+same=$(stat -c %s "$work/shot.png" 2>/dev/null || echo 0)
+[[ $signature == 89504e470d0a1a0a && $size -gt 1000 && $same == "$size" ]] && pass ||
+    fail "signature '$signature', size $size, after a second try $same"
+
 step ":messages lists this session's messages"
 run "messages"
 expect_title "Messages"

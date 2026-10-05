@@ -321,6 +321,11 @@ pub enum Command {
     },
     /// Toggle fullscreen for the window.
     Fullscreen,
+    /// Save what the current tab shows as an image.
+    Screenshot {
+        path: String,
+        force: bool,
+    },
     /// Show the page's source in a new tab.
     ViewSource,
     /// Evaluate JavaScript in the page and show the result.
@@ -681,6 +686,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("devtools", "Open the developer tools for this tab (wi)"),
     spec("print", "Print the page, or save it: :print [--pdf file]"),
     spec("fullscreen", "Toggle fullscreen (F11)"),
+    spec(
+        "screenshot",
+        "Save what the tab shows as an image: :screenshot [--force] file (.png, .jpg or .webp)",
+    ),
     spec("view-source", "Show the page source in a new tab (gf)"),
     spec(
         "jseval",
@@ -1188,6 +1197,13 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             },
         },
         "fullscreen" => Command::Fullscreen,
+        "screenshot" => {
+            let force = args.flag(&["-f", "--force"]).is_some();
+            Command::Screenshot {
+                path: args.required("file")?.to_string(),
+                force,
+            }
+        }
         "view-source" => Command::ViewSource,
         "jseval" => {
             let code = args.rest();
@@ -1939,6 +1955,7 @@ mod tests {
             "spawn",
             "navigate",
             "jseval",
+            "screenshot",
             "cmd-later",
             "scroll-px",
             "config-unset",

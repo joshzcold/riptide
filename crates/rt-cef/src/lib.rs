@@ -22,6 +22,7 @@ mod prompts;
 mod remote;
 mod renderer;
 mod scheme;
+mod screenshot;
 mod search;
 mod shell;
 mod spawn;

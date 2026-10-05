@@ -5,6 +5,15 @@
 - `colors.webpage.preferred_color_scheme` (`auto`, `light` or `dark`) is what pages see in `prefers-color-scheme`. It applies immediately.
 - `colors.webpage.darkmode.enabled = true` renders light pages dark with Chromium's automatic dark mode. It takes effect after a restart: it's a Chromium switch, so `config.toml`/`config.lua` are read before Chromium starts.
 
+## Saving and printing
+
+| Command | What it does |
+|---|---|
+| `:print` | Opens the system print dialog |
+| `:print --pdf ~/page.pdf` | Saves the page as a PDF, backgrounds included |
+| `:screenshot ~/shot.png` | Saves what the tab shows as an image; `.jpg` and `.webp` work too. It won't replace an existing file without `--force`. |
+| `gf`, `:view-source` | Shows the page's source in a new tab |
+
 ## Spell checking
 
 Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.languages = { "en-US", "de-DE" }` in `config.lua` or `:set spellcheck.languages '["en-US"]'`. Chromium downloads each dictionary once from Google (`redirector.gvt1.com`) and underlines mistakes as you type.
