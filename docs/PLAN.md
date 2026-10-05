@@ -651,14 +651,17 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - The entries are laid out in columns, letters first.
   - `Engine::keyhints` and `Keymap::continuations` are unit tested; the layout was checked by screenshot.
 - **Completion:**
-  - Tier 1: `completion-item-del` (delete a history, quickmark, bookmark or session entry from the list) and `completion-item-yank`.
+  - ✅ Tier 1 (2026-10-05): `completion-item-del` (`Ctrl-d`: delete a history, quickmark, bookmark or session entry, or close a tab) and `completion-item-yank` (`Ctrl-c`, `Ctrl-Shift-c` for the primary selection). A smoke step deletes a history entry and checks `history.sqlite`.
   - `completion.height`, `shrink`, `show`, `open_categories` (order and which ones), `web_history.exclude`, `timestamp_format`, `min_chars`, `delay`, `use_best_match`, `quick`, and `cmd_history_max_items`.
-  - Command-line commands: `cmd-edit` (edit the line in `editor.command`), `cmd-repeat`, `cmd-repeat-last`, `cmd-run-with-count`.
+  - Command-line commands: ✅ `cmd-edit` (2026-10-05); still to do: `cmd-repeat`, `cmd-repeat-last`, `cmd-run-with-count`.
 - **Hints:**
-  - Tier 1: `hints.auto_follow` (always, unique-match, full-match, never) and `auto_follow_timeout`, `hints.selectors` (custom groups, e.g. hint every `code` block), and rapid mode (`hint --rapid`).
+  - ✅ Tier 1 (2026-10-05):
+    - `hints.auto_follow` (always, unique-match, full-match, never), with `hint-follow` on `Return`, and `hints.auto_follow_timeout`.
+    - `hints.selectors`: user groups are merged over the built-in all, links, images, media and inputs.
+    - Rapid mode (`hint --rapid`) was already done.
   - `hints.min_chars`, `hints.scatter`, `hints.dictionary` (word hints), `hints.leave_on_load`, `hints.hide_unmatched_rapid_hints`, `hint-follow`, and `hints.next_regexes`/`prev_regexes` as real settings.
 - **URLs:**
-  - Tier 1: `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `fbclid` and the like when yanking).
+  - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
   - `url.auto_search` (naive, dns, schemeless, never), `url.open_base_url`, `url.incdec_segments`, `new_instance_open_target_window`.
 - **Downloads and files:**
   - Tier 1: `download-retry`, `download-remove`, `download-delete`, and an external file picker (`fileselect.handler = external` with `fileselect.{single_file,multiple_files,folder}.command`, e.g. yazi or ranger in a terminal), plus `prompt-fileselect-external`.
@@ -691,7 +694,11 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - Fix whatever differs; most just need the environment and FIFO commands to match.
     - Don't copy them into the repo (their licenses differ). Instead, document which work and add a smoke step that runs one through `QUTE_FIFO`.
   - **Editor:**
-    - Tier 1: `edit-text` as qutebrowser's current name for `:open-editor`, which stays as an alias; `edit-url` (with `--tab`, `--bg`, `--window`, `--private`, `--related`); and `cmd-edit` (edit the command line, run it on save).
+    - ✅ Tier 1 (2026-10-05):
+      - `edit-text` as qutebrowser's current name for `:open-editor`, which stays as an alias.
+      - `edit-url` (with `--tab`, `--bg`, `--window`, `--private`, `--related`).
+      - `cmd-edit` (edit the command line; `--run` runs it on save).
+      - All three share one editor helper, and each has a smoke step.
     - `editor.encoding`, `editor.remove_file`.
   - **Greasemonkey:**
     - Tier 1: `@require`, fetched once into the data directory and pinned to the URL. Also `GM_setValue`, `getValue`, `deleteValue` and `listValues`, stored per script.
