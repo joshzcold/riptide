@@ -129,7 +129,17 @@ keyhint.blacklist = ["<Ctrl-x>*", "g$"]
 
 ## The command line
 
-In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from quickmarks, bookmarks and history (every typed word must match, in any order). `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
+In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from search engines, quickmarks, bookmarks, history and, for paths starting with `/` or `~/`, files. Every typed word must match, in any order.
+
+| Setting | What it does |
+|---|---|
+| `completion.open_categories` | Which of those `:open` offers, in order |
+| `completion.web_history.exclude` | URL globs never suggested from history, e.g. `["*://*.bank.example/*"]` |
+| `completion.show` | `always`, only after pressing `Tab` (`auto`), or `never` |
+| `completion.height` | Rows (`12`) or a share of the window (`50%`) |
+| `completion.min_chars` | Characters to type after the command before its arguments complete |
+| `completion.cmd_history_max_items` | How many command lines `Up` and `Down` remember |
+ `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
 The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 

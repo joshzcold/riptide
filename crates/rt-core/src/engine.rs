@@ -135,6 +135,8 @@ pub struct Engine {
     message_log: VecDeque<LoggedMessage>,
     /// What `.` runs: the last command line or normal-mode binding.
     last_command: Option<(String, Option<u32>)>,
+    /// Tab was pressed, for `completion.show = auto`.
+    completion_opened: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -209,6 +211,7 @@ impl Engine {
             macros: Macros::default(),
             message_log: VecDeque::new(),
             last_command: None,
+            completion_opened: false,
             user_commands: Vec::new(),
         }
     }
@@ -329,6 +332,23 @@ impl Engine {
     pub fn completions(&mut self) -> CompletionView {
         if self.mode != Mode::Command {
             self.completion = None;
+            self.completion_opened = false;
+            return CompletionView::default();
+        }
+        let shown = match self.settings.str("completion.show") {
+            "never" => false,
+            "auto" => self.completion_opened,
+            _ => true,
+        };
+        // completion.min_chars counts what's typed after the command name.
+        let typed = self
+            .cmdline
+            .text()
+            .trim_start_matches(':')
+            .split_once(char::is_whitespace)
+            .map_or(usize::MAX, |(_, rest)| rest.trim_start().chars().count());
+        if !shown || typed < self.settings.int("completion.min_chars").max(0) as usize {
+            self.completion = None;
             return CompletionView::default();
         }
         let text = self.cmdline.text();
@@ -431,6 +451,7 @@ impl Engine {
     }
 
     fn focus_completion(&mut self, forward: bool) {
+        self.completion_opened = true;
         self.completions();
         let Some(state) = self.completion.as_mut() else {
             return;
@@ -1166,6 +1187,8 @@ impl Engine {
             Command::CommandAccept => {
                 let text = self.cmdline.text().to_string();
                 self.history.push(&text);
+                self.history
+                    .truncate(self.settings.int("completion.cmd_history_max_items").max(0) as usize);
                 self.set_mode(Mode::Normal, effects);
                 if let Some((reverse, needle)) = search_text(&text) {
                     let search = Command::Search {
@@ -2077,6 +2100,55 @@ mod tests {
         assert!(all_effects(&out).is_empty());
         assert!(e.status().message.unwrap().text.starts_with("Can't delete"));
         assert_eq!(e.completions().items.len(), 6);
+    }
+
+    fn set(e: &mut Engine, name: &str, value: Value) {
+        e.apply_config(&ConfigOp::Set {
+            name: name.into(),
+            value,
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn completion_show_and_min_chars() {
+        let mut e = engine();
+        set(&mut e, "completion.show", Value::Str("auto".into()));
+        press(&mut e, ":scr");
+        assert!(e.completions().items.is_empty(), "auto waits for Tab");
+        press(&mut e, "<Tab>");
+        assert!(!e.completions().items.is_empty());
+        press(&mut e, "<Escape>");
+        set(&mut e, "completion.show", Value::Str("never".into()));
+        press(&mut e, ":scr<Tab>");
+        assert!(e.completions().items.is_empty());
+        press(&mut e, "<Escape>");
+        set(&mut e, "completion.show", Value::Str("always".into()));
+        set(&mut e, "completion.min_chars", Value::Int(3));
+        press(&mut e, ":set hi");
+        assert!(
+            e.completions().items.is_empty(),
+            "two characters is too few"
+        );
+        press(&mut e, "n");
+        assert!(!e.completions().items.is_empty());
+        press(&mut e, "<Escape>");
+        press(&mut e, ":scr");
+        assert!(
+            !e.completions().items.is_empty(),
+            "command names don't wait"
+        );
+    }
+
+    #[test]
+    fn command_history_is_capped() {
+        let mut e = engine();
+        set(&mut e, "completion.cmd_history_max_items", Value::Int(2));
+        for line in [":reload<Return>", ":stop<Return>", ":back<Return>"] {
+            press(&mut e, line);
+        }
+        press(&mut e, ":<Up><Up><Up>");
+        assert_eq!(e.status().command_line.unwrap().text, ":stop");
     }
 
     #[test]

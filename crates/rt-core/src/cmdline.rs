@@ -140,6 +140,13 @@ pub struct History {
 }
 
 impl History {
+    /// Keep only the newest `max` entries (`completion.cmd_history_max_items`).
+    pub fn truncate(&mut self, max: usize) {
+        if self.entries.len() > max {
+            self.entries.drain(..self.entries.len() - max);
+        }
+    }
+
     pub fn push(&mut self, entry: &str) {
         if entry.trim().is_empty() || self.entries.last().is_some_and(|e| e == entry) {
             return;

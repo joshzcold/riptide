@@ -2,7 +2,7 @@
 //! Kept apart from the shell so the engine's completion source can read it
 //! while the shell is borrowed.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use cef::*;
@@ -19,7 +19,9 @@ pub const DEFAULT_SESSION: &str = "default";
 
 thread_local! {
     static STORAGE: RefCell<Option<Storage>> = const { RefCell::new(None) };
-    static HISTORY_LIMIT: Cell<usize> = const { Cell::new(100) };
+    /// Settings the completion source needs; it can't read the engine's while
+    /// the engine is asking it for completions.
+    static COMPLETION: RefCell<CompletionSettings> = RefCell::new(CompletionSettings::default());
 }
 
 /// Open storage; returns errors to report (the browser works without it).
@@ -130,9 +132,27 @@ pub fn delete_completion(item: &rt_core::completion::Completion) {
     run_command(&command);
 }
 
-/// Mirror `completion.web_history.max_items`, which the source can't read itself.
-pub fn set_history_limit(limit: i64) {
-    HISTORY_LIMIT.with(|l| l.set(limit.max(0) as usize));
+#[derive(Default)]
+struct CompletionSettings {
+    history_limit: usize,
+    categories: Vec<String>,
+    exclude: Vec<String>,
+    engines: std::collections::BTreeMap<String, String>,
+}
+
+/// Mirror the settings the completion source reads.
+pub fn sync_settings(settings: &rt_core::settings::Settings) {
+    COMPLETION.with(|c| {
+        *c.borrow_mut() = CompletionSettings {
+            history_limit: settings.int("completion.web_history.max_items").max(0) as usize,
+            categories: settings.list("completion.open_categories").to_vec(),
+            exclude: settings.list("completion.web_history.exclude").to_vec(),
+            engines: settings
+                .map("url.searchengines")
+                .cloned()
+                .unwrap_or_default(),
+        }
+    });
 }
 
 fn now() -> i64 {
@@ -175,41 +195,31 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     if kind == CompletionKind::Tab {
         return crate::tabs::completions(pattern);
     }
+    if kind == CompletionKind::Url {
+        let categories = COMPLETION.with(|c| c.borrow().categories.clone());
+        return categories
+            .iter()
+            .flat_map(|c| open_category(c, pattern))
+            .collect();
+    }
     with(|s| {
         let mut items = Vec::new();
-        if matches!(kind, CompletionKind::Url | CompletionKind::Quickmark) {
+        if kind == CompletionKind::Quickmark {
             for (name, url) in s
                 .quickmarks
                 .iter()
                 .filter(|(n, u)| matches(pattern, &[n, u]))
             {
-                // `:open` inserts the URL; `:quickmark-load` inserts the name.
-                items.push(match kind {
-                    CompletionKind::Url => item("Quickmarks", url, name),
-                    _ => item("Quickmarks", name, url),
-                });
+                items.push(item("Quickmarks", name, url));
             }
         }
-        if matches!(kind, CompletionKind::Url | CompletionKind::Bookmark) {
+        if kind == CompletionKind::Bookmark {
             for (url, title) in s
                 .bookmarks
                 .iter()
                 .filter(|(u, t)| matches(pattern, &[u, t]))
             {
                 items.push(item("Bookmarks", url, title));
-            }
-        }
-        if kind == CompletionKind::Url
-            && let Some(history) = &s.history
-        {
-            let limit = HISTORY_LIMIT.with(Cell::get);
-            if limit > 0 {
-                match history.search(pattern, limit) {
-                    Ok(entries) => {
-                        items.extend(entries.iter().map(|e| item("History", &e.url, &e.title)))
-                    }
-                    Err(e) => tracing::warn!(%e, "history search failed"),
-                }
             }
         }
         if kind == CompletionKind::Session {
@@ -220,6 +230,104 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
         items
     })
     .unwrap_or_default()
+}
+
+/// One `completion.open_categories` entry for `:open`.
+fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
+    match category {
+        "searchengines" => {
+            let engines = COMPLETION.with(|c| c.borrow().engines.clone());
+            let word = pattern.split_whitespace().next().unwrap_or("");
+            // Only while the first word could still be an engine's name.
+            if pattern.contains(char::is_whitespace) {
+                return Vec::new();
+            }
+            engines
+                .iter()
+                .filter(|(name, _)| *name != "DEFAULT" && name.starts_with(word))
+                .map(|(name, url)| item("Search engines", name, url))
+                .collect()
+        }
+        "quickmarks" => with(|s| {
+            s.quickmarks
+                .iter()
+                .filter(|(n, u)| matches(pattern, &[n, u]))
+                .map(|(name, url)| item("Quickmarks", url, name))
+                .collect()
+        })
+        .unwrap_or_default(),
+        "bookmarks" => with(|s| {
+            s.bookmarks
+                .iter()
+                .filter(|(u, t)| matches(pattern, &[u, t]))
+                .map(|(url, title)| item("Bookmarks", url, title))
+                .collect()
+        })
+        .unwrap_or_default(),
+        "history" => {
+            let (limit, exclude) = COMPLETION.with(|c| {
+                let c = c.borrow();
+                (c.history_limit, c.exclude.clone())
+            });
+            if limit == 0 {
+                return Vec::new();
+            }
+            with(
+                |s| match s.history.as_ref().map(|h| h.search(pattern, limit)) {
+                    Some(Ok(entries)) => entries
+                        .iter()
+                        .filter(|e| !exclude.iter().any(|glob| rt_core::url::glob(glob, &e.url)))
+                        .map(|e| item("History", &e.url, &e.title))
+                        .collect(),
+                    Some(Err(e)) => {
+                        tracing::warn!(%e, "history search failed");
+                        Vec::new()
+                    }
+                    None => Vec::new(),
+                },
+            )
+            .unwrap_or_default()
+        }
+        "filesystem" => files(pattern),
+        _ => Vec::new(),
+    }
+}
+
+/// Files and folders for a pattern that looks like a path (`/…`, `~/…`, `file://…`).
+fn files(pattern: &str) -> Vec<Completion> {
+    let path = pattern.strip_prefix("file://").unwrap_or(pattern);
+    if !(path.starts_with('/') || path.starts_with("~/")) {
+        return Vec::new();
+    }
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let expanded = match (path.strip_prefix("~/"), &home) {
+        (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
+        _ => path.to_string(),
+    };
+    let (dir, prefix) = match expanded.rfind('/') {
+        Some(i) => (&expanded[..=i], &expanded[i + 1..]),
+        None => return Vec::new(),
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names: Vec<(String, bool)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let is_dir = e.file_type().is_ok_and(|t| t.is_dir());
+            (name.starts_with(prefix) && !name.starts_with('.')).then_some((name, is_dir))
+        })
+        .collect();
+    names.sort();
+    names
+        .into_iter()
+        .take(50)
+        .map(|(name, is_dir)| {
+            let full = format!("{dir}{name}{}", if is_dir { "/" } else { "" });
+            item("Filesystem", &full, if is_dir { "folder" } else { "" })
+        })
+        .collect()
 }
 
 fn current_page() -> Option<(String, String)> {

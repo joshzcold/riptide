@@ -396,7 +396,7 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
         s.overridden = loaded.overridden;
         s.setting_sources = loaded.sources;
         s.config_files = loaded.files;
-        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
+        storage::sync_settings(s.engine.settings());
         crate::adblock::sync_settings(s.engine.settings());
         errors
     })
@@ -453,7 +453,7 @@ fn persist(op: rt_core::config::ConfigOp) {
     }
     crate::help::refresh();
     with(|s| {
-        storage::set_history_limit(s.engine.settings().int("completion.web_history.max_items"));
+        storage::sync_settings(s.engine.settings());
         crate::adblock::sync_settings(s.engine.settings());
     });
     apply_chromium_settings();
@@ -1070,7 +1070,8 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             (json!({ "kind": "prompt", "prompt": prompt }), rows)
         }
         None if focused => 'rows: {
-            let mut rows = completion_rows(&s.engine.completions());
+            let max_rows = completion_max_rows(s);
+            let mut rows = completion_rows(&s.engine.completions(), max_rows);
             if rows.is_empty() {
                 let (hints, wait) = keyhints(s);
                 keyhint_wait = wait;
@@ -1204,19 +1205,32 @@ wrap_task! {
     }
 }
 
+/// How many rows the completion list may use, from `completion.height`.
+fn completion_max_rows(s: &Shell) -> usize {
+    match rt_core::settings::parse_height(s.engine.settings().str("completion.height")) {
+        Some(rt_core::settings::Height::Rows(rows)) => rows,
+        Some(rt_core::settings::Height::Percent(percent)) => {
+            let window = s
+                .window
+                .as_ref()
+                .map_or(800, |w| View::from(w).bounds().height);
+            ((f64::from(window) * percent / 100.0) as i32 / COMPLETION_ROW_HEIGHT).max(2) as usize
+        }
+        None => COMPLETION_MAX_ROWS,
+    }
+}
+
 /// The rows to draw: category headers and items, scrolled so the selected
-/// item is visible, at most `COMPLETION_MAX_ROWS` in total.
-fn completion_rows(view: &CompletionView) -> Vec<serde_json::Value> {
+/// item is visible, at most `max_rows` in total.
+fn completion_rows(view: &CompletionView, max_rows: usize) -> Vec<serde_json::Value> {
     let items = &view.items;
-    let mut start = view
-        .selected
-        .map_or(0, |i| i.saturating_sub(COMPLETION_MAX_ROWS / 2));
+    let mut start = view.selected.map_or(0, |i| i.saturating_sub(max_rows / 2));
     loop {
         let mut rows = Vec::new();
         let mut category = "";
         for (i, item) in items.iter().enumerate().skip(start) {
             let header = item.category != category || rows.is_empty();
-            if rows.len() + usize::from(header) + 1 > COMPLETION_MAX_ROWS {
+            if rows.len() + usize::from(header) + 1 > max_rows {
                 break;
             }
             if header {
@@ -1300,7 +1314,8 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
 /// Next to the status bar, on the page's side of it; at the page area's
 /// edge when the status bar is hidden.
 fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
-    let height = rows.min(OVERLAY_MAX_ROWS) as i32 * COMPLETION_ROW_HEIGHT;
+    let height =
+        rows.min(OVERLAY_MAX_ROWS.max(completion_max_rows(s))) as i32 * COMPLETION_ROW_HEIGHT;
     let top = s.bar_placement.statusbar == "top";
     let (x, width, edge) = if s.statusbar_shown {
         let bar = View::from(s.statusbar.as_ref()?).bounds();

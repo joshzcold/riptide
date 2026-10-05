@@ -12,6 +12,12 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
 | `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode (takes effect after a restart) |
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
+| `completion.cmd_history_max_items` | integer | `100` | How many command lines Up and Down remember |
+| `completion.height` | string | `12` | Height of the completion list: rows (12) or a percentage of the window (50%) |
+| `completion.min_chars` | integer | `0` | Characters to type after a command before its arguments complete |
+| `completion.open_categories` | string[] | `["searchengines","quickmarks","bookmarks","history","filesystem"]` | What :open completes from, in order: searchengines, quickmarks, bookmarks, history, filesystem |
+| `completion.show` | always \| auto \| never | `always` | When to show completions: always, only after pressing Tab (auto), or never |
+| `completion.web_history.exclude` | string[] | `[]` | URL globs (e.g. *://*.bank.example/*) that :open never suggests from history |
 | `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
 | `confirm_quit` | string[] | `["never"]` | Ask before quitting: always, multiple-tabs (more than one tab open), downloads (downloads still running), or never |
 | `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists) |

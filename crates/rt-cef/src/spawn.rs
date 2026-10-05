@@ -320,10 +320,7 @@ fn start(
         return;
     };
     let mut process = Process::new(program);
-    process
-        .args(args)
-        .envs(env)
-        .stdin(Stdio::null());
+    process.args(args).envs(env).stdin(Stdio::null());
     if flags.detach {
         process.stdout(Stdio::null()).stderr(Stdio::null());
         match process.spawn() {

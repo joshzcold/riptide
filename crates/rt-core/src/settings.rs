@@ -314,6 +314,67 @@ fn zoom_levels(value: &Value) -> Result<(), String> {
     }
 }
 
+/// What `completion.open_categories` can list.
+pub const OPEN_CATEGORIES: &[&str] = &[
+    "searchengines",
+    "quickmarks",
+    "bookmarks",
+    "history",
+    "filesystem",
+];
+
+fn open_categories(value: &Value) -> Result<(), String> {
+    let Value::List(items) = value else {
+        return Ok(());
+    };
+    match items
+        .iter()
+        .find(|i| !OPEN_CATEGORIES.contains(&i.as_str()))
+    {
+        Some(bad) => Err(format!(
+            "unknown category {bad:?}; use {}",
+            OPEN_CATEGORIES.join(", ")
+        )),
+        None => Ok(()),
+    }
+}
+
+fn completion_height(value: &Value) -> Result<(), String> {
+    let Value::Str(text) = value else {
+        return Ok(());
+    };
+    match parse_height(text) {
+        Some(_) => Ok(()),
+        None => Err(format!(
+            "{text:?} isn't a number of rows (12) or a percentage of the window (50%)"
+        )),
+    }
+}
+
+/// How tall the completion list may be: rows, or a percentage of the window.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Height {
+    Rows(usize),
+    Percent(f64),
+}
+
+pub fn parse_height(text: &str) -> Option<Height> {
+    let text = text.trim();
+    match text.strip_suffix('%') {
+        Some(p) => p
+            .trim()
+            .parse::<f64>()
+            .ok()
+            .filter(|p| *p > 0.0 && *p <= 100.0)
+            .map(Height::Percent),
+        None => text
+            .parse::<usize>()
+            .ok()
+            .filter(|r| *r > 0)
+            .map(Height::Rows),
+    }
+}
+
 const POSITIONS: &[&str] = &["prev", "next", "first", "last"];
 const ASK: &[&str] = &["ask", "true", "false"];
 
@@ -391,6 +452,47 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["auto", "light", "dark"]),
         s("auto"),
         "The color scheme pages see in prefers-color-scheme: auto follows the system"
+    ),
+    def!(
+        "completion.cmd_history_max_items",
+        Kind::Int {
+            min: 0,
+            max: 100_000
+        },
+        Value::Int(100),
+        "How many command lines Up and Down remember"
+    ),
+    def!(
+        "completion.height",
+        Kind::Str,
+        s("12"),
+        "Height of the completion list: rows (12) or a percentage of the window (50%)",
+        completion_height
+    ),
+    def!(
+        "completion.min_chars",
+        Kind::Int { min: 0, max: 100 },
+        Value::Int(0),
+        "Characters to type after a command before its arguments complete"
+    ),
+    def!(
+        "completion.open_categories",
+        Kind::List,
+        Value::List(OPEN_CATEGORIES.iter().map(|c| c.to_string()).collect()),
+        "What :open completes from, in order: searchengines, quickmarks, bookmarks, history, filesystem",
+        open_categories
+    ),
+    def!(
+        "completion.show",
+        Kind::Enum(&["always", "auto", "never"]),
+        s("always"),
+        "When to show completions: always, only after pressing Tab (auto), or never"
+    ),
+    def!(
+        "completion.web_history.exclude",
+        Kind::List,
+        Value::List(Vec::new()),
+        "URL globs (e.g. *://*.bank.example/*) that :open never suggests from history"
     ),
     def!(
         "completion.web_history.max_items",
@@ -1213,6 +1315,26 @@ mod tests {
             find("confirm_quit")
                 .unwrap()
                 .from_json(&json!(["sometimes"]))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn completion_heights() {
+        assert_eq!(parse_height("12"), Some(Height::Rows(12)));
+        assert_eq!(parse_height(" 50% "), Some(Height::Percent(50.0)));
+        assert_eq!(parse_height("0"), None);
+        assert_eq!(parse_height("150%"), None);
+        assert!(
+            find("completion.height")
+                .unwrap()
+                .from_json(&json!("tall"))
+                .is_err()
+        );
+        assert!(
+            find("completion.open_categories")
+                .unwrap()
+                .from_json(&json!(["history", "web"]))
                 .is_err()
         );
     }
