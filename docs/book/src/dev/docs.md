@@ -8,7 +8,6 @@ This book is the documentation. It's built with [mdBook](https://rust-lang.githu
 |---|---|
 | A new or changed command, setting or default binding | Nothing by hand: regenerate the reference (below). Add or update a guide page only if the feature needs explaining beyond its one-line description. |
 | New user-visible behaviour (a mode, a prompt, a page, a file riptide reads) | The matching page under `docs/book/src/guide/` or `configuration/`. Add a page to `SUMMARY.md` if no existing one fits. |
-| Something a qutebrowser user would trip over | A note on [Moving from qutebrowser](../guide/qutebrowser.md). |
 | How riptide is built, structured, tested or released | The matching page under `docs/book/src/dev/`. |
 | A pitfall or lesson learned (a CEF quirk, a threading rule) | `docs/book/src/dev/`, and the milestone notes in `docs/PLAN.md`. |
 | Plans, status and gaps | `docs/PLAN.md` only; it isn't published. |
@@ -47,7 +46,6 @@ To change their text, change the description in the registry (`crates/rt-core/sr
 - Write for someone using the browser, in the second person ("`:set` changes a setting"), starting with the task and then how to do it.
 - Show one short example per feature: the keys, or a `config.lua`/`config.toml` snippet.
 - Use plain language, and name settings and commands exactly, in backticks.
-- Say what's missing or different from qutebrowser where users would expect it.
 
 **Developer guide pages:**
 - Explain why as well as what, and link to the code (`crates/rt-cef/src/shell.rs`).

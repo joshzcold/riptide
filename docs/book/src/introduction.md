@@ -11,14 +11,13 @@
 - **Hints:** for links, inputs, images, yanking and downloads, including number hints and same-origin iframes.
 - **Privacy:** an Adblock Plus engine (EasyList and EasyPrivacy), Google background calls turned off, the Chromium sandbox where Linux allows it, and per-site permissions and certificate decisions.
 - **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
-- **qutebrowser compatibility:** quickmarks and bookmarks files, userscripts (with `RIPTIDE_*` variables in place of `QUTE_*`), Greasemonkey scripts, `:open-editor`, and `:history-import`.
+- **Scripts and data:** userscripts, Greasemonkey scripts, `:open-editor`, and qutebrowser's quickmark, bookmark and history formats (`:history-import`).
 - **Page tools:** zoom (`+` `-` `=`), DevTools (`wi`), print or save as PDF, fullscreen, view source (`gf`), `:jseval`, tab muting, `:messages`, and `.` to repeat the last command.
 - **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`riptide ':open -t x'`).
 
 ## Where to start
 
 - New here: [Installing](guide/installing.md), then [Keys and modes](guide/keys.md).
-- Coming from qutebrowser: [Moving from qutebrowser](guide/qutebrowser.md).
 - Looking something up: the [Reference](reference/commands.md) lists every command, binding and setting. In the browser, `F1` or `:help` shows the same, with your own config applied.
 - Working on riptide itself: the [Developer guide](dev/building.md).
 

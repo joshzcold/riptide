@@ -5,7 +5,6 @@
 # User guide
 
 - [Installing](guide/installing.md)
-- [Moving from qutebrowser](guide/qutebrowser.md)
 - [Keys and modes](guide/keys.md)
 - [Tabs and windows](guide/tabs.md)
 - [Sessions, history and bookmarks](guide/sessions.md)

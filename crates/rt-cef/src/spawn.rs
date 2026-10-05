@@ -1,8 +1,8 @@
 //! `:spawn`, userscripts and `:open-editor`. Programs run on a worker thread;
 //! their results come back to the UI thread as tasks.
 //!
-//! Userscripts get `RIPTIDE_URL`, `RIPTIDE_FIFO` and the rest (qutebrowser's
-//! `QUTE_*` variables under riptide's names). Commands written to `RIPTIDE_FIFO`
+//! Userscripts get `RIPTIDE_URL`, `RIPTIDE_FIFO` and the rest of the
+//! `RIPTIDE_*` variables. Commands written to `RIPTIDE_FIFO`
 //! run when the script exits; it is a plain file on every platform.
 
 use std::cell::{Cell, RefCell};

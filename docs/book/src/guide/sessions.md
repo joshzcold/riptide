@@ -9,7 +9,7 @@
 | Bookmarks | `<config>/bookmarks/urls` | qutebrowser's: one `url title` per line |
 | Sessions | `<data>/sessions/<name>.toml` | TOML |
 
-Quickmarks and bookmarks use qutebrowser's formats and sit next to the config, so you can keep them in dotfiles or copy yours from `~/.config/qutebrowser/`. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
+Quickmarks and bookmarks sit next to the config, so you can keep them in dotfiles. Sessions keep each tab's current page; CEF cannot restore a tab's back/forward history.
 
 ## Sessions
 

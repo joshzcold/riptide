@@ -15,7 +15,7 @@ What works today:
 - **Hints:** for links, inputs, images, yanking and downloads, including number hints and same-origin iframes.
 - **Privacy:** an Adblock Plus engine (EasyList and EasyPrivacy), Google background calls turned off, the Chromium sandbox where Linux allows it, and per-site permissions and certificate decisions.
 - **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
-- **qutebrowser compatibility:** quickmarks and bookmarks files, userscripts (with `RIPTIDE_*` variables in place of `QUTE_*`), Greasemonkey scripts, `:open-editor`, and `:history-import`.
+- **Scripts and data:** userscripts, Greasemonkey scripts, `:open-editor`, and qutebrowser's quickmark, bookmark and history formats (`:history-import`).
 - **Page tools:** zoom (`+` `-` `=`), DevTools (`wi`), print or save as PDF, fullscreen, view source (`gf`), `:jseval`, tab muting, `:messages`, and `.` to repeat the last command.
 - **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`riptide ':open -t x'`).
 
@@ -24,7 +24,6 @@ What works today:
 **<https://joshzcold.github.io/riptide/>**, built from [`docs/book/`](docs/book/src/SUMMARY.md):
 
 - [Installing](docs/book/src/guide/installing.md), including the Linux sandbox setup
-- [Moving from qutebrowser](docs/book/src/guide/qutebrowser.md)
 - [Keys and modes](docs/book/src/guide/keys.md) and [configuration](docs/book/src/configuration/files.md)
 - Reference: [commands](docs/book/src/reference/commands.md), [key bindings](docs/book/src/reference/bindings.md), [settings](docs/settings.md), [Lua API](docs/book/src/reference/lua-api.md)
 - [Developer guide](docs/book/src/dev/building.md)
@@ -47,6 +46,10 @@ Requirements: Rust 1.88+ (edition 2024).
 ## Contributing
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org), and changes that users or contributors would notice update the documentation in the same commit. See [Contributing](docs/book/src/dev/contributing.md) and [Writing documentation](docs/book/src/dev/docs.md). AI agents start at [AGENTS.md](AGENTS.md).
+
+## Acknowledgements
+
+Riptide owes its design to [qutebrowser](https://qutebrowser.org/) by Florian Bruhin and its contributors. The modes, key bindings, command and setting names, hint labels, quickmark and bookmark files, userscripts and Greasemonkey support all follow qutebrowser, and qutebrowser's documentation was the reference for how they should behave. Riptide is an independent project, written from scratch in Rust on Chromium, and isn't affiliated with qutebrowser.
 
 ## License
 

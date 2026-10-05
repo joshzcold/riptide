@@ -179,7 +179,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Documentation website at https://joshzcold.github.io/riptide/ (mdBook, `docs/book/`), with agent skills for user and developer docs (M24)
 
 ### Extensibility
-- [x] Userscripts (spawned processes with `RIPTIDE_URL`, `RIPTIDE_FIFO`, etc., qutebrowser's `QUTE_*` under riptide's names since 2026-10-05) (M9)
+- [x] Userscripts (spawned processes with `RIPTIDE_URL`, `RIPTIDE_FIFO`, etc.) (M9)
 - [x] Greasemonkey-style injected JS (M9)
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
@@ -346,7 +346,7 @@ Gaps:
 - ✅ **`:spawn`, userscripts and `:open-editor`** (2026-10-02):
   - `rt_core::shell_words` splits arguments like a POSIX shell, with no shell involved.
   - `rt_config::userscripts::resolve` searches config, then data, then `PATH`.
-  - `rt-cef/src/spawn.rs` runs programs on a worker thread and reports back through a UI task. Userscripts get qutebrowser's `QUTE_*` (named `RIPTIDE_*` since 2026-10-05) environment. `QUTE_HTML`, `QUTE_TEXT` and `QUTE_FIFO` live in a private 0700 temp directory that is removed afterwards.
+  - `rt-cef/src/spawn.rs` runs programs on a worker thread and reports back through a UI task. Userscripts get `RIPTIDE_*` variables. `RIPTIDE_HTML`, `RIPTIDE_TEXT` and `RIPTIDE_FIFO` live in a private 0700 temp directory that is removed afterwards.
   - `editor.command` is validated to contain `{file}`. `js/editor.js` remembers the field and writes the text back with `input`/`change` events. It's bound to `Ctrl-e` in insert mode.
   - Smoke steps cover a userscript (environment plus a FIFO command) and Ctrl-e with a scripted editor.
   - Gaps:
@@ -700,15 +700,15 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ (2026-10-05) `:restart` (saves a `_restart` session, quits, and starts again with `:session-load _restart`), `debug-dump-page`, `debug-clear-ssl-errors` and `devtools-focus`. Still to do: `:report`, `debug-keytester`, `debug-log-filter`.
   - ✅ Bookmarks and quickmarks (2026-10-05): `bookmark-list` (a `riptide://bookmarks/` page), `quickmark-save`, `bookmarks-reload` and `quickmarks-reload`.
   - ✅ (2026-10-05) Readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word` and `rl-yank` (with a kill buffer), the `move-to-{start,end}-of-{next,prev}-block` set on `[` `]` `{` `}` as in qutebrowser, and `selection-drop` (`Ctrl-Space`).
-- **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, 15 of qutebrowser's 17 `QUTE_*` variables with `QUTE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
-  - ✅ **Environment** (2026-10-05): `RIPTIDE_CURRENT_URL` (the page's URL when `RIPTIDE_URL` is a hinted link) and `RIPTIDE_SELECTED_HTML`. Every variable is now `RIPTIDE_*` only; qutebrowser's `QUTE_*` names are gone (the user's decision), so qutebrowser's scripts need them renamed or a wrapper.
+- **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, the `RIPTIDE_*` variables with `RIPTIDE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
+  - ✅ **Environment** (2026-10-05): `RIPTIDE_CURRENT_URL` (the page's URL when `RIPTIDE_URL` is a hinted link) and `RIPTIDE_SELECTED_HTML`. Every variable is `RIPTIDE_*`.
   - ✅ **qutebrowser's bundled userscripts** (tier 1, 2026-10-05):
     - Checked the variables and FIFO commands of 18 of them against riptide, which turned up two fixes:
       - One-word arguments are now unquoted as in qutebrowser (`message-info 'text'`, `fake-key \a`, `fake-key " "`), which the password scripts rely on.
       - `jseval` takes `-q`, `-w <world>` and `-f`.
-    - `format_json` was run unchanged and works.
+    - With the variable names changed to `RIPTIDE_*`, `format_json` runs and works.
     - The password scripts weren't run against a real store.
-    - `ripbang` needs `config-dict-add` (still to do).
+    - `ripbang`'s `config-dict-add` now exists.
   - **Editor:**
     - ✅ Tier 1 (2026-10-05):
       - `edit-text` as qutebrowser's current name for `:open-editor`, which stays as an alias.

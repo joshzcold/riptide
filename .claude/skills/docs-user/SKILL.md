@@ -43,7 +43,6 @@ Find the page that covers the feature in `docs/book/src/SUMMARY.md`:
 - A command or setting whose one-line description says it all needs no guide text, only the regenerated reference.
 - Otherwise, add a short section: what it does for the user, then how (keys, command or setting), with one example.
 - If no page fits, add one to `docs/book/src/guide/` and list it in `SUMMARY.md`.
-- When the behaviour differs from qutebrowser in a way users would notice, add a note to `guide/qutebrowser.md`.
 - Update the "What works today" list in `docs/book/src/introduction.md` and the README summary only for a major feature.
 - Remove or correct text the change made wrong. Search for the old command or setting name: `grep -rn 'old-name' docs/book/src README.md`.
 
