@@ -964,6 +964,19 @@ Original plan:
 - **New coverage the channel makes possible:** M23's crash recovery (kill -9 the browser and check the tabs come back), the pinned-tab prompt, M25's permission card, per-tab modes, and multiple windows.
 - **Later:** run the same suite on macOS and Windows once M10 makes them run.
 
+- ✅ **Started (2026-10-05):**
+  - **Test channel:** `TestRequest` (`keys`, `run`, `state`, `eval`) in `rt_config::remote`, answered by `rt-cef/src/test_control.rs` in debug builds or with `--features test-control`.
+    - Keys go through `client::press`, which feeds `handle_key_event` exactly as `OnPreKeyEvent` does, then sends the key to the page if the engine doesn't use it.
+    - The socket thread waits on a channel for the UI thread's answer.
+    - There's no server-side `wait` request: the harness polls `state` instead.
+  - **Harness:** `crates/rt-e2e` gives each test its own Xvfb (`-displayfd`), scratch `--basedir`, short `XDG_RUNTIME_DIR` (Unix socket paths must fit in ~108 bytes) and fixture HTTP server. It stops its process group and then the CEF helpers that carry its `--user-data-dir`, because the zygote leaves the group.
+  - **Tests:** 11 so far, in keys, tabs, command line and prompts. They're `#[ignore]`d so a workspace-wide `cargo test` never starts browsers. `./task e2e` and CI run them; each test binary takes under a second.
+  - **Found while writing them:** a tab closed before its first page commits has an empty `url`, so `close()` doesn't record it and `u` can't reopen it. The tab should remember the URL it was opened with.
+  - **Next:**
+    - Port more smoke areas: hints, downloads, sessions, config and Lua, private windows, adblock.
+    - Delete the ported steps from `scripts/smoke-test.sh` once nobody else is editing it.
+    - Expose hint labels in `state`, so tests can click any element, not just the only input.
+
 #### Unit tests for the CEF layer
 
 `rt-cef` mixes logic that has nothing to do with CEF into its handlers. Move that logic into pure functions, in `rt-core` where it isn't CEF-specific, and test it:

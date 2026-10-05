@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [features]
 sandbox = ["rt-cef/sandbox"]
+test-control = ["rt-cef/test-control"]
 
 [dependencies]
 rt-cef.workspace = true

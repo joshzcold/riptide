@@ -25,6 +25,7 @@ pub fn hand_off(paths: &Paths, cli: &Cli) -> Option<i32> {
         cwd: std::env::current_dir().unwrap_or_default(),
         args: cli.urls.clone(),
         target: cli.target.clone(),
+        test: None,
     };
     match remote::send(&socket, &request) {
         Ok(()) => Some(0),
@@ -58,12 +59,15 @@ pub fn listen() {
     let Some(server) = SERVER.lock().unwrap_or_else(|e| e.into_inner()).take() else {
         return;
     };
-    server.spawn(|request| {
+    server.spawn(|mut request| {
+        if let Some(test) = request.test.take() {
+            return crate::test_control::handle(test);
+        }
         let mut task = HandleRequest::new(RefCell::new(Some(request)));
         if post_task(ThreadId::UI, Some(&mut task)) == 0 {
             return Err("the browser is shutting down".into());
         }
-        Ok(())
+        Ok(None)
     });
 }
 

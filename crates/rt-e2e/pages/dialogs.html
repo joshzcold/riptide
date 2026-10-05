@@ -1,0 +1,5 @@
+<!doctype html><title>dialogs</title>
+<script>
+// Called from tests with setTimeout, so the eval returns before the dialog blocks the page.
+function ask() { document.title = 'confirm ' + confirm('Sure?'); }
+</script>

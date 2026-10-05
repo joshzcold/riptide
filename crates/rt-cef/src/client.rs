@@ -175,6 +175,32 @@ thread_local! {
     static SENDING_TO_PAGE: Cell<bool> = const { Cell::new(false) };
 }
 
+/// The CEF event for `key`, as the keyboard would deliver it.
+fn key_event(key: rt_core::Key, type_: KeyEventType) -> KeyEvent {
+    let raw = vk::to_raw(key);
+    let flag = |on: bool, bit: u32| if on { bit } else { 0 };
+    KeyEvent {
+        type_,
+        modifiers: flag(raw.mods.shift, EVENTFLAG_SHIFT_DOWN)
+            | flag(raw.mods.ctrl, EVENTFLAG_CONTROL_DOWN)
+            | flag(raw.mods.alt, EVENTFLAG_ALT_DOWN)
+            | flag(raw.mods.meta, EVENTFLAG_COMMAND_DOWN),
+        windows_key_code: raw.windows_key_code,
+        character: raw.character,
+        unmodified_character: raw.unmodified_character,
+        ..Default::default()
+    }
+}
+
+/// Press `key` as if typed: the engine sees it first, as in `OnPreKeyEvent`,
+/// and the current tab gets it if the engine doesn't consume it.
+#[cfg(any(debug_assertions, feature = "test-control"))]
+pub fn press(key: rt_core::Key) {
+    if !handle_key_event(&key_event(key, KeyEventType::RAWKEYDOWN)) {
+        send_to_page(key);
+    }
+}
+
 /// Type `key` into the current tab, as a macro replays it.
 pub fn send_to_page(key: rt_core::Key) {
     let Some(host) = shell::with(|s| s.current_browser())
@@ -184,19 +210,7 @@ pub fn send_to_page(key: rt_core::Key) {
         return;
     };
     let raw = vk::to_raw(key);
-    let flag = |on: bool, bit: u32| if on { bit } else { 0 };
-    let modifiers = flag(raw.mods.shift, EVENTFLAG_SHIFT_DOWN)
-        | flag(raw.mods.ctrl, EVENTFLAG_CONTROL_DOWN)
-        | flag(raw.mods.alt, EVENTFLAG_ALT_DOWN)
-        | flag(raw.mods.meta, EVENTFLAG_COMMAND_DOWN);
-    let event = |type_: KeyEventType| KeyEvent {
-        type_,
-        modifiers,
-        windows_key_code: raw.windows_key_code,
-        character: raw.character,
-        unmodified_character: raw.unmodified_character,
-        ..Default::default()
-    };
+    let event = |type_: KeyEventType| key_event(key, type_);
     SENDING_TO_PAGE.with(|s| s.set(true));
     host.send_key_event(Some(&event(KeyEventType::RAWKEYDOWN)));
     if raw.character != 0 {

@@ -9,6 +9,8 @@ license.workspace = true
 
 [features]
 sandbox = ["cef/sandbox"]
+# Answer end-to-end test requests on the command socket (always on in debug builds).
+test-control = []
 
 [dependencies]
 rt-adblock.workspace = true

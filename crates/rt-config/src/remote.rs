@@ -5,6 +5,9 @@
 //! `{"version":1,"cwd":"/home/u","args":["example.com",":tab-focus 1"],"target":null}`
 //! → `{"ok":true}`. Unix only for now; the socket lives in a `0700`
 //! directory and is `0600`, so only the same user can connect.
+//!
+//! Test builds also answer [`TestRequest`]s (`"test":{"op":"state"}`), whose
+//! replies carry `data`; release builds refuse them.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -22,6 +25,25 @@ pub struct Request {
     pub args: Vec<String>,
     /// `--target` override: tab, tab-bg, window or current.
     pub target: Option<String>,
+    /// Drive the browser from a test instead of handing it arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<TestRequest>,
+}
+
+/// What end-to-end tests can ask a test build (`debug_assertions` or the
+/// `test-control` feature) to do.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "lowercase")]
+pub enum TestRequest {
+    /// Press keys, e.g. `5j` or `:open -t x<Return>`, as if typed.
+    Keys { keys: String },
+    /// Run a command line, as `:` would.
+    Run { command: String },
+    /// A JSON snapshot of modes, windows, tabs, the status bar and prompts.
+    State,
+    /// Evaluate JavaScript in a tab of the current window (default: the
+    /// current tab); the reply is the script's string result.
+    Eval { code: String, tab: Option<usize> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,6 +51,8 @@ struct Reply {
     ok: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    data: Option<serde_json::Value>,
 }
 
 /// What one command line argument asks for.
@@ -120,21 +144,31 @@ pub enum SendError {
 }
 
 /// Unix sockets aren't implemented on Windows yet; every start is a new instance.
+pub fn send(socket: &Path, request: &Request) -> Result<(), SendError> {
+    exchange(socket, request, std::time::Duration::from_secs(5)).map(drop)
+}
+
+/// Send `request` and return the reply's data, waiting up to `timeout`.
 #[cfg(not(unix))]
-pub fn send(_socket: &Path, _request: &Request) -> Result<(), SendError> {
+pub fn exchange(
+    _socket: &Path,
+    _request: &Request,
+    _timeout: std::time::Duration,
+) -> Result<Option<serde_json::Value>, SendError> {
     Err(SendError::NotRunning)
 }
 
 #[cfg(unix)]
-pub fn send(socket: &Path, request: &Request) -> Result<(), SendError> {
+pub fn exchange(
+    socket: &Path,
+    request: &Request,
+    timeout: std::time::Duration,
+) -> Result<Option<serde_json::Value>, SendError> {
     use std::os::unix::net::UnixStream;
-    use std::time::Duration;
 
     let mut stream = UnixStream::connect(socket).map_err(|_| SendError::NotRunning)?;
     let fail = |e: std::io::Error| SendError::Failed(e.to_string());
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .map_err(fail)?;
+    stream.set_read_timeout(Some(timeout)).map_err(fail)?;
     let mut line = serde_json::to_string(request).map_err(|e| SendError::Failed(e.to_string()))?;
     line.push('\n');
     stream.write_all(line.as_bytes()).map_err(fail)?;
@@ -143,7 +177,7 @@ pub fn send(socket: &Path, request: &Request) -> Result<(), SendError> {
         .read_line(&mut reply)
         .map_err(fail)?;
     match serde_json::from_str::<Reply>(&reply) {
-        Ok(Reply { ok: true, .. }) => Ok(()),
+        Ok(Reply { ok: true, data, .. }) => Ok(data),
         Ok(Reply { error, .. }) => {
             Err(SendError::Failed(error.unwrap_or_else(|| "refused".into())))
         }
@@ -209,25 +243,21 @@ impl Server {
     #[cfg(unix)]
     pub fn spawn(
         self,
-        handle: impl Fn(Request) -> Result<(), String> + Send + 'static,
+        handle: impl Fn(Request) -> Result<Option<serde_json::Value>, String> + Send + 'static,
     ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
             for stream in self.listener.incoming() {
                 let Ok(stream) = stream else { continue };
-                let reply = match read_request(&stream) {
-                    Ok(request) => match handle(request) {
-                        Ok(()) => Reply {
-                            ok: true,
-                            error: None,
-                        },
-                        Err(e) => Reply {
-                            ok: false,
-                            error: Some(e),
-                        },
+                let reply = match read_request(&stream).and_then(&handle) {
+                    Ok(data) => Reply {
+                        ok: true,
+                        error: None,
+                        data,
                     },
                     Err(e) => Reply {
                         ok: false,
                         error: Some(e),
+                        data: None,
                     },
                 };
                 let mut line = serde_json::to_string(&reply).unwrap_or_default();
@@ -241,7 +271,7 @@ impl Server {
     #[cfg(not(unix))]
     pub fn spawn(
         self,
-        _handle: impl Fn(Request) -> Result<(), String> + Send + 'static,
+        _handle: impl Fn(Request) -> Result<Option<serde_json::Value>, String> + Send + 'static,
     ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(|| {})
     }
@@ -353,11 +383,14 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         server.spawn(move |req| {
             let refuse = req.args.iter().any(|a| a == "refuse");
+            let state = req.test == Some(TestRequest::State);
             tx.send(req).unwrap();
             if refuse {
                 Err("no thanks".into())
+            } else if state {
+                Ok(Some(serde_json::json!({"mode": "normal"})))
             } else {
-                Ok(())
+                Ok(None)
             }
         });
         send(
@@ -370,12 +403,29 @@ mod tests {
             matches!(send(&path, &request(vec!["refuse".into()])), Err(SendError::Failed(e)) if e == "no thanks")
         );
 
+        let mut state = request(vec![]);
+        state.test = Some(TestRequest::State);
+        let reply = exchange(&path, &state, std::time::Duration::from_secs(5)).unwrap();
+        assert_eq!(reply, Some(serde_json::json!({"mode": "normal"})));
+
         let mut old = request(vec![]);
         old.version = 99;
         assert!(
             matches!(send(&path, &old), Err(SendError::Failed(e)) if e.contains("protocol version 99"))
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_requests_are_tagged_by_op() {
+        let keys = TestRequest::Keys { keys: "5j".into() };
+        let json = serde_json::to_string(&keys).unwrap();
+        assert_eq!(json, r#"{"op":"keys","keys":"5j"}"#);
+        assert_eq!(serde_json::from_str::<TestRequest>(&json).unwrap(), keys);
+        // Requests from older clients have no test field.
+        let plain: Request =
+            serde_json::from_str(r#"{"version":1,"cwd":"/","args":[],"target":null}"#).unwrap();
+        assert_eq!(plain.test, None);
     }
 
     #[cfg(unix)]
@@ -398,6 +448,7 @@ mod tests {
             cwd: PathBuf::from("/"),
             args,
             target: None,
+            test: None,
         }
     }
 }

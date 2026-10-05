@@ -84,6 +84,12 @@ tasks:
     cmds:
       - ./scripts/smoke-test.sh
 
+  e2e:
+    desc: 'End-to-end tests: real browsers on throwaway X displays, driven through the test channel (needs Xvfb); pass a test name after --'
+    deps: [build]
+    cmds:
+      - cargo test -p rt-e2e --no-fail-fast -- --ignored --test-threads={{.E2E_THREADS | default "2"}} {{.CLI_ARGS}}
+
   fmt:
     desc: Format the code
     cmds:
@@ -100,10 +106,11 @@ tasks:
       - scripts/tool.sh cargo-deny check --hide-inclusion-graph
 
   check:
-    desc: Everything CI would run - lint, unit tests, smoke test
+    desc: Everything CI would run - lint, unit tests, e2e tests, smoke test
     cmds:
       - task: lint
       - task: test
+      - task: e2e
       - task: smoke
 
   hooks:

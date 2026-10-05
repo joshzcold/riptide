@@ -32,6 +32,7 @@ mod spell;
 mod statusbar;
 mod storage;
 mod tabs;
+mod test_control;
 mod tls;
 mod ui;
 mod view;

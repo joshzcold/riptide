@@ -25,7 +25,9 @@ The user runs riptide for real on this machine. Every test must stay in its own 
 CI=true ./scripts/smoke-test.sh   # same pauses as CI (3x slower)
 ```
 
-It starts its own Xvfb (`-displayfd`), uses a temporary `--basedir`, kills only its own PID, and deletes everything afterwards. Prefer adding a step to it over ad-hoc manual checks when the behaviour should stay tested. `./task check` runs lint, unit tests and smoke.
+It starts its own Xvfb (`-displayfd`), uses a temporary `--basedir`, kills only its own PID, and deletes everything afterwards. `./task check` runs lint, unit tests, e2e and smoke.
+
+**To keep a behaviour tested, add an end-to-end test in `crates/rt-e2e`** (`./task e2e`) rather than a smoke step or a manual check. Each test gets its own browser, display and profile through the test channel, and waits on real state instead of sleeping. `docs/book/src/dev/testing.md` has the API. Keep smoke steps for real X11 input and for the release packages.
 
 ## A manual session
 

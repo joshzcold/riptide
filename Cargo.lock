@@ -1259,6 +1259,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rt-e2e"
+version = "0.1.0"
+dependencies = [
+ "rt-config",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rt-storage"
 version = "0.1.0"
 dependencies = [

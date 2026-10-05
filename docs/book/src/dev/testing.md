@@ -3,11 +3,42 @@
 | Command | What it runs |
 |---|---|
 | `./task test` | Unit tests for `rt-core`, `rt-config` and `rt-storage` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions); no browser needed |
+| `./task e2e` | End-to-end tests in [`crates/rt-e2e`](#end-to-end-tests): real browsers, each on its own Xvfb display, driven through the test channel. `./task e2e -- tabs` runs only the tests whose names contain `tabs`. |
 | `./task smoke` | Starts the real browser on a throwaway Xvfb display, drives it with xdotool, and checks insert mode, key consumption, scrolling and a clean `:quit` |
 | `./task lint` | `cargo fmt --check`, `clippy -D warnings`, ShellCheck on the scripts, actionlint on the workflows, and cargo-deny (below) |
 | `./task check` | All of the above |
 
-The smoke test uses a temporary profile, so it never touches your browsing data.
+The e2e and smoke tests use temporary profiles, so they never touch your browsing data or your browser.
+
+## End-to-end tests
+
+Debug builds (and release builds with `--features test-control`) answer test requests on the [command socket](https://github.com/joshzcold/riptide/blob/main/crates/rt-config/src/remote.rs). Release builds refuse them. There are four requests:
+
+| Request | Does |
+|---|---|
+| `keys` | Presses keys such as `5j`, `<Escape>` or `:open x<Return>`. They go through the same engine path as typed keys, and to the page when the engine doesn't use them. |
+| `run` | Runs a command line, as `:` would. |
+| `state` | Returns JSON with the mode, windows, tabs (URL, title, pinned, loading, mode), the status bar, completion and the prompt. |
+| `eval` | Runs JavaScript in a tab and returns its string result. |
+
+`crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
+
+```rust
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn d_closes_the_tab() {
+    let b = Browser::start("page.html");
+    b.run(&format!("open -t {}", b.url("second.html")));
+    b.wait_until("the second tab loads", |s| s.tabs().len() == 2 && s.tab().title == "second");
+    b.keys("d");
+    b.wait_until("one tab is left", |s| s.tabs().len() == 1);
+}
+```
+
+- **Wait, don't sleep:** `wait_until`, `wait_mode` and `wait_eval` poll until the state matches, and fail with the last state after 15 seconds.
+- **Every test is `#[ignore]`d,** so a plain `cargo test` never starts browsers. `./task e2e` runs them with `--ignored`, two at a time (`E2E_THREADS` changes that).
+- **Clicks that should count as the user's go through hints:** run `hint inputs`, then press the label. Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
+- **The smoke test stays** for what needs real X11 input (xdotool) and for checking the release packages. New behaviour gets an e2e test.
 
 ## Linters
 

@@ -37,7 +37,7 @@ jobs:
           scripts/check-commits.sh "$range"
 
   linux:
-    name: linux (lint, tests, smoke)
+    name: linux (lint, tests, smoke, e2e)
     runs-on: ubuntu-24.04
     env:
       CEF_PATH: ${{ github.workspace }}/../cef
@@ -68,6 +68,7 @@ jobs:
       - run: ./task smoke
         env:
           EXPECT_SANDBOX: "1"
+      - run: ./task e2e
 
   build:
     name: ${{ matrix.os }} (build, unit tests)
