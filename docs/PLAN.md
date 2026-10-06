@@ -577,6 +577,11 @@ Original plan:
   - `:changelog [-t]` serves the bundled changelog at `riptide://changelog/` through `rt_core::changelog::to_html`, a minimal, escaping Markdown renderer that is unit tested. The "Updated to X" notice compares `<data>/last-version`.
   - No release has been tagged yet; that's the maintainer's call. Running `release.yml` by hand is a dry run that keeps the files as a one-day artifact. Run 37088697211 (2026-10-02) built the tarball, the AppImage, `SHA256SUMS` and the notes (301 MB in total) with publishing skipped.
   - ~~Not done: macOS and Windows release artifacts (M10).~~ Experimental packages since 2026-10-05 (below).
+- ✅ **Releases through pull requests** (2026-10-06): a "Protect main" ruleset now requires pull requests. Admins can bypass it, but GitHub Actions can't be a bypass actor on a personal repository.
+  - **From Actions:** `release.yml` commits the version and changelog to a `release/vX.Y.Z` branch and opens a pull request (`scripts/open-pr.sh`). If Actions may not create pull requests, the run summary links to open one instead.
+  - **On every push to `main`:** a `Cargo.toml` version without a tag is built, tagged (by `gh release create --target`) and published.
+  - **Afterwards:** the package checksum update comes as a second pull request.
+  - The "push a `v*` tag by hand" trigger is gone.
 - ✅ **Release automation** (2026-10-05):
   - **One-click releases:** `release.yml` is started from Actions. It works out the version with `git-cliff --bumped-version` (`[bump] initial_tag = "v0.1.0"` in `cliff.toml`), or takes one you type. It then commits `chore(release): vX.Y.Z` with `Cargo.toml`, `Cargo.lock` and `CHANGELOG.md`, and pushes the commit and the tag together (`--atomic`). Build and publish follow in the same run, because a tag pushed with the workflow's own token doesn't trigger other workflows. Dry run is the default; pushing a tag by hand still works.
   - **Shared builds:** `build-release.yml` (`workflow_call`) builds for releases and nightlies alike. On Linux it runs the full smoke test against the unpacked tarball and the extracted AppImage before anything is published. macOS and Windows build experimental packages (`scripts/package-experimental.sh`, with `continue-on-error`).

@@ -1,15 +1,24 @@
 name: release
 
-# Actions → release → Run workflow cuts a release from main in one go:
-#   1. the version: the one you type, or git-cliff's next version from the
-#      Conventional Commits since the last tag (feat bumps the minor version in 0.x)
-#   2. a `chore(release): vX.Y.Z` commit with Cargo.toml and CHANGELOG.md, tagged vX.Y.Z
-#   3. build-release.yml: the Linux tarball and AppImage (smoke-tested), plus
-#      experimental macOS and Windows packages
-#   4. a GitHub release with SHA256SUMS, build provenance and the changelog section
-#   5. a commit pointing the AUR and Nix packages at it (not for pre-releases)
-# "Dry run" (the default) does everything except pushing and publishing, and keeps
-# the files as a workflow artifact for a day. Pushing a v* tag by hand still works.
+# Releases go through pull requests, since main only takes changes that way:
+#   1. Actions → release → Run workflow works out the version (the one you
+#      type, or git-cliff's next version from the Conventional Commits since
+#      the last tag; feat bumps the minor version in 0.x), commits
+#      `chore(release): vX.Y.Z` with Cargo.toml, Cargo.lock and CHANGELOG.md
+#      to a release/vX.Y.Z branch, and opens a pull request for it.
+#   2. Merging that pull request is the release: on the push to main, a
+#      Cargo.toml version with no tag yet is built (build-release.yml: the
+#      Linux tarball, AppImage and .deb, smoke-tested, plus experimental macOS
+#      and Windows packages), tagged and published with SHA256SUMS, build
+#      provenance and the changelog section.
+#   3. A second pull request points the AUR and Nix packages at the new
+#      tarball (not for pre-releases).
+# "Dry run" (the default) builds and packages without pushing anything, and
+# keeps the files as a workflow artifact for a day.
+#
+# If Actions isn't allowed to create pull requests (Settings → Actions →
+# "Allow GitHub Actions to create and approve pull requests"), the run's
+# summary links to open each one by hand instead.
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +31,7 @@ on:
         type: boolean
         default: true
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: read
@@ -32,35 +41,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: prepare
+  plan:
+    name: plan
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      pull-requests: write
     outputs:
+      build: ${{ steps.plan.outputs.build }}
       version: ${{ steps.plan.outputs.version }}
       ref: ${{ steps.plan.outputs.ref }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event_name == 'push' && github.sha || github.ref }}
           fetch-depth: 0
-      - name: Version, commit and tag
+      - name: Plan the release
         id: plan
         env:
           INPUT_VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 
           if [[ $GITHUB_EVENT_NAME == push ]]; then
-            # A tag pushed by hand: it must already match Cargo.toml.
-            if [[ "v$current" != "$GITHUB_REF_NAME" ]]; then
-              echo "::error::tag $GITHUB_REF_NAME doesn't match version $current in Cargo.toml"
-              exit 1
+            # Every push to main lands here; only a version without a tag (a
+            # merged release pull request) is released.
+            if git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+              echo "v$current is already released; nothing to do"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-            { echo "version=$current"; echo "ref=$GITHUB_REF_NAME"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
+            echo "Releasing v$current from $GITHUB_SHA"
+            { echo "build=true"; echo "version=$current"; echo "ref=$GITHUB_SHA"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -82,7 +97,7 @@ jobs:
             echo "::error::v$version is already tagged"
             exit 1
           fi
-          echo "Releasing v$version (Cargo.toml has $current)"
+          echo "Preparing v$version (Cargo.toml has $current)"
 
           sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$version\"/" Cargo.toml
           cargo update --workspace --quiet
@@ -90,40 +105,45 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -q -am "chore(release): v$version"
-          git tag -a "v$version" -m "riptide v$version"
           git show --stat HEAD
 
           if [[ $DRY_RUN == true ]]; then
             # Nothing is pushed, so the build uses the branch as it was, with the new version in the file names.
-            { echo "version=$version"; echo "ref=$(git rev-parse HEAD~1)"; echo "publish=false"; } >> "$GITHUB_OUTPUT"
-          else
-            # Atomic, so a main that moved on leaves neither the commit nor the tag behind.
-            git push --atomic origin HEAD:main "refs/tags/v$version"
-            { echo "version=$version"; echo "ref=v$version"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
+            { echo "build=true"; echo "version=$version"; echo "ref=$(git rev-parse HEAD~1)"; echo "publish=false"; } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
+          branch=release/v$version
+          git push -q origin "HEAD:refs/heads/$branch"
+          scripts/open-pr.sh "$branch" "chore(release): v$version" \
+            "Merging this releases **v$version**: the push to main builds, tags and publishes it. The version and \`CHANGELOG.md\` were updated by the release workflow."
+          echo "build=false" >> "$GITHUB_OUTPUT"
+
   build:
-    needs: prepare
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     uses: ./.github/workflows/build-release.yml
     with:
-      ref: ${{ needs.prepare.outputs.ref }}
-      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.plan.outputs.ref }}
+      version: ${{ needs.plan.outputs.version }}
 
   publish:
     name: publish
-    needs: [prepare, build]
+    needs: [plan, build]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
       attestations: write
     env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-      PUBLISH: ${{ needs.prepare.outputs.publish }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      REF: ${{ needs.plan.outputs.ref }}
+      PUBLISH: ${{ needs.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.plan.outputs.ref }}
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
@@ -133,12 +153,9 @@ jobs:
       - name: Checksums and release notes
         run: |
           (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
-          # A dry run has no tag yet, so it renders the unreleased commits as if tagged.
-          if [[ $PUBLISH == true ]]; then
-            scripts/git-cliff.sh --latest --strip header 2>/dev/null > notes.md
-          else
-            scripts/git-cliff.sh --unreleased --tag "v$VERSION" --strip header 2>/dev/null > notes.md
-          fi
+          # The tag doesn't exist until the release is created, so the
+          # unreleased commits are rendered as if tagged.
+          scripts/git-cliff.sh --unreleased --tag "v$VERSION" --strip header 2>/dev/null > notes.md
           cat >> notes.md <<'EOF'
 
           ### Downloads
@@ -163,15 +180,19 @@ jobs:
         run: |
           flags=()
           [[ $VERSION == *-* ]] && flags+=(--prerelease)
-          gh release create "v$VERSION" --verify-tag --title "riptide v$VERSION" --notes-file notes.md "${flags[@]}" dist/*
-      # The AUR and Nix packages download the release tarball, so they're
-      # pointed at the new version once it's published. A dry run shows the change.
+          # Creates the tag on the merged release commit.
+          gh release create "v$VERSION" --target "$REF" --title "riptide v$VERSION" \
+            --notes-file notes.md "${flags[@]}" dist/*
+      # The AUR and Nix packages download the release tarball, so a pull
+      # request points them at the new version. A dry run shows the change.
       - name: Update the AUR and Nix packages
-        if: ${{ !contains(needs.prepare.outputs.version, '-') }}
+        if: ${{ !contains(needs.plan.outputs.version, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ $PUBLISH == true ]]; then
             git fetch -q origin main
-            git checkout -q -B main origin/main
+            git checkout -q -B "release/v$VERSION-packages" origin/main
           fi
           scripts/update-packages.sh "$VERSION" "dist/riptide-$VERSION-linux-x86_64.tar.gz"
           git diff -- packaging
@@ -181,13 +202,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -q -m "chore(release): update the AUR and Nix packages for v$VERSION" -- packaging
-          # main may have moved since the release commit; rebase and retry.
-          for _ in 1 2 3; do
-            git push -q origin HEAD:main && exit 0
-            git pull -q --rebase origin main
-          done
-          echo "::error::couldn't push the package update; run scripts/update-packages.sh $VERSION by hand"
-          exit 1
+          git push -q origin "HEAD:refs/heads/release/v$VERSION-packages"
+          scripts/open-pr.sh "release/v$VERSION-packages" \
+            "chore(release): update the AUR and Nix packages for v$VERSION" \
+            "Points \`packaging/aur/PKGBUILD\` and \`packaging/nix/package.nix\` (and so the flake) at the v$VERSION tarball."
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v4
