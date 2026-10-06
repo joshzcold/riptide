@@ -17,15 +17,15 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:mode-enter` | `'` `<Ctrl-v>` `V` `` ` `` `i` `v` | Enter a key mode |
 | `:mode-leave` |  | Leave the current mode |
 | `:cmd-set-text` |  | Preset the command line text |
-| `:tab-close` | `<Ctrl-w>` `d` | Close the current tab (--force: even if pinned) |
+| `:tab-close` | `<Ctrl-w>` `d` | Close the current tab (--force: a pinned one without asking) |
 | `:tab-pin` | `<Ctrl-p>` | Pin or unpin the current tab (count: tab number) |
-| `:tab-next` | `<Ctrl-PgDown>` `J` `gt` | Switch to the next tab |
+| `:tab-next` | `<Ctrl-PgDown>` `J` | Switch to the next tab |
 | `:tab-prev` | `<Ctrl-PgUp>` `K` `gT` | Switch to the previous tab |
 | `:tab-focus` | `<Alt-1>` `<Alt-2>` `<Alt-3>` `<Alt-4>` `<Alt-5>` `<Alt-6>` `<Alt-7>` `<Alt-8>` `<Alt-9>` `<Ctrl-Tab>` `<Ctrl-^>` `g$` `g0` `g^` | Select a tab by number, or 'last' |
 | `:tab-move` | `gJ` `gK` `gm` | Move the current tab: +, -, start, end or a number |
 | `:tab-only` | `co` | Close all tabs except the current one |
 | `:tab-clone` |  | Duplicate the current tab: :tab-clone [-b] [-w] |
-| `:tab-give` |  | Move the current tab to window N, or to a new window: :tab-give [N] |
+| `:tab-give` | `gD` | Move the current tab to window N, or to a new window: :tab-give [N] |
 | `:tab-take` |  | Move a tab from another window here: :tab-take &lt;window/tab&gt; |
 | `:undo` | `<Ctrl-T>` `u` | Re-open the last closed tab |
 | `:hint` | `;I` `;O` `;b` `;d` `;f` `;h` `;i` `;o` `;r` `;t` `;y` `F` `f` | Label elements to follow: [--rapid] [group] [target] [fill text] |
@@ -60,7 +60,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:cmd-edit` |  | Edit the command line in editor.command, then put it back: [--run] runs it instead |
 | `:greasemonkey-reload` |  | Read the scripts in the greasemonkey directories again |
 | `:close` |  | Close the current window (:quit closes all of them) |
-| `:tab-select` | `T` | Go to a tab in any window: :tab-select &lt;window/tab \| text&gt; (T) |
+| `:tab-select` | `T` `gt` | Go to a tab in any window: :tab-select &lt;window/tab \| text&gt; (T) |
 | `:history` |  | Show the browsing history: :history [-t] |
 | `:selection-follow` | `<Ctrl-Return>` `<Return>` | Follow the link around the selection, e.g. after a search (Return; -t: new tab) |
 | `:zoom` | `=` | Set the zoom: :zoom [percent] (=; no value: zoom.default) |
