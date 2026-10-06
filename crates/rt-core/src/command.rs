@@ -418,6 +418,16 @@ pub enum Command {
     Messages,
     /// Run the last command again (`.`).
     RepeatCommand,
+    /// `:cmd-repeat N command`: run `command` N times.
+    CmdRepeat {
+        times: u32,
+        command: String,
+    },
+    /// `:cmd-run-with-count N command`: run `command` with count N.
+    CmdRunWithCount {
+        count: u32,
+        command: String,
+    },
     /// Edit `url` (or the current page's) in `editor.command`, then open it.
     EditUrl {
         target: OpenTarget,
@@ -862,6 +872,15 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
+    spec("cmd-repeat-last", "Run the last command again, as . does"),
+    spec(
+        "cmd-repeat",
+        "Run a command several times: :cmd-repeat N command",
+    ),
+    spec(
+        "cmd-run-with-count",
+        "Run a command with a count, multiplied by any count typed first: :cmd-run-with-count N command",
+    ),
     spec("scroll-px", "Scroll by pixels: :scroll-px <dx> <dy>"),
     spec(
         "cmd-later",
@@ -1515,7 +1534,24 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "home" => Command::Home,
         "tab-mute" => Command::TabMute,
         "messages" => Command::Messages,
-        "repeat-command" => Command::RepeatCommand,
+        "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,
+        which @ ("cmd-repeat" | "cmd-run-with-count") => {
+            let n: u32 = args
+                .required("count")?
+                .parse()
+                .ok()
+                .filter(|n| (1..=1000).contains(n))
+                .ok_or_else(|| args.error("the count must be a number from 1 to 1000"))?;
+            let command = args.rest().trim_start_matches(':').to_string();
+            if command.is_empty() {
+                return Err(args.error("missing argument: command"));
+            }
+            if which == "cmd-repeat" {
+                Command::CmdRepeat { times: n, command }
+            } else {
+                Command::CmdRunWithCount { count: n, command }
+            }
+        }
         "scroll-px" => {
             let x = args.required("dx")?;
             let y = args.required("dy")?;
@@ -2380,6 +2416,8 @@ mod tests {
             "set-mark",
             "jump-mark",
             "debug-log-filter",
+            "cmd-repeat",
+            "cmd-run-with-count",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

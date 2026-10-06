@@ -54,3 +54,14 @@ fn gd_gives_the_tab_to_a_new_window() {
                 .any(|w| w.tabs.len() == 1 && w.tabs[0].url == second)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn cmd_repeat_and_run_with_count_move_through_tabs() {
+    let b = Browser::start("page.html");
+    three_tabs(&b);
+    b.run("cmd-repeat 2 tab-prev");
+    b.wait_until("two tabs back", |s| s.window().current_tab == 0);
+    b.run("cmd-run-with-count 3 tab-focus");
+    b.wait_until("tab 3", |s| s.window().current_tab == 2);
+}

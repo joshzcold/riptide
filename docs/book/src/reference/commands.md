@@ -87,6 +87,9 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-mute` | `<Alt-m>` | Mute or unmute this tab (Alt-m) |
 | `:messages` |  | Show this session's messages |
 | `:repeat-command` | `.` | Run the last command again (.) |
+| `:cmd-repeat-last` |  | Run the last command again, as . does |
+| `:cmd-repeat` |  | Run a command several times: :cmd-repeat N command |
+| `:cmd-run-with-count` |  | Run a command with a count, multiplied by any count typed first: :cmd-run-with-count N command |
 | `:scroll-px` |  | Scroll by pixels: :scroll-px &lt;dx&gt; &lt;dy&gt; |
 | `:cmd-later` |  | Run a command later: :cmd-later &lt;ms&gt; &lt;command&gt; |
 | `:message-info` |  | Show a message: :message-info &lt;text&gt; |

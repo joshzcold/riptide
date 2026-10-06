@@ -165,7 +165,12 @@ fn repeatable(line: &str) -> bool {
         .unwrap_or("");
     !matches!(
         name,
-        "" | "repeat-command" | "mode-enter" | "mode-leave" | "set-cmd-text" | "cmd-set-text"
+        "" | "repeat-command"
+            | "cmd-repeat-last"
+            | "mode-enter"
+            | "mode-leave"
+            | "set-cmd-text"
+            | "cmd-set-text"
     )
 }
 
@@ -1540,6 +1545,15 @@ impl Engine {
                     self.show_message(Level::Error, "No command to repeat yet");
                 }
             },
+            Command::CmdRepeat { times, command } => {
+                for _ in 0..times {
+                    effects.extend(self.execute_str(&command, count));
+                }
+            }
+            Command::CmdRunWithCount { count: n, command } => {
+                let count = n.saturating_mul(count.unwrap_or(1));
+                effects.extend(self.execute_str(&command, Some(count)));
+            }
             Command::CompletionItemDel => self.delete_completion(effects),
             Command::HintFollow { label } => {
                 let index = self.hints.as_ref().and_then(|session| match &label {
@@ -2491,6 +2505,23 @@ mod tests {
         press(&mut e, "<Escape>");
         assert_eq!(e.status().message.unwrap().text, "Key tester off");
         assert!(!runs(&press(&mut e, "j")).is_empty(), "keys work again");
+    }
+
+    #[test]
+    fn cmd_repeat_and_run_with_count() {
+        let mut e = engine();
+        let ran = runs(&press(&mut e, ":cmd-repeat 3 tab-next<Return>"));
+        assert_eq!(ran.len(), 3);
+        assert!(ran.iter().all(|(c, _)| *c == Command::TabNext));
+        assert_eq!(
+            runs(&press(&mut e, ":cmd-run-with-count 2 tab-close<Return>")),
+            [(Command::TabClose { force: false }, Some(2))]
+        );
+        assert_eq!(
+            runs(&press(&mut e, ":cmd-repeat-last<Return>")),
+            [(Command::TabClose { force: false }, Some(2))]
+        );
+        assert!(runs(&press(&mut e, ":cmd-repeat 0 reload<Return>")).is_empty());
     }
 
     #[test]
