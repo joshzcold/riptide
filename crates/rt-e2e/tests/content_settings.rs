@@ -259,3 +259,30 @@ fn scrolling_bar_never_hides_page_scrollbars() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_unknown_url_scheme_policy_asks_or_refuses() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("external.html");
+    b.follow_hint("hint", |h| h.text == "mail");
+    let s = b.wait_mode("yesno");
+    assert!(
+        s.prompt
+            .as_ref()
+            .unwrap()
+            .to_string()
+            .contains("mailto:someone@example.invalid"),
+        "{:?}",
+        s.prompt
+    );
+    b.keys("n");
+    b.wait_mode("normal");
+    b.run("set content.unknown_url_scheme_policy disallow");
+    b.follow_hint("hint", |h| h.text == "mail");
+    b.wait_until("the link is refused", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("Not opening mailto:"))
+    });
+}

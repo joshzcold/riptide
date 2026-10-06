@@ -270,6 +270,37 @@ pub fn origin(url: &str) -> Option<String> {
     (!authority.is_empty()).then(|| format!("{scheme}://{authority}/"))
 }
 
+/// Whether `url`'s scheme is one only another program can open (mailto:,
+/// magnet:, zoommtg:), as opposed to one a tab can show.
+pub fn is_external_scheme(url: &str) -> bool {
+    const SHOWN: &[&str] = &[
+        "http",
+        "https",
+        "file",
+        "data",
+        "blob",
+        "about",
+        "javascript",
+        "riptide",
+        "chrome",
+        "chrome-extension",
+        "devtools",
+        "view-source",
+        "filesystem",
+    ];
+    match url.split_once(':') {
+        Some((scheme, _)) => {
+            let scheme = scheme.to_ascii_lowercase();
+            !scheme.is_empty()
+                && scheme
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
+                && !SHOWN.contains(&scheme.as_str())
+        }
+        None => false,
+    }
+}
+
 /// `content.headers.referer`: whether a request to `url` may carry
 /// `referrer`. `always`, `never`, or `same-domain`: the same host, or one a
 /// subdomain of the other.
@@ -345,6 +376,18 @@ pub fn encode_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn external_schemes() {
+        assert!(is_external_scheme("mailto:a@b.example"));
+        assert!(is_external_scheme("magnet:?xt=urn:btih:x"));
+        assert!(is_external_scheme("zoommtg://zoom.us/join"));
+        assert!(!is_external_scheme("https://example.com/"));
+        assert!(!is_external_scheme("riptide://help/"));
+        assert!(!is_external_scheme("about:blank"));
+        assert!(!is_external_scheme("javascript:void(0)"));
+        assert!(!is_external_scheme("not a url"));
+    }
 
     #[test]
     fn referrers_by_policy() {

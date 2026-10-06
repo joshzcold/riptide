@@ -361,6 +361,9 @@ pub fn run() -> i32 {
         if !settings.bool("content.webgl") {
             switches.push(("disable-webgl", None));
         }
+        if settings.bool("content.local_content_can_access_file_urls") {
+            switches.push(("allow-file-access-from-files", None));
+        }
         if settings.str("scrolling.bar") == "overlay" {
             switches.push(("enable-features", Some("OverlayScrollbar".to_string())));
         }

@@ -72,12 +72,12 @@ pub const PROMPT_FEATURES: &[Feature] = &[
     Feature {
         bit: 131072,
         label: "lock your mouse pointer",
-        setting: None,
+        setting: Some("content.mouse_lock"),
     },
     Feature {
         bit: 524288,
         label: "handle a link protocol",
-        setting: None,
+        setting: Some("content.register_protocol_handler"),
     },
     Feature {
         bit: 1048576,
@@ -225,6 +225,23 @@ mod tests {
             Decision::Ask(
                 "https://meet.example wants to use your camera and use your microphone".into()
             )
+        );
+    }
+
+    #[test]
+    fn mouse_lock_and_protocol_handlers_follow_their_settings() {
+        let s = settings(&[
+            ("content.mouse_lock", "true"),
+            ("content.register_protocol_handler", "false"),
+        ]);
+        let none = Remembered::default();
+        assert_eq!(
+            decide("o", 131072, PROMPT_FEATURES, &s, &none),
+            Decision::Allow
+        );
+        assert_eq!(
+            decide("o", 524288, PROMPT_FEATURES, &s, &none),
+            Decision::Deny
         );
     }
 

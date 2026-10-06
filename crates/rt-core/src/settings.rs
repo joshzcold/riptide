@@ -721,6 +721,12 @@ pub static SETTINGS: &[SettingDef] = &[
         log_levels
     ),
     def!(
+        "content.local_content_can_access_file_urls",
+        Kind::Bool,
+        Value::Bool(false),
+        "Let file:// pages read other local files, which a downloaded page could misuse (after a restart)"
+    ),
+    def!(
         "content.media.audio_capture",
         Kind::Enum(ASK),
         s("ask"),
@@ -731,6 +737,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(ASK),
         s("ask"),
         "Let sites use your camera: ask, true or false"
+    ),
+    def!(
+        "content.mouse_lock",
+        Kind::Enum(&["ask", "true", "false"]),
+        s("ask"),
+        "Let sites lock your mouse pointer, as games do: ask, true or false"
     ),
     def!(
         "content.mute",
@@ -764,10 +776,22 @@ pub static SETTINGS: &[SettingDef] = &[
         proxy
     ),
     def!(
+        "content.register_protocol_handler",
+        Kind::Enum(&["ask", "true", "false"]),
+        s("ask"),
+        "Let sites register to handle links like mailto: : ask, true or false"
+    ),
+    def!(
         "content.tls.certificate_errors",
         Kind::Enum(&["ask", "block", "load-insecurely"]),
         s("ask"),
         "Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely"
+    ),
+    def!(
+        "content.unknown_url_scheme_policy",
+        Kind::Enum(&["ask", "allow-all", "disallow"]),
+        s("ask"),
+        "Links to schemes the browser can't show (mailto:, magnet:, zoommtg:): ask before handing them to xdg-open, always hand them over, or never"
     ),
     def!(
         "content.webgl",
@@ -1425,10 +1449,12 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.javascript.clipboard",
     "content.javascript.enabled",
     "content.javascript.log_message.levels",
+    "content.mouse_lock",
     "content.mute",
     "content.media.audio_capture",
     "content.media.video_capture",
     "content.notifications.enabled",
+    "content.register_protocol_handler",
     "content.tls.certificate_errors",
     "input.mode_override",
 ];

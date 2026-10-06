@@ -33,6 +33,7 @@ The preferences are written into the profile (`Local State`, `Default/Preference
 | `content.dns_prefetch` | `false` stops looking up the hosts of links before you follow them |
 | `content.canvas_reading` | `false` stops pages reading back what they drew, a common fingerprinting trick; some sites break (after a restart) |
 | `content.cache.size` | Disk cache size in bytes; `0` lets Chromium choose (after a restart) |
+| `content.local_content_can_access_file_urls` | `true` lets `file://` pages read other local files (after a restart) |
 | `content.webgl` | `false` turns off WebGL, which 3D graphics need and fingerprinting scripts use (after a restart) |
 
 ```toml

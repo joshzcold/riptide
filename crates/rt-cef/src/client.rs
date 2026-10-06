@@ -538,8 +538,12 @@ wrap_load_handler! {
             if self.role != Role::Tab || frame.is_main() == 0 {
                 return;
             }
-            // Aborted loads include downloads and navigations we replaced.
-            if sys::cef_errorcode_t::from(error_code) == sys::cef_errorcode_t::ERR_ABORTED {
+            // Aborted loads include downloads and navigations we replaced;
+            // unknown schemes (mailto:) go to content.unknown_url_scheme_policy.
+            if matches!(
+                sys::cef_errorcode_t::from(error_code),
+                sys::cef_errorcode_t::ERR_ABORTED | sys::cef_errorcode_t::ERR_UNKNOWN_URL_SCHEME
+            ) {
                 return;
             }
             let error_text = error_text.map(CefString::to_string).unwrap_or_default();

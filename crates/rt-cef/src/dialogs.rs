@@ -4,9 +4,11 @@
 use std::cell::RefCell;
 
 use cef::*;
+use rt_core::engine::Level;
 use rt_core::prompt::{PromptAnswer, PromptKind, Remember};
 
 use crate::prompts::{self, Scope};
+use crate::shell;
 
 fn string(s: Option<&CefString>) -> String {
     s.map(CefString::to_string).unwrap_or_default()
@@ -95,6 +97,12 @@ wrap_request_handler! {
             is_redirect: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int {
             let url = request.map(|r| CefString::from(&r.url()).to_string()).unwrap_or_default();
+            // mailto: and friends never load in the tab; content.unknown_url_scheme_policy
+            // decides whether another program gets them.
+            if rt_core::url::is_external_scheme(&url) {
+                open_external(browser.map(|b| b.identifier()), url);
+                return 1;
+            }
             let blocked = url.starts_with(rt_core::ui_message::UI_PREFIX)
                 || (is_redirect != 0 && url.starts_with("riptide://"));
             if blocked {
@@ -163,6 +171,25 @@ wrap_resource_request_handler! {
     pub struct RtResourceRequestHandler {}
 
     impl ResourceRequestHandler {
+        /// A link to a scheme Chromium can't show (mailto:, magnet:). Runs on
+        /// the IO thread; `content.unknown_url_scheme_policy` is applied on
+        /// the UI thread, where xdg-open is run instead of Chromium's handler.
+        fn on_protocol_execution(
+            &self,
+            browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+            allow_os_execution: Option<&mut ::std::os::raw::c_int>,
+        ) {
+            if let Some(allow) = allow_os_execution {
+                *allow = 0;
+            }
+            let Some(request) = request else { return };
+            let url = CefString::from(&request.url()).to_string();
+            let mut task = OpenExternal::new(browser.map(|b| b.identifier()), url);
+            post_task(ThreadId::UI, Some(&mut task));
+        }
+
         /// Runs on the IO thread for every request a tab makes.
         fn on_before_resource_load(
             &self,
@@ -185,6 +212,67 @@ wrap_resource_request_handler! {
                 crate::content::before_request(request);
                 ReturnValue::CONTINUE
             }
+        }
+    }
+}
+
+wrap_task! {
+    struct OpenExternal {
+        browser: Option<i32>,
+        url: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            open_external(self.browser, self.url.clone());
+        }
+    }
+}
+
+/// The desktop's handler for `url` (xdg-open on Linux), as one argument with no shell.
+fn system_open(url: &str) {
+    let program = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    if let Err(e) = std::process::Command::new(program).arg(url).spawn() {
+        shell::show_message(Level::Error, format!("Can't run {program}: {e}"));
+    }
+}
+
+/// Hand `url` to xdg-open as `content.unknown_url_scheme_policy` says.
+fn open_external(browser: Option<i32>, url: String) {
+    let policy = shell::with(|s| {
+        s.engine
+            .settings()
+            .str("content.unknown_url_scheme_policy")
+            .to_string()
+    })
+    .unwrap_or_default();
+    let scheme = url.split(':').next().unwrap_or_default().to_string();
+    match policy.as_str() {
+        "disallow" => shell::show_message(
+            Level::Info,
+            format!("Not opening {scheme}: link (content.unknown_url_scheme_policy)"),
+        ),
+        "allow-all" => system_open(&url),
+        _ => {
+            prompts::ask(
+                browser,
+                Scope::Other,
+                "Open link?",
+                format!("Open {url} with another program?"),
+                PromptKind::YesNo {
+                    default: false,
+                    remember: Remember::Never,
+                },
+                move |answer| {
+                    if matches!(answer, PromptAnswer::Yes { .. }) {
+                        system_open(&url);
+                    }
+                },
+            );
         }
     }
 }

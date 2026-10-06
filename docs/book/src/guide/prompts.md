@@ -20,7 +20,11 @@ For permission prompts:
 - `y` allows once and `n` (or `Escape`) means "not now".
 - `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, as in qutebrowser, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.
 
-The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture` and `content.desktop_capture` settings (`ask`, `true` or `false`) answer without asking.
+The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture`, `content.desktop_capture`, `content.mouse_lock` (pointer lock, as games use) and `content.register_protocol_handler` (a site offering to handle `mailto:` links) settings (`ask`, `true` or `false`) answer without asking.
+
+## Links to other programs
+
+A link riptide can't show, like `mailto:`, `magnet:` or `zoommtg:`, asks before going to your desktop's handler (`xdg-open`). `content.unknown_url_scheme_policy = "allow-all"` hands them over without asking, and `"disallow"` never does.
 
 Untrusted TLS certificates (self-signed, expired, wrong host…) ask before the page loads: `y` loads it once, `A` always loads that site, `N` always blocks it. `content.tls.certificate_errors` (`ask`, `block` or `load-insecurely`) sets the default and can be set per site. `:debug-clear-ssl-errors` forgets the `y` answers given this session.
 
