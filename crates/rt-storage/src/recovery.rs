@@ -165,6 +165,7 @@ mod tests {
                     url: url.into(),
                     title: String::new(),
                     pinned: false,
+                    ..Default::default()
                 }],
             }],
         }

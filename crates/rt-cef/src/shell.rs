@@ -46,6 +46,12 @@ pub struct Tab {
     pub pending: Option<String>,
     /// Why the tab's renderer process died; cleared when it loads again.
     pub crashed: Option<String>,
+    /// A restored tab's back/forward history, which CEF can't restore.
+    pub history: Option<rt_core::tab_history::TabHistory>,
+    /// How far down the page was scrolled at the last autosave, in CSS pixels.
+    pub scroll_y: Option<u32>,
+    /// Where to scroll once a restored page has loaded.
+    pub restore_scroll: Option<u32>,
 }
 
 impl Tab {
@@ -67,6 +73,9 @@ impl Tab {
             scroll: None,
             pending: None,
             crashed: None,
+            history: None,
+            scroll_y: None,
+            restore_scroll: None,
         }
     }
 
@@ -640,6 +649,21 @@ fn run_command(command: Command, count: Option<u32>) {
         return;
     };
     let n = count.unwrap_or(1).max(1);
+    if matches!(command, Command::Back | Command::Forward) {
+        let step = if matches!(command, Command::Back) {
+            -i64::from(n)
+        } else {
+            i64::from(n)
+        };
+        let restored =
+            with(|s| s.tabs.current_mut()?.history.as_mut().map(|h| h.go(step))).flatten();
+        if let Some(target) = restored {
+            if let (Some(url), Some(frame)) = (target, browser.main_frame()) {
+                frame.load_url(Some(&CefString::from(url.as_str())));
+            }
+            return;
+        }
+    }
     match command {
         Command::Open {
             target,
@@ -764,7 +788,7 @@ pub fn current_session() -> rt_storage::Session {
                         .tabs
                         .iter()
                         .enumerate()
-                        .map(|(i, t)| (t.url.as_str(), t.title.as_str(), w.tabs.is_pinned(i)));
+                        .map(|(i, t)| crate::history::tab_state(t, w.tabs.is_pinned(i)));
                     rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())
                 })
                 .collect(),
@@ -1042,8 +1066,8 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "zoom": current.map_or(100, |t| t.zoom),
         "muted": current.is_some_and(|t| t.muted),
         "widgets": s.engine.settings().list("statusbar.widgets"),
-        "back": current.is_some_and(|t| t.can_go_back),
-        "forward": current.is_some_and(|t| t.can_go_forward),
+        "back": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_back, |h| h.can_go_back())),
+        "forward": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_forward, |h| h.can_go_forward())),
         "search_match": current.and_then(|t| t.search_match),
         "scroll": current.and_then(|t| t.scroll),
     })

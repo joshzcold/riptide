@@ -875,7 +875,11 @@ Whatever path wins:
     - If the next start finds a crash and the mark, the tabs aren't reopened. The start page opens, with an error message naming the session.
     - The decision is `rt_storage::recovery::recovery()`, with unit tests and four e2e tests in `sessions.rs`.
     - Not done: a `riptide://recover/` page to pick tabs from.
-  - **More state per tab:** save each tab's back/forward history and scroll position, so restoring doesn't drop where you were.
+  - ✅ **More state per tab** (2026-10-06):
+    - Sessions save each tab's back/forward pages (`back`, `forward`, up to 50 each way) and `scroll` in CSS pixels. Older files still load.
+    - CEF can read a tab's history (`get_navigation_entries`) but can't restore it. So a restored tab with saved pages gets an `rt_core::tab_history::TabHistory`: `H`/`L` load the saved URLs, and new pages drop the ones ahead, as a browser does. Pages come from the network again, and their form state is lost.
+    - The scroll position is read at each autosave, for every tab, and applied when the restored page has loaded.
+    - Tests: unit tests in `tab_history.rs`, `history.rs` and `sessions.rs`; e2e in `restored_history.rs`.
   - ✅ **Crashed tabs** (2026-10-06):
     - `on_render_process_terminated` marks the tab crashed and logs the reason. Before this, a dead renderer left a blank grey tab.
     - A dead renderer can't draw, and navigating to an error page would add a history entry. So each window has a `riptide://ui/crashed.html` view, created on first use, that's shown in the content panel in place of the current tab while it's crashed.

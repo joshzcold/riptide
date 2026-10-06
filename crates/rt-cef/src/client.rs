@@ -392,7 +392,12 @@ wrap_display_handler! {
                     s.engine.set_url(&url);
                 }
                 // A lazily restored tab keeps its real URL until it loads it.
-                s.tabs.get_mut(index).filter(|tab| tab.pending.is_none()).map(|tab| tab.url = url.clone())
+                let tab = s.tabs.get_mut(index).filter(|tab| tab.pending.is_none())?;
+                tab.url = url.clone();
+                if let Some(history) = &mut tab.history {
+                    history.committed(&url);
+                }
+                Some(())
             });
             shell::refresh_ui();
             if changed.flatten().is_some() {
@@ -446,6 +451,9 @@ wrap_display_handler! {
             let url = shell::with_tab(browser, |s, index, _| {
                 let tab = s.tabs.get_mut(index).filter(|tab| tab.pending.is_none())?;
                 tab.title = title.clone();
+                if let Some(history) = &mut tab.history {
+                    history.titled(&title);
+                }
                 Some(tab.url.clone())
             });
             if let Some(Some(url)) = url {
@@ -542,10 +550,19 @@ wrap_load_handler! {
                         // Private windows leave no history.
                         let visit = (!tab.load_error && !private && tab.pending.is_none())
                             .then(|| (tab.url.clone(), tab.title.clone()));
-                        Some((tab.pending_error.take(), visit, effects))
+                        // A lazily restored tab's placeholder isn't the saved page.
+                        let scroll = if tab.pending.is_none() && !tab.load_error {
+                            tab.restore_scroll.take()
+                        } else {
+                            None
+                        };
+                        Some((tab.pending_error.take(), visit, effects, scroll))
                     });
-                    let Some(Some((error, visit, effects))) = done else { return };
+                    let Some(Some((error, visit, effects, scroll))) = done else { return };
                     shell::apply(effects);
+                    if let Some(y) = scroll {
+                        crate::history::restore_scroll(frame, y);
+                    }
                     if let Some((url, error)) = error {
                         shell::exec_js(frame, &ui::error_page_js(&url, &error));
                     }
@@ -608,6 +625,9 @@ wrap_load_handler! {
                 if let Some(tab) = s.tabs.get_mut(index) {
                     tab.load_error = true;
                     tab.url = failed_url.clone();
+                    if let Some(history) = &mut tab.history {
+                        history.committed(&failed_url);
+                    }
                     tab.pending_error = Some((failed_url, error_text));
                 }
             });

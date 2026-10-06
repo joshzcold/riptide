@@ -469,17 +469,21 @@ pub fn restore_window(window: &rt_storage::WindowState) {
     let lazy = shell::with(|s| s.engine.settings().bool("session.lazy_restore")).unwrap_or(false);
     let active = window.active.min(window.tabs.len() - 1);
     for (i, tab) in window.tabs.iter().enumerate() {
-        if !lazy || i == active {
-            open(&tab.url, Position::Last, false);
-            continue;
-        }
-        open("about:blank", Position::Last, false);
+        let now = !lazy || i == active;
+        open(
+            if now { &tab.url } else { "about:blank" },
+            Position::Last,
+            false,
+        );
         shell::with(|s| {
             let last = s.tabs.len().checked_sub(1)?;
-            let placeholder = s.tabs.get_mut(last)?;
-            placeholder.url = tab.url.clone();
-            placeholder.title = tab.title.clone();
-            placeholder.pending = Some(tab.url.clone());
+            let opened = s.tabs.get_mut(last)?;
+            crate::history::restore(opened, tab);
+            if !now {
+                opened.url = tab.url.clone();
+                opened.title = tab.title.clone();
+                opened.pending = Some(tab.url.clone());
+            }
             Some(())
         });
     }

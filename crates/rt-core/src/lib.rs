@@ -19,6 +19,7 @@ pub mod permissions;
 pub mod prompt;
 pub mod settings;
 pub mod shell_words;
+pub mod tab_history;
 pub mod tabs;
 pub mod theme;
 pub mod title;

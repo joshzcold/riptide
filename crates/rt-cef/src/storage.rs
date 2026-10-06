@@ -654,6 +654,7 @@ wrap_task! {
         fn execute(&self) {
             let interval = shell::with(|s| s.engine.settings().int("auto_save.interval")).unwrap_or(0);
             if interval > 0 {
+                crate::history::read_scroll_positions();
                 let session = shell::current_session();
                 if !session.windows.is_empty()
                     && let Some(Err(e)) = with(|s| s.sessions.save(AUTOSAVE_SESSION, &session))

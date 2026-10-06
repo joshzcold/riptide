@@ -19,6 +19,7 @@ mod gm_api;
 mod greasemonkey;
 mod help;
 mod hints;
+mod history;
 mod lua;
 mod marks;
 mod navigate;
