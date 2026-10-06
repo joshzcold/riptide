@@ -9,7 +9,7 @@ use rt_core::tabs::Position;
 
 use crate::client::{Role, RtClient};
 use crate::shell;
-use crate::storage::{self, DEFAULT_SESSION};
+use crate::storage;
 use crate::tabs;
 use crate::ui;
 
@@ -298,7 +298,7 @@ wrap_window_delegate! {
                     && self.urls.is_empty()
                     && shell::with(|s| s.engine.settings().bool("auto_save.session")).unwrap_or(false);
                 let restored = recovered || restore
-                    && match storage::load_session(DEFAULT_SESSION) {
+                    && match storage::load_session(&storage::default_session()) {
                         Ok(session) => {
                             tabs::restore(&session);
                             true
@@ -383,7 +383,7 @@ wrap_window_delegate! {
             })
             .flatten()
             .unwrap_or(false);
-            if save && let Err(e) = storage::save_session(DEFAULT_SESSION) {
+            if save && let Err(e) = storage::save_session(&storage::default_session()) {
                 tracing::warn!("could not save session: {e}");
             }
             let hosts: Vec<BrowserHost> = shell::with(|s| {

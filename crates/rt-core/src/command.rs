@@ -295,6 +295,11 @@ pub enum Command {
     SessionSave {
         name: Option<String>,
     },
+    /// `:save [what…]`: write config, cookies, quickmarks, bookmarks and
+    /// the session now; empty means all of them.
+    Save {
+        what: Vec<String>,
+    },
     SessionLoad {
         name: String,
     },
@@ -706,6 +711,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "bookmark-del",
         "Delete a bookmark (default: the current page)",
+    ),
+    spec(
+        "save",
+        "Write config, cookies, quickmarks, bookmarks and the session to disk now: :save [what…]",
     ),
     spec("session-save", "Save the open tabs: :session-save [name]"),
     spec("session-load", "Replace the open tabs with a saved session"),
@@ -1293,6 +1302,17 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "bookmark-del" => Command::BookmarkDel {
             url: args.optional().map(String::from),
         },
+        "save" => {
+            const SAVEABLE: &[&str] = &["bookmarks", "config", "cookies", "quickmarks", "session"];
+            let what: Vec<String> = args.rest().split_whitespace().map(String::from).collect();
+            if let Some(unknown) = what.iter().find(|w| !SAVEABLE.contains(&w.as_str())) {
+                return Err(args.error(format!(
+                    "can't save {unknown}; choose from {}",
+                    SAVEABLE.join(", ")
+                )));
+            }
+            Command::Save { what }
+        }
         "session-save" => {
             let name = args.rest();
             Command::SessionSave {
@@ -2071,6 +2091,18 @@ mod tests {
             parse("bind --mode sideways x quit"),
             Err(CommandError::BadArgs { .. })
         ));
+    }
+
+    #[test]
+    fn save_takes_known_things_only() {
+        assert_eq!(parse("save").unwrap(), Command::Save { what: vec![] });
+        assert_eq!(
+            parse("save config session").unwrap(),
+            Command::Save {
+                what: vec!["config".into(), "session".into()]
+            }
+        );
+        assert!(parse("save passwords").is_err());
     }
 
     #[test]

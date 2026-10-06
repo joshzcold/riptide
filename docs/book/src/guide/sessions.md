@@ -13,7 +13,11 @@ Quickmarks and bookmarks sit next to the config, so you can keep them in dotfile
 
 ## Sessions
 
-`:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions, and `:session-load` completes their names. `ZZ` or `:wq` saves the tabs as the `default` session and quits; `ZQ` quits without saving. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
+`:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions, and `:session-load` completes their names. `ZZ` or `:wq` saves the tabs and quits; `ZQ` quits without saving. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
+
+Unnamed saves and the restore at startup use `session.default_name`. Left empty (the default), that's the session you last loaded with `:session-load`, or `default` if you haven't loaded one, so after `:session-load work` a `:wq` saves `work`.
+
+`:save` writes everything to disk now: `config`, `cookies`, `quickmarks`, `bookmarks` and the `session`. Name some of them to save only those, e.g. `:save cookies session`.
 
 With `session.lazy_restore = true`, a restored session loads only the tab you're on. The others keep their titles in the tab bar and load when you first switch to them, which makes restoring many tabs fast.
 

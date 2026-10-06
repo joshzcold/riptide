@@ -340,6 +340,24 @@ fn report(result: std::io::Result<String>) {
     }
 }
 
+thread_local! {
+    /// The session last loaded with `:session-load`, for `session.default_name`.
+    static LOADED_SESSION: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// The session to save to and restore from when none is named:
+/// `session.default_name`, else the last one loaded, else `default`.
+pub fn default_session() -> String {
+    let configured = shell::with(|s| s.engine.settings().str("session.default_name").to_string())
+        .unwrap_or_default();
+    if !configured.is_empty() {
+        return configured;
+    }
+    LOADED_SESSION
+        .with(|l| l.borrow().clone())
+        .unwrap_or_else(|| DEFAULT_SESSION.to_string())
+}
+
 /// Save the open tabs as `name`.
 pub fn save_session(name: &str) -> Result<(), String> {
     let session = shell::current_session();
@@ -349,6 +367,51 @@ pub fn save_session(name: &str) -> Result<(), String> {
 
 pub fn load_session(name: &str) -> Result<Session, String> {
     with(|s| s.sessions.load(name)).unwrap_or_else(|| Err("storage is unavailable".into()))
+}
+
+/// `:save`: write each of `what` (everything when empty) now.
+fn save(what: &[String]) {
+    let all = what.is_empty();
+    let wants = |name: &str| all || what.iter().any(|w| w == name);
+    let mut errors = Vec::new();
+    if wants("config")
+        && let Some(Err(e)) = shell::with(|s| s.autoconfig.as_ref().map(|a| a.save())).flatten()
+    {
+        errors.push(format!("config: {e}"));
+    }
+    if wants("quickmarks")
+        && let Some(Err(e)) = with(|s| s.quickmarks.save())
+    {
+        errors.push(format!("quickmarks: {e}"));
+    }
+    if wants("bookmarks")
+        && let Some(Err(e)) = with(|s| s.bookmarks.save())
+    {
+        errors.push(format!("bookmarks: {e}"));
+    }
+    if wants("cookies")
+        && let Some(manager) = cookie_manager_get_global_manager(None)
+    {
+        manager.flush_store(None);
+    }
+    if wants("session")
+        && let Err(e) = save_session(&default_session())
+    {
+        errors.push(format!("session: {e}"));
+    }
+    if errors.is_empty() {
+        let saved = if all {
+            "everything".to_string()
+        } else {
+            what.join(", ")
+        };
+        shell::show_message(Level::Info, format!("Saved {saved}"));
+    } else {
+        shell::show_message(
+            Level::Error,
+            format!("Could not save {}", errors.join("; ")),
+        );
+    }
 }
 
 /// Carry out storage commands; returns false for anything else.
@@ -453,16 +516,23 @@ pub fn run_command(command: &Command) -> bool {
             }
         }
         Command::SessionSave { name } => {
-            let name = name.as_deref().unwrap_or(DEFAULT_SESSION);
-            match save_session(name) {
+            let name = name.clone().unwrap_or_else(default_session);
+            match save_session(&name) {
                 Ok(()) => shell::show_message(Level::Info, format!("Saved session {name}")),
                 Err(e) => shell::show_message(Level::Error, e),
             }
         }
         Command::SessionLoad { name } => match load_session(name) {
-            Ok(session) => tabs::restore(&session),
+            Ok(session) => {
+                // Internal sessions (_autosave, _restart) don't become the default.
+                if !name.starts_with('_') {
+                    LOADED_SESSION.with(|l| *l.borrow_mut() = Some(name.clone()));
+                }
+                tabs::restore(&session);
+            }
             Err(e) => shell::show_message(Level::Error, e),
         },
+        Command::Save { what } => save(what),
         Command::SessionDelete { name } => {
             match with(|s| s.sessions.delete(name))
                 .unwrap_or_else(|| Err("storage is unavailable".into()))

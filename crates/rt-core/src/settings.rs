@@ -943,6 +943,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Say when a search wraps around the page"
     ),
     def!(
+        "session.default_name",
+        Kind::Str,
+        s(""),
+        "Session that :session-save, :wq and auto_save.session use; empty means the last one loaded, or default"
+    ),
+    def!(
         "session.lazy_restore",
         Kind::Bool,
         Value::Bool(false),

@@ -82,6 +82,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `search.incremental` | boolean | `true` | Search while typing after / or ? |
 | `search.wrap` | boolean | `true` | Go on from the top when a search passes the last match (or from the bottom, searching up) |
 | `search.wrap_messages` | boolean | `true` | Say when a search wraps around the page |
+| `session.default_name` | string | `` | Session that :session-save, :wq and auto_save.session use; empty means the last one loaded, or default |
 | `session.lazy_restore` | boolean | `false` | When restoring a session, load background tabs only when they are first shown |
 | `spellcheck.languages` | string[] | `[]` | Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once |
 | `statusbar.position` | top \| bottom | `bottom` | Where the status bar is |

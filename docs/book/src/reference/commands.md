@@ -43,6 +43,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:bookmark-add` | `M` | Bookmark a URL (default: the current page) |
 | `:bookmark-load` | `gB` `gb` | Open a bookmark: :bookmark-load [-t\|-b] &lt;url&gt; |
 | `:bookmark-del` |  | Delete a bookmark (default: the current page) |
+| `:save` |  | Write config, cookies, quickmarks, bookmarks and the session to disk now: :save [what…] |
 | `:session-save` |  | Save the open tabs: :session-save [name] |
 | `:session-load` |  | Replace the open tabs with a saved session |
 | `:session-delete` |  | Delete a saved session |

@@ -632,7 +632,7 @@ fn run_command(command: Command, count: Option<u32>) {
                 save || s.save_session_on_quit || s.engine.settings().bool("auto_save.session")
             })
             .unwrap_or(false);
-            if save && let Err(e) = storage::save_session(crate::storage::DEFAULT_SESSION) {
+            if save && let Err(e) = storage::save_session(&storage::default_session()) {
                 tracing::warn!("could not save session: {e}");
             }
             let windows: Vec<Window> =

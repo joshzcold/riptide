@@ -702,7 +702,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - Not possible: `zoom.text_only` (Chromium has no text-only zoom) and `zoom.mouse_divider` (Ctrl+wheel zoom is Chromium's own).
 - **Sessions and window:**
   - ✅ Tier 1 (2026-10-05): `session.lazy_restore` (background tabs keep their URL and title and load when first shown) and `confirm_quit` (always, multiple-tabs, downloads, never; asked on `:quit` and when closing the last window), each with a smoke step.
-  - `session.default_name`, `:save`, `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
+  - ✅ (2026-10-06) `session.default_name` (empty means the last session loaded, as qutebrowser's null) and `:save [config|cookies|quickmarks|bookmarks|session…]`, with e2e tests in `crates/rt-e2e/tests/session_settings.rs`.
+  - `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
 - **Tools:**
   - ✅ Tier 1 (2026-10-05): `:screenshot [--force] file`, through the DevTools protocol (`send_dev_tools_message` with `Page.captureScreenshot` and a `DevToolsMessageObserver`), which needs no Views API or DevTools window. The format follows the file extension (png, jpeg, webp). A smoke step checks the PNG signature.
   - ✅ (2026-10-05) `:restart` (saves a `_restart` session, quits, and starts again with `:session-load _restart`), `debug-dump-page`, `debug-clear-ssl-errors` and `devtools-focus`. Still to do: `:report`, `debug-keytester`, `debug-log-filter`.
