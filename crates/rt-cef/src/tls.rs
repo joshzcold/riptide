@@ -83,6 +83,7 @@ pub fn certificate_error(browser: Option<i32>, code: i32, url: &str, callback: C
     prompts::ask(
         browser,
         Scope::Other,
+        rt_core::prompt::Topic::Certificate,
         "Untrusted certificate",
         message,
         kind,

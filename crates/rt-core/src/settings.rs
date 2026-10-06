@@ -1619,9 +1619,9 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "prompt.position",
-        Kind::Enum(&["bottom", "docked"]),
+        Kind::Enum(&["bottom", "center", "docked"]),
         s("bottom"),
-        "Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page, or docked above the status bar"
+        "Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page; center, the same box in the middle; or docked above the status bar"
     ),
     def!(
         "prompt.width",
@@ -1630,7 +1630,7 @@ pub static SETTINGS: &[SettingDef] = &[
             max: 4000
         },
         Value::Int(640),
-        "Width in pixels of a floating prompt (prompt.position = bottom), at most the page's"
+        "Width in pixels of a floating prompt (prompt.position = bottom or center), at most the page's"
     ),
     def!(
         "scrolling.bar",

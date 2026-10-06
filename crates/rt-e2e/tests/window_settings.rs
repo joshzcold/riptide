@@ -175,3 +175,36 @@ fn prompt_buttons_answer_with_their_key_and_nothing_else() {
         s.mode == "normal" && s.tab().title == "answered default"
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn prompts_say_what_they_are_about_and_can_be_centered() {
+    let b = Browser::launch()
+        .toml("\"prompt.position\" = \"center\"\n")
+        .start("page.html");
+    b.eval("Notification.requestPermission(); ''");
+    b.wait_mode("yesno");
+    let classes = |b: &Browser| b.eval_bar("completion", "document.body.className");
+    let start = std::time::Instant::now();
+    while classes(&b) != "floating prompt-permission" {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the overlay's classes are {:?}",
+            classes(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.keys("<Escape>");
+    b.wait_mode("normal");
+    b.eval("setTimeout(() => confirm('sure?')); ''");
+    b.wait_mode("yesno");
+    let start = std::time::Instant::now();
+    while classes(&b) != "floating prompt-dialog" {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the overlay's classes are {:?}",
+            classes(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

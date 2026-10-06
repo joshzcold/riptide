@@ -135,6 +135,7 @@ fn save_to(
         prompts::ask(
             browser,
             Scope::Other,
+            rt_core::prompt::Topic::Download,
             "Download",
             message,
             PromptKind::YesNo {
@@ -203,7 +204,7 @@ wrap_download_handler! {
             let prompt_url = url.clone();
             prompts::ask_about(
                 browser,
-                Scope::Other,
+                Scope::Other, rt_core::prompt::Topic::Download,
                 "Save file to",
                 name.clone(),
                 PromptKind::Text { default, masked: false, path: true },

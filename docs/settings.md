@@ -170,8 +170,8 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
 | `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
 | `new_instance_open_target_window` | first-opened \| last-opened \| last-focused | `last-focused` | Which window URLs from a second riptide invocation open in |
-| `prompt.position` | bottom \| docked | `bottom` | Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page, or docked above the status bar |
-| `prompt.width` | integer | `640` | Width in pixels of a floating prompt (prompt.position = bottom), at most the page's |
+| `prompt.position` | bottom \| center \| docked | `bottom` | Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page; center, the same box in the middle; or docked above the status bar |
+| `prompt.width` | integer | `640` | Width in pixels of a floating prompt (prompt.position = bottom or center), at most the page's |
 | `scrolling.bar` | always \| never \| overlay | `always` | Page scrollbars: always, never, or overlay (thin, shown while scrolling; after a restart) |
 | `scrolling.smooth` | boolean | `false` | Animate scrolling by keys instead of jumping |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |

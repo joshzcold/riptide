@@ -3,7 +3,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
-use rt_core::prompt::{Prompt, PromptAnswer, PromptKind};
+use rt_core::prompt::{Prompt, PromptAnswer, PromptKind, Topic};
 
 use crate::shell;
 
@@ -30,12 +30,15 @@ thread_local! {
 pub fn ask(
     browser: Option<i32>,
     scope: Scope,
+    topic: Topic,
     title: impl Into<String>,
     message: impl Into<String>,
     kind: PromptKind,
     on_answer: impl FnOnce(PromptAnswer) + 'static,
 ) -> u64 {
-    ask_about(browser, scope, title, message, kind, None, false, on_answer)
+    ask_about(
+        browser, scope, topic, title, message, kind, None, false, on_answer,
+    )
 }
 
 /// [`ask`], with the URL `prompt-yank` copies and whether it's a download's
@@ -44,6 +47,7 @@ pub fn ask(
 pub fn ask_about(
     browser: Option<i32>,
     scope: Scope,
+    topic: Topic,
     title: impl Into<String>,
     message: impl Into<String>,
     kind: PromptKind,
@@ -71,6 +75,7 @@ pub fn ask_about(
         title: title.into(),
         message: message.into(),
         kind,
+        topic,
         url,
         download,
     };

@@ -862,6 +862,7 @@ pub fn confirm_quit(quit: impl FnOnce() + 'static) -> bool {
     crate::prompts::ask(
         None,
         crate::prompts::Scope::Other,
+        rt_core::prompt::Topic::Confirm,
         "Quit riptide?",
         reason,
         rt_core::prompt::PromptKind::YesNo {
@@ -1589,18 +1590,22 @@ const PROMPT_PADDING: i32 = 12;
 /// Gap between a floating prompt and the bottom of the page area.
 const PROMPT_MARGIN: i32 = 24;
 
-/// `prompt.position = bottom`: a box centred near the bottom of the page
-/// area, `prompt.width` wide at most. Its height is filled in by the caller.
+/// `prompt.position = bottom` or `center`: a box centred near the bottom
+/// of the page area or in its middle, `prompt.width` wide at most. `y` is
+/// where its bottom (`bottom`) or middle (`center`) goes; the caller fills
+/// in the height.
 fn floating_prompt_box(s: &Shell) -> Option<Rect> {
-    if s.engine.settings().str("prompt.position") != "bottom" {
-        return None;
-    }
     let area = View::from(s.row.as_ref()?).bounds();
+    let y = match s.engine.settings().str("prompt.position") {
+        "bottom" => area.y + area.height - PROMPT_MARGIN,
+        "center" => area.y + area.height / 2,
+        _ => return None,
+    };
     let max = s.engine.settings().int("prompt.width") as i32;
     let width = max.min(area.width - 2 * PROMPT_MARGIN).max(200);
     Some(Rect {
         x: area.x + (area.width - width) / 2,
-        y: area.y + area.height - PROMPT_MARGIN,
+        y,
         width,
         height: 0,
     })
@@ -1611,8 +1616,9 @@ fn floating_prompt_box(s: &Shell) -> Option<Rect> {
 fn prompt_bounds(s: &Shell, rows: usize, height: Option<i32>) -> Option<Rect> {
     match (floating_prompt_box(s), height) {
         (Some(mut bounds), Some(height)) => {
+            let center = s.engine.settings().str("prompt.position") == "center";
             bounds.height = height;
-            bounds.y -= bounds.height;
+            bounds.y -= if center { height / 2 } else { height };
             Some(bounds)
         }
         _ => completion_bounds(s, rows),

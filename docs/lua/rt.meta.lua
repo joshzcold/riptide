@@ -499,8 +499,8 @@ function rt.spawn(argv, opts, callback) end
 ---@field timeout integer Milliseconds before a status bar message clears (0 keeps it)
 
 ---@class rt.c.prompt
----@field position "bottom"|"docked" Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page, or docked above the status bar
----@field width integer Width in pixels of a floating prompt (prompt.position = bottom), at most the page's
+---@field position "bottom"|"center"|"docked" Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page; center, the same box in the middle; or docked above the status bar
+---@field width integer Width in pixels of a floating prompt (prompt.position = bottom or center), at most the page's
 
 ---@class rt.c.scrolling
 ---@field bar "always"|"never"|"overlay" Page scrollbars: always, never, or overlay (thin, shown while scrolling; after a restart)

@@ -567,6 +567,7 @@ impl Engine {
             title: prompt.title.clone(),
             message: prompt.message.clone(),
             kind,
+            topic: prompt.topic.name(),
             input,
             cursor: self.prompt_editor.cursor(),
             hint: prompt.hint(),
@@ -3165,6 +3166,7 @@ mod tests {
             title: "t".into(),
             message: "m".into(),
             kind,
+            topic: crate::prompt::Topic::Dialog,
             url: None,
             download: false,
         }

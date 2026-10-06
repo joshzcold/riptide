@@ -39,7 +39,7 @@ wrap_jsdialog_handler! {
             } else {
                 PromptKind::Text { default: string(default_prompt_text), masked: false, path: false }
             };
-            prompts::ask(browser, Scope::JsDialog, title, message, kind, move |answer| {
+            prompts::ask(browser, Scope::JsDialog, rt_core::prompt::Topic::Dialog, title, message, kind, move |answer| {
                 let (ok, input) = match answer {
                     PromptAnswer::Ok | PromptAnswer::Yes { .. } => (1, String::new()),
                     PromptAnswer::Text(text) => (1, text),
@@ -63,7 +63,7 @@ wrap_jsdialog_handler! {
             let action = if is_reload != 0 { "Reload" } else { "Leave" };
             prompts::ask(
                 browser.map(|b| b.identifier()),
-                Scope::JsDialog,
+                Scope::JsDialog, rt_core::prompt::Topic::Dialog,
                 "Unsaved changes",
                 format!("This page may have unsaved changes. {action} anyway?"),
                 PromptKind::YesNo { default: false, remember: Remember::Never },
@@ -275,6 +275,7 @@ fn open_external(browser: Option<i32>, url: String) {
             prompts::ask(
                 browser,
                 Scope::Other,
+                rt_core::prompt::Topic::Confirm,
                 "Open link?",
                 format!("Open {url} with another program?"),
                 PromptKind::YesNo {
@@ -313,6 +314,7 @@ fn ask_credentials(browser: Option<i32>, message: String, callback: AuthCallback
     prompts::ask(
         browser,
         Scope::Other,
+        rt_core::prompt::Topic::Login,
         "Authentication required",
         message,
         PromptKind::Text {
@@ -327,6 +329,7 @@ fn ask_credentials(browser: Option<i32>, message: String, callback: AuthCallback
             prompts::ask(
                 browser,
                 Scope::Other,
+                rt_core::prompt::Topic::Login,
                 format!("Password for {username}"),
                 password_message,
                 PromptKind::Text {

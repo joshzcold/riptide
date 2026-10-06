@@ -95,6 +95,13 @@ For anything else, put CSS in `hints.css` in the config directory. Labels are `.
 #bar.insert { font-style: italic; }
 ```
 
+While a question is up, the overlay's `body` has a class for what it's about: `prompt-dialog` (a page's `alert`, `confirm`, `prompt` or leave-page warning), `prompt-permission`, `prompt-login`, `prompt-download`, `prompt-certificate` or `prompt-confirm` (riptide asking before quitting, closing a pinned tab or opening another program). Setting `--prompt-accent` recolors the box's frame and keys:
+
+```css
+body.prompt-permission { --prompt-accent: #e06c75; }
+body.prompt-download { --prompt-accent: #98c379; }
+```
+
 `content.user_stylesheets` lists CSS files for web pages; relative paths are in the config directory, and like other content settings it can be set per site:
 
 ```toml

@@ -30,12 +30,40 @@ pub enum Remember {
     Site,
 }
 
+/// What a prompt is about, for styling (`prompt-<topic>` classes in `ui.css`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Topic {
+    /// The page's `alert()`, `confirm()`, `prompt()` or leave-page dialog.
+    Dialog,
+    Permission,
+    /// A site's or proxy's login.
+    Login,
+    Download,
+    Certificate,
+    /// riptide asking before doing something, e.g. quitting.
+    Confirm,
+}
+
+impl Topic {
+    pub fn name(self) -> &'static str {
+        match self {
+            Topic::Dialog => "dialog",
+            Topic::Permission => "permission",
+            Topic::Login => "login",
+            Topic::Download => "download",
+            Topic::Certificate => "certificate",
+            Topic::Confirm => "confirm",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Prompt {
     pub id: u64,
     pub title: String,
     pub message: String,
     pub kind: PromptKind,
+    pub topic: Topic,
     /// What `prompt-yank` copies, e.g. a download's URL.
     pub url: Option<String>,
     /// A download's save prompt, which `prompt-open-download` can answer.
@@ -67,6 +95,8 @@ pub struct PromptView {
     pub title: String,
     pub message: String,
     pub kind: &'static str,
+    /// [`Topic::name`].
+    pub topic: &'static str,
     /// The text being typed, masked for passwords.
     pub input: String,
     pub cursor: usize,

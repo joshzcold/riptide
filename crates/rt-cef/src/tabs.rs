@@ -110,6 +110,7 @@ pub fn close_unless_pinned(index: usize, force: bool) {
     crate::prompts::ask(
         browser,
         crate::prompts::Scope::Other,
+        rt_core::prompt::Topic::Confirm,
         "Close pinned tab?",
         format!("Close pinned tab {title}?"),
         rt_core::prompt::PromptKind::YesNo {

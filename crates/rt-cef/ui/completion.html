@@ -84,7 +84,7 @@
     border-left-width: 4px;
     padding-left: 8px;
   }
-  body.floating .header { background: none; color: var(--prompt-accent); }
+  body.floating .header { display: block; overflow: hidden; text-overflow: ellipsis; background: none; color: var(--prompt-accent); }
   body.floating .prompt-input { margin: 2px 0; }
   /* ui.overlay.position = floating: a framed box with the command on top. */
   body.palette {
@@ -311,6 +311,10 @@
     const list = document.getElementById("list");
     // prompt.position = bottom: a framed box floating over the page.
     document.body.classList.toggle("floating", payload.kind === "prompt" && !!payload.floating);
+    // prompt-dialog, prompt-permission, prompt-login, prompt-download,
+    // prompt-certificate or prompt-confirm, for ui.css.
+    for (const c of [...document.body.classList]) if (c.startsWith("prompt-")) document.body.classList.remove(c);
+    if (payload.kind === "prompt") document.body.classList.add(`prompt-${payload.prompt.topic}`);
     if (payload.kind === "prompt") return renderPrompt(list, payload.prompt, payload.floating);
     document.body.classList.toggle("palette", payload.kind !== "prompt" && !!payload.floating);
     if (payload.kind === "keyhints") return renderKeyhints(list, payload);

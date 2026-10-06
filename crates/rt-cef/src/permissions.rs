@@ -70,6 +70,7 @@ fn resolve(
     let id = prompts::ask_about(
         browser,
         Scope::Other,
+        rt_core::prompt::Topic::Permission,
         "Permission request",
         message,
         kind,
