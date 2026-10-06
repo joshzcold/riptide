@@ -286,3 +286,28 @@ fn content_unknown_url_scheme_policy_asks_or_refuses() {
             .is_some_and(|m| m.contains("Not opening mailto:"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_notifications_presenter_messages_shows_them_in_the_status_bar() {
+    const NOTIFY: &str = "new Notification('Hello', { body: 'from a page' }).onshow = () => { document.title = 'shown'; }; ''";
+    let b = Browser::launch()
+        .toml(
+            "\"content.notifications.enabled\" = \"true\"\n\
+             \"content.notifications.presenter\" = \"messages\"\nmessages.timeout = 0\n",
+        )
+        .start("page.html");
+    b.eval("Notification.requestPermission().then(() => { document.title = 'asked'; }); ''");
+    b.wait_until("permission is granted", |s| s.tab().title == "asked");
+    b.eval(NOTIFY);
+    let origin = b.url("").trim_end_matches('/').to_string();
+    b.wait_until("the notification is a message", |s| {
+        s.message() == Some(format!("{origin} Hello: from a page").as_str())
+    });
+    b.wait_until("the page saw it shown", |s| s.tab().title == "shown");
+    b.run("set content.notifications.show_origin false");
+    b.eval(NOTIFY);
+    b.wait_until("without the origin", |s| {
+        s.message() == Some("Hello: from a page")
+    });
+}

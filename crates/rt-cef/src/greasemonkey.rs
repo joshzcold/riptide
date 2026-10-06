@@ -20,6 +20,8 @@ thread_local! {
     static GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// `input.mouse.rocker_gestures`, handed to renderers with the scripts.
     static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// `content.notifications.presenter = messages`, likewise.
+    static NOTIFICATION_MESSAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// `@require` URLs already tried this session, so a failing one isn't
     /// fetched again on every reload.
     static TRIED: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
@@ -48,7 +50,10 @@ pub fn load() -> (usize, Vec<String>) {
 /// Settings renderers need: tell them when one changes. Outside the shell borrow.
 pub fn sync_settings(settings: &rt_core::settings::Settings) {
     let rocker = settings.bool("input.mouse.rocker_gestures");
-    if ROCKER.with(|r| r.replace(rocker)) != rocker {
+    let messages = settings.str("content.notifications.presenter") == "messages";
+    let changed = ROCKER.with(|r| r.replace(rocker))
+        != rocker | (NOTIFICATION_MESSAGES.with(|n| n.replace(messages)) != messages);
+    if changed {
         publish();
         send_to_renderers();
     }
@@ -65,6 +70,7 @@ fn publish() -> u64 {
             generation,
             scripts: s.borrow().clone(),
             rocker_gestures: ROCKER.with(std::cell::Cell::get),
+            notification_messages: NOTIFICATION_MESSAGES.with(std::cell::Cell::get),
         })
         .unwrap_or_default()
     });

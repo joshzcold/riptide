@@ -55,6 +55,8 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.mouse_lock` | ask \| true \| false | `ask` | Let sites lock your mouse pointer, as games do: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
+| `content.notifications.presenter` | auto \| messages | `auto` | Where page notifications show: auto (the desktop's notifications) or messages (riptide's status bar) |
+| `content.notifications.show_origin` | boolean | `true` | Start notification messages with the site they came from (presenter = messages) |
 | `content.pdf_viewer` | boolean | `true` | Show PDFs in the browser; false downloads them instead |
 | `content.prefers_reduced_motion` | boolean | `false` | Tell pages you prefer less motion, so they can tone down animations (after a restart) |
 | `content.proxy` | string | `system` | Proxy: system, none, a proxy URL such as socks5://127.0.0.1:9050, or pac+ and a PAC script's URL |

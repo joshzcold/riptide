@@ -43,7 +43,14 @@ pub struct Scripts {
     /// `input.mouse.rocker_gestures`, which pages need to know about too.
     #[serde(default)]
     pub rocker_gestures: bool,
+    /// `content.notifications.presenter = messages`.
+    #[serde(default)]
+    pub notification_messages: bool,
 }
+
+/// Renderer → browser: a page's notification for the status bar; arguments
+/// are the title and the body.
+pub const NOTIFICATION_MESSAGE: &str = "rt.notification";
 
 /// Renderer → browser: a rocker gesture; argument 0 is `back` or `forward`.
 pub const ROCKER_MESSAGE: &str = "rt.rocker";
@@ -51,6 +58,7 @@ pub const ROCKER_MESSAGE: &str = "rt.rocker";
 thread_local! {
     static SCRIPTS: RefCell<(u64, Vec<Script>)> = const { RefCell::new((0, Vec::new())) };
     static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static NOTIFICATION_MESSAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NEXT_XHR: std::cell::Cell<i32> = const { std::cell::Cell::new(1) };
     /// `GM_xmlhttpRequest` callbacks waiting for the browser, by request id.
     static XHR_CALLBACKS: RefCell<std::collections::HashMap<i32, (V8Context, V8Value)>> =
@@ -77,7 +85,11 @@ fn granted_api(script: &Script) -> String {
 fn set_scripts(json: &str) {
     match serde_json::from_str::<Scripts>(json) {
         Ok(scripts) => {
-            let (generation, rocker) = (scripts.generation, scripts.rocker_gestures);
+            let (generation, rocker, messages) = (
+                scripts.generation,
+                scripts.rocker_gestures,
+                scripts.notification_messages,
+            );
             let current = SCRIPTS.with(|s| {
                 let mut state = s.borrow_mut();
                 apply_scripts(&mut state, scripts);
@@ -85,6 +97,7 @@ fn set_scripts(json: &str) {
             });
             if current == generation {
                 ROCKER.with(|r| r.set(rocker));
+                NOTIFICATION_MESSAGES.with(|n| n.set(messages));
             }
         }
         Err(e) => tracing::warn!("bad greasemonkey scripts from the browser: {e}"),
@@ -228,6 +241,9 @@ wrap_render_process_handler! {
                     run_greasemonkey(frame, context, &url);
                     if ROCKER.with(std::cell::Cell::get) {
                         install_rocker(context);
+                    }
+                    if NOTIFICATION_MESSAGES.with(std::cell::Cell::get) {
+                        install_notification_messages(context);
                     }
                 }
                 return;
@@ -405,24 +421,114 @@ const ROCKER_JS: &str = r#"(function (go) {
 })"#;
 
 fn install_rocker(context: &V8Context) {
+    let mut handler = RtRockerHandler::new();
+    install_with(
+        context,
+        ROCKER_JS,
+        "riptide:rocker",
+        v8_value_create_function(Some(&CefString::from("go")), Some(&mut handler)),
+    );
+}
+
+/// `content.notifications.presenter = messages`: `new Notification()` goes
+/// to the status bar. Permission still comes from the real API, so the
+/// permission prompt and settings apply as before. Service workers'
+/// `showNotification` isn't covered.
+const NOTIFICATION_JS: &str = r#"(function (show) {
+  // The real class, for permission; Chromium only adds it after this runs.
+  let Native = null;
+  class Notification extends EventTarget {
+    constructor(title, options = {}) {
+      super();
+      this.title = String(title);
+      this.body = String(options.body ?? "");
+      this.onshow = this.onclick = this.onclose = this.onerror = null;
+      const granted = Native?.permission === "granted";
+      if (granted) show(this.title, this.body);
+      setTimeout(() => {
+        const event = new Event(granted ? "show" : "error");
+        (granted ? this.onshow : this.onerror)?.call(this, event);
+        this.dispatchEvent(event);
+      });
+    }
+    close() {}
+    static get permission() { return Native?.permission ?? "default"; }
+    static requestPermission(callback) { return Native.requestPermission(callback); }
+  }
+  // Take the real one's place as soon as it's there: when the page starts,
+  // and again once it has loaded.
+  const install = () => {
+    const current = window.Notification;
+    if (current && current !== Notification) {
+      Native = current;
+      window.Notification = Notification;
+    }
+  };
+  install();
+  queueMicrotask(install);
+  addEventListener("DOMContentLoaded", install, { once: true, capture: true });
+  addEventListener("load", install, { once: true, capture: true });
+})"#;
+
+fn install_notification_messages(context: &V8Context) {
+    let mut handler = RtNotificationHandler::new();
+    install_with(
+        context,
+        NOTIFICATION_JS,
+        "riptide:notifications",
+        v8_value_create_function(Some(&CefString::from("show")), Some(&mut handler)),
+    );
+}
+
+/// Run `code` (a function expression) in `context`, giving it `native` as
+/// its one argument so the page never sees it.
+fn install_with(context: &V8Context, code: &str, name: &str, native: Option<V8Value>) {
     let mut retval = None;
     let mut exception = None;
     context.enter();
     let ok = context.eval(
-        Some(&CefString::from(ROCKER_JS)),
-        Some(&CefString::from("riptide:rocker")),
+        Some(&CefString::from(code)),
+        Some(&CefString::from(name)),
         0,
         Some(&mut retval),
         Some(&mut exception),
     );
-    let mut handler = RtRockerHandler::new();
-    let go = v8_value_create_function(Some(&CefString::from("go")), Some(&mut handler));
-    if ok != 0
-        && let (Some(function), Some(go)) = (retval, go)
-    {
-        function.execute_function(None, Some(&[Some(go)]));
+    if ok == 0 {
+        let message = exception.map(|e| CefString::from(&e.message()).to_string());
+        tracing::warn!(name, ?message, "couldn't install a page helper");
+    } else if let (Some(function), Some(native)) = (retval, native) {
+        function.execute_function(None, Some(&[Some(native)]));
+        if let Some(e) = function.exception() {
+            tracing::warn!(name, message = %CefString::from(&e.message()), "a page helper failed");
+        }
     }
     context.exit();
+}
+
+// The notification stand-in's way to the browser.
+wrap_v8_handler! {
+    struct RtNotificationHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let text = |i: usize| {
+                arguments
+                    .and_then(|a| a.get(i).cloned().flatten())
+                    .filter(|v| v.is_string() != 0)
+                    .map(|v| CefString::from(&v.string_value()))
+                    .unwrap_or_default()
+            };
+            send_to_browser(NOTIFICATION_MESSAGE, &[&text(0), &text(1)]);
+            1
+        }
+    }
 }
 
 // The rocker listener's way to the browser.
@@ -608,6 +714,7 @@ mod tests {
                 generation: 1,
                 scripts: vec![script("old")],
                 rocker_gestures: false,
+                notification_messages: false,
             },
         );
         assert_eq!(state.1[0].name, "new");
@@ -617,6 +724,7 @@ mod tests {
                 generation: 3,
                 scripts: vec![script("newer")],
                 rocker_gestures: false,
+                notification_messages: false,
             },
         );
         assert_eq!((state.0, state.1[0].name.as_str()), (3, "newer"));
@@ -645,6 +753,7 @@ mod tests {
                 generation: 1,
                 scripts: vec![script("b")],
                 rocker_gestures: false,
+                notification_messages: false,
             },
         );
         assert_eq!(state.1[1].values, values);

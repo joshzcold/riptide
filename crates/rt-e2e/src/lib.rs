@@ -503,6 +503,9 @@ fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
         .args(args)
         .env("DISPLAY", format!(":{display}"))
         .env("XDG_RUNTIME_DIR", dir.join("run"))
+        // Not the desktop's session bus: tests must not pop up notifications
+        // or talk to services on the user's screen.
+        .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
         .env(
             "RT_LOG",
             std::env::var("RT_LOG").unwrap_or_else(|_| "info".into()),

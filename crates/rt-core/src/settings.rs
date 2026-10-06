@@ -757,6 +757,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites show notifications: ask, true or false"
     ),
     def!(
+        "content.notifications.presenter",
+        Kind::Enum(&["auto", "messages"]),
+        s("auto"),
+        "Where page notifications show: auto (the desktop's notifications) or messages (riptide's status bar)"
+    ),
+    def!(
+        "content.notifications.show_origin",
+        Kind::Bool,
+        Value::Bool(true),
+        "Start notification messages with the site they came from (presenter = messages)"
+    ),
+    def!(
         "content.pdf_viewer",
         Kind::Bool,
         Value::Bool(true),

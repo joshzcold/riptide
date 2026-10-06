@@ -22,6 +22,8 @@ For permission prompts:
 
 The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture`, `content.desktop_capture`, `content.mouse_lock` (pointer lock, as games use) and `content.register_protocol_handler` (a site offering to handle `mailto:` links) settings (`ask`, `true` or `false`) answer without asking.
 
+Notifications from sites show on your desktop. `content.notifications.presenter = "messages"` shows them in riptide's status bar instead, starting with the site's origin unless `content.notifications.show_origin = false`.
+
 ## Links to other programs
 
 A link riptide can't show, like `mailto:`, `magnet:` or `zoommtg:`, asks before going to your desktop's handler (`xdg-open`). `content.unknown_url_scheme_policy = "allow-all"` hands them over without asking, and `"disallow"` never does.
