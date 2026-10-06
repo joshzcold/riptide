@@ -217,8 +217,16 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
         hint_bg = mix(&hint_bg, "#ffffff", 0.2);
     }
     let pinned_bg = mix(p.surface2, p.blue, 0.35);
-    // The current tab: tinted with the accent so it stands out from the rest.
-    let selected_tab = mix(p.surface2, p.accent, 0.4);
+    // The current tab is always the darkest tab, pinned ones included, with
+    // a hint of the accent; the accent alone can match the pinned tint.
+    let darkest_other = [p.surface, p.surface2, p.surface3, pinned_bg.as_str()]
+        .iter()
+        .map(|c| luminance(c))
+        .fold(f64::MAX, f64::min);
+    let mut selected_tab = mix(p.base, p.accent, 0.12);
+    while luminance(&selected_tab) > darkest_other * 0.7 && luminance(&selected_tab) > 0.002 {
+        selected_tab = mix(&selected_tab, "#000000", 0.15);
+    }
     // In dark themes, very bright colors would glare across a whole bar.
     let dark = luminance(p.base) < 0.2;
     let bar = |c: &str| -> String {
@@ -570,5 +578,26 @@ mod tests {
         assert!(is_font("bold 10pt \"Fira Code\", monospace"));
         assert!(!is_font("10pt x; background: red"));
         assert!(!is_font("10pt x}"));
+    }
+
+    #[test]
+    fn the_current_tab_is_the_darkest_tab() {
+        for name in THEMES {
+            let t = theme(name).unwrap();
+            let selected = luminance(&t["tabs-selected-bg"]);
+            for other in [
+                "tabs-odd-bg",
+                "tabs-even-bg",
+                "tabs-pinned-bg",
+                "tabs-bar-bg",
+            ] {
+                assert!(
+                    selected < luminance(&t[other]),
+                    "{name}: the current tab {} isn't darker than {other} {}",
+                    t["tabs-selected-bg"],
+                    t[other]
+                );
+            }
+        }
     }
 }
