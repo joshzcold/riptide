@@ -846,9 +846,13 @@ Whatever path wins:
 
 - **Recovering open tabs:**
   - ~~**Signals count as clean exits.**~~ Checked 2026-10-05 with the e2e test `tabs_come_back_after_sigterm`. After SIGTERM, riptide exits with status 0 but keeps `_autosave.toml`, and the next start restores the tabs. SIGKILL works the same way (`tabs_come_back_after_a_crash`). SIGINT and logout aren't tested yet.
-  - **The "Restored the tabs open before the crash" message is hidden** almost at once by the "Content blocking has no filter lists yet" notice, so it's easy to miss that recovery happened.
-  - **The recovery copy gets overwritten:** after a crash, starting with URLs on the command line leaves the old tabs in `_autosave`, but the next autosave tick replaces them. At startup, rename the crashed autosave to a timestamped session (e.g. `_crashed-2026-10-05T10-34`), keep the last few, and list them in `:session-load` completion.
-  - **Crash loops:** if the restored tabs crash the browser again shortly after startup, don't restore them automatically the next time. Instead, show the crashed tabs on a `riptide://recover/` page where the user picks which ones to reopen, the way Firefox's "Restore Session" page works.
+  - ~~**The "Restored the tabs open before the crash" message is hidden.**~~ It isn't: messages stack, and the overlay above the status bar still shows the older ones. The e2e state only reported the newest.
+  - ✅ **Crashed tabs are kept** (2026-10-06). At startup `Sessions::take_crashed` renames `_autosave` to `_crashed-<UTC date-time>` before anything can overwrite it, and prunes all but the newest five (`rt_storage::recovery`). Startup with URLs opens only those and names the kept session.
+  - ✅ **Crash loops** (2026-10-06):
+    - Reopening a crash's tabs sets a `sessions/.recovering` mark, which 60 seconds of uptime or a clean exit clears.
+    - If the next start finds a crash and the mark, the tabs aren't reopened. The start page opens, with an error message naming the session.
+    - The decision is `rt_storage::recovery::recovery()`, with unit tests and four e2e tests in `sessions.rs`.
+    - Not done: a `riptide://recover/` page to pick tabs from.
   - **More state per tab:** save each tab's back/forward history and scroll position, so restoring doesn't drop where you were.
   - **Crashed tabs:** there's no `on_render_process_terminated` handler, so a crashed or killed renderer leaves a dead tab. Show an error page in the tab with "reload" (`r`) and log the reason.
 - **Crash reports** (complements `:report` in M19):

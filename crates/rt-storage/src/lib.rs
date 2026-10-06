@@ -3,6 +3,7 @@
 
 pub mod history;
 pub mod marks;
+pub mod recovery;
 pub mod sessions;
 
 use std::path::Path;

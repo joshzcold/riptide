@@ -398,6 +398,8 @@ pub fn run() -> i32 {
     {
         tracing::warn!("can't remove {}: {e}", autosave.display());
     }
+    // Reopened crashed tabs that got as far as a clean exit are fine.
+    rt_storage::Sessions::new(&data_dir.join("sessions")).set_recovering(false);
     shutdown();
     remote::cleanup();
     if RESTART.load(std::sync::atomic::Ordering::SeqCst) {

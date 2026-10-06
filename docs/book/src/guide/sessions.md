@@ -29,7 +29,15 @@ confirm_quit = ["multiple-tabs", "downloads"]
 
 ## Crash recovery
 
-Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. A normal exit deletes that save. If the browser crashed, the next start reopens those tabs; with URLs on the command line, it says where they are (`:session-load _autosave`).
+Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. A normal exit deletes that save.
+
+After a crash, the next start keeps the saved tabs as a session named after the time of the crash, such as `_crashed-2026-10-06-115803` (UTC). The last five crashes are kept, and `:session-load _crashed-` completes their names.
+
+| Start after a crash | What happens |
+|---|---|
+| Plain `riptide` | The crashed tabs reopen. |
+| With URLs on the command line | Only those URLs open. A message names the session holding the crashed tabs, and the new run's autosaves don't touch it. |
+| The browser crashed again within a minute of reopening a crash's tabs | They aren't reopened a second time, in case they caused the crash. The start page opens, and a message names the session to load them from when you choose. |
 
 ## History
 

@@ -167,6 +167,56 @@ pub fn request_context() -> Option<RequestContext> {
     context
 }
 
+/// After a crash: reopen its tabs, or (with URLs on the command line, or when
+/// reopening them crashed the browser again) say where they're kept. Returns
+/// whether they were reopened.
+fn recover_crashed_tabs(urls_given: bool) -> bool {
+    use rt_core::engine::Level;
+    use rt_storage::recovery::{Recovery, recovery};
+
+    let crashed = storage::take_crashed();
+    let was_recovering = storage::was_recovering();
+    match (
+        recovery(crashed.is_some(), urls_given, was_recovering),
+        crashed,
+    ) {
+        (Recovery::Restore, Some((name, session))) => {
+            tabs::restore(&session);
+            storage::start_recovery_probation();
+            shell::show_message(
+                Level::Info,
+                format!("Restored the tabs open before the crash (kept as :session-load {name})"),
+            );
+            true
+        }
+        (Recovery::Offer, Some((name, _))) => {
+            shell::show_message(
+                Level::Info,
+                format!("The tabs open before the crash are in :session-load {name}"),
+            );
+            false
+        }
+        (Recovery::OfferAfterLoop, Some((name, _))) => {
+            storage::set_recovering(false);
+            shell::show_message(
+                Level::Error,
+                format!(
+                    "riptide crashed again soon after reopening the last crash's tabs, \
+                     so they weren't reopened: :session-load {name}"
+                ),
+            );
+            false
+        }
+        _ => {
+            // A clean exit during probation leaves nothing to suspect.
+            if was_recovering {
+                storage::set_recovering(false);
+            }
+            false
+        }
+    }
+}
+
 pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
     let mut client = RtClient::new(role);
     let settings = BrowserSettings {
@@ -293,22 +343,7 @@ wrap_window_delegate! {
             if let Some(session) = &self.session {
                 tabs::restore_window(session);
             } else {
-                let crashed = if first { storage::crashed_session() } else { None };
-                let recovered = match crashed {
-                    Some(session) if self.urls.is_empty() => {
-                        tabs::restore(&session);
-                        shell::show_message(rt_core::engine::Level::Info, "Restored the tabs open before the crash");
-                        true
-                    }
-                    Some(_) => {
-                        shell::show_message(
-                            rt_core::engine::Level::Info,
-                            "The tabs open before the crash are in :session-load _autosave",
-                        );
-                        false
-                    }
-                    None => false,
-                };
+                let recovered = first && recover_crashed_tabs(!self.urls.is_empty());
                 let restore = first
                     && !recovered
                     && self.urls.is_empty()

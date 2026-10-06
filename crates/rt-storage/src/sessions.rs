@@ -108,6 +108,15 @@ impl Sessions {
         toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
+    pub fn rename(&self, from: &str, to: &str) -> Result<(), String> {
+        let (from, to) = (self.path(from)?, self.path(to)?);
+        std::fs::rename(&from, &to).map_err(|e| format!("{}: {e}", from.display()))
+    }
+
+    pub(crate) fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     pub fn delete(&self, name: &str) -> Result<(), String> {
         let path = self.path(name)?;
         std::fs::remove_file(&path).map_err(|e| match e.kind() {

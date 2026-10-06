@@ -590,7 +590,10 @@ pub fn run_command(command: &Command) -> bool {
 
 /// Saved every `auto_save.interval` ms and deleted on a clean exit, so it is
 /// only there at startup after a crash.
-pub const AUTOSAVE_SESSION: &str = "_autosave";
+pub const AUTOSAVE_SESSION: &str = rt_storage::recovery::AUTOSAVE;
+/// Restored tabs that last this long without a crash are no longer suspected
+/// of causing one.
+const RECOVERY_PROBATION_MS: i64 = 60_000;
 
 /// Start the crash-recovery saves.
 pub fn start_autosave() {
@@ -599,12 +602,49 @@ pub fn start_autosave() {
     post_delayed_task(ThreadId::UI, Some(&mut task), interval.max(1000));
 }
 
-/// A crash left tabs behind: the autosave from the last run, if any.
-pub fn crashed_session() -> Option<Session> {
-    let exists = with(|s| s.sessions.exists(AUTOSAVE_SESSION)).unwrap_or(false);
-    exists
-        .then(|| load_session(AUTOSAVE_SESSION).ok())
-        .flatten()
+/// A crash left tabs behind: the last run's autosave, moved aside to its
+/// `_crashed-…` name, and its tabs.
+pub fn take_crashed() -> Option<(String, Session)> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let name = match with(|s| s.sessions.take_crashed(now))? {
+        Ok(name) => name?,
+        Err(e) => {
+            tracing::warn!("can't keep the crashed session: {e}");
+            return None;
+        }
+    };
+    let session = load_session(&name).ok()?;
+    Some((name, session))
+}
+
+/// Whether the last start reopened crashed tabs less than
+/// [`RECOVERY_PROBATION_MS`] before it crashed again (or exited).
+pub fn was_recovering() -> bool {
+    with(|s| s.sessions.was_recovering()).unwrap_or(false)
+}
+
+pub fn set_recovering(on: bool) {
+    with(|s| s.sessions.set_recovering(on));
+}
+
+/// Mark the reopened crashed tabs as suspects until they have run for a
+/// while; a clean exit clears the mark too (see `rt_cef::run`).
+pub fn start_recovery_probation() {
+    set_recovering(true);
+    let mut task = EndProbation::new();
+    post_delayed_task(ThreadId::UI, Some(&mut task), RECOVERY_PROBATION_MS);
+}
+
+wrap_task! {
+    struct EndProbation {}
+
+    impl Task {
+        fn execute(&self) {
+            set_recovering(false);
+        }
+    }
 }
 
 wrap_task! {

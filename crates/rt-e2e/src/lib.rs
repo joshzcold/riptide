@@ -280,12 +280,17 @@ impl Browser {
     /// Start the browser again on the same profile and display, with no URL,
     /// once the last one has exited or crashed. Waits until it answers.
     pub fn restart(&self) {
+        self.restart_with(&[]);
+    }
+
+    /// [`Browser::restart`] with command line arguments, e.g. a URL.
+    pub fn restart_with(&self, args: &[&str]) {
         assert!(
             matches!(self.browser.borrow_mut().try_wait(), Ok(Some(_))),
             "restart() needs the browser to have exited first"
         );
         // A crash can leave the socket behind; the new browser replaces it.
-        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, &[]);
+        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, args);
         self.wait_until("the browser is back", |s| !s.tabs().is_empty());
     }
 

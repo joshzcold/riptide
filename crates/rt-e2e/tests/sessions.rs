@@ -143,3 +143,107 @@ fn confirm_quit_asks_with_several_tabs() {
     b.keys("y");
     assert!(b.wait_exit().success());
 }
+
+/// The `_crashed-…` sessions in the profile, oldest first.
+fn crashed_sessions(b: &Browser) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(b.data_dir().join("sessions"))
+        .map(|dir| {
+            dir.filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .filter(|n| n.starts_with("_crashed-") && n.ends_with(".toml"))
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+/// Open a second tab and crash once the autosave has it.
+fn crash_with_two_tabs(b: &Browser) -> String {
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| {
+        s.tabs().len() == 2 && s.tab().is_loaded(&second)
+    });
+    wait_for_autosave(b, "second.html");
+    b.crash();
+    second
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_crash_is_kept_under_its_own_name() {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    let second = crash_with_two_tabs(&b);
+    b.restart();
+    b.wait_until("the tabs are restored", |s| {
+        s.tabs().len() == 2 && s.tabs()[1].url == second
+    });
+    let crashed = crashed_sessions(&b);
+    assert_eq!(crashed.len(), 1, "{crashed:?}");
+    let text = std::fs::read_to_string(b.data_dir().join("sessions").join(&crashed[0])).unwrap();
+    assert!(text.contains("second.html"), "{text}");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_url_after_a_crash_opens_alone_and_the_crashed_tabs_survive_autosaves() {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    crash_with_two_tabs(&b);
+    let nav1 = b.url("nav1.html");
+    b.restart_with(&[&nav1]);
+    let s = b.wait_until("only the given URL opens", |s| s.tab().is_loaded(&nav1));
+    assert_eq!(s.tabs().len(), 1, "{:?}", s.tabs());
+    // The new run autosaves its own tabs; the crashed ones must survive that.
+    wait_for_autosave(&b, "nav1.html");
+    let crashed = crashed_sessions(&b);
+    assert_eq!(crashed.len(), 1, "{crashed:?}");
+    let text = std::fs::read_to_string(b.data_dir().join("sessions").join(&crashed[0])).unwrap();
+    assert!(
+        text.contains("second.html"),
+        "the crashed tabs were overwritten: {text}"
+    );
+    b.run(&format!(
+        "session-load {}",
+        crashed[0].trim_end_matches(".toml")
+    ));
+    b.wait_until("loading it brings them back", |s| {
+        s.tabs().iter().any(|t| t.url.ends_with("/second.html"))
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tabs_that_crash_again_right_after_reopening_arent_reopened() {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    let second = crash_with_two_tabs(&b);
+    b.restart();
+    b.wait_until("the tabs are reopened", |s| {
+        s.tabs().len() == 2 && s.tabs()[1].url == second
+    });
+    let marker = b.data_dir().join("sessions/.recovering");
+    assert!(marker.exists(), "reopened tabs should be on probation");
+    // Crash again well within the probation period.
+    wait_for_autosave(&b, "second.html");
+    b.crash();
+    b.restart();
+    let s = b.wait_until("the start page opens instead", |s| {
+        s.tab().url == "about:blank"
+    });
+    assert_eq!(s.tabs().len(), 1, "{:?}", s.tabs());
+    assert!(!marker.exists(), "the probation mark should be cleared");
+    assert!(!crashed_sessions(&b).is_empty());
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_clean_quit_after_reopening_crashed_tabs_ends_probation() {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    let second = crash_with_two_tabs(&b);
+    b.restart();
+    b.wait_until("the tabs are reopened", |s| {
+        s.tabs().len() == 2 && s.tabs()[1].url == second
+    });
+    b.run("quit");
+    assert!(b.wait_exit().success());
+    assert!(!b.data_dir().join("sessions/.recovering").exists());
+}
