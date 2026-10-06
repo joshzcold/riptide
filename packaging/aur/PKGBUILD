@@ -1,4 +1,4 @@
-# Maintainer: Joshua Cold
+# Maintainer: Joshua Cold <joshzcold@gmail.com>
 # riptide-bin: the Linux release tarball (the binary and the CEF runtime).
 # The version and checksum are updated at each release.
 pkgname=riptide-bin

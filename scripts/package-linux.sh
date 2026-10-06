@@ -129,7 +129,7 @@ EOF
 Package: riptide
 Version: $version
 Architecture: $deb_arch
-Maintainer: Joshua Cold <joshzcold@users.noreply.github.com>
+Maintainer: Joshua Cold <joshzcold@gmail.com>
 Installed-Size: $size
 Depends: $depends, xdg-utils
 Section: web
