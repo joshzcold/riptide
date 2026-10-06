@@ -1457,6 +1457,46 @@ pub fn find(name: &str) -> Option<&'static SettingDef> {
 
 /// Current values, starting from the defaults.
 /// Settings that can differ per site (`:set -u <pattern>`, `[per_domain]`).
+/// Settings Chromium only reads at startup.
+pub const RESTART_REQUIRED: &[&str] = &[
+    "colors.webpage.darkmode.enabled",
+    "content.autoplay",
+    "content.cache.size",
+    "content.canvas_reading",
+    "content.local_content_can_access_file_urls",
+    "content.prefers_reduced_motion",
+    "content.webgl",
+    "content.widevine",
+    "input.media_keys",
+    "input.spatial_navigation",
+    "scrolling.bar",
+];
+
+/// What a restart-only setting's value means at startup: `scrolling.bar`
+/// only needs one to switch overlay scrollbars on or off.
+fn startup_meaning(settings: &Settings, name: &str) -> String {
+    match name {
+        "scrolling.bar" => (settings.str(name) == "overlay").to_string(),
+        _ => settings
+            .get(name)
+            .map(ToString::to_string)
+            .unwrap_or_default(),
+    }
+}
+
+/// Restart-only settings that a change from `before` to `now` left
+/// different from what the browser `started` with, so they wait for a restart.
+pub fn needs_restart(started: &Settings, before: &Settings, now: &Settings) -> Vec<&'static str> {
+    RESTART_REQUIRED
+        .iter()
+        .copied()
+        .filter(|name| {
+            let now = startup_meaning(now, name);
+            now != startup_meaning(before, name) && now != startup_meaning(started, name)
+        })
+        .collect()
+}
+
 pub const PER_DOMAIN: &[&str] = &[
     "content.blocking.enabled",
     "content.desktop_capture",
@@ -1676,6 +1716,28 @@ mod tests {
             let value = def.default_value();
             assert_eq!(def.from_json(&value.to_json()), Ok(value), "{}", def.name);
         }
+    }
+
+    #[test]
+    fn restart_only_settings_are_noted_once_they_differ_from_startup() {
+        let started = Settings::default();
+        let mut now = started.clone();
+        now.set("content.webgl", Value::Bool(false)).unwrap();
+        now.set("hints.chars", Value::Str("ab".into())).unwrap();
+        assert_eq!(needs_restart(&started, &started, &now), ["content.webgl"]);
+        // Changing it back needs no restart, and neither does an unrelated change.
+        assert!(needs_restart(&started, &now, &started).is_empty());
+        let mut bar = started.clone();
+        bar.set("scrolling.bar", Value::Str("never".into()))
+            .unwrap();
+        assert!(
+            needs_restart(&started, &started, &bar).is_empty(),
+            "never applies live"
+        );
+        bar.set("scrolling.bar", Value::Str("overlay".into()))
+            .unwrap();
+        assert_eq!(needs_restart(&started, &started, &bar), ["scrolling.bar"]);
+        assert!(RESTART_REQUIRED.iter().all(|n| find(n).is_some()));
     }
 
     #[test]

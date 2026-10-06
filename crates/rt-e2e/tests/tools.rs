@@ -86,3 +86,24 @@ fn new_instance_open_target_window_first_opened() {
         s.windows[0].tabs.iter().any(|t| t.url == nav)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn restart_only_settings_say_so_when_changed() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("page.html");
+    b.run("set content.webgl false");
+    b.wait_until("the restart is mentioned", |s| {
+        s.message() == Some("content.webgl changes after a restart (:restart)")
+    });
+    b.run("clear-messages");
+    b.run("set scrolling.bar never");
+    b.run("set hints.chars ab");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert!(
+        b.state().message().is_none_or(|m| !m.contains("restart")),
+        "{:?}",
+        b.state().message()
+    );
+}

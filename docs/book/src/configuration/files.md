@@ -19,6 +19,8 @@ Every setting is listed in the [settings reference](../reference/settings.md), a
 - `:config-edit` opens `config.lua` (or `config.toml`) in `editor.command` and reloads it when you close the editor.
 - `:config-source` reloads every file. Errors show in the status bar with `file:line`, and the rest of the file still applies.
 
+A few settings, such as `content.webgl` and `input.spatial_navigation`, only apply when riptide starts; the reference marks them "after a restart". When you change one, the status bar says so, and `:restart` restarts riptide with your tabs.
+
 Per-site values use `[per_domain."<pattern>"]` tables; see [Per-site settings](../guide/prompts.md#per-site-settings).
 
 ## Example `config.toml`

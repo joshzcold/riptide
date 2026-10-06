@@ -104,6 +104,10 @@ pub struct WindowState {
     pub window_closing: bool,
     last_status: String,
     last_tabbar: String,
+    /// The settings at startup and after the last change, to say when a
+    /// change only applies after a restart.
+    restart_started: Option<rt_core::settings::Settings>,
+    restart_before: Option<rt_core::settings::Settings>,
     /// The command line `completion.delay` is waiting on, and when it was typed.
     completion_typed_at: Option<(String, std::time::Instant)>,
     last_title: String,
@@ -138,6 +142,8 @@ impl WindowState {
             last_status: String::new(),
             last_tabbar: String::new(),
             completion_typed_at: None,
+            restart_started: None,
+            restart_before: None,
             last_title: String::new(),
             last_overlay: String::new(),
             last_overlay_rows: 0,
@@ -413,6 +419,35 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
     errors
 }
 
+/// Say which changed settings only apply after a restart.
+fn note_restart_settings(now: rt_core::settings::Settings) {
+    let pending = with(|s| {
+        if s.restart_started.is_none() {
+            s.restart_started = Some(now.clone());
+            s.restart_before = Some(now);
+            return Vec::new();
+        }
+        let before = s
+            .restart_before
+            .replace(now.clone())
+            .unwrap_or_else(|| now.clone());
+        let started = s.restart_started.as_ref().unwrap_or(&before);
+        rt_core::settings::needs_restart(started, &before, &now)
+    })
+    .unwrap_or_default();
+    let verb = if pending.len() == 1 {
+        "changes"
+    } else {
+        "change"
+    };
+    if !pending.is_empty() {
+        show_message(
+            Level::Info,
+            format!("{} {verb} after a restart (:restart)", pending.join(", ")),
+        );
+    }
+}
+
 /// Outside the shell borrow: setting Chromium preferences can call back into us.
 fn apply_chromium_settings() {
     let Some((languages, scheme, sites)) = with(|s| {
@@ -432,6 +467,7 @@ fn apply_chromium_settings() {
     if let Some(settings) = with(|s| s.engine.settings().clone()) {
         crate::content::apply_globals(&settings);
         crate::greasemonkey::sync_settings(&settings);
+        note_restart_settings(settings);
     }
     crate::permissions::apply_site_settings(sites);
     let variant = match scheme.as_str() {
