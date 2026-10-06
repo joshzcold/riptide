@@ -1066,7 +1066,15 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
 
     let current = s.tabs.current();
     // ui.theme and colors.*, sent with every bar's update.
-    let theme = json!(rt_core::theme::ui_vars(s.engine.settings()));
+    // `:theme nord` shows nord while it's being typed or picked.
+    let preview = status
+        .command_line
+        .as_ref()
+        .and_then(|c| rt_core::theme::previewed(&c.text));
+    let theme = json!(rt_core::theme::ui_vars_previewing(
+        s.engine.settings(),
+        preview
+    ));
     // ui.css, after the pages' own styles.
     let css = crate::userstyle::ui_css(&s.paths.config_dir);
     // ui.overlay.position = floating: the box shows the command line, so the

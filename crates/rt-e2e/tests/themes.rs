@@ -172,3 +172,26 @@ fn auto_theme_follows_the_light_or_dark_preference() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn theme_command_previews_the_theme_until_escape() {
+    let b = Browser::start("page.html");
+    wait_bg(&b, "rgb(6, 24, 38)");
+    b.keys(":theme ");
+    b.wait_mode("command");
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let before = statusbar_bg(&b);
+    b.keys("dracula");
+    let start = std::time::Instant::now();
+    while statusbar_bg(&b) == before {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "no preview: {before}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.keys("<Escape>");
+    wait_bg(&b, "rgb(6, 24, 38)");
+    b.run("set ui.theme");
+    b.wait_until("ui.theme is unchanged", |s| {
+        s.message().is_some_and(|m| m.contains("riptide"))
+    });
+}

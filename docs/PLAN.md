@@ -776,14 +776,14 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
   - ✅ Custom CSS: `ui.css` (sent to the bars and overlay with their updates) and `content.user_stylesheets` (injected at load start and load end, per site), both re-read within a second of a change (`userstyle.rs`).
   - ✅ Pages: `colors.webpage.bg` (each new tab's background color), and `colors.webpage.darkmode.enabled` now live and per site through DevTools' `Emulation.setAutoDarkModeOverride` instead of a startup switch. Both checked by screenshot pixels (neither shows to page JavaScript).
   - ✅ Readability pass (2026-10-06, after user feedback): every theme checked by screenshot in every state. Text on a coloured status bar (the URL too) takes the bar's text colour; accent-coloured text (descriptions, key hints, https URLs, prompt titles and keys, typed hint characters) is nudged until readable; hint labels in light themes get a lighter background; the current tab is tinted with the accent; very bright mode and message bars are toned down in dark themes; pinned tabs get their own text colour (`colors.tabs.pinned.odd.fg`). The contrast test covers all of these pairs.
-  - e2e test in `crates/rt-e2e/tests/themes.rs`; checked by screenshot in three themes. Not yet: a live preview while picking, user theme files, importers, and the downloads/history pages.
+  - e2e test in `crates/rt-e2e/tests/themes.rs`; checked by screenshot in three themes. Not yet: user theme files, importers, and the downloads/history pages.
 - **One token set:** named tokens (bg, fg, accent, selected, insert, passthrough, private, warning, error, https, http, hint fg/bg/border, prompt, completion, downloads, keyhint) feed every UI page as CSS variables. They're sent over the UI channel (M13), so a change applies live without reloading anything.
 - **Settings:**
   - `colors.*` uses qutebrowser's names where they map (`colors.statusbar.insert.bg`, `colors.tabs.selected.odd.bg`, `colors.hints.bg`, `colors.completion.item.selected.bg`, `colors.messages.error.bg`, `colors.webpage.bg`…) and overrides the theme's tokens one by one.
   - `fonts.*`: `fonts.default_family`, `fonts.default_size`, per-widget fonts, and the page fonts `fonts.web.family.*` and `fonts.web.size.*` (Chromium's `webkit.webprefs.fonts` prefs).
 - **Built-in themes:**
   - `riptide` (dark, the default) and `riptide-light`, plus ports of gruvbox (dark and light), catppuccin (mocha and latte), nord, dracula, solarized (dark and light) and tokyo night.
-  - `:theme <name>` with completion and a live preview while picking.
+  - ✅ (2026-10-06) `:theme <name>` with completion and a live preview while picking: a command line naming a theme (`theme::previewed`) shows it until Return or Escape.
   - ✅ (2026-10-06) `ui.theme = auto` follows the light or dark preference with `ui.auto_theme.dark`/`.light`. The status bar page watches `prefers-color-scheme`, which Chromium takes from the desktop (or `colors.webpage.preferred_color_scheme`), and reports changes (`ui_message` `color-scheme`).
 - **User themes:** `themes/<name>.toml` in the config directory (tokens plus optional overrides), or `rt.theme{…}` in Lua.
 - **Importers:** base16 scheme YAML, and simple qutebrowser theme files (only `c.colors.… = "…"` lines are read; no Python is run).

@@ -13,7 +13,7 @@
 | `solarized-dark`, `solarized-light` | Solarized |
 | `tokyo-night` | Tokyo Night |
 
-`:theme nord` switches and saves the choice, like `:set ui.theme nord`; `:theme` alone lists them, and `:theme <Tab>` completes the names. In a config file:
+`:theme nord` switches and saves the choice, like `:set ui.theme nord`; `:theme` alone lists them, and `:theme <Tab>` completes the names. While you type or `Tab` through the names, riptide shows each theme as it's named; `Escape` goes back to the one you had. In a config file:
 
 ```toml
 ui.theme = "gruvbox-dark"

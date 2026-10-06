@@ -162,7 +162,11 @@ pub fn set_prefers_dark(dark: bool) -> bool {
 /// The theme `ui.theme` means now: `auto` picks `ui.auto_theme.dark` or
 /// `ui.auto_theme.light`.
 pub fn theme_name(settings: &Settings, dark: bool) -> &str {
-    match settings.str("ui.theme") {
+    auto_name(settings, settings.str("ui.theme"), dark)
+}
+
+fn auto_name<'a>(settings: &'a Settings, name: &'a str, dark: bool) -> &'a str {
+    match name {
         "auto" if dark => settings.str("ui.auto_theme.dark"),
         "auto" => settings.str("ui.auto_theme.light"),
         name => name,
@@ -371,7 +375,14 @@ pub fn font(value: &str, settings: &Settings) -> String {
 /// Everything riptide's own pages style themselves with: the colors and
 /// the fonts, as `--rt-<name>` variables.
 pub fn ui_vars(settings: &Settings) -> BTreeMap<String, String> {
-    let mut vars: BTreeMap<String, String> = resolve(settings)
+    ui_vars_previewing(settings, None)
+}
+
+/// [`ui_vars`], with theme `preview` in place of `ui.theme`.
+pub fn ui_vars_previewing(settings: &Settings, preview: Option<&str>) -> BTreeMap<String, String> {
+    let dark = PREFERS_DARK.load(std::sync::atomic::Ordering::Relaxed);
+    let name = preview.unwrap_or(settings.str("ui.theme"));
+    let mut vars: BTreeMap<String, String> = colors_of(settings, name, dark)
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
         .collect();
@@ -412,7 +423,24 @@ pub fn resolve(settings: &Settings) -> BTreeMap<&'static str, String> {
 
 /// [`resolve`], with `auto` following `dark`.
 pub fn resolve_for(settings: &Settings, dark: bool) -> BTreeMap<&'static str, String> {
-    let mut colors = theme(theme_name(settings, dark))
+    colors_of(settings, settings.str("ui.theme"), dark)
+}
+
+/// The theme a command line like `:theme nord` is about to pick, to show
+/// it before it's chosen.
+pub fn previewed(command_line: &str) -> Option<&'static str> {
+    let rest = command_line.strip_prefix(':')?.trim_start();
+    let name = rest.strip_prefix("theme")?;
+    if !name.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let name = name.trim();
+    THEME_CHOICES.iter().copied().find(|t| *t == name)
+}
+
+/// Theme `name` (`auto` follows `dark`), with any `colors.*` setting on top.
+fn colors_of(settings: &Settings, name: &str, dark: bool) -> BTreeMap<&'static str, String> {
+    let mut colors = theme(auto_name(settings, name, dark))
         .or_else(|| theme("riptide"))
         .unwrap_or_default();
     for (token, setting) in TOKENS {
@@ -527,6 +555,16 @@ fn mix(a: &str, b: &str, amount: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn theme_command_lines_preview_their_theme() {
+        assert_eq!(previewed(":theme nord"), Some("nord"));
+        assert_eq!(previewed(": theme  dracula "), Some("dracula"));
+        assert_eq!(previewed(":theme no"), None);
+        assert_eq!(previewed(":themenord"), None);
+        assert_eq!(previewed(":set ui.theme nord"), None);
+        assert_eq!(previewed("/theme nord"), None);
+    }
 
     #[test]
     fn auto_follows_the_preference_with_the_configured_pair() {
