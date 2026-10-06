@@ -33,6 +33,7 @@ The preferences are written into the profile (`Local State`, `Default/Preference
 | `content.dns_prefetch` | `false` stops looking up the hosts of links before you follow them |
 | `content.canvas_reading` | `false` stops pages reading back what they drew, a common fingerprinting trick; some sites break (after a restart) |
 | `content.cache.size` | Disk cache size in bytes; `0` lets Chromium choose (after a restart) |
+| `content.webgl` | `false` turns off WebGL, which 3D graphics need and fingerprinting scripts use (after a restart) |
 
 ```toml
 content.proxy = "socks5://127.0.0.1:9050"
@@ -52,11 +53,16 @@ content.webrtc_ip_handling_policy = "disable-non-proxied-udp"
 | `content.headers.accept_language` | The languages sites are asked for, e.g. `de-DE,de;q=0.9`. Requests follow a change at once; `navigator.languages` after a restart |
 | `content.headers.custom` | Extra headers for every request, e.g. `{ "X-Requested-By" = "me" }` |
 | `content.images` | `false` stops loading images |
+| `content.autoplay` | `false` keeps videos from playing until you interact with the page (after a restart) |
+| `content.pdf_viewer` | `false` downloads PDFs instead of showing them |
+| `content.prefers_reduced_motion` | `true` asks pages for fewer animations (after a restart) |
+| `content.javascript.can_close_tabs` | `false` stops pages closing their own tab with `window.close()` (login popups do this) |
+| `content.javascript.log_message.levels` | Page console messages to show in the status bar and `:messages`, e.g. `["error", "warning"]`; per site too |
 | `content.mute` | `true` mutes pages; `:tab-mute` mutes one tab instead |
 | `content.javascript.can_open_tabs_automatically` | `true` lets pages open tabs without a click (popups) |
 | `content.javascript.clipboard` | `none`, `access` (copy after a click, the default) or `access-paste` (read it too) |
 
-All but the cookie settings can also be set per site:
+`content.images`, `content.mute`, popups, the clipboard, JavaScript, console messages and the user agent can also be set per site:
 
 ```toml
 content.cookies.accept = "no-3rdparty"

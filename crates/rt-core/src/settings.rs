@@ -339,6 +339,17 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+fn log_levels(value: &Value) -> Result<(), String> {
+    const LEVELS: &[&str] = &["debug", "info", "warning", "error"];
+    match value {
+        Value::List(items) => match items.iter().find(|i| !LEVELS.contains(&i.as_str())) {
+            Some(bad) => Err(format!("{bad:?} isn't a level; use {}", LEVELS.join(", "))),
+            None => Ok(()),
+        },
+        _ => Ok(()),
+    }
+}
+
 fn proxy(value: &Value) -> Result<(), String> {
     match value {
         Value::Str(text) => crate::network::parse_proxy(text).map(|_| ()),
@@ -571,6 +582,12 @@ pub static SETTINGS: &[SettingDef] = &[
         confirm_quit
     ),
     def!(
+        "content.autoplay",
+        Kind::Bool,
+        Value::Bool(true),
+        "Let videos play by themselves; false waits until you interact with the page (after a restart)"
+    ),
+    def!(
         "content.blocking.adblock.lists",
         Kind::List,
         Value::List(vec![
@@ -673,6 +690,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Load images; can be set per site"
     ),
     def!(
+        "content.javascript.can_close_tabs",
+        Kind::Bool,
+        Value::Bool(true),
+        "Let a page close its own tab with window.close(), as login popups do"
+    ),
+    def!(
         "content.javascript.can_open_tabs_automatically",
         Kind::Bool,
         Value::Bool(false),
@@ -689,6 +712,13 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Run JavaScript on pages; can be set per site"
+    ),
+    def!(
+        "content.javascript.log_message.levels",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Console messages from pages shown in the status bar and :messages, by level: debug, info, warning, error (can be set per site)",
+        log_levels
     ),
     def!(
         "content.media.audio_capture",
@@ -715,6 +745,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites show notifications: ask, true or false"
     ),
     def!(
+        "content.pdf_viewer",
+        Kind::Bool,
+        Value::Bool(true),
+        "Show PDFs in the browser; false downloads them instead"
+    ),
+    def!(
+        "content.prefers_reduced_motion",
+        Kind::Bool,
+        Value::Bool(false),
+        "Tell pages you prefer less motion, so they can tone down animations (after a restart)"
+    ),
+    def!(
         "content.proxy",
         Kind::Str,
         s("system"),
@@ -726,6 +768,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["ask", "block", "load-insecurely"]),
         s("ask"),
         "Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely"
+    ),
+    def!(
+        "content.webgl",
+        Kind::Bool,
+        Value::Bool(true),
+        "Allow WebGL, which 3D graphics need and fingerprinting scripts use (after a restart)"
     ),
     def!(
         "content.webrtc_ip_handling_policy",
@@ -1331,6 +1379,7 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.javascript.can_open_tabs_automatically",
     "content.javascript.clipboard",
     "content.javascript.enabled",
+    "content.javascript.log_message.levels",
     "content.mute",
     "content.media.audio_capture",
     "content.media.video_capture",
@@ -1405,6 +1454,13 @@ impl Settings {
 
     pub fn bool_for(&self, name: &str, url: &str) -> bool {
         matches!(self.get_for(name, url), Some(Value::Bool(true)))
+    }
+
+    pub fn list_for(&self, name: &str, url: &str) -> &[String] {
+        match self.get_for(name, url) {
+            Some(Value::List(items)) => items,
+            _ => &[],
+        }
     }
 
     /// Every per-site value of `name`, as `(pattern, value)`.

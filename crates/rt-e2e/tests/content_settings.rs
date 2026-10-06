@@ -165,3 +165,76 @@ fn content_webrtc_policy_disable_non_proxied_udp_hides_local_candidates() {
     });
     assert_eq!(b.eval("window.__candidates"), "0");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_pdf_viewer_false_downloads_pdfs() {
+    let b = Browser::launch()
+        .toml(
+            "downloads.location.directory = \"{scratch}/dl\"\ndownloads.location.prompt = false\n\
+             \"content.pdf_viewer\" = false\n",
+        )
+        .start("page.html");
+    b.run(&format!("open {}", b.url("blank.pdf")));
+    b.wait_file(&b.scratch().join("dl/blank.pdf"));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_javascript_can_close_tabs_gates_window_close() {
+    let b = Browser::launch()
+        .toml("\"content.javascript.can_close_tabs\" = false\nmessages.timeout = 0\n")
+        .start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| {
+        s.tabs().len() == 2 && s.tab().is_loaded(&second)
+    });
+    b.eval("window.close(); ''");
+    b.wait_until("the page is told no", |s| {
+        s.message().is_some_and(|m| m.contains("can_close_tabs"))
+    });
+    assert_eq!(b.state().tabs().len(), 2);
+    assert_eq!(b.eval("document.title"), "second", "the tab still works");
+    b.keys("d");
+    b.wait_until("d still closes it", |s| s.tabs().len() == 1);
+    b.run("set content.javascript.can_close_tabs true");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| {
+        s.tabs().len() == 2 && s.tab().is_loaded(&second)
+    });
+    b.eval("window.close(); ''");
+    b.wait_until("the page closes its tab", |s| s.tabs().len() == 1);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_javascript_log_message_levels_show_console_messages() {
+    let b = Browser::launch()
+        .toml("\"content.javascript.log_message.levels\" = [\"error\"]\nmessages.timeout = 0\n")
+        .start("page.html");
+    b.eval("console.info('quiet'); console.error('boom'); ''");
+    let s = b.wait_until("the error shows", |s| {
+        s.message().is_some_and(|m| m.starts_with("JS: boom"))
+    });
+    assert!(!s.message().unwrap().contains("quiet"));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_webgl_and_reduced_motion_apply_at_startup() {
+    const WEBGL: &str = "String(!!document.createElement('canvas').getContext('webgl'))";
+    const REDUCED: &str = "String(matchMedia('(prefers-reduced-motion: reduce)').matches)";
+    let b = Browser::start("page.html");
+    let webgl_by_default = b.eval(WEBGL);
+    assert_eq!(b.eval(REDUCED), "false");
+    let b = Browser::launch()
+        .toml("\"content.webgl\" = false\n\"content.prefers_reduced_motion\" = true\n")
+        .start("page.html");
+    assert_eq!(b.eval(REDUCED), "true");
+    assert_eq!(
+        b.eval(WEBGL),
+        "false",
+        "WebGL by default: {webgl_by_default}"
+    );
+}

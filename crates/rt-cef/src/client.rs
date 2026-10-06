@@ -364,6 +364,43 @@ wrap_display_handler! {
             crate::view::page_fullscreen(fullscreen != 0);
         }
 
+        /// `content.javascript.log_message.levels`: page console messages in
+        /// the status bar. Greasemonkey script errors always show; the UI
+        /// bars aren't tabs, so they never do.
+        fn on_console_message(
+            &self,
+            browser: Option<&mut Browser>,
+            level: LogSeverity,
+            message: Option<&CefString>,
+            source: Option<&CefString>,
+            line: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int {
+            let name = match level {
+                LogSeverity::ERROR | LogSeverity::FATAL => "error",
+                LogSeverity::WARNING => "warning",
+                LogSeverity::INFO => "info",
+                _ => "debug",
+            };
+            let source = source.map(|s| s.to_string()).unwrap_or_default();
+            let script = source.starts_with("greasemonkey:");
+            let shown = shell::with_tab(browser, |s, index, _| {
+                let url = s.tabs.get(index).map(|t| t.url.clone()).unwrap_or_default();
+                s.engine.settings().list_for("content.javascript.log_message.levels", &url).iter().any(|l| l == name)
+            })
+            .unwrap_or(false);
+            if shown || (script && name == "error") {
+                let text = message.map(|m| m.to_string()).unwrap_or_default();
+                let where_ = if source.is_empty() { String::new() } else { format!(" ({source}:{line})") };
+                let level = match name {
+                    "error" => Level::Error,
+                    "warning" => Level::Warning,
+                    _ => Level::Info,
+                };
+                shell::show_message(level, format!("JS: {text}{where_}"));
+            }
+            0
+        }
+
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
             let url = shell::with_tab(browser, |s, index, _| {
@@ -545,9 +582,15 @@ wrap_life_span_handler! {
         fn do_close(&self, browser: Option<&mut Browser>) -> ::std::os::raw::c_int {
             // A page calling `window.close()` should close its tab, not the window.
             // Closing from inside this callback is unsafe, so post it.
-            let tab = shell::with_tab(browser, |s, index, _| (!s.window_closing && s.tabs.len() > 1).then_some(index));
+            let tab = shell::with_tab(browser, |s, index, _| {
+                (!s.window_closing && s.tabs.len() > 1).then(|| (index, s.engine.settings().bool("content.javascript.can_close_tabs")))
+            });
             match tab.flatten() {
-                Some(index) => {
+                Some((_, false)) => {
+                    shell::show_message(Level::Info, "The page tried to close its tab (content.javascript.can_close_tabs)");
+                    1
+                }
+                Some((index, true)) => {
                     let mut task = tabs::CloseTab::new(index);
                     post_task(ThreadId::UI, Some(&mut task));
                     1

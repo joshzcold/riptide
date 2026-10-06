@@ -112,7 +112,8 @@ pub fn before_request(request: &mut Request) {
 
 /// The settings that are profile preferences (`content.headers.do_not_track`,
 /// `content.dns_prefetch`, `content.webrtc_ip_handling_policy`,
-/// `content.proxy`): set on the profile and on the private windows' context.
+/// `content.proxy`, `content.pdf_viewer`): set on the profile and on the
+/// private windows' context.
 pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
     let set = |name: &str, value: Option<cef::Value>| {
         let Some(mut value) = value else { return };
@@ -126,6 +127,12 @@ pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
         "enable_do_not_track",
         value_create().inspect(|v| {
             v.set_bool(settings.bool("content.headers.do_not_track").into());
+        }),
+    );
+    set(
+        "plugins.always_open_pdf_externally",
+        value_create().inspect(|v| {
+            v.set_bool((!settings.bool("content.pdf_viewer")).into());
         }),
     );
     // Chromium's NetworkPredictionOptions: 0 standard, 2 disabled.
@@ -186,6 +193,7 @@ pub fn apply_globals(settings: &Settings) {
         "content.dns_prefetch",
         "content.webrtc_ip_handling_policy",
         "content.proxy",
+        "content.pdf_viewer",
     ]
     .map(|name| {
         settings

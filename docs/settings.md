@@ -27,6 +27,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `completion.web_history.exclude` | string[] | `[]` | URL globs (e.g. *://*.bank.example/*) that :open never suggests from history |
 | `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
 | `confirm_quit` | string[] | `["never"]` | Ask before quitting: always, multiple-tabs (more than one tab open), downloads (downloads still running), or never |
+| `content.autoplay` | boolean | `true` | Let videos play by themselves; false waits until you interact with the page (after a restart) |
 | `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists) |
 | `content.blocking.enabled` | boolean | `true` | Block ads and trackers with the filter lists from content.blocking.adblock.lists |
 | `content.blocking.whitelist` | string[] | `[]` | Sites where nothing is blocked, as host names; a host also covers its subdomains |
@@ -43,15 +44,20 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.headers.referer` | always \| never \| same-domain | `same-domain` | When to send the Referer header: always, never, or only within the same domain and its subdomains |
 | `content.headers.user_agent` | string | `` | User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site |
 | `content.images` | boolean | `true` | Load images; can be set per site |
+| `content.javascript.can_close_tabs` | boolean | `true` | Let a page close its own tab with window.close(), as login popups do |
 | `content.javascript.can_open_tabs_automatically` | boolean | `false` | Let pages open tabs and windows without a click (popups); can be set per site |
 | `content.javascript.clipboard` | none \| access \| access-paste | `access` | What pages may do with the clipboard: nothing, copy with a click (access), or also read it (access-paste); can be set per site |
 | `content.javascript.enabled` | boolean | `true` | Run JavaScript on pages; can be set per site |
+| `content.javascript.log_message.levels` | string[] | `[]` | Console messages from pages shown in the status bar and :messages, by level: debug, info, warning, error (can be set per site) |
 | `content.media.audio_capture` | ask \| true \| false | `ask` | Let sites use your microphone: ask, true or false |
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
+| `content.pdf_viewer` | boolean | `true` | Show PDFs in the browser; false downloads them instead |
+| `content.prefers_reduced_motion` | boolean | `false` | Tell pages you prefer less motion, so they can tone down animations (after a restart) |
 | `content.proxy` | string | `system` | Proxy: system, none, a proxy URL such as socks5://127.0.0.1:9050, or pac+ and a PAC script's URL |
 | `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
+| `content.webgl` | boolean | `true` | Allow WebGL, which 3D graphics need and fingerprinting scripts use (after a restart) |
 | `content.webrtc_ip_handling_policy` | all-interfaces \| default-public-and-private-interfaces \| default-public-interface-only \| disable-non-proxied-udp | `all-interfaces` | Which IP addresses WebRTC (video calls) may reveal; disable-non-proxied-udp keeps it behind content.proxy |
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |

@@ -65,8 +65,8 @@ struct Startup {
     /// become Chromium switches; taken once CEF is up.
     config: std::sync::Arc<std::sync::Mutex<Option<rt_config::Loaded>>>,
     dark_mode: bool,
-    /// Switches from startup-only settings: `content.cache.size` and
-    /// `content.canvas_reading`.
+    /// Switches from startup-only settings such as `content.cache.size`,
+    /// `content.canvas_reading` and `content.webgl`.
     switches: Vec<(&'static str, Option<String>)>,
     /// `content.widevine` is on but the CDM isn't downloaded yet.
     fetch_widevine: bool,
@@ -331,6 +331,18 @@ pub fn run() -> i32 {
         }
         if !settings.bool("content.canvas_reading") {
             switches.push(("disable-reading-from-canvas", None));
+        }
+        if !settings.bool("content.autoplay") {
+            switches.push((
+                "autoplay-policy",
+                Some("document-user-activation-required".to_string()),
+            ));
+        }
+        if !settings.bool("content.webgl") {
+            switches.push(("disable-webgl", None));
+        }
+        if settings.bool("content.prefers_reduced_motion") {
+            switches.push(("force-prefers-reduced-motion", None));
         }
         switches
     };

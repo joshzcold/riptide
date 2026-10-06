@@ -685,11 +685,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - A smoke step covers all three.
   - ✅ (2026-10-06) Headers: `do_not_track` (Chromium's pref, on private windows too), `referer` (always, never, same-domain, applied per request on the IO thread), `accept_language` (CEF's `accept_language_list` at startup, so `navigator.languages` matches, plus a per-request header for later changes) and `custom`. Global only, not per site yet. e2e tests in `crates/rt-e2e/tests/content_settings.rs` read the headers back from the fixture server's `/headers`.
   - ✅ (2026-10-05) `content.images`, `content.mute`, `content.javascript.can_open_tabs_automatically` and `content.javascript.clipboard`, all also per site. `content.register_protocol_handler` was dropped: any stored default for Chromium's `PROTOCOL_HANDLERS` setting fails a `CHECK` when a private window's off-the-record profile inherits it. They share one table of Chromium content settings in `crates/rt-cef/src/content.rs`, with e2e tests in `crates/rt-e2e/tests/content_settings.rs`.
-  - Media: `content.autoplay`, `content.webgl`.
+  - ✅ (2026-10-06) `content.autoplay`, `content.webgl` and `content.prefers_reduced_motion` (startup switches), `content.pdf_viewer` (riptide's name: Chromium's built-in viewer already shows PDFs, so qutebrowser's `content.pdfjs` choice doesn't apply; `false` downloads them), `content.javascript.can_close_tabs` (refused in `DoClose`; a tab refused once can't close itself later, but `d` still works) and `content.javascript.log_message.levels` (console messages into `:messages`, per site; Greasemonkey errors always show). e2e tests in `crates/rt-e2e/tests/content_settings.rs`.
   - ✅ (2026-10-06) Privacy and network: `content.proxy` (system, none, URL, PAC; Chromium's `proxy` pref, live, on private windows too), `content.webrtc_ip_handling_policy`, `content.dns_prefetch` (prefs), and `content.canvas_reading` and `content.cache.size` (startup switches). `proxy_dns_requests` isn't needed: Chromium resolves names through SOCKS5 proxies, and qutebrowser's `socks://` maps to `socks5://`. e2e tests in `crates/rt-e2e/tests/content_settings.rs` (the fixture server doubles as an HTTP proxy).
-  - JavaScript permissions: `content.javascript.can_close_tabs`.
-  - Notifications and logging: `content.notifications.presenter` and `show_origin`, `content.javascript.log` (into `:messages`).
-  - Everything else: the PDF viewer (`content.pdfjs`), `content.prefers_reduced_motion`, `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
+  - Notifications: `content.notifications.presenter` and `show_origin`.
+  - Everything else: `content.unknown_url_scheme_policy`, `content.local_content_can_access_*`, `content.persistent_storage`, `content.mouse_lock`.
   - `content.user_stylesheets` is part of M20.
 - **Input:**
   - ✅ Tier 1 (2026-10-05):
