@@ -34,12 +34,18 @@ fn tabs_come_back_after_a_crash() {
     wait_for_autosave(&b, "second.html");
     b.crash();
     b.restart();
-    // The "Restored the tabs" message is soon replaced by the content
-    // blocking notice, so check the tabs themselves.
     let s = b.wait_until("the tabs are restored", |s| {
         s.tabs().len() == 2 && s.tabs()[1].url == second
     });
     assert_eq!(s.tabs()[0].url, b.url("page.html"));
+    // Shown once a restored page has loaded, which would otherwise clear it.
+    wait_message(&b, "Restored the tabs open before the crash");
+}
+
+fn wait_message(b: &Browser, text: &str) {
+    b.wait_until(&format!("the message says {text:?}"), |s| {
+        s.message().is_some_and(|m| m.contains(text))
+    });
 }
 
 #[test]
@@ -193,6 +199,10 @@ fn a_url_after_a_crash_opens_alone_and_the_crashed_tabs_survive_autosaves() {
     b.restart_with(&[&nav1]);
     let s = b.wait_until("only the given URL opens", |s| s.tab().is_loaded(&nav1));
     assert_eq!(s.tabs().len(), 1, "{:?}", s.tabs());
+    wait_message(
+        &b,
+        "The tabs open before the crash are in :session-load _crashed-",
+    );
     // The new run autosaves its own tabs; the crashed ones must survive that.
     wait_for_autosave(&b, "nav1.html");
     let crashed = crashed_sessions(&b);
@@ -230,6 +240,7 @@ fn tabs_that_crash_again_right_after_reopening_arent_reopened() {
         s.tab().url == "about:blank"
     });
     assert_eq!(s.tabs().len(), 1, "{:?}", s.tabs());
+    wait_message(&b, "crashed again soon after reopening");
     assert!(!marker.exists(), "the probation mark should be cleared");
     assert!(!crashed_sessions(&b).is_empty());
 }

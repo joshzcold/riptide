@@ -1,7 +1,7 @@
 //! Crash reports: a panic in the browser process writes one to
 //! `<data>/crashes/`, and the next start says where it is.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rt_core::engine::Level;
 use rt_storage::crash_reports::{CrashReports, Report};
@@ -55,24 +55,13 @@ pub fn install_panic_hook(data_dir: &Path) {
     }));
 }
 
-thread_local! {
-    static UNMENTIONED: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
-}
-
-/// At startup: find the report the last run left, if it hasn't been mentioned yet.
-pub fn find_last_report() {
+/// At startup: say where the report the last run left is, if that hasn't been said yet.
+pub fn mention_last_report() {
     let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) else {
         return;
     };
-    let path = reports(&data_dir).take_unseen();
-    UNMENTIONED.with(|u| *u.borrow_mut() = path);
-}
-
-/// Once a page has loaded, say where that report is. Earlier, the page
-/// starting to load would clear the message.
-pub fn mention_last_report() {
-    if let Some(path) = UNMENTIONED.with(|u| u.borrow_mut().take()) {
-        shell::show_message(
+    if let Some(path) = reports(&data_dir).take_unseen() {
+        shell::show_message_after_load(
             Level::Error,
             format!(
                 "riptide crashed last time. The report is in {}",

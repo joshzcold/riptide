@@ -195,14 +195,14 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
         (Recovery::Restore, Some((name, session))) => {
             tabs::restore(&session);
             storage::start_recovery_probation();
-            shell::show_message(
+            shell::show_message_after_load(
                 Level::Info,
                 format!("Restored the tabs open before the crash (kept as :session-load {name})"),
             );
             true
         }
         (Recovery::Offer, Some((name, _))) => {
-            shell::show_message(
+            shell::show_message_after_load(
                 Level::Info,
                 format!("The tabs open before the crash are in :session-load {name}"),
             );
@@ -210,7 +210,7 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
         }
         (Recovery::OfferAfterLoop, Some((name, _))) => {
             storage::set_recovering(false);
-            shell::show_message(
+            shell::show_message_after_load(
                 Level::Error,
                 format!(
                     "riptide crashed again soon after reopening the last crash's tabs, \
@@ -380,7 +380,7 @@ wrap_window_delegate! {
                 }
                 if first {
                     storage::start_autosave();
-                    crate::crash::find_last_report();
+                    crate::crash::mention_last_report();
                 }
             }
             crate::remote::run_commands(&self.commands);

@@ -881,7 +881,7 @@ Whatever path wins:
       - A panic that reaches CEF's C callers panics a second time ("cannot unwind"). Only the first panic on a thread is reported.
       - The next start says "riptide crashed last time. The report is in …", once. The message waits until the first page has loaded, because starting a load clears messages.
       - Tests: unit tests in `crash_reports.rs`, and the e2e test `a_panic_writes_a_report_that_the_next_start_mentions_once`. The test channel's `Panic` request triggers it.
-      - **Found:** a page starting to load clears every message, so startup messages such as "Restored the tabs open before the crash" vanish as soon as the restored tabs load. They should get the same delay.
+      - ✅ **Fixed:** a page starting to load clears every message, so the recovery messages ("Restored the tabs open before the crash" and the others) vanished as soon as the restored tabs loaded. `shell::show_message_after_load` now holds startup messages until a page has finished loading; `sessions.rs` checks all three.
     - For native crashes in CEF, enable Crashpad to write minidumps locally with uploads off, and record the dump's path.
   - **Offer after the crash:** at the next startup, the status bar names the report (done). Next: a `:crash-report` command that opens `riptide://crash/`, which shows the report and lets the user edit it, then send it one of two ways:
     - **Email:** a `mailto:` link with the subject and body filled in. The address comes from a `crash_report.email` setting; with no address, the email button is hidden.

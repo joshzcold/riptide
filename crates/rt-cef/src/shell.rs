@@ -396,6 +396,23 @@ pub fn show_message(level: Level, text: impl Into<String>) {
     with(|s| s.engine.show_message(level, text));
 }
 
+thread_local! {
+    static AFTER_LOAD: std::cell::RefCell<Vec<(Level, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Show a startup message once a page has loaded. Shown earlier, the page
+/// starting to load would clear it.
+pub fn show_message_after_load(level: Level, text: impl Into<String>) {
+    AFTER_LOAD.with(|m| m.borrow_mut().push((level, text.into())));
+}
+
+/// A page finished loading: show the messages waiting for that.
+pub fn show_messages_waiting_for_load() {
+    for (level, text) in AFTER_LOAD.with(|m| std::mem::take(&mut *m.borrow_mut())) {
+        show_message(level, text);
+    }
+}
+
 /// (Re)read the config files into the engine. Returns the errors found.
 pub fn load_config() -> Vec<String> {
     let Some(paths) = with(|s| s.paths.clone()) else {
