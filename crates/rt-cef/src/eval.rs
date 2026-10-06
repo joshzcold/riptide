@@ -19,10 +19,14 @@ thread_local! {
 /// Evaluate `code` in the browser's main frame and call `done` with the
 /// result. The script's completion value must be a string (use JSON).
 pub fn eval(browser: &Browser, code: &str, done: impl FnOnce(Result<String, String>) + 'static) {
-    let Some(frame) = browser.main_frame() else {
-        done(Err("page has no main frame".into()));
-        return;
-    };
+    match browser.main_frame() {
+        Some(frame) => eval_frame(&frame, code, done),
+        None => done(Err("page has no main frame".into())),
+    }
+}
+
+/// [`eval`] in one frame, which may be a cross-origin iframe.
+pub fn eval_frame(frame: &Frame, code: &str, done: impl FnOnce(Result<String, String>) + 'static) {
     let Some(mut message) = process_message_create(Some(&CefString::from(EVAL_MESSAGE))) else {
         done(Err("could not create process message".into()));
         return;

@@ -40,7 +40,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `gJ` `gK`, `gm` | `tab-move +` / `-` / to the start (or to the count) |
 | `co` | `tab-only` (keeps pinned tabs; `:tab-only --force` closes them too) |
 | `Ctrl-p` | `tab-pin`: pin or unpin the tab (a count picks one, e.g. `3 Ctrl-p`) |
-| `f` / `F` / `;b` | Hint elements; click / open in a new tab / open in a background tab. With `hints.mode = "number"`, labels are numbers and typing letters narrows the elements by their text (a single match is followed). Elements in same-origin iframes are hinted too. |
+| `f` / `F` / `;b` | Hint elements; click / open in a new tab / open in a background tab. With `hints.mode = "number"`, labels are numbers and typing letters narrows the elements by their text (a single match is followed). Elements inside iframes (from any site, such as Gmail's Chat) and inside web components' shadow DOM are hinted too. |
 | `;y` / `;h` / `;t` | Hint a link to yank / an element to hover / an input to focus |
 | `;i` / `;I` | Hint an image; open it here / in a new tab |
 | `;o` / `;O` | Hint a link and put `:open` (or `:open -t`) with its URL on the command line |

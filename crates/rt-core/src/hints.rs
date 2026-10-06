@@ -367,6 +367,83 @@ impl HintSession {
     }
 }
 
+/// A frame that collected its own hints: the top page, or a frame its
+/// parent can't see into (cross-origin).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FrameReport {
+    pub id: String,
+    /// The nearest frame above this one that collected its own hints;
+    /// `None` for the top page.
+    pub ancestor: Option<String>,
+    pub name: String,
+    pub url: String,
+    /// The cross-origin frames this one found while collecting.
+    pub children: Vec<ChildFrame>,
+}
+
+/// A cross-origin `<iframe>` as its collecting frame saw it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ChildFrame {
+    pub url: String,
+    pub name: String,
+    /// Where its content starts, in the collecting frame's viewport; `None`
+    /// when it isn't visible.
+    pub at: Option<(f64, f64)>,
+}
+
+/// Where a frame's hints are on screen.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Placement {
+    /// Its viewport starts here in the top page.
+    At(f64, f64),
+    /// Shown, but where couldn't be worked out (two frames alike).
+    Unknown,
+    /// Not visible: its hints are dropped.
+    Hidden,
+}
+
+/// Place every frame: find its `<iframe>` among its ancestor's children,
+/// by name, or by URL when it has none, and add up the offsets.
+pub fn place_frames(frames: &[FrameReport]) -> Vec<Placement> {
+    fn place(frames: &[FrameReport], index: usize, depth: usize) -> Placement {
+        let frame = &frames[index];
+        let Some(ancestor_id) = &frame.ancestor else {
+            return Placement::At(0.0, 0.0);
+        };
+        let Some(ancestor) = frames.iter().position(|f| f.id == *ancestor_id) else {
+            return Placement::Unknown;
+        };
+        let above = if depth > 32 {
+            Placement::Unknown
+        } else {
+            place(frames, ancestor, depth + 1)
+        };
+        if above == Placement::Hidden {
+            return Placement::Hidden;
+        }
+        let children = &frames[ancestor].children;
+        let by_name: Vec<&ChildFrame> = children
+            .iter()
+            .filter(|c| !frame.name.is_empty() && c.name == frame.name)
+            .collect();
+        let matches = if by_name.is_empty() {
+            children.iter().filter(|c| c.url == frame.url).collect()
+        } else {
+            by_name
+        };
+        match (matches.as_slice(), above) {
+            ([only], Placement::At(x, y)) => match only.at {
+                Some((cx, cy)) => Placement::At(x + cx, y + cy),
+                None => Placement::Hidden,
+            },
+            ([only], _) if only.at.is_none() => Placement::Hidden,
+            (all, _) if !all.is_empty() && all.iter().all(|c| c.at.is_none()) => Placement::Hidden,
+            _ => Placement::Unknown,
+        }
+    }
+    (0..frames.len()).map(|i| place(frames, i, 0)).collect()
+}
+
 /// The words of a `hints.dictionary` file that make usable labels:
 /// lowercase letters only, at least two, shortest first.
 pub fn dictionary_words(text: &str) -> Vec<String> {
@@ -622,5 +699,63 @@ mod tests {
         let labels = word_labels(&items, &dictionary);
         // "news" is a prefix of "newsletter", taken first, so it can't be used.
         assert_eq!(labels, ["home", "newsletter", "go", "help", ""]);
+    }
+
+    #[test]
+    fn frames_are_placed_through_their_ancestors() {
+        let child = |url: &str, name: &str, at: Option<(f64, f64)>| ChildFrame {
+            url: url.into(),
+            name: name.into(),
+            at,
+        };
+        let frames = [
+            FrameReport {
+                id: "top".into(),
+                children: vec![
+                    child("https://chat.example/list", "", Some((10.0, 20.0))),
+                    child("https://ads.example/", "", None),
+                    child("https://twin.example/", "", Some((0.0, 0.0))),
+                    child("https://twin.example/", "", Some((50.0, 0.0))),
+                ],
+                ..FrameReport::default()
+            },
+            FrameReport {
+                id: "chat".into(),
+                ancestor: Some("top".into()),
+                url: "https://chat.example/list".into(),
+                children: vec![child("https://inner.example/", "box", Some((5.0, 5.0)))],
+                ..FrameReport::default()
+            },
+            FrameReport {
+                id: "inner".into(),
+                ancestor: Some("chat".into()),
+                name: "box".into(),
+                url: "https://inner.example/moved".into(),
+                ..FrameReport::default()
+            },
+            FrameReport {
+                id: "ads".into(),
+                ancestor: Some("top".into()),
+                url: "https://ads.example/".into(),
+                ..FrameReport::default()
+            },
+            FrameReport {
+                id: "twin".into(),
+                ancestor: Some("top".into()),
+                url: "https://twin.example/".into(),
+                ..FrameReport::default()
+            },
+        ];
+        assert_eq!(
+            place_frames(&frames),
+            [
+                Placement::At(0.0, 0.0),
+                Placement::At(10.0, 20.0),
+                // Matched by name although its URL changed.
+                Placement::At(15.0, 25.0),
+                Placement::Hidden,
+                Placement::Unknown,
+            ]
+        );
     }
 }

@@ -30,7 +30,7 @@ A browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrow
 
 - **Keyboard first:** normal, insert, command, hint, caret and passthrough modes, with qutebrowser's bindings. Also counts, marks, macros, `/` search, `:navigate`, and a command line with history and completion.
 - **Tabs and windows:** pinned tabs, a tab bar that works with the mouse, favicons, `:tab-select`, moving tabs between windows, and private windows.
-- **Hints:** for links, inputs, images, yanking and downloads, including number hints and same-origin iframes.
+- **Hints:** for links, inputs, images, yanking and downloads, including number hints, iframes from any site and shadow DOM.
 - **Privacy:** an Adblock Plus engine (EasyList and EasyPrivacy), Google background calls turned off, the Chromium sandbox where Linux allows it, and per-site permissions and certificate decisions.
 - **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
 - **Scripts and data:** userscripts, Greasemonkey scripts, `:open-editor`, and qutebrowser's quickmark, bookmark and history formats (`:history-import`).

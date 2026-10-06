@@ -86,16 +86,40 @@
     }
   }
 
-  function gather(doc, frames, selector, out) {
-    for (const el of doc.querySelectorAll(selector)) {
-      // Same-origin frames are searched below instead of hinted themselves.
-      const searched = (el.tagName === "IFRAME" || el.tagName === "FRAME") && innerDocument(el);
+  // Cross-origin frames found while gathering: the browser hints inside them
+  // separately and needs to know where they are.
+  let crossFrames = [];
+
+  // Elements in `root` (a document or an open shadow root) and in the
+  // shadow roots inside it, which querySelectorAll doesn't enter.
+  function gatherRoot(root, frames, selector, out) {
+    for (const el of root.querySelectorAll(selector)) {
+      // Frames are searched (same-origin) or hinted by the browser (cross-origin)
+      // instead of hinted themselves.
+      if (el.tagName === "IFRAME" || el.tagName === "FRAME") continue;
       const entry = { el, frames };
-      if (!searched && visibleRect(entry) && isShown(el)) out.push(entry);
+      if (visibleRect(entry) && isShown(el)) out.push(entry);
     }
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) gatherRoot(el.shadowRoot, frames, selector, out);
+    }
+  }
+
+  function gather(doc, frames, selector, out) {
+    gatherRoot(doc, frames, selector, out);
     for (const frame of doc.querySelectorAll("iframe, frame")) {
       const inner = innerDocument(frame);
-      if (inner && visibleRect({ el: frame, frames }) && isShown(frame)) {
+      const shown = visibleRect({ el: frame, frames }) && isShown(frame);
+      if (!inner) {
+        // Where the frame's content starts, in this frame's viewport.
+        const r = frame.getBoundingClientRect();
+        const { x, y } = frameOffset(frames);
+        crossFrames.push({
+          url: frame.src ? new URL(frame.src, frame.ownerDocument.baseURI).href : "",
+          name: frame.name || "",
+          rect: shown ? { x: x + r.left + frame.clientLeft, y: y + r.top + frame.clientTop } : null,
+        });
+      } else if (shown) {
         gather(inner, [...frames, frame], selector, out);
       }
     }
@@ -110,10 +134,23 @@
 
   window.__rtHints = {
     // `selector` is a CSS selector list from hints.selectors.
+    // Also says whether this frame collects for itself (the top page, or a
+    // frame its parent can't see into) and lists the cross-origin frames in it.
     collect(selector) {
       clear();
-      elements = gather(document, [], selector, []);
-      return JSON.stringify(elements.map(({ el }) => ({ url: urlOf(el), text: textOf(el) })));
+      let root;
+      try {
+        root = window.frameElement === null;
+      } catch {
+        root = true;
+      }
+      crossFrames = [];
+      elements = root ? gather(document, [], selector, []) : [];
+      return JSON.stringify({
+        root,
+        items: elements.map(({ el }) => ({ url: urlOf(el), text: textOf(el) })),
+        frames: crossFrames,
+      });
     },
 
     show(texts, uppercase) {
@@ -160,6 +197,16 @@
 
     clear() {
       clear();
+      return "";
+    },
+
+    // Click an element without real input, when the browser can't tell where
+    // this frame is on screen.
+    activate(i) {
+      const entry = elements[i];
+      if (!entry || !entry.el.isConnected) return "gone";
+      entry.el.focus?.();
+      entry.el.click?.();
       return "";
     },
 

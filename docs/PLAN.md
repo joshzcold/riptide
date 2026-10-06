@@ -146,7 +146,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
 - [x] `;d` download
-- [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02; cross-origin iframes are hinted as a whole until the M19 item for them is done)
+- [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02), cross-origin iframes and open shadow roots (2026-10-06)
 - [x] Number hint mode (`hints.mode = number`: digit labels, letters filter by element text, a unique match is followed) (2026-10-02)
 
 ### Command line
@@ -678,7 +678,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - Rapid mode (`hint --rapid`) was already done.
   - ✅ (2026-10-05) `hints.min_chars`, `hints.scatter`, `hints.leave_on_load`, and `hints.next_regexes`/`prev_regexes` as settings (passed to `navigate.js`), with e2e tests in `crates/rt-e2e/tests/hint_settings.rs`. `hint-follow` was already done.
   - ✅ (2026-10-05) `hints.mode = word` with `hints.dictionary` (labels from each link's own words, prefix-free, shortest dictionary words as a fallback) and `hints.hide_unmatched_rapid_hints`.
-  - **Hints inside cross-origin iframes and shadow DOM.** Gmail's Chat panes (served from `chat.google.com` inside `mail.google.com`) get one hint for the whole iframe today, because `hints.js` only searches same-origin frames and page JavaScript can't see into other sites' frames. Sites built from web components (YouTube, GitHub) lose buttons inside shadow roots the same way.
+  - ✅ (2026-10-06, e2e tests in `crates/rt-e2e/tests/hint_frames.rs`; `rt_core::hints::place_frames` is unit tested) **Hints inside cross-origin iframes and shadow DOM.** Gmail's Chat panes (served from `chat.google.com` inside `mail.google.com`) get one hint for the whole iframe today, because `hints.js` only searches same-origin frames and page JavaScript can't see into other sites' frames. Sites built from web components (YouTube, GitHub) lose buttons inside shadow roots the same way.
     - **Collect per frame:** the browser runs `hints.js` in every frame of the tab (`Browser::frame_identifiers`, each through the eval channel), not just the main frame. Results are merged in frame order, so one label sequence covers them all.
     - **Draw per frame:** each frame draws its own labels in its own document, so labels need no coordinate translation. Filtering, `hint-follow` and leaving hint mode go to every frame that has labels.
     - **Follow:** a click needs window coordinates. The main frame finds the `<iframe>` element showing that frame (matched by URL), and its box offsets the element's point. When the match is ambiguous (two iframes with the same URL), fall back to `el.click()` inside the frame, which some sites ignore since it isn't a trusted event.

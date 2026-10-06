@@ -1,0 +1,7 @@
+<!doctype html><title>shadow</title>
+<div id="host"></div>
+<script>
+  const root = document.getElementById("host").attachShadow({ mode: "open" });
+  root.innerHTML = '<button>shadowed</button>';
+  root.querySelector("button").addEventListener("click", (e) => { document.title = "shadow clicked " + e.isTrusted; });
+</script>

@@ -1,9 +1,12 @@
 //! Hint mode glue: asks the page for hintable elements, draws labels, and
 //! performs the chosen action. Label logic lives in `rt_core::hints`.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use cef::*;
 use rt_core::engine::Level;
-use rt_core::hints::{HintItem, HintRequest, HintTarget};
+use rt_core::hints::{ChildFrame, FrameReport, HintItem, HintRequest, HintTarget, Placement};
 use rt_core::tabs::Position;
 use serde::Deserialize;
 
@@ -24,7 +27,50 @@ struct Point {
     y: f64,
 }
 
-/// `:hint` — collect elements in the current tab, then enter hint mode.
+/// What `__rtHints.collect` reports from one frame.
+#[derive(Deserialize)]
+struct Collected {
+    root: bool,
+    items: Vec<Item>,
+    #[serde(default)]
+    frames: Vec<CrossFrame>,
+}
+
+#[derive(Deserialize)]
+struct CrossFrame {
+    url: String,
+    name: String,
+    rect: Option<Point>,
+}
+
+/// A frame with hints: its items are `start..start + len` of the session's.
+struct HintFrame {
+    frame: Frame,
+    /// Where its viewport is in the top page; `None` if that couldn't be worked out.
+    offset: Option<(f64, f64)>,
+    start: usize,
+    len: usize,
+}
+
+thread_local! {
+    /// The frames of the current hint session, in label order.
+    static FRAMES: RefCell<Vec<HintFrame>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Replies still to come from the frames of one `:hint`.
+struct Gathering {
+    browser: i32,
+    request: Option<HintRequest>,
+    pending: usize,
+    replies: Vec<(Frame, Collected)>,
+}
+
+/// How long to wait for every frame before hinting with what has answered.
+const COLLECT_TIMEOUT_MS: i64 = 1500;
+
+/// `:hint` — collect elements in every frame of the current tab, then enter
+/// hint mode. Cross-origin iframes collect their own; the rest are searched
+/// from the frame above them.
 pub fn request(request: HintRequest) {
     let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
         return;
@@ -44,31 +90,153 @@ pub fn request(request: HintRequest) {
     };
     let selectors = serde_json::to_string(selectors).unwrap_or_default();
     let code = format!("{HINTS_JS}; window.__rtHints.collect({selectors})");
-    let id = browser.identifier();
-    eval::eval(&browser, &code, move |result| {
-        let items: Vec<Item> = match result.map(|json| serde_json::from_str(&json)) {
-            Ok(Ok(items)) => items,
-            Ok(Err(e)) => return shell::show_message(Level::Error, format!("Hints failed: {e}")),
-            Err(e) => return shell::show_message(Level::Error, format!("Hints failed: {e}")),
-        };
-        let items = items
-            .into_iter()
-            .map(|i| HintItem {
-                url: i.url,
-                text: i.text,
-            })
-            .collect();
-        load_dictionary();
-        let effects = shell::with(|s| {
-            // Ignore stale replies if the user switched tabs meanwhile.
-            if s.current_browser().map(|b| b.identifier()) != Some(id) {
-                return Vec::new();
+    let frames = all_frames(&browser);
+    let gathering = Rc::new(RefCell::new(Gathering {
+        browser: browser.identifier(),
+        request: Some(request),
+        pending: frames.len(),
+        replies: Vec::new(),
+    }));
+    for frame in frames {
+        let state = gathering.clone();
+        let target = frame.clone();
+        eval::eval_frame(&frame, &code, move |result| {
+            let reply = result
+                .ok()
+                .and_then(|json| serde_json::from_str::<Collected>(&json).ok());
+            let finished = {
+                let mut g = state.borrow_mut();
+                if let Some(reply) = reply {
+                    g.replies.push((target, reply));
+                }
+                g.pending = g.pending.saturating_sub(1);
+                g.pending == 0
+            };
+            if finished {
+                finish(&state);
             }
-            s.hint_browser = Some(id);
-            s.engine.start_hints(request, items)
         });
-        shell::apply(effects.unwrap_or_default());
+    }
+    // A frame that never answers (busy, or gone) doesn't hold the rest up.
+    let mut task = FinishGathering::new(RefCell::new(Some(gathering)));
+    post_delayed_task(ThreadId::UI, Some(&mut task), COLLECT_TIMEOUT_MS);
+}
+
+/// The browser's frames, the main frame first.
+fn all_frames(browser: &Browser) -> Vec<Frame> {
+    let mut ids = CefStringList::new();
+    browser.frame_identifiers(Some(&mut ids));
+    let mut frames: Vec<Frame> = ids
+        .into_iter()
+        .filter_map(|id| browser.frame_by_identifier(Some(&CefString::from(id.as_str()))))
+        .filter(|f| f.is_valid() != 0)
+        .collect();
+    frames.sort_by_key(|f| f.is_main() == 0);
+    frames
+}
+
+wrap_task! {
+    struct FinishGathering {
+        gathering: RefCell<Option<Rc<RefCell<Gathering>>>>,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(state) = self.gathering.borrow_mut().take() {
+                finish(&state);
+            }
+        }
+    }
+}
+
+fn frame_id(frame: &Frame) -> String {
+    CefString::from(&frame.identifier()).to_string()
+}
+
+/// Place the frames, drop hidden ones, and start hint mode with every
+/// frame's items in order. Runs once, whichever comes first: the last
+/// reply or the timeout.
+fn finish(state: &Rc<RefCell<Gathering>>) {
+    let (browser, request, replies) = {
+        let mut g = state.borrow_mut();
+        let Some(request) = g.request.take() else {
+            return;
+        };
+        (g.browser, request, std::mem::take(&mut g.replies))
+    };
+    let mut replies: Vec<(Frame, Collected)> =
+        replies.into_iter().filter(|(_, c)| c.root).collect();
+    replies.sort_by_key(|(f, _)| f.is_main() == 0);
+    let roots: Vec<String> = replies.iter().map(|(f, _)| frame_id(f)).collect();
+    let reports: Vec<FrameReport> = replies
+        .iter()
+        .map(|(frame, collected)| {
+            // The nearest frame above that collected for itself.
+            let mut ancestor = None;
+            let mut parent = if frame.is_main() != 0 {
+                None
+            } else {
+                frame.parent()
+            };
+            while let Some(p) = parent {
+                let id = frame_id(&p);
+                if roots.contains(&id) {
+                    ancestor = Some(id);
+                    break;
+                }
+                parent = p.parent();
+            }
+            FrameReport {
+                id: frame_id(frame),
+                ancestor,
+                name: CefString::from(&frame.name()).to_string(),
+                url: CefString::from(&frame.url()).to_string(),
+                children: collected
+                    .frames
+                    .iter()
+                    .map(|c| ChildFrame {
+                        url: c.url.clone(),
+                        name: c.name.clone(),
+                        at: c.rect.as_ref().map(|r| (r.x, r.y)),
+                    })
+                    .collect(),
+            }
+        })
+        .collect();
+    let placements = rt_core::hints::place_frames(&reports);
+    let mut items = Vec::new();
+    let mut frames = Vec::new();
+    for ((frame, collected), placement) in replies.into_iter().zip(placements) {
+        let offset = match placement {
+            Placement::Hidden => continue,
+            Placement::At(x, y) => Some((x, y)),
+            Placement::Unknown => None,
+        };
+        if collected.items.is_empty() {
+            continue;
+        }
+        frames.push(HintFrame {
+            frame,
+            offset,
+            start: items.len(),
+            len: collected.items.len(),
+        });
+        items.extend(collected.items.into_iter().map(|i| HintItem {
+            url: i.url,
+            text: i.text,
+        }));
+    }
+    load_dictionary();
+    let effects = shell::with(|s| {
+        // Ignore stale replies if the user switched tabs meanwhile.
+        if s.current_browser().map(|b| b.identifier()) != Some(browser) {
+            return Vec::new();
+        }
+        s.hint_browser = Some(browser);
+        FRAMES.with(|f| *f.borrow_mut() = frames);
+        s.engine.start_hints(request, items)
     });
+    shell::apply(effects.unwrap_or_default());
 }
 
 thread_local! {
@@ -118,24 +286,51 @@ fn hint_browser() -> Option<Browser> {
     .flatten()
 }
 
+/// Run `__rtHints.method(arg)` in every frame of the hint session.
 fn call(method: &str, arg: &str) {
-    if let Some(browser) = hint_browser() {
-        eval::eval(
-            &browser,
-            &format!("window.__rtHints.{method}({arg})"),
-            |_| {},
-        );
+    let frames: Vec<Frame> = FRAMES.with(|f| f.borrow().iter().map(|h| h.frame.clone()).collect());
+    for frame in frames.iter().filter(|f| f.is_valid() != 0) {
+        eval::eval_frame(frame, &format!("window.__rtHints.{method}({arg})"), |_| {});
     }
+}
+
+/// A frame, where it is in the top page (if known), and an index within it.
+type FrameHint = (Frame, Option<(f64, f64)>, usize);
+
+/// The frame showing hint `index`, its offset, and the index within it.
+fn frame_of(index: usize) -> Option<FrameHint> {
+    FRAMES.with(|f| {
+        f.borrow()
+            .iter()
+            .find(|h| (h.start..h.start + h.len).contains(&index))
+            .map(|h| (h.frame.clone(), h.offset, index - h.start))
+    })
 }
 
 fn related_position() -> Position {
     shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next)
 }
 
+/// Each frame draws its own share of the labels.
 pub fn show(labels: &[String]) {
     let upper = shell::with(|s| s.engine.settings().bool("hints.uppercase")).unwrap_or(false);
-    let labels = serde_json::to_string(labels).unwrap_or_default();
-    call("show", &format!("{labels}, {upper}"));
+    let frames: Vec<(Frame, usize, usize)> = FRAMES.with(|f| {
+        f.borrow()
+            .iter()
+            .map(|h| (h.frame.clone(), h.start, h.len))
+            .collect()
+    });
+    for (frame, start, len) in frames {
+        let Some(slice) = labels.get(start..start + len) else {
+            continue;
+        };
+        let slice = serde_json::to_string(slice).unwrap_or_default();
+        eval::eval_frame(
+            &frame,
+            &format!("window.__rtHints.show({slice}, {upper})"),
+            |_| {},
+        );
+    }
 }
 
 pub fn filter(typed: &str) {
@@ -178,11 +373,30 @@ pub fn follow(index: usize, url: Option<String>, target: HintTarget) {
 
 /// Move the mouse to the element and optionally click it. Real input events
 /// give the page a user gesture, so popups, focus and frameworks behave.
+/// Inside a frame whose place on screen isn't known, the element is clicked
+/// by script instead.
 fn mouse_at(browser: &Browser, index: usize, click: bool) {
+    let Some((frame, offset, local)) = frame_of(index) else {
+        return shell::show_message(Level::Error, "The element is gone");
+    };
+    let Some((dx, dy)) = offset else {
+        if click {
+            eval::eval_frame(
+                &frame,
+                &format!("window.__rtHints.activate({local})"),
+                |result| {
+                    if result.as_deref() == Ok("gone") {
+                        shell::show_message(Level::Error, "The element is gone");
+                    }
+                },
+            );
+        }
+        return;
+    };
     let target = browser.clone();
-    eval::eval(
-        browser,
-        &format!("window.__rtHints.point({index})"),
+    eval::eval_frame(
+        &frame,
+        &format!("window.__rtHints.point({local})"),
         move |result| {
             let Some(point) = result
                 .ok()
@@ -194,8 +408,8 @@ fn mouse_at(browser: &Browser, index: usize, click: bool) {
             let Some(host) = target.host() else { return };
             let zoom = 1.2_f64.powf(host.zoom_level());
             let event = MouseEvent {
-                x: (point.x * zoom).round() as i32,
-                y: (point.y * zoom).round() as i32,
+                x: ((point.x + dx) * zoom).round() as i32,
+                y: ((point.y + dy) * zoom).round() as i32,
                 modifiers: 0,
             };
             host.send_mouse_move_event(Some(&event), 0);

@@ -1,0 +1,11 @@
+<!doctype html><title>xframe</title>
+<a href="#top" onclick="document.title = 'clicked top'">outer</a>
+<iframe id="f" style="width: 400px; height: 120px; border: 0; margin-left: 30px"></iframe>
+<iframe id="h" style="display: none"></iframe>
+<script>
+  // The same server as localhost: another origin.
+  const other = (page) => location.href.replace("127.0.0.1", "localhost").replace(/[^/]*$/, page);
+  document.getElementById("f").src = other("xframe-inner.html");
+  document.getElementById("h").src = other("xframe-inner.html?hidden");
+  addEventListener("message", (e) => { document.title = e.data; });
+</script>
