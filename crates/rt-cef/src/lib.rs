@@ -14,6 +14,7 @@ mod eval;
 mod favicons;
 mod fetch;
 mod fileselect;
+mod gm_api;
 mod greasemonkey;
 mod help;
 mod hints;

@@ -94,6 +94,21 @@ wrap_client! {
                 }
                 return 1;
             }
+            if name == crate::renderer::GM_XHR_MESSAGE {
+                if let (Some(frame), Some(args)) = (frame.as_ref(), message.argument_list()) {
+                    let text = |i| CefString::from(&args.string(i)).to_string();
+                    let id = text(1).parse().unwrap_or(0);
+                    crate::gm_api::xhr((*frame).clone(), &text(0), id, &text(2));
+                }
+                return 1;
+            }
+            if name == crate::renderer::GM_OPEN_MESSAGE {
+                if let (Some(frame), Some(args)) = (frame.as_ref(), message.argument_list()) {
+                    let text = |i| CefString::from(&args.string(i)).to_string();
+                    crate::gm_api::open_in_tab(frame, &text(0), &text(1), !text(2).is_empty());
+                }
+                return 1;
+            }
             if name == crate::renderer::GM_SET_MESSAGE {
                 if let Some(args) = message.argument_list() {
                     let text = |i| CefString::from(&args.string(i)).to_string();

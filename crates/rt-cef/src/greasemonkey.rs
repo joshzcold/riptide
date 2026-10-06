@@ -100,6 +100,11 @@ fn fetch_requires(paths: &rt_config::Paths, urls: Vec<String>) {
     }
 }
 
+/// The loaded script called `name`.
+pub fn script(name: &str) -> Option<rt_config::greasemonkey::Script> {
+    SCRIPTS.with(|s| s.borrow().iter().find(|s| s.name == name).cloned())
+}
+
 /// A script's `GM_setValue` or `GM_deleteValue` (`value: None`), from a renderer.
 pub fn set_value(script: &str, key: &str, value: Option<&str>) {
     let Some(paths) = shell::with(|s| s.paths.clone()) else {

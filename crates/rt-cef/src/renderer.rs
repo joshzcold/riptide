@@ -25,6 +25,16 @@ pub const GM_VALUES_MESSAGE: &str = "rt.gm-values";
 /// key, and the value as JSON (empty to delete it).
 pub const GM_SET_MESSAGE: &str = "rt.gm-set";
 
+/// Renderer → browser: `GM_xmlhttpRequest`; arguments are the script name,
+/// the request id, and the request as JSON.
+pub const GM_XHR_MESSAGE: &str = "rt.gm-xhr";
+/// Browser → renderer: a `GM_xmlhttpRequest` finished; arguments are the
+/// request id and the response as JSON.
+pub const GM_XHR_DONE_MESSAGE: &str = "rt.gm-xhr-done";
+/// Renderer → browser: `GM_openInTab`; arguments are the script name, the
+/// URL, and whether to open it in the background.
+pub const GM_OPEN_MESSAGE: &str = "rt.gm-open";
+
 /// The scripts, numbered so a renderer can tell which list is newest.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Scripts {
@@ -34,6 +44,27 @@ pub struct Scripts {
 
 thread_local! {
     static SCRIPTS: RefCell<(u64, Vec<Script>)> = const { RefCell::new((0, Vec::new())) };
+    static NEXT_XHR: std::cell::Cell<i32> = const { std::cell::Cell::new(1) };
+    /// `GM_xmlhttpRequest` callbacks waiting for the browser, by request id.
+    static XHR_CALLBACKS: RefCell<std::collections::HashMap<i32, (V8Context, V8Value)>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+/// JavaScript for the APIs a script must `@grant`, built on the private
+/// `__rtXhr` and `__rtOpen` functions.
+fn granted_api(script: &Script) -> String {
+    let mut js = String::new();
+    if script.grants("GM_xmlhttpRequest") {
+        js.push_str(
+            "const GM_xmlhttpRequest = (d) => {\n               const request = { method: d.method || 'GET', url: String(new URL(d.url, location.href)), \n                 headers: d.headers || {}, data: d.data == null ? null : String(d.data), timeout: d.timeout || 0 };\n               __rtXhr(JSON.stringify(request), (json) => {\n                 const r = JSON.parse(json);\n                 const response = { readyState: 4, status: r.status, statusText: r.statusText, \n                   responseText: r.responseText, response: r.responseText, responseHeaders: r.responseHeaders, \n                   finalUrl: r.finalUrl, error: r.error, context: d.context };\n                 if (d.responseType === 'json') { try { response.response = JSON.parse(r.responseText); } catch (e) { response.response = null; } }\n                 if (r.error === 'timeout') (d.ontimeout || d.onerror)?.(response);\n                 else if (r.error) d.onerror?.(response);\n                 else d.onload?.(response);\n                 d.onloadend?.(response);\n               });\n               return { abort() {} };\n             };\n             GM.xmlHttpRequest = (d) => new Promise((resolve, reject) => GM_xmlhttpRequest({ ...d, \n               onload: (r) => { d.onload?.(r); resolve(r); }, onerror: (r) => { d.onerror?.(r); reject(r); }, \n               ontimeout: (r) => { d.ontimeout?.(r); reject(r); } }));\n",
+        );
+    }
+    if script.grants("GM_openInTab") {
+        js.push_str(
+            "const GM_openInTab = (url, options) => {\n               const background = typeof options === 'object' && options !== null \n                 ? options.active === false || options.loadInBackground === true : options === true;\n               __rtOpen(String(new URL(url, location.href)), background);\n               return { close() {}, closed: false };\n             };\n             GM.openInTab = async (url, options) => GM_openInTab(url, options);\n",
+        );
+    }
+    js
 }
 
 fn set_scripts(json: &str) {
@@ -103,7 +134,8 @@ fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
                  const GM = {{ info: GM_info, addStyle: GM_addStyle, \
                  getValue: async (k, d) => GM_getValue(k, d), setValue: async (k, v) => GM_setValue(k, v), \
                  deleteValue: async (k) => GM_deleteValue(k), listValues: async () => GM_listValues() }};\n\
-                 {required}\n{code}",
+                 {granted}{required}\n{code}",
+                granted = granted_api(script),
                 required = script.required_code,
                 code = script.code
             );
@@ -116,9 +148,9 @@ fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
                     "addEventListener('load', () => setTimeout(() => {{ {body} }}, 0), {{ once: true }});"
                 ),
             };
-            // The setter is passed in as an argument rather than through a
-            // global, so the page can't reach it.
-            let code = format!("(function (__rtSet) {{\n{run}\n}})");
+            // The native functions are passed in as arguments rather than
+            // through globals, so the page can't reach them.
+            let code = format!("(function (__rtSet, __rtXhr, __rtOpen) {{\n{run}\n}})");
             let name = CefString::from(format!("greasemonkey:{}", script.name).as_str());
             let mut retval = None;
             let mut exception = None;
@@ -132,10 +164,17 @@ fn run_greasemonkey(frame: &Frame, context: &V8Context, url: &str) {
             );
             let mut handler = RtGmSetHandler::new(script.name.clone());
             let setter = v8_value_create_function(Some(&CefString::from("GM_setValue")), Some(&mut handler));
+            let mut handler = RtGmXhrHandler::new(script.name.clone());
+            let xhr = v8_value_create_function(Some(&CefString::from("GM_xmlhttpRequest")), Some(&mut handler));
+            let mut handler = RtGmOpenHandler::new(script.name.clone());
+            let open = v8_value_create_function(Some(&CefString::from("GM_openInTab")), Some(&mut handler));
             if ok != 0
-                && let (Some(function), Some(setter)) = (retval, setter)
+                && let (Some(function), Some(setter), Some(xhr), Some(open)) = (retval, setter, xhr, open)
             {
-                ok = function.execute_function(None, Some(&[Some(setter)])).is_some().into();
+                ok = function
+                    .execute_function(None, Some(&[Some(setter), Some(xhr), Some(open)]))
+                    .is_some()
+                    .into();
             }
             context.exit();
             if ok == 0 {
@@ -220,6 +259,12 @@ wrap_render_process_handler! {
             if name == GREASEMONKEY_MESSAGE {
                 if let Some(args) = message.argument_list() {
                     set_scripts(&CefString::from(&args.string(0)).to_string());
+                }
+                return 1;
+            }
+            if name == GM_XHR_DONE_MESSAGE {
+                if let Some(args) = message.argument_list() {
+                    xhr_done(args.int(0), &CefString::from(&args.string(1)));
                 }
                 return 1;
             }
@@ -314,6 +359,101 @@ wrap_v8_handler! {
                 }
                 frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
             }
+            1
+        }
+    }
+}
+
+/// Hand a finished `GM_xmlhttpRequest` to the script's callback.
+fn xhr_done(id: i32, json: &CefString) {
+    let Some((context, callback)) = XHR_CALLBACKS.with(|c| c.borrow_mut().remove(&id)) else {
+        return;
+    };
+    if context.is_valid() == 0 || context.enter() == 0 {
+        return;
+    }
+    let argument = v8_value_create_string(Some(json));
+    callback.execute_function(None, Some(&[argument]));
+    context.exit();
+}
+
+/// Send `message` with string arguments to the browser from the current frame.
+fn send_to_browser(name: &str, arguments: &[&CefString]) -> bool {
+    let frame = v8_context_get_current_context().and_then(|c| c.frame());
+    let message = process_message_create(Some(&CefString::from(name)));
+    let (Some(frame), Some(mut message)) = (frame, message) else {
+        return false;
+    };
+    if let Some(args) = message.argument_list() {
+        for (i, value) in arguments.iter().enumerate() {
+            args.set_string(i, Some(value));
+        }
+    }
+    frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
+    true
+}
+
+// `GM_xmlhttpRequest` for one script: the browser makes the request.
+wrap_v8_handler! {
+    struct RtGmXhrHandler {
+        script: String,
+    }
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let Some([Some(request), Some(callback)]) = arguments.and_then(|a| a.get(..2)).map(|a| [a[0].clone(), a[1].clone()]) else {
+                return 1;
+            };
+            if request.is_string() == 0 || callback.is_function() == 0 {
+                return 1;
+            }
+            let Some(context) = v8_context_get_current_context() else { return 1 };
+            let id = NEXT_XHR.with(|n| {
+                let id = n.get();
+                n.set(id + 1);
+                id
+            });
+            XHR_CALLBACKS.with(|c| c.borrow_mut().insert(id, (context, callback)));
+            let script = CefString::from(self.script.as_str());
+            let id_text = CefString::from(id.to_string().as_str());
+            let request = CefString::from(&request.string_value());
+            if !send_to_browser(GM_XHR_MESSAGE, &[&script, &id_text, &request]) {
+                XHR_CALLBACKS.with(|c| c.borrow_mut().remove(&id));
+            }
+            1
+        }
+    }
+}
+
+// `GM_openInTab` for one script: the browser opens the tab.
+wrap_v8_handler! {
+    struct RtGmOpenHandler {
+        script: String,
+    }
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let arg = |i: usize| arguments.and_then(|a| a.get(i).cloned().flatten());
+            let Some(url) = arg(0).filter(|v| v.is_string() != 0) else { return 1 };
+            let background = arg(1).is_some_and(|v| v.is_bool() != 0 && v.bool_value() != 0);
+            let script = CefString::from(self.script.as_str());
+            let url = CefString::from(&url.string_value());
+            let background = CefString::from(if background { "1" } else { "" });
+            send_to_browser(GM_OPEN_MESSAGE, &[&script, &url, &background]);
             1
         }
     }

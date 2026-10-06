@@ -41,6 +41,12 @@ pub struct Script {
     /// What `GM_setValue` stored, filled in by [`load`].
     #[serde(default)]
     pub values: serde_json::Map<String, serde_json::Value>,
+    /// `@grant`: the APIs the script asks for beyond the basic ones.
+    #[serde(default)]
+    pub grants: Vec<String>,
+    /// `@connect`: the hosts `GM_xmlhttpRequest` may reach (`*` for any).
+    #[serde(default)]
+    pub connects: Vec<String>,
 }
 
 impl Script {
@@ -81,6 +87,8 @@ impl Script {
                 "exclude" | "exclude-match" => script.excludes.push(value),
                 "noframes" => script.no_frames = true,
                 "require" => script.requires.push(value),
+                "grant" => script.grants.push(value),
+                "connect" => script.connects.push(value.to_lowercase()),
                 "run-at" => {
                     script.run_at = match value.as_str() {
                         "document-start" => RunAt::Start,
@@ -92,6 +100,35 @@ impl Script {
             }
         }
         script
+    }
+
+    /// Whether `@grant` asks for `api` (either its `GM_` or `GM.` name).
+    pub fn grants(&self, api: &str) -> bool {
+        let dotted = api.replacen("GM_", "GM.", 1);
+        self.grants
+            .iter()
+            .any(|g| g == api || g.eq_ignore_ascii_case(&dotted))
+    }
+
+    /// Whether `GM_xmlhttpRequest` from a page at `page` may fetch `target`:
+    /// only http(s), and only the page's own host or an `@connect` host
+    /// (with its subdomains), `self`, or `*`.
+    pub fn may_connect(&self, page: &str, target: &str) -> bool {
+        if !(target.starts_with("http://") || target.starts_with("https://")) {
+            return false;
+        }
+        let host = rt_core::url::host(target).to_lowercase();
+        let page_host = rt_core::url::host(page).to_lowercase();
+        if host.is_empty() {
+            return false;
+        }
+        host == page_host
+            || self.connects.iter().any(|c| {
+                c == "*"
+                    || (c == "self" && host == page_host)
+                    || host == *c
+                    || host.ends_with(&format!(".{c}"))
+            })
     }
 
     /// Whether the script runs on `url`. Without `@match` or `@include` it
@@ -214,6 +251,28 @@ fn file_name(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grants_and_connects_limit_cross_origin_requests() {
+        let script = Script::parse(
+            "x.user.js",
+            "// ==UserScript==\n// @grant GM.xmlHttpRequest\n// @connect API.example.org\n// ==/UserScript==\n",
+        );
+        assert!(script.grants("GM_xmlhttpRequest"));
+        assert!(!script.grants("GM_openInTab"));
+        let page = "https://news.site/a";
+        assert!(script.may_connect(page, "https://news.site/b"));
+        assert!(script.may_connect(page, "https://api.example.org/v1"));
+        assert!(script.may_connect(page, "https://eu.api.example.org/v1"));
+        assert!(!script.may_connect(page, "https://evilapi.example.org/"));
+        assert!(!script.may_connect(page, "https://example.org/"));
+        assert!(!script.may_connect(page, "file:///etc/passwd"));
+        let any = Script {
+            connects: vec!["*".into()],
+            ..Script::default()
+        };
+        assert!(any.may_connect(page, "http://anything.test/"));
+    }
 
     const SCRIPT: &str = "\
 // ==UserScript==

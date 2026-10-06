@@ -731,7 +731,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
       - The setter is a native function passed to the script as an argument, never through a global, so pages can't reach it.
       - Value updates carry the browser's script generation, so a reload's original `extra_info` doesn't bring back old values.
       - A smoke step covers both.
-    - `GM_xmlhttpRequest` through the browser process (cross-origin, so only for scripts that `@grant` it, and only to `@connect` hosts), `GM_openInTab`, the promise-based `GM.*` API, and `unsafeWindow`.
+    - ✅ (2026-10-06) `GM_xmlhttpRequest` through the browser process (only for scripts that `@grant` it, only to the page's host and `@connect` hosts, in the frame's own request context so private windows stay private) and `GM_openInTab`, with their `GM.*` forms. `may_connect` and `grants` are unit tested in rt-config, with e2e tests in `crates/rt-e2e/tests/gm_api.rs`. Binary responses (`arraybuffer`, `blob`) aren't supported yet.
   - **Lua:** `rt.spawn(argv, opts)` with a callback for the output, so `config.lua` can do what a userscript does without a separate file.
 - ✅ **Config commands** (2026-10-05): `config-list-add` and `remove`, `config-dict-add [--replace]` and `remove`, `config-clear`, `config-diff` (a `riptide://config-diff/` page), `config-edit` (opens `config.lua` or `config.toml`, then reloads it), and `config-write-toml` (round-trip tested).
 - **Not planned:** `qt.*` (Qt only), `backend`, and the Python-only commands (`debug-pyeval`, `debug-all-objects`, `config-write-py`).

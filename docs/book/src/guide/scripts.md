@@ -11,4 +11,23 @@
 
 ## Greasemonkey scripts
 
-`*.js` files in `<data>/greasemonkey/` (as in qutebrowser) or `<config>/greasemonkey/` run in matching pages. They follow the usual `// ==UserScript==` block: `@match`, `@include`, `@exclude`, `@run-at` (`document-start`, `document-end` (the default) or `document-idle`) and `@noframes`. Scripts get `GM_info`, `GM_addStyle`, `unsafeWindow`, and `GM_getValue`, `GM_setValue`, `GM_deleteValue` and `GM_listValues`, plus the promise versions under `GM.*`. Values are kept per script and survive restarts; a page sees the values as they were when it loaded. `@require` URLs are downloaded once, into the data directory, and run before the script. A new `@require` is fetched in the background; reload the page once it says the download is done. `GM_xmlhttpRequest` and `GM_openInTab` aren't there yet. `:greasemonkey-reload` reads the files again; reload a page to run the new versions.
+`*.js` files in `<data>/greasemonkey/` (as in qutebrowser) or `<config>/greasemonkey/` run in matching pages. They follow the usual `// ==UserScript==` block: `@match`, `@include`, `@exclude`, `@run-at` (`document-start`, `document-end` (the default) or `document-idle`) and `@noframes`. Scripts get `GM_info`, `GM_addStyle`, `unsafeWindow`, and `GM_getValue`, `GM_setValue`, `GM_deleteValue` and `GM_listValues`, plus the promise versions under `GM.*`. Values are kept per script and survive restarts; a page sees the values as they were when it loaded. `@require` URLs are downloaded once, into the data directory, and run before the script. A new `@require` is fetched in the background; reload the page once it says the download is done. `:greasemonkey-reload` reads the files again; reload a page to run the new versions.
+
+Two more APIs need the script to ask for them with `@grant`:
+
+| API | What it does |
+|---|---|
+| `GM_xmlhttpRequest` (`GM.xmlHttpRequest`) | Fetches a URL from another site, with the page's cookies for that site. It only reaches the page's own host and the hosts listed with `@connect` (and their subdomains); `@connect *` allows any. Responses are text, or parsed JSON with `responseType: "json"`. |
+| `GM_openInTab` (`GM.openInTab`) | Opens an http(s) URL in a new tab, in the background with `GM_openInTab(url, true)` or `{ active: false }`. |
+
+```js
+// ==UserScript==
+// @match https://news.example/*
+// @grant GM_xmlhttpRequest
+// @connect api.example.org
+// ==/UserScript==
+GM_xmlhttpRequest({ url: "https://api.example.org/scores", responseType: "json",
+  onload: (r) => console.log(r.response) });
+```
+
+A request riptide refuses calls `onerror` with `error: "not allowed"` and says why in the status bar.
