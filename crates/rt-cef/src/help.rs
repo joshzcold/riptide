@@ -49,22 +49,32 @@ pub fn changelog_page() -> Arc<[u8]> {
 }
 
 /// Tell the user once when the browser was updated since the last start.
-pub fn note_upgrade(data_dir: &std::path::Path) {
+/// Returns whether `changelog_after_upgrade` wants the changelog opened.
+pub fn note_upgrade(data_dir: &std::path::Path) -> bool {
     let path = data_dir.join("last-version");
     let current = env!("CARGO_PKG_VERSION");
     let last = std::fs::read_to_string(&path).ok();
     if last.as_deref().map(str::trim) == Some(current) {
-        return;
+        return false;
     }
     if let Err(e) = std::fs::write(&path, current) {
         tracing::warn!("can't write {}: {e}", path.display());
     }
-    if last.is_some() {
-        shell::show_message(
-            Level::Info,
-            format!("Updated to {current}; :changelog for details"),
-        );
-    }
+    let Some(last) = last else {
+        return false;
+    };
+    shell::show_message(
+        Level::Info,
+        format!("Updated to {current}; :changelog for details"),
+    );
+    let level = shell::with(|s| {
+        s.engine
+            .settings()
+            .str("changelog_after_upgrade")
+            .to_string()
+    })
+    .unwrap_or_default();
+    rt_core::changelog::show_after_upgrade(&level, &last, current)
 }
 
 fn cef_version() -> String {

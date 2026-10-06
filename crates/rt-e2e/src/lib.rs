@@ -289,6 +289,11 @@ impl Browser {
         self.wait_until("the browser is back", |s| !s.tabs().is_empty());
     }
 
+    /// The X display number the browser runs on, for `xprop` and friends.
+    pub fn display(&self) -> &str {
+        &self.display
+    }
+
     /// The URL of a fixture page on this browser's server.
     pub fn url(&self, page: &str) -> String {
         format!("http://127.0.0.1:{}/{page}", self.port)

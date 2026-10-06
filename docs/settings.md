@@ -10,6 +10,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `auto_save.interval` | integer | `15000` | Milliseconds between crash-recovery saves of the open tabs (0 turns them off) |
 | `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
 | `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
+| `changelog_after_upgrade` | major \| minor \| patch \| never | `minor` | Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never |
 | `colors.tabs.selected.accent` | string | `` | Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows |
 | `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode (takes effect after a restart) |
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
@@ -118,6 +119,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `url.searchengines` | table<string, string> | `{"DEFAULT":"https://duckduckgo.com/?q={}"}` | Search engines; ':open g rust' uses the 'g' entry, anything else DEFAULT |
 | `url.start_pages` | string[] | `["https://start.duckduckgo.com/"]` | Pages opened at startup when no URL is given |
 | `url.yank_ignored_parameters` | string[] | `["ref","utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_name","fbclid","gclid"]` | Query parameters dropped when yanking a URL, such as tracking tags |
+| `window.hide_decoration` | boolean | `false` | Ask the window manager for no title bar or borders (applies to new windows) |
 | `window.title_format` | string | `{current_title}{title_sep}Riptide` | Window title; fields: {current_title}, {title_sep}, {current_url}, {host}, {mode} |
 | `zoom.default` | integer | `100` | Zoom in percent for pages, and what :zoom without a value resets to |
 | `zoom.levels` | string[] | `["25%","33%","50%","67%","75%","90%","100%","110%","125%","150%","175%","200%","250%","300%","400%","500%"]` | The zoom levels + and - step through, in percent |

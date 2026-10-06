@@ -133,13 +133,17 @@ wrap_browser_process_handler! {
             }) {
                 adblock::load(data_dir, lists);
             }
-            window::create(startup.urls, startup.commands, false);
+            let data_dir = shell::with(|s| s.paths.data_dir.clone());
+            let mut commands = startup.commands;
+            if data_dir.as_deref().is_some_and(help::note_upgrade) {
+                commands.push("open -b riptide://changelog/".to_string());
+            }
+            window::create(startup.urls, commands, false);
             report_config_errors(&errors);
-            if let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) {
-                help::note_upgrade(&data_dir);
-                if startup.fetch_widevine {
-                    privacy::watch_widevine_download(data_dir);
-                }
+            if let Some(data_dir) = data_dir
+                && startup.fetch_widevine
+            {
+                privacy::watch_widevine_download(data_dir);
             }
             remote::listen();
             statusbar::start();

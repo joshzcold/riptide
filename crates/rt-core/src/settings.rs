@@ -453,6 +453,12 @@ pub static SETTINGS: &[SettingDef] = &[
         key_mappings
     ),
     def!(
+        "changelog_after_upgrade",
+        Kind::Enum(&["major", "minor", "patch", "never"]),
+        s("minor"),
+        "Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never"
+    ),
+    def!(
         "colors.tabs.selected.accent",
         Kind::Str,
         s(""),
@@ -1201,6 +1207,12 @@ pub static SETTINGS: &[SettingDef] = &[
             .to_vec()
         ),
         "Query parameters dropped when yanking a URL, such as tracking tags"
+    ),
+    def!(
+        "window.hide_decoration",
+        Kind::Bool,
+        Value::Bool(false),
+        "Ask the window manager for no title bar or borders (applies to new windows)"
     ),
     def!(
         "window.title_format",

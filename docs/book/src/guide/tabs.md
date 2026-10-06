@@ -40,4 +40,6 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 
 `:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
 
+`window.hide_decoration = true` asks the window manager for windows without a title bar or borders, which suits tiling window managers. It applies to windows opened after the change.
+
 `:tab-give` and `:tab-take` move tabs between windows, and `:tab-clone` duplicates one.

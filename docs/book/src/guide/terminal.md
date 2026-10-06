@@ -14,4 +14,4 @@ The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/riptide/` (or the data
 
 The tab bar, status bar and overlay are HTML pages served from the browser itself at `riptide://ui/…`. Web pages can't link to, frame or redirect to `riptide://` addresses, and only `riptide://ui/` pages get the `rt.send()` channel to Rust. The browser accepts only the messages each page is allowed to send.
 
-Pages you can open: `riptide://help/` (`:help`), `riptide://history/` (`:history`), `riptide://downloads/` (`:downloads`) and `riptide://changelog/` (`:changelog`).
+Pages you can open: `riptide://help/` (`:help`), `riptide://history/` (`:history`), `riptide://downloads/` (`:downloads`) and `riptide://changelog/` (`:changelog`). The first start after an update opens the changelog in a background tab when the version's minor or major number changed; `changelog_after_upgrade` (`major`, `minor`, `patch` or `never`) sets how big a step that takes.

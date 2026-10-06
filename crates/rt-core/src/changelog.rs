@@ -4,6 +4,33 @@
 
 use crate::html::escape;
 
+/// `changelog_after_upgrade`: whether going from version `last` to
+/// `current` is a big enough step to open the changelog. `level` is
+/// `major`, `minor`, `patch` or `never`; a downgrade never opens it.
+pub fn show_after_upgrade(level: &str, last: &str, current: &str) -> bool {
+    let parts = |v: &str| -> [u64; 3] {
+        let mut out = [0; 3];
+        let release = v.trim().split(['-', '+']).next().unwrap_or_default();
+        for (slot, part) in out.iter_mut().zip(release.split('.')) {
+            *slot = part.parse().unwrap_or(0);
+        }
+        out
+    };
+    let (last, current) = (parts(last), parts(current));
+    if current <= last {
+        return false;
+    }
+    // The first part that changed: 0 major, 1 minor, 2 patch.
+    let changed = (0..3).find(|&i| last[i] != current[i]).unwrap_or(2);
+    let needed = match level {
+        "major" => 0,
+        "minor" => 1,
+        "patch" => 2,
+        _ => return false,
+    };
+    changed <= needed
+}
+
 /// HTML for the changelog's body.
 pub fn to_html(markdown: &str) -> String {
     let mut html = String::new();
@@ -97,6 +124,21 @@ fn link(text: &str) -> Option<(&str, &str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changelog_after_upgrade_levels() {
+        assert!(show_after_upgrade("minor", "0.1.4", "0.2.0"));
+        assert!(show_after_upgrade("minor", "0.2.0", "1.0.0"));
+        assert!(!show_after_upgrade("minor", "0.2.0", "0.2.1"));
+        assert!(show_after_upgrade("patch", "0.2.0", "0.2.1"));
+        assert!(!show_after_upgrade("major", "0.2.0", "0.3.0"));
+        assert!(show_after_upgrade("major", "0.9.0", "1.0.0-rc1"));
+        assert!(
+            !show_after_upgrade("patch", "0.3.0", "0.2.9"),
+            "a downgrade"
+        );
+        assert!(!show_after_upgrade("never", "0.1.0", "2.0.0"));
+    }
 
     #[test]
     fn renders_git_cliff_output() {

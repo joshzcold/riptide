@@ -703,7 +703,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
 - **Sessions and window:**
   - ✅ Tier 1 (2026-10-05): `session.lazy_restore` (background tabs keep their URL and title and load when first shown) and `confirm_quit` (always, multiple-tabs, downloads, never; asked on `:quit` and when closing the last window), each with a smoke step.
   - ✅ (2026-10-06) `session.default_name` (empty means the last session loaded, as qutebrowser's null) and `:save [config|cookies|quickmarks|bookmarks|session…]`, with e2e tests in `crates/rt-e2e/tests/session_settings.rs`.
-  - `window.hide_decoration`, `window.transparent`, `changelog_after_upgrade`.
+  - ✅ (2026-10-06) `window.hide_decoration` (CEF's frameless window, checked through `_MOTIF_WM_HINTS` with xprop) and `changelog_after_upgrade` (a background tab, compared in `rt_core::changelog::show_after_upgrade`), with e2e tests in `crates/rt-e2e/tests/window_settings.rs`.
+  - `window.transparent`: needs an ARGB X visual (Chromium's `--enable-transparent-visuals`) and alpha backgrounds in every view; not tried yet.
 - **Tools:**
   - ✅ Tier 1 (2026-10-05): `:screenshot [--force] file`, through the DevTools protocol (`send_dev_tools_message` with `Page.captureScreenshot` and a `DevToolsMessageObserver`), which needs no Views API or DevTools window. The format follows the file extension (png, jpeg, webp). A smoke step checks the PNG signature.
   - ✅ (2026-10-05) `:restart` (saves a `_restart` session, quits, and starts again with `:session-load _restart`), `debug-dump-page`, `debug-clear-ssl-errors` and `devtools-focus`. Still to do: `:report`, `debug-keytester`, `debug-log-filter`.

@@ -51,4 +51,4 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 
 **In the browser:**
 
-In the browser, `:changelog` shows the changelog it was built with, and the first start after an update says so in the status bar. The [documentation site](https://joshzcold.github.io/riptide/) isn't tied to releases: it's rebuilt from `main` on every push.
+In the browser, `:changelog` shows the changelog it was built with, and the first start after an update says so in the status bar (and opens it, as `changelog_after_upgrade` decides). The [documentation site](https://joshzcold.github.io/riptide/) isn't tied to releases: it's rebuilt from `main` on every push.

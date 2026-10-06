@@ -200,6 +200,13 @@ wrap_window_delegate! {
     impl PanelDelegate {}
 
     impl WindowDelegate {
+        /// `window.hide_decoration`: no title bar or borders from the window manager.
+        fn is_frameless(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            shell::with(|s| s.engine.settings().bool("window.hide_decoration"))
+                .unwrap_or(false)
+                .into()
+        }
+
         fn on_window_created(&self, window: Option<&mut Window>) {
             let Some(window) = window else { return };
             let (Some(tabbar), Some(row), Some(content), Some(statusbar), Some(completion)) = (
