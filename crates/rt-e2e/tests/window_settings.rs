@@ -96,3 +96,38 @@ fn tabs_are_windows_opens_tabs_and_popups_as_windows() {
         s.windows.len() == 2 && s.windows.iter().all(|w| w.tabs.len() == 1)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn prompts_float_near_the_bottom_by_default() {
+    let b = Browser::start("page.html");
+    let window_width = b.eval("String(innerWidth)");
+    b.eval("Notification.requestPermission(); ''");
+    b.wait_mode("yesno");
+    let overlay = |b: &Browser| {
+        b.eval_bar(
+            "completion",
+            "innerWidth + ' ' + document.body.classList.contains('floating')",
+        )
+    };
+    let start = std::time::Instant::now();
+    while overlay(&b) != "640 true" {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "not floating: {}",
+            overlay(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.run("set prompt.position docked");
+    let docked = format!("{window_width} false");
+    let start = std::time::Instant::now();
+    while overlay(&b) != docked {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "not docked: {}",
+            overlay(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

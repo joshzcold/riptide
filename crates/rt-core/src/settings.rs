@@ -1124,6 +1124,21 @@ pub static SETTINGS: &[SettingDef] = &[
         "Which window URLs from a second riptide invocation open in"
     ),
     def!(
+        "prompt.position",
+        Kind::Enum(&["bottom", "docked"]),
+        s("bottom"),
+        "Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page, or docked above the status bar"
+    ),
+    def!(
+        "prompt.width",
+        Kind::Int {
+            min: 200,
+            max: 4000
+        },
+        Value::Int(640),
+        "Width in pixels of a floating prompt (prompt.position = bottom), at most the page's"
+    ),
+    def!(
         "scrolling.bar",
         Kind::Enum(&["always", "never", "overlay"]),
         s("always"),

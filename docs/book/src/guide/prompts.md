@@ -2,7 +2,7 @@
 
 ## Prompts
 
-Everything that needs an answer appears above the status bar, one at a time:
+Everything that needs an answer appears in a box floating near the bottom of the page, one at a time (`prompt.position = "docked"` puts it in a strip above the status bar instead, and `prompt.width` sets the box's width):
 
 - JavaScript `alert`, `confirm`, `prompt` and leave-page warnings
 - HTTP logins (username, then a hidden password)

@@ -119,6 +119,8 @@ pub struct WindowState {
     /// What the overlay shows (a prompt or completions), to skip redraws.
     last_overlay: String,
     last_overlay_rows: usize,
+    /// Whether the overlay shows a prompt, which may float.
+    last_overlay_prompt: bool,
 }
 
 impl WindowState {
@@ -153,6 +155,7 @@ impl WindowState {
             last_title: String::new(),
             last_overlay: String::new(),
             last_overlay_rows: 0,
+            last_overlay_prompt: false,
         }
     }
 }
@@ -968,7 +971,7 @@ pub fn position_overlay() {
         return;
     };
     if rows > 0
-        && let Some(bounds) = with(|s| completion_bounds(s, rows)).flatten()
+        && let Some(bounds) = with(|s| overlay_bounds(s, rows)).flatten()
     {
         overlay.set_bounds(Some(&bounds));
     }
@@ -1117,7 +1120,11 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let (payload, rows) = match prompt {
         Some(prompt) => {
             let rows = prompt_rows(s, &prompt);
-            (json!({ "kind": "prompt", "prompt": prompt }), rows)
+            let floating = floating_prompt_box(s).is_some();
+            (
+                json!({ "kind": "prompt", "prompt": prompt, "floating": floating }),
+                rows,
+            )
         }
         None if focused && completion_held(s, &mut keyhint_wait) => {
             // completion.delay: keep what's shown until typing pauses.
@@ -1164,6 +1171,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         }
         None => (json!({ "kind": "rows", "rows": [] }), 0),
     };
+    let is_prompt = payload["kind"] == "prompt";
     let payload = payload.to_string();
     let overlay_changed = payload != s.last_overlay;
     if s.completion_ready
@@ -1175,13 +1183,22 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let overlay = overlay_changed
         .then(|| {
             let overlay = s.overlay.clone()?;
-            let bounds = (rows > 0).then(|| completion_bounds(s, rows)).flatten();
+            let bounds = (rows > 0)
+                .then(|| {
+                    if is_prompt {
+                        prompt_bounds(s, rows)
+                    } else {
+                        completion_bounds(s, rows)
+                    }
+                })
+                .flatten();
             Some((overlay, bounds))
         })
         .flatten();
     if s.completion_ready || rows == 0 {
         s.last_overlay = payload;
         s.last_overlay_rows = rows;
+        s.last_overlay_prompt = is_prompt;
     }
     // Come back when the key hint delay runs out, or the tab bar's switching delay.
     let refresh_after = match (refresh_after, keyhint_wait) {
@@ -1426,18 +1443,72 @@ fn keyhints(s: &mut Shell) -> (Option<(serde_json::Value, usize)>, Option<i64>) 
 fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     const CHAR_WIDTH: i32 = 8;
     const MAX_MESSAGE_ROWS: usize = 8;
-    let width = s
-        .statusbar
-        .as_ref()
-        .map_or(800, |v| View::from(v).bounds().width);
+    let width = match floating_prompt_box(s) {
+        Some(bounds) => bounds.width - 2 * PROMPT_PADDING,
+        None => s
+            .statusbar
+            .as_ref()
+            .map_or(800, |v| View::from(v).bounds().width),
+    };
     let per_line = (width / CHAR_WIDTH).max(20) as usize;
-    let message_rows: usize = prompt
-        .message
-        .lines()
-        .map(|line| line.chars().count().div_ceil(per_line).max(1))
-        .sum();
+    let lines = |text: &str| -> usize {
+        text.lines()
+            .map(|line| line.chars().count().div_ceil(per_line).max(1))
+            .sum()
+    };
+    let message_rows = lines(&prompt.message);
     let input_row = usize::from(prompt.kind == "text");
-    1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + 1
+    // A floating box wraps the key hints too; the docked strip cuts them off.
+    let hint_rows = if floating_prompt_box(s).is_some() {
+        lines(&prompt.hint).max(1)
+    } else {
+        1
+    };
+    1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + hint_rows
+}
+
+/// Padding (and border) around a floating prompt's text, in pixels.
+const PROMPT_PADDING: i32 = 12;
+/// Gap between a floating prompt and the bottom of the page area.
+const PROMPT_MARGIN: i32 = 24;
+
+/// `prompt.position = bottom`: a box centred near the bottom of the page
+/// area, `prompt.width` wide at most. Its height is filled in by the caller.
+fn floating_prompt_box(s: &Shell) -> Option<Rect> {
+    if s.engine.settings().str("prompt.position") != "bottom" {
+        return None;
+    }
+    let area = View::from(s.row.as_ref()?).bounds();
+    let max = s.engine.settings().int("prompt.width") as i32;
+    let width = max.min(area.width - 2 * PROMPT_MARGIN).max(200);
+    Some(Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + area.height - PROMPT_MARGIN,
+        width,
+        height: 0,
+    })
+}
+
+/// Where the overlay goes for a prompt `rows` rows tall: floating, or docked
+/// like completion.
+fn prompt_bounds(s: &Shell, rows: usize) -> Option<Rect> {
+    match floating_prompt_box(s) {
+        Some(mut bounds) => {
+            bounds.height = rows as i32 * COMPLETION_ROW_HEIGHT + 2 * PROMPT_PADDING;
+            bounds.y -= bounds.height;
+            Some(bounds)
+        }
+        None => completion_bounds(s, rows),
+    }
+}
+
+/// The overlay's bounds for what it shows now.
+fn overlay_bounds(s: &Shell, rows: usize) -> Option<Rect> {
+    if s.last_overlay_prompt {
+        prompt_bounds(s, rows)
+    } else {
+        completion_bounds(s, rows)
+    }
 }
 
 /// Next to the status bar, on the page's side of it; at the page area's

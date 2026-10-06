@@ -58,6 +58,15 @@
   .prompt-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: #061826; }
   .prompt-hint { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); color: var(--desc-fg); }
   .cursor { background: var(--fg); color: var(--bg); }
+  /* A floating prompt: the overlay view is the box, so frame it and pad it. */
+  body.floating {
+    box-sizing: border-box;
+    padding: 11px;
+    border: 1px solid var(--selected-bg);
+  }
+  body.floating .header { background: none; color: var(--selected-bg); }
+  body.floating .prompt-input { margin: 2px 0; }
+  body.floating .prompt-hint { height: auto; white-space: normal; }
 </style>
 </head>
 <body>
@@ -135,6 +144,8 @@
   // for messages older than the one in the status bar.
   window.rtRender = (payload) => {
     const list = document.getElementById("list");
+    // prompt.position = bottom: a framed box floating over the page.
+    document.body.classList.toggle("floating", payload.kind === "prompt" && !!payload.floating);
     if (payload.kind === "prompt") return renderPrompt(list, payload.prompt);
     if (payload.kind === "keyhints") return renderKeyhints(list, payload);
     list.replaceChildren(...payload.rows.map((row) => {
