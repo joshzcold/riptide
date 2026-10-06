@@ -32,7 +32,7 @@ fn gt_filters_tabs_by_number_or_text() {
     let s = b.wait_until("every tab is listed", |s| completion_names(s).len() == 3);
     assert_eq!(s.mode, "command");
     b.keys("2");
-    b.wait_until("only tab 2", |s| completion_names(s) == ["1/2"]);
+    b.wait_until("only tab 2", |s| completion_names(s) == ["2"]);
     b.keys("<Return>");
     b.wait_until("tab 2 is current", |s| s.window().current_tab == 1);
     b.keys("gtnav2<Return>");

@@ -275,12 +275,17 @@ fn load_pending(view: &BrowserView) {
 /// Close the tab a `window/tab` label (from tab completion) names, in
 /// whichever window it is.
 pub fn close_label(label: &str) {
-    let Some((window, tab)) = label.split_once('/').and_then(|(w, t)| {
-        Some((
-            w.trim().parse::<usize>().ok()?,
-            t.trim().parse::<usize>().ok()?,
-        ))
-    }) else {
+    // A plain number is a tab in the current window.
+    let current = shell::with(|s| current_window_number(s)).flatten();
+    let parsed = match label.split_once('/') {
+        Some((w, t)) => w
+            .trim()
+            .parse::<usize>()
+            .ok()
+            .zip(t.trim().parse::<usize>().ok()),
+        None => current.zip(label.trim().parse::<usize>().ok()),
+    };
+    let Some((window, tab)) = parsed else {
         return;
     };
     let Some(Some(previous)) = shell::with(|s| {
@@ -297,6 +302,16 @@ pub fn close_label(label: &str) {
             s.active = previous;
         }
     });
+}
+
+/// The active window's number among the open ones, as completion counts them.
+fn current_window_number(s: &shell::Shell) -> Option<usize> {
+    s.windows
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| w.window.is_some())
+        .position(|(i, _)| i == s.active)
+        .map(|n| n + 1)
 }
 
 /// Close a tab. Closing the last one follows `tabs.last_close`.
@@ -518,8 +533,9 @@ fn tab_matches(t: &OpenTab, words: &[String]) -> bool {
 }
 
 /// Completions for `:tab-select` (`gt`): the current window's tabs first,
-/// narrowed by [`tab_matches`].
-pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
+/// as plain tab numbers, then other windows' as `window/tab`, narrowed by
+/// [`tab_matches`]. `others_only` is for `:tab-take`.
+pub fn completions(pattern: &str, others_only: bool) -> Vec<rt_core::completion::Completion> {
     let words: Vec<String> = pattern.split_whitespace().map(str::to_lowercase).collect();
     OPEN_TABS.with(|o| {
         let tabs = o.borrow();
@@ -528,12 +544,16 @@ pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
         current
             .into_iter()
             .chain(others)
-            .filter(|t| tab_matches(t, &words))
+            .filter(|t| !(others_only && t.current_window) && tab_matches(t, &words))
             .map(|t| rt_core::completion::Completion {
                 time: None,
                 detail: None,
                 category: "Tabs",
-                name: format!("{}/{}", t.window, t.tab),
+                name: if t.current_window {
+                    t.tab.to_string()
+                } else {
+                    format!("{}/{}", t.window, t.tab)
+                },
                 description: if t.title.is_empty() {
                     t.url.clone()
                 } else {

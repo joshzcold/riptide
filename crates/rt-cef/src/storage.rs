@@ -189,8 +189,8 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     if kind == CompletionKind::Spelling {
         return crate::spell::completions(pattern);
     }
-    if kind == CompletionKind::Tab {
-        return crate::tabs::completions(pattern);
+    if matches!(kind, CompletionKind::Tab | CompletionKind::OtherTab) {
+        return crate::tabs::completions(pattern, kind == CompletionKind::OtherTab);
     }
     if kind == CompletionKind::Url {
         let categories = COMPLETION.with(|c| c.borrow().categories.clone());

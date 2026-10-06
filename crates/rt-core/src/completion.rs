@@ -32,6 +32,8 @@ pub enum CompletionKind {
     Spelling,
     /// Open tabs in every window, for `:tab-select`.
     Tab,
+    /// Tabs in the other windows, for `:tab-take`.
+    OtherTab,
 }
 
 pub type Source = Box<dyn Fn(CompletionKind, &str) -> Vec<Completion>>;
@@ -177,7 +179,8 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
         "session-load" | "session-delete" | "session-save" => CompletionKind::Session,
         "spell-replace" => CompletionKind::Spelling,
-        "tab-select" | "tab-take" => CompletionKind::Tab,
+        "tab-select" => CompletionKind::Tab,
+        "tab-take" => CompletionKind::OtherTab,
         _ => return Vec::new(),
     };
     source.map(|s| s(kind, parsed.pattern)).unwrap_or_default()
