@@ -1,14 +1,32 @@
-<img src="packaging/riptide.svg" alt="" width="96" align="right">
+<div align="center">
+
+<img src="packaging/riptide.svg" alt="Riptide logo" width="120">
 
 # Riptide
 
-*Surfing the web really fast.* A modern browser with vim-like bindings, using Rust and CEF.
+*Surfing the web really fast.*<br>
+A keyboard-driven browser with vim-like bindings, built on Chromium and Rust.
 
-A keyboard-driven browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate.
+[![Build](https://img.shields.io/github/actions/workflow/status/joshzcold/riptide/check.yml?branch=main&label=build&logo=github)](https://github.com/joshzcold/riptide/actions/workflows/check.yml)
+[![Release](https://img.shields.io/github/v/release/joshzcold/riptide?label=release&color=2ec4b6)](https://github.com/joshzcold/riptide/releases/latest)
+[![Nightly](https://img.shields.io/github/actions/workflow/status/joshzcold/riptide/nightly.yml?branch=main&label=nightly)](https://github.com/joshzcold/riptide/releases/tag/nightly)
+[![Docs](https://img.shields.io/github/actions/workflow/status/joshzcold/riptide/docs.yml?branch=main&label=docs)](https://joshzcold.github.io/riptide/)
+[![Security audit](https://img.shields.io/github/actions/workflow/status/joshzcold/riptide/audit.yml?branch=main&label=security%20audit)](https://github.com/joshzcold/riptide/actions/workflows/audit.yml)
+[![License](https://img.shields.io/github/license/joshzcold/riptide?color=0b2a3f)](LICENSE)
 
-**Status:** early prototype, Linux/X11 only, not ready for daily browsing. See the plan for what's done and what's missing.
+**[Documentation](https://joshzcold.github.io/riptide/)** ·
+**[Install](#install)** ·
+**[Releases](https://github.com/joshzcold/riptide/releases)** ·
+**[Roadmap](docs/PLAN.md)**
 
-What works today:
+</div>
+
+A browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate, with everything else in Rust.
+
+> [!NOTE]
+> **Status:** early (v0.1). Linux on X11 only. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+
+## What works today
 
 - **Keyboard first:** normal, insert, command, hint, caret and passthrough modes, with qutebrowser's bindings. Also counts, marks, macros, `/` search, `:navigate`, and a command line with history and completion.
 - **Tabs and windows:** pinned tabs, a tab bar that works with the mouse, favicons, `:tab-select`, moving tabs between windows, and private windows.
@@ -18,6 +36,19 @@ What works today:
 - **Scripts and data:** userscripts, Greasemonkey scripts, `:open-editor`, and qutebrowser's quickmark, bookmark and history formats (`:history-import`).
 - **Page tools:** zoom (`+` `-` `=`), DevTools (`wi`), print or save as PDF, fullscreen, view source (`gf`), `:jseval`, tab muting, `:messages`, and `.` to repeat the last command.
 - **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`riptide ':open -t x'`).
+
+## Install
+
+Each [release](https://github.com/joshzcold/riptide/releases/latest) has Linux x86_64 packages, with `SHA256SUMS` and build provenance:
+
+| On | Get |
+|---|---|
+| **Ubuntu 24.04+, Debian 13+** | the `.deb` (from v0.2, and in the nightly): `sudo apt install ./riptide_*_amd64.deb` |
+| **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
+| **Nix** | `nix run github:joshzcold/riptide` |
+| **Arch Linux** | [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) (`makepkg -si`) |
+
+The [`nightly`](https://github.com/joshzcold/riptide/releases/tag/nightly) pre-release is rebuilt from `main` every night it changes. [Installing](https://joshzcold.github.io/riptide/guide/installing.html) covers the sandbox setup.
 
 ## Documentation
 
