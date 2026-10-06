@@ -327,7 +327,8 @@ fn looks_like_host(input: &str) -> bool {
         && tld.chars().all(char::is_alphabetic)
 }
 
-fn encode_query(query: &str) -> String {
+/// Encode text for a URL's query string (spaces become `+`).
+pub fn encode_query(query: &str) -> String {
     let mut out = String::with_capacity(query.len());
     for byte in query.bytes() {
         match byte {

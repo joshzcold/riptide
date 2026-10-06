@@ -67,6 +67,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `downloads.open_dispatcher` | string | `` | Program that opens downloads (:download-open); {} is the file, or it's added at the end. Empty for the desktop's default |
 | `downloads.remove_finished` | integer | `-1` | Take finished downloads off the list after this many milliseconds; -1 keeps them |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
+| `editor.remove_file` | boolean | `true` | Delete the temporary file after the editor closes; false keeps it, e.g. to recover text |
 | `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to |
 | `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |
 | `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line |
@@ -96,6 +97,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `keyhint.delay` | integer | `500` | How long after a partial key chain the popup listing its continuations appears, in milliseconds |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
 | `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
+| `new_instance_open_target_window` | first-opened \| last-opened \| last-focused | `last-focused` | Which window URLs from a second riptide invocation open in |
 | `scrolling.smooth` | boolean | `false` | Animate scrolling by keys instead of jumping |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |
 | `search.incremental` | boolean | `true` | Search while typing after / or ? |

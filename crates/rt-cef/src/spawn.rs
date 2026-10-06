@@ -612,7 +612,9 @@ fn start_editor(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
-    run_in_background(process, then(file), Some(dir));
+    // editor.remove_file = false keeps the text, e.g. to recover it.
+    let remove = shell::with(|s| s.engine.settings().bool("editor.remove_file")).unwrap_or(true);
+    run_in_background(process, then(file), remove.then_some(dir));
 }
 
 /// `:config-edit`: open `file` itself in `editor.command`, then reload the config.

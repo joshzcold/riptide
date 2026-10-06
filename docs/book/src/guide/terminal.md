@@ -8,6 +8,8 @@ riptide --target tab-bg notes.html # relative files become file:// URLs
 riptide ':tab-focus 1' ':reload'   # arguments starting with ':' run as commands
 ```
 
+With several windows open, URLs go to the one you used last; `new_instance_open_target_window` can pick the `first-opened` or `last-opened` window instead.
+
 The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/riptide/` (or the data directory), inside a `0700` directory and with `0600` permissions, so only your user can send commands. On Windows each start is a new instance for now.
 
 ## Internal pages

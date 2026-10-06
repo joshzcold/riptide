@@ -182,6 +182,22 @@ fn startup_settings(loaded: &rt_config::Loaded) -> rt_core::settings::Settings {
     engine.settings().clone()
 }
 
+type LogFilterHook = Box<dyn Fn(&str) -> Result<(), String> + Send + Sync>;
+
+static LOG_FILTER: std::sync::OnceLock<LogFilterHook> = std::sync::OnceLock::new();
+
+/// Let `:debug-log-filter` change the log filter; `main` owns the logger.
+pub fn set_log_filter_hook(hook: LogFilterHook) {
+    let _ = LOG_FILTER.set(hook);
+}
+
+pub(crate) fn set_log_filter(filter: &str) -> Result<(), String> {
+    match LOG_FILTER.get() {
+        Some(hook) => hook(filter),
+        None => Err("the log filter can't be changed in this build".into()),
+    }
+}
+
 /// A setting's value from config read before the engine exists.
 fn startup_bool(loaded: &rt_config::Loaded, name: &str) -> bool {
     startup_settings(loaded).bool(name)

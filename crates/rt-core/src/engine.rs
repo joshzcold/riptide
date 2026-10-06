@@ -113,6 +113,8 @@ pub struct Engine {
     count: Option<u32>,
     /// Numbers each partly typed key chain, for `input.partial_timeout`.
     partial_generation: u64,
+    /// `:debug-keytester` is on: keys are described, not acted on.
+    keytester: bool,
     cmdline: LineEditor,
     history: History,
     /// Messages on screen, newest last, each with the generation that
@@ -199,6 +201,7 @@ impl Engine {
             pending: Vec::new(),
             count: None,
             partial_generation: 0,
+            keytester: false,
             cmdline: LineEditor::default(),
             history: History::default(),
             messages: Vec::new(),
@@ -808,6 +811,9 @@ impl Engine {
     }
 
     pub fn handle_key(&mut self, key: Key) -> KeyOutcome {
+        if self.keytester {
+            return consumed(self.test_key(key));
+        }
         let key = self.map_key(key);
         if self.macros.replaying == 0
             && let Some((_, keys)) = &mut self.macros.recording
@@ -815,6 +821,31 @@ impl Engine {
             keys.push(key);
         }
         self.dispatch_key(key)
+    }
+
+    /// `:debug-keytester`: say what `key` is called and does in normal mode.
+    fn test_key(&mut self, key: Key) -> Vec<Effect> {
+        if key.code == KeyCode::Escape && key.mods.is_empty() {
+            self.keytester = false;
+            self.show_message(Level::Info, "Key tester off");
+            return Vec::new();
+        }
+        let mapped = self.map_key(key);
+        let name = if mapped == key {
+            key.to_string()
+        } else {
+            format!("{key} (as {mapped})")
+        };
+        let binding = match self.keymap.lookup(Mode::Normal, &[mapped]) {
+            Lookup::Exact(command) => format!("runs :{command}"),
+            Lookup::Partial => "starts a key chain".to_string(),
+            Lookup::None => "isn't bound".to_string(),
+        };
+        self.show_message(
+            Level::Info,
+            format!("{name} {binding} (Escape ends the key tester)"),
+        );
+        Vec::new()
     }
 
     /// `bindings.key_mappings`: the key this one stands for.
@@ -1328,6 +1359,13 @@ impl Engine {
                     self.cmdline.set(&entry);
                     self.dirty = true;
                 }
+            }
+            Command::DebugKeytester => {
+                self.keytester = true;
+                self.show_message(
+                    Level::Info,
+                    "Key tester: press keys to see their names; Escape ends it",
+                );
             }
             Command::RlPaste { primary } => {
                 let reader = if primary {
@@ -2404,6 +2442,33 @@ mod tests {
             Mode::Command,
             "the command line isn't interrupted"
         );
+    }
+
+    #[test]
+    fn debug_keytester_describes_keys_until_escape() {
+        let mut e = engine();
+        press(&mut e, ":debug-keytester<Return>");
+        assert!(runs(&press(&mut e, "j")).is_empty(), "j doesn't scroll");
+        assert!(
+            e.status()
+                .message
+                .unwrap()
+                .text
+                .starts_with("j runs :scroll")
+        );
+        press(&mut e, "<Ctrl-[>");
+        assert!(e.status().message.unwrap().text.contains("(as <Escape>)"));
+        press(&mut e, "g");
+        assert!(
+            e.status()
+                .message
+                .unwrap()
+                .text
+                .contains("starts a key chain")
+        );
+        press(&mut e, "<Escape>");
+        assert_eq!(e.status().message.unwrap().text, "Key tester off");
+        assert!(!runs(&press(&mut e, "j")).is_empty(), "keys work again");
     }
 
     #[test]

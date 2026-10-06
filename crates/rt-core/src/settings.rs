@@ -843,6 +843,12 @@ pub static SETTINGS: &[SettingDef] = &[
         editor_command
     ),
     def!(
+        "editor.remove_file",
+        Kind::Bool,
+        Value::Bool(true),
+        "Delete the temporary file after the editor closes; false keeps it, e.g. to recover text"
+    ),
+    def!(
         "fileselect.folder.command",
         Kind::List,
         Value::List(vec![
@@ -1056,6 +1062,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["tab", "tab-bg", "window"]),
         s("tab"),
         "Where URLs from a second riptide invocation open"
+    ),
+    def!(
+        "new_instance_open_target_window",
+        Kind::Enum(&["first-opened", "last-opened", "last-focused"]),
+        s("last-focused"),
+        "Which window URLs from a second riptide invocation open in"
     ),
     def!(
         "scrolling.smooth",

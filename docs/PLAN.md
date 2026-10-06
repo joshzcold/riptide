@@ -674,7 +674,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ (2026-10-05) `hints.mode = word` with `hints.dictionary` (labels from each link's own words, prefix-free, shortest dictionary words as a fallback) and `hints.hide_unmatched_rapid_hints`.
 - **URLs:**
   - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
-  - ✅ (2026-10-05) `url.auto_search` (naive, schemeless, never), `url.open_base_url` and `url.incdec_segments`, with e2e tests in `crates/rt-e2e/tests/urls.rs`. Not planned: the `dns` mode, which would block on a DNS lookup. Still to do: `new_instance_open_target_window`.
+  - ✅ (2026-10-05) `url.auto_search` (naive, schemeless, never), `url.open_base_url` and `url.incdec_segments`, with e2e tests in `crates/rt-e2e/tests/urls.rs`. Not planned: the `dns` mode, which would block on a DNS lookup. `new_instance_open_target_window` (first-opened, last-opened, last-focused; qutebrowser's last-visible isn't offered, since Alloy windows don't say whether they're covered) done 2026-10-06, with an e2e test in `crates/rt-e2e/tests/tools.rs`.
 - **Downloads and files:**
   - ✅ Tier 1 (2026-10-05):
     - `download-retry`, `download-remove [--all]` and `download-delete`.
@@ -712,7 +712,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `window.transparent`: needs an ARGB X visual (Chromium's `--enable-transparent-visuals`) and alpha backgrounds in every view; not tried yet.
 - **Tools:**
   - ✅ Tier 1 (2026-10-05): `:screenshot [--force] file`, through the DevTools protocol (`send_dev_tools_message` with `Page.captureScreenshot` and a `DevToolsMessageObserver`), which needs no Views API or DevTools window. The format follows the file extension (png, jpeg, webp). A smoke step checks the PNG signature.
-  - ✅ (2026-10-05) `:restart` (saves a `_restart` session, quits, and starts again with `:session-load _restart`), `debug-dump-page`, `debug-clear-ssl-errors` and `devtools-focus`. Still to do: `:report`, `debug-keytester`, `debug-log-filter`.
+  - ✅ (2026-10-05) `:restart` (saves a `_restart` session, quits, and starts again with `:session-load _restart`), `debug-dump-page`, `debug-clear-ssl-errors` and `devtools-focus`. `:report` (a prefilled GitHub issue), `debug-keytester` and `debug-log-filter` (a reloadable `tracing` filter) done 2026-10-06, with e2e tests in `crates/rt-e2e/tests/tools.rs`.
   - ✅ Bookmarks and quickmarks (2026-10-05): `bookmark-list` (a `riptide://bookmarks/` page), `quickmark-save`, `bookmarks-reload` and `quickmarks-reload`.
   - ✅ (2026-10-05) Readline and caret commands: `rl-backward-word`, `rl-forward-word`, `rl-kill-word`, `rl-backward-kill-word` and `rl-yank` (with a kill buffer), the `move-to-{start,end}-of-{next,prev}-block` set on `[` `]` `{` `}` as in qutebrowser, and `selection-drop` (`Ctrl-Space`).
 - **Userscripts, editing and Greasemonkey** (already there since M9: `:spawn -u/-v/-o/-m/-d`, hint targets `spawn` and `userscript`, the `RIPTIDE_*` variables with `RIPTIDE_FIFO`, `:open-editor`, and Greasemonkey `@match`/`@include`/`@exclude`/`@run-at`/`@noframes` with `GM_addStyle` and `GM_info`):
@@ -730,7 +730,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
       - `edit-url` (with `--tab`, `--bg`, `--window`, `--private`, `--related`).
       - `cmd-edit` (edit the command line; `--run` runs it on save).
       - All three share one editor helper, and each has a smoke step.
-    - `editor.encoding`, `editor.remove_file`.
+    - ✅ (2026-10-06) `editor.remove_file`. `editor.encoding` isn't planned: riptide reads and writes the file as UTF-8.
   - **Greasemonkey:**
     - ✅ Tier 1 (2026-10-05): `@require`, fetched once into `<data>/greasemonkey-data/requires/` and keyed by the URL. Also `GM_setValue`, `getValue`, `deleteValue` and `listValues`, with promise versions under `GM.*`, stored per script in `<data>/greasemonkey-data/values/`.
       - The setter is a native function passed to the script as an argument, never through a global, so pages can't reach it.

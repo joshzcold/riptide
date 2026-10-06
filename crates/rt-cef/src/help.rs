@@ -182,6 +182,30 @@ pub fn run_command(command: &Command) -> bool {
         }
         Command::Help { tab, topic } => (*tab, topic.as_deref()),
         Command::Version => (false, Some("version")),
+        Command::Report => {
+            let body = format!(
+                "**What happened:**\n\n**What you expected:**\n\n**Steps to reproduce:**\n\n---\n{}\nOS: {} {}\nSandbox: {}",
+                version_line(),
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+                SANDBOX.get().map_or("unknown", String::as_str),
+            );
+            let url = format!(
+                "https://github.com/joshzcold/riptide/issues/new?body={}",
+                rt_core::url::encode_query(&body)
+            );
+            shell::open(OpenTarget::Tab, true, Some(url));
+            return true;
+        }
+        Command::DebugLogFilter { filter } => {
+            match crate::set_log_filter(filter) {
+                Ok(()) => shell::show_message(Level::Info, format!("Log filter: {filter}")),
+                Err(e) => {
+                    shell::show_message(Level::Error, format!("Bad log filter {filter:?}: {e}"))
+                }
+            }
+            return true;
+        }
         _ => return false,
     };
     let anchor = match rt_core::help::anchor(topic) {

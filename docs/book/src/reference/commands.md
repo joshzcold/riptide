@@ -36,6 +36,9 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:config-source` |  | Reload the configuration files |
 | `:help` | `<F1>` | Show help: :help [-t] [:command \| setting \| section] |
 | `:version` |  | Show version, paths and loaded config files |
+| `:report` |  | Report a bug: opens a new GitHub issue with the version filled in |
+| `:debug-keytester` |  | Show the name and binding of each key you press, until Escape |
+| `:debug-log-filter` |  | Change the log filter while running, e.g. rt_cef=debug; default goes back to RT_LOG |
 | `:changelog` |  | Show what changed in each version: :changelog [-t] |
 | `:quickmark-add` | `m` | Save a quickmark: :quickmark-add &lt;url&gt; &lt;name&gt; |
 | `:quickmark-load` | `B` `b` | Open a quickmark: :quickmark-load [-t\|-b] &lt;name&gt; |

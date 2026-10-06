@@ -89,6 +89,28 @@ pub fn run_commands(commands: &[String]) {
     }
 }
 
+/// `new_instance_open_target_window`: make that window the active one.
+/// The active window is the last focused one already.
+fn choose_window() {
+    shell::with(|s| {
+        let open: Vec<usize> = s
+            .windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w.window.is_some() && !w.private)
+            .map(|(i, _)| i)
+            .collect();
+        let chosen = match s.engine.settings().str("new_instance_open_target_window") {
+            "first-opened" => open.first(),
+            "last-opened" => open.last(),
+            _ => None,
+        };
+        if let Some(&index) = chosen {
+            s.active = index;
+        }
+    });
+}
+
 fn handle(request: Request) {
     let configured = shell::with(|s| {
         s.engine
@@ -97,6 +119,7 @@ fn handle(request: Request) {
             .to_string()
     });
     let target = target(request.target.as_deref().or(configured.as_deref()));
+    choose_window();
     let mut commands = Vec::new();
     for arg in &request.args {
         match remote::classify(arg, &request.cwd) {

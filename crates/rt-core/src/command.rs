@@ -245,6 +245,14 @@ pub enum Command {
         topic: Option<String>,
     },
     Version,
+    /// `:report`: open a new GitHub issue with the version filled in.
+    Report,
+    /// `:debug-keytester`: show each key's name and binding until Escape.
+    DebugKeytester,
+    /// `:debug-log-filter`: change what riptide's log shows, e.g. `rt_cef=debug`.
+    DebugLogFilter {
+        filter: String,
+    },
     /// Open the bundled changelog, in a new tab with `tab`.
     Changelog {
         tab: bool,
@@ -692,6 +700,18 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Show help: :help [-t] [:command | setting | section]",
     ),
     spec("version", "Show version, paths and loaded config files"),
+    spec(
+        "report",
+        "Report a bug: opens a new GitHub issue with the version filled in",
+    ),
+    spec(
+        "debug-keytester",
+        "Show the name and binding of each key you press, until Escape",
+    ),
+    spec(
+        "debug-log-filter",
+        "Change the log filter while running, e.g. rt_cef=debug; default goes back to RT_LOG",
+    ),
     spec(
         "changelog",
         "Show what changed in each version: :changelog [-t]",
@@ -1262,6 +1282,11 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "version" => Command::Version,
+        "report" => Command::Report,
+        "debug-keytester" => Command::DebugKeytester,
+        "debug-log-filter" => Command::DebugLogFilter {
+            filter: args.required("filter")?.to_string(),
+        },
         "changelog" => Command::Changelog {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
@@ -2329,6 +2354,7 @@ mod tests {
             "lua-call",
             "set-mark",
             "jump-mark",
+            "debug-log-filter",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);
