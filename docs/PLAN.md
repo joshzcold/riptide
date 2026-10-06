@@ -146,7 +146,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
 - [x] `;d` download
-- [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02; cross-origin iframes are hinted as a whole)
+- [x] Configurable chars (M5), hints inside same-origin iframes (2026-10-02; cross-origin iframes are hinted as a whole until the M19 item for them is done)
 - [x] Number hint mode (`hints.mode = number`: digit labels, letters filter by element text, a unique match is followed) (2026-10-02)
 
 ### Command line
@@ -673,6 +673,14 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - Rapid mode (`hint --rapid`) was already done.
   - ✅ (2026-10-05) `hints.min_chars`, `hints.scatter`, `hints.leave_on_load`, and `hints.next_regexes`/`prev_regexes` as settings (passed to `navigate.js`), with e2e tests in `crates/rt-e2e/tests/hint_settings.rs`. `hint-follow` was already done.
   - ✅ (2026-10-05) `hints.mode = word` with `hints.dictionary` (labels from each link's own words, prefix-free, shortest dictionary words as a fallback) and `hints.hide_unmatched_rapid_hints`.
+  - **Hints inside cross-origin iframes and shadow DOM.** Gmail's Chat panes (served from `chat.google.com` inside `mail.google.com`) get one hint for the whole iframe today, because `hints.js` only searches same-origin frames and page JavaScript can't see into other sites' frames. Sites built from web components (YouTube, GitHub) lose buttons inside shadow roots the same way.
+    - **Collect per frame:** the browser runs `hints.js` in every frame of the tab (`Browser::frame_identifiers`, each through the eval channel), not just the main frame. Results are merged in frame order, so one label sequence covers them all.
+    - **Draw per frame:** each frame draws its own labels in its own document, so labels need no coordinate translation. Filtering, `hint-follow` and leaving hint mode go to every frame that has labels.
+    - **Follow:** a click needs window coordinates. The main frame finds the `<iframe>` element showing that frame (matched by URL), and its box offsets the element's point. When the match is ambiguous (two iframes with the same URL), fall back to `el.click()` inside the frame, which some sites ignore since it isn't a trusted event.
+    - **Hidden frames:** a frame scrolled out of view or hidden by its page still thinks its contents are visible. Before labelling a frame, check that its `<iframe>` element is visible in the main frame, or labels are wasted on frames you can't see.
+    - **Shadow DOM:** `gather` also walks open shadow roots (`el.shadowRoot`). Closed ones stay out of reach.
+    - **Same-origin frames:** keep today's in-page search for them, so they aren't hinted twice.
+    - **Tests:** e2e fixtures with a cross-origin iframe (`127.0.0.1` embedding `localhost`) and with a button inside a shadow root. Check that the elements are labelled, that typing a label follows it with a trusted click, and that a hidden iframe gets no labels.
 - **URLs:**
   - ✅ Tier 1 (2026-10-05): `edit-url` (edit the URL in the editor) and `url.yank_ignored_parameters` (drop `utm_*`, `ref`, `fbclid` and `gclid` when yanking).
   - ✅ (2026-10-05) `url.auto_search` (naive, schemeless, never), `url.open_base_url` and `url.incdec_segments`, with e2e tests in `crates/rt-e2e/tests/urls.rs`. Not planned: the `dns` mode, which would block on a DNS lookup. `new_instance_open_target_window` (first-opened, last-opened, last-focused; qutebrowser's last-visible isn't offered, since Alloy windows don't say whether they're covered) done 2026-10-06, with an e2e test in `crates/rt-e2e/tests/tools.rs`.
