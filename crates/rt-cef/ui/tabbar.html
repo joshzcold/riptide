@@ -47,6 +47,8 @@
   .tab.shrunk { flex: 0 0 auto; }
   /* A dragged tab follows the pointer; the others slide aside to show where it lands. */
   .tab.dragging { position: relative; z-index: 1; opacity: 0.9; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }
+  /* A dragged tab shrinks to about a pinned tab's size, so wide tabs are easy to place. */
+  body:not(.vertical) .tab.dragging { flex: 0 0 auto; width: 10ch; min-width: 0; max-width: none; }
   .tab.shifting { transition: transform 120ms ease; }
   .tab.selected {
     background: var(--selected-bg);
@@ -87,17 +89,19 @@
 
   function startDrag() {
     press.dragging = true;
-    press.spans = [...bar.children].map((el) => span(el.getBoundingClientRect()));
     press.target = press.index;
+    // Shrink first, then measure, so the other tabs' new sizes are what we compare with.
     bar.children[press.index].classList.add("dragging");
+    press.spans = [...bar.children].map((el) => span(el.getBoundingClientRect()));
     for (const [i, el] of [...bar.children].entries()) if (i !== press.index) el.classList.add("shifting");
   }
 
-  // Move the dragged tab by `delta` pixels and slide the others out of its
-  // way. Where it lands follows the pointer, not the tab's centre, so a wide
-  // tab can still pass narrow ones near the edge of the bar.
-  function dragTo(delta, pointer) {
+  // Keep the dragged tab centred on the pointer and slide the others out of
+  // its way. Where it lands follows the pointer, so a tab can pass narrow
+  // ones near the edge of the bar.
+  function dragTo(pointer) {
     const { index, spans } = press;
+    const delta = pointer - spans[index].size / 2 - spans[index].start;
     let target = index;
     spans.forEach((other, i) => {
       const middle = other.start + other.size / 2;
@@ -140,8 +144,7 @@
     const moved = Math.max(Math.abs(e.clientX - press.x), Math.abs(e.clientY - press.y));
     if (!press.dragging && moved < DRAG_THRESHOLD) return;
     if (!press.dragging) startDrag();
-    const pointer = vertical() ? e.clientY : e.clientX;
-    dragTo(pointer - (vertical() ? press.y : press.x), pointer);
+    dragTo(vertical() ? e.clientY : e.clientX);
   });
   bar.addEventListener("pointerup", () => {
     if (!press) return;

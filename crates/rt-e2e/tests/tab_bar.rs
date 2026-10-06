@@ -157,7 +157,7 @@ fn tab_bar_a_wide_tab_drags_past_narrow_pinned_ones() {
         "2",
     );
     // Grab the wide tab near its left edge and move the pointer onto the first tab.
-    b.eval_bar(
+    let widths = b.eval_bar(
         "tabbar",
         r#"(() => {
           const bar = document.getElementById('tabs');
@@ -169,10 +169,14 @@ fn tab_bar_a_wide_tab_drags_past_narrow_pinned_ones() {
           fire('pointerdown', wide.left + 4);
           fire('pointermove', wide.left + 14);
           fire('pointermove', first.left + 2);
+          const dragged = tabs[2].getBoundingClientRect().width;
           fire('pointerup', first.left + 2);
-          return '';
+          return `${wide.width} ${dragged}`;
         })()"#,
     );
+    let (before, during) = widths.split_once(' ').unwrap();
+    let (before, during): (f64, f64) = (before.parse().unwrap(), during.parse().unwrap());
+    assert!(during < before / 2.0, "it shrinks while dragged: {widths}");
     let nav2 = b.url("nav2.html");
     b.wait_until("the wide tab is first", |s| s.tabs()[0].url == nav2);
 }
