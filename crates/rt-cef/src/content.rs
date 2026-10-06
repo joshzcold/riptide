@@ -56,7 +56,7 @@ struct State {
     /// Whether the protocol handler default stored by an earlier version is gone.
     cleared_protocol_handlers: bool,
     /// The header preferences last given to Chromium.
-    prefs: Option<bool>,
+    prefs: Option<String>,
     /// The cookie settings last given to Chromium.
     cookies: Option<(String, bool)>,
     /// (setting, origin) pairs given their own value, to undo when no override matches.
@@ -110,15 +110,16 @@ pub fn before_request(request: &mut Request) {
     }
 }
 
-/// `content.headers.do_not_track`, a profile preference: set on the profile
-/// and on the private windows' context.
+/// The settings that are profile preferences (`content.headers.do_not_track`,
+/// `content.dns_prefetch`, `content.webrtc_ip_handling_policy`,
+/// `content.proxy`): set on the profile and on the private windows' context.
 pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
     let set = |name: &str, value: Option<cef::Value>| {
         let Some(mut value) = value else { return };
         let mut error = CefString::from(" ");
-        let name = CefString::from(name);
-        if context.set_preference(Some(&name), Some(&mut value), Some(&mut error)) == 0 {
-            tracing::warn!(%error, "could not set a header preference");
+        let pref = CefString::from(name);
+        if context.set_preference(Some(&pref), Some(&mut value), Some(&mut error)) == 0 {
+            tracing::warn!(%error, name, "could not set a preference");
         }
     };
     set(
@@ -127,6 +128,41 @@ pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
             v.set_bool(settings.bool("content.headers.do_not_track").into());
         }),
     );
+    // Chromium's NetworkPredictionOptions: 0 standard, 2 disabled.
+    let prediction = if settings.bool("content.dns_prefetch") {
+        0
+    } else {
+        2
+    };
+    set(
+        "net.network_prediction_options",
+        value_create().inspect(|v| {
+            v.set_int(prediction);
+        }),
+    );
+    let policy = rt_core::network::webrtc_policy(settings.str("content.webrtc_ip_handling_policy"));
+    set(
+        "webrtc.ip_handling_policy",
+        value_create().inspect(|v| {
+            v.set_string(Some(&CefString::from(policy)));
+        }),
+    );
+    // The setting's validator already rejected anything unparsable.
+    if let Ok(proxy) = rt_core::network::parse_proxy(settings.str("content.proxy"))
+        && let Some(dict) = dictionary_value_create()
+    {
+        let (mode, extra) = proxy.pref();
+        dict.set_string(Some(&CefString::from("mode")), Some(&CefString::from(mode)));
+        if let Some((key, value)) = extra {
+            dict.set_string(Some(&CefString::from(key)), Some(&CefString::from(value)));
+        }
+        set(
+            "proxy",
+            value_create().inspect(|v| {
+                v.set_dictionary(Some(&mut dict.clone()));
+            }),
+        );
+    }
 }
 
 /// Apply the content settings as Chromium's defaults for every site.
@@ -145,7 +181,19 @@ pub fn apply_globals(settings: &Settings) {
     if let Ok(mut current) = HEADER_RULES.write() {
         *current = Some(rules);
     }
-    let prefs = settings.bool("content.headers.do_not_track");
+    let prefs = [
+        "content.headers.do_not_track",
+        "content.dns_prefetch",
+        "content.webrtc_ip_handling_policy",
+        "content.proxy",
+    ]
+    .map(|name| {
+        settings
+            .get(name)
+            .map(ToString::to_string)
+            .unwrap_or_default()
+    })
+    .join("\n");
     if STATE.with(|s| s.borrow().prefs.as_ref() != Some(&prefs)) {
         apply_prefs(&context, settings);
         if let Some(private) = shell::with(|s| s.private_context.clone()).flatten() {

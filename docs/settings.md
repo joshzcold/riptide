@@ -30,9 +30,12 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists) |
 | `content.blocking.enabled` | boolean | `true` | Block ads and trackers with the filter lists from content.blocking.adblock.lists |
 | `content.blocking.whitelist` | string[] | `[]` | Sites where nothing is blocked, as host names; a host also covers its subdomains |
+| `content.cache.size` | integer | `0` | Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart) |
+| `content.canvas_reading` | boolean | `true` | Let pages read back what they drew on a canvas; false blocks a common fingerprinting trick but breaks some sites (after a restart) |
 | `content.cookies.accept` | all \| no-3rdparty \| no-unknown-3rdparty \| never | `all` | Which cookies sites may set: all, none from other sites (no-3rdparty; no-unknown-3rdparty is the same here), or never |
 | `content.cookies.store` | boolean | `true` | Keep cookies after the browser closes; false makes every cookie last only for the session |
 | `content.desktop_capture` | ask \| true \| false | `ask` | Let sites capture your screen or desktop audio: ask, true or false |
+| `content.dns_prefetch` | boolean | `true` | Look up the hosts of links before you follow them, which is faster but tells your DNS server about them |
 | `content.geolocation` | ask \| true \| false | `ask` | Let sites know your location: ask, true or false |
 | `content.headers.accept_language` | string | `` | Languages sites are asked for, e.g. en-US,en;q=0.9 (also navigator.languages); empty for the system's |
 | `content.headers.custom` | table<string, string> | `{}` | Extra headers sent with every request: name → value |
@@ -47,7 +50,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
+| `content.proxy` | string | `system` | Proxy: system, none, a proxy URL such as socks5://127.0.0.1:9050, or pac+ and a PAC script's URL |
 | `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
+| `content.webrtc_ip_handling_policy` | all-interfaces \| default-public-and-private-interfaces \| default-public-interface-only \| disable-non-proxied-udp | `all-interfaces` | Which IP addresses WebRTC (video calls) may reveal; disable-non-proxied-udp keeps it behind content.proxy |
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |

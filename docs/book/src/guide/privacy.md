@@ -24,6 +24,21 @@ Chromium calls Google in the background. riptide turns off the calls that only s
 
 The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 
+## Proxy and network
+
+| Setting | What it does |
+|---|---|
+| `content.proxy` | `system` (default), `none`, a proxy URL (`socks5://127.0.0.1:9050`, `http://proxy:3128`), or `pac+` and a PAC script's URL. Names are looked up through a SOCKS5 proxy, not locally |
+| `content.webrtc_ip_handling_policy` | Which addresses video calls may reveal: `all-interfaces` (default), `default-public-and-private-interfaces`, `default-public-interface-only`, or `disable-non-proxied-udp` to keep WebRTC behind the proxy |
+| `content.dns_prefetch` | `false` stops looking up the hosts of links before you follow them |
+| `content.canvas_reading` | `false` stops pages reading back what they drew, a common fingerprinting trick; some sites break (after a restart) |
+| `content.cache.size` | Disk cache size in bytes; `0` lets Chromium choose (after a restart) |
+
+```toml
+content.proxy = "socks5://127.0.0.1:9050"
+content.webrtc_ip_handling_policy = "disable-non-proxied-udp"
+```
+
 ## Cookies, JavaScript, images and the user agent
 
 | Setting | What it does |

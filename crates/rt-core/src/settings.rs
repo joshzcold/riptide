@@ -339,6 +339,13 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+fn proxy(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(text) => crate::network::parse_proxy(text).map(|_| ()),
+        _ => Ok(()),
+    }
+}
+
 fn completion_height(value: &Value) -> Result<(), String> {
     let Value::Str(text) = value else {
         return Ok(());
@@ -585,6 +592,21 @@ pub static SETTINGS: &[SettingDef] = &[
         "Sites where nothing is blocked, as host names; a host also covers its subdomains"
     ),
     def!(
+        "content.cache.size",
+        Kind::Int {
+            min: 0,
+            max: 1 << 40
+        },
+        Value::Int(0),
+        "Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart)"
+    ),
+    def!(
+        "content.canvas_reading",
+        Kind::Bool,
+        Value::Bool(true),
+        "Let pages read back what they drew on a canvas; false blocks a common fingerprinting trick but breaks some sites (after a restart)"
+    ),
+    def!(
         "content.cookies.accept",
         Kind::Enum(&["all", "no-3rdparty", "no-unknown-3rdparty", "never"]),
         s("all"),
@@ -601,6 +623,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(ASK),
         s("ask"),
         "Let sites capture your screen or desktop audio: ask, true or false"
+    ),
+    def!(
+        "content.dns_prefetch",
+        Kind::Bool,
+        Value::Bool(true),
+        "Look up the hosts of links before you follow them, which is faster but tells your DNS server about them"
     ),
     def!(
         "content.geolocation",
@@ -687,10 +715,28 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites show notifications: ask, true or false"
     ),
     def!(
+        "content.proxy",
+        Kind::Str,
+        s("system"),
+        "Proxy: system, none, a proxy URL such as socks5://127.0.0.1:9050, or pac+ and a PAC script's URL",
+        proxy
+    ),
+    def!(
         "content.tls.certificate_errors",
         Kind::Enum(&["ask", "block", "load-insecurely"]),
         s("ask"),
         "Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely"
+    ),
+    def!(
+        "content.webrtc_ip_handling_policy",
+        Kind::Enum(&[
+            "all-interfaces",
+            "default-public-and-private-interfaces",
+            "default-public-interface-only",
+            "disable-non-proxied-udp",
+        ]),
+        s("all-interfaces"),
+        "Which IP addresses WebRTC (video calls) may reveal; disable-non-proxied-udp keeps it behind content.proxy"
     ),
     def!(
         "content.widevine",

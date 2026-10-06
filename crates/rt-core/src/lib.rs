@@ -13,6 +13,7 @@ pub mod html;
 pub mod key;
 pub mod keymap;
 pub mod mode;
+pub mod network;
 pub mod path_complete;
 pub mod permissions;
 pub mod prompt;

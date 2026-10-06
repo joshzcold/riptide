@@ -104,3 +104,64 @@ fn content_headers_referer_same_domain_drops_cross_site_referrers() {
         "always sends it: {seen}"
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_proxy_sends_requests_through_the_proxy() {
+    let b = Browser::start("page.html");
+    // The fixture server doubles as an HTTP proxy, so a host that doesn't
+    // exist loads only if the request really goes through it.
+    let proxy = b.url("").trim_end_matches('/').to_string();
+    b.run(&format!("set content.proxy {proxy}"));
+    let url = "http://riptide-proxy-test.invalid/second.html";
+    b.run(&format!("open {url}"));
+    b.wait_until("the page comes through the proxy", |s| {
+        s.tab().url == url && s.tab().title == "second"
+    });
+    b.run("set content.proxy none");
+    b.run("reload");
+    b.wait_until("without it the host doesn't resolve", |s| {
+        s.tab().title != "second" && !s.tab().loading
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_canvas_reading_false_blocks_reading_pixels_back() {
+    const READ: &str = "(() => { const c = document.createElement('canvas'); \
+        try { c.getContext('2d').getImageData(0, 0, 1, 1); return 'read'; } catch (e) { return 'blocked'; } })()";
+    let b = Browser::start("page.html");
+    assert_eq!(b.eval(READ), "read");
+    let b = Browser::launch()
+        .toml("\"content.canvas_reading\" = false\n")
+        .start("page.html");
+    assert_eq!(b.eval(READ), "blocked");
+}
+
+/// Start gathering WebRTC ICE candidates; `window.__candidates` becomes
+/// their count once gathering ends.
+const GATHER: &str = "(() => { const pc = new RTCPeerConnection(); let n = 0; \
+    pc.onicecandidate = (e) => { if (e.candidate) n++; else window.__candidates = String(n); }; \
+    pc.createDataChannel('x'); pc.createOffer().then((o) => pc.setLocalDescription(o)); return ''; })()";
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn content_webrtc_policy_disable_non_proxied_udp_hides_local_candidates() {
+    let b = Browser::start("page.html");
+    b.eval(GATHER);
+    b.wait_until("gathering ends", |_| {
+        b.try_eval("window.__candidates ?? ''")
+            .is_ok_and(|n| !n.is_empty())
+    });
+    let open = b.eval("window.__candidates");
+    assert_ne!(open, "0", "the default policy finds local candidates");
+    b.run("set content.webrtc_ip_handling_policy disable-non-proxied-udp");
+    b.run("reload");
+    b.wait_until("reloaded", |s| !s.tab().loading);
+    b.eval(GATHER);
+    b.wait_until("gathering ends", |_| {
+        b.try_eval("window.__candidates ?? ''")
+            .is_ok_and(|n| !n.is_empty())
+    });
+    assert_eq!(b.eval("window.__candidates"), "0");
+}

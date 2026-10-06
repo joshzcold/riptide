@@ -65,6 +65,9 @@ struct Startup {
     /// become Chromium switches; taken once CEF is up.
     config: std::sync::Arc<std::sync::Mutex<Option<rt_config::Loaded>>>,
     dark_mode: bool,
+    /// Switches from startup-only settings: `content.cache.size` and
+    /// `content.canvas_reading`.
+    switches: Vec<(&'static str, Option<String>)>,
     /// `content.widevine` is on but the CDM isn't downloaded yet.
     fetch_widevine: bool,
 }
@@ -92,6 +95,13 @@ wrap_app! {
             if browser_process && let Some(command_line) = command_line {
                 command_line.append_switch(Some(&CefString::from("disable-chrome-login-prompt")));
                 privacy::append_switches(command_line);
+                for (name, value) in self.startup.as_ref().map_or(&[][..], |s| &s.switches) {
+                    let name = CefString::from(*name);
+                    match value {
+                        Some(value) => command_line.append_switch_with_value(Some(&name), Some(&CefString::from(value.as_str()))),
+                        None => command_line.append_switch(Some(&name)),
+                    }
+                }
                 if self.startup.as_ref().is_some_and(|s| s.dark_mode) {
                     append_to_list_switch(command_line, "blink-settings", "forceDarkModeEnabled=true");
                 }
@@ -312,12 +322,25 @@ pub fn run() -> i32 {
         ..Default::default()
     };
     let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");
+    let switches = {
+        let settings = startup_settings(&loaded);
+        let mut switches = Vec::new();
+        let cache = settings.int("content.cache.size");
+        if cache > 0 {
+            switches.push(("disk-cache-size", Some(cache.to_string())));
+        }
+        if !settings.bool("content.canvas_reading") {
+            switches.push(("disable-reading-from-canvas", None));
+        }
+        switches
+    };
     let mut app = RtApp::new(Some(Startup {
         paths,
         urls,
         commands,
         config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
         dark_mode,
+        switches,
         fetch_widevine,
     }));
     if initialize(

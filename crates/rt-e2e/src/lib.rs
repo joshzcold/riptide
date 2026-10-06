@@ -601,6 +601,10 @@ fn serve(mut stream: std::net::TcpStream, root: &Path) {
     let n = stream.read(&mut head).unwrap_or(0);
     let request = String::from_utf8_lossy(&head[..n]);
     let path = request.split_whitespace().nth(1).unwrap_or("/");
+    // As a proxy, it gets absolute URLs: serve their path from the fixtures.
+    let path = path
+        .strip_prefix("http://")
+        .map_or(path, |rest| rest.find('/').map_or("/", |i| &rest[i..]));
     let path = path
         .split(['?', '#'])
         .next()
