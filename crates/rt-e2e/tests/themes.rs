@@ -79,3 +79,42 @@ fn fonts_restyle_the_bars_and_pages() {
         "21px",
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn ui_css_and_user_stylesheets_apply_and_reload() {
+    let b = Browser::launch()
+        .file(
+            "config/ui.css",
+            "#bar { background: rgb(1, 2, 3) !important; }",
+        )
+        .file(
+            "config/page.css",
+            "body { background: rgb(4, 5, 6) !important; }",
+        )
+        .toml("\"content.user_stylesheets\" = [\"page.css\"]\n")
+        .start("page.html");
+    let bar = |b: &Browser| {
+        b.eval_bar(
+            "statusbar",
+            "getComputedStyle(document.getElementById('bar')).backgroundColor",
+        )
+    };
+    let page = |b: &Browser| b.eval("getComputedStyle(document.body).backgroundColor");
+    wait_for(&b, "the status bar", bar, "rgb(1, 2, 3)");
+    wait_for(&b, "the page", page, "rgb(4, 5, 6)");
+    // Edits apply without reloading anything.
+    let config = b.config_dir();
+    std::fs::write(
+        config.join("ui.css"),
+        "#bar { background: rgb(7, 8, 9) !important; }",
+    )
+    .unwrap();
+    std::fs::write(
+        config.join("page.css"),
+        "body { background: rgb(10, 11, 12) !important; }",
+    )
+    .unwrap();
+    wait_for(&b, "the status bar after the edit", bar, "rgb(7, 8, 9)");
+    wait_for(&b, "the page after the edit", page, "rgb(10, 11, 12)");
+}

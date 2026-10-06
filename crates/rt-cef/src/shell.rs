@@ -1022,8 +1022,11 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let current = s.tabs.current();
     // ui.theme and colors.*, sent with every bar's update.
     let theme = json!(rt_core::theme::ui_vars(s.engine.settings()));
+    // ui.css, after the pages' own styles.
+    let css = crate::userstyle::ui_css(&s.paths.config_dir);
     let status_json = json!({
         "theme": theme,
+        "css": css,
         "mode": status.mode,
         "command_line": status.command_line,
         "keystring": status.keystring,
@@ -1097,6 +1100,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         .collect();
     let tabbar_json = json!({
         "theme": theme,
+        "css": css,
         "tabs": tabs,
         "current": s.tabs.current_index(),
         "shrink": settings.bool("tabs.pinned.shrink"),
@@ -1199,6 +1203,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let is_prompt = payload["kind"] == "prompt";
     let mut payload = payload;
     payload["theme"] = theme;
+    payload["css"] = css.into();
     let payload = payload.to_string();
     let overlay_changed = payload != s.last_overlay;
     if s.completion_ready

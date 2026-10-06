@@ -137,6 +137,20 @@
   }, 1000);
 
 
+  // ui.css from the config directory, after the page's own styles.
+  let appliedCss = null;
+  function applyCss(css) {
+    if (css === undefined || css === appliedCss) return;
+    appliedCss = css;
+    let style = document.getElementById("user-css");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "user-css";
+      document.head.append(style);
+    }
+    style.textContent = css;
+  }
+
   // ui.theme and colors.*: the browser sends them as --rt-<token> variables.
   let appliedTheme = "";
   function applyTheme(theme) {
@@ -151,6 +165,7 @@
 
   window.rtRender = (state) => {
     applyTheme(state.theme);
+    applyCss(state.css);
     const bar = $("bar");
     const left = $("left");
     bar.className = state.mode;

@@ -103,6 +103,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.register_protocol_handler` | ask \| true \| false | `ask` | Let sites register to handle links like mailto: : ask, true or false |
 | `content.tls.certificate_errors` | ask \| block \| load-insecurely | `ask` | Pages whose TLS certificate isn't trusted: ask, block, or load-insecurely |
 | `content.unknown_url_scheme_policy` | ask \| allow-all \| disallow | `ask` | Links to schemes the browser can't show (mailto:, magnet:, zoommtg:): ask before handing them to xdg-open, always hand them over, or never |
+| `content.user_stylesheets` | string[] | `[]` | CSS files applied to pages (relative paths are in the config directory); reloaded when they change; can be set per site |
 | `content.webgl` | boolean | `true` | Allow WebGL, which 3D graphics need and fingerprinting scripts use (after a restart) |
 | `content.webrtc_ip_handling_policy` | all-interfaces \| default-public-and-private-interfaces \| default-public-interface-only \| disable-non-proxied-udp | `all-interfaces` | Which IP addresses WebRTC (video calls) may reveal; disable-non-proxied-udp keeps it behind content.proxy |
 | `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |

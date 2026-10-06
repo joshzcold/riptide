@@ -48,3 +48,24 @@ The [settings reference](../reference/settings.md) lists every `colors.*` settin
 The bars don't grow with the font yet, so sizes much above the default are cut off.
 
 Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and `.sans_serif` (empty keeps Chromium's) and `fonts.web.size.default`, `.default_fixed` and `.minimum` in pixels. Pages pick them up when they reload.
+
+## Custom CSS
+
+`ui.css` in the config directory is added to riptide's tab bar, status bar and overlay after their own styles, for anything the settings don't cover. The theme's colors are there as CSS variables (`--rt-statusbar-bg`, `--rt-tabs-selected-bg`, … one per `colors.*` setting), so a rule can reuse them:
+
+```css
+/* ~/.config/riptide/ui.css */
+.tab.selected { border-bottom: 2px solid var(--rt-prompts-border); }
+#bar.insert { font-style: italic; }
+```
+
+`content.user_stylesheets` lists CSS files for web pages; relative paths are in the config directory, and like other content settings it can be set per site:
+
+```toml
+"content.user_stylesheets" = ["readable.css"]
+
+[per_domain."news.example.com"]
+"content.user_stylesheets" = ["readable.css", "news.css"]
+```
+
+Both are read again within a second of being saved: open pages and bars change without a reload.

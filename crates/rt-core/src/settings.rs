@@ -1113,6 +1113,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Links to schemes the browser can't show (mailto:, magnet:, zoommtg:): ask before handing them to xdg-open, always hand them over, or never"
     ),
     def!(
+        "content.user_stylesheets",
+        Kind::List,
+        Value::List(Vec::new()),
+        "CSS files applied to pages (relative paths are in the config directory); reloaded when they change; can be set per site"
+    ),
+    def!(
         "content.webgl",
         Kind::Bool,
         Value::Bool(true),
@@ -1976,6 +1982,7 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.notifications.enabled",
     "content.register_protocol_handler",
     "content.tls.certificate_errors",
+    "content.user_stylesheets",
     "input.mode_override",
 ];
 

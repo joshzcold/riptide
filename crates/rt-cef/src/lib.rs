@@ -39,6 +39,7 @@ mod tabs;
 mod test_control;
 mod tls;
 mod ui;
+mod userstyle;
 mod view;
 mod window;
 
@@ -163,6 +164,7 @@ wrap_browser_process_handler! {
             }
             remote::listen();
             statusbar::start();
+            userstyle::start();
         }
     }
 }

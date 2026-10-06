@@ -215,6 +215,20 @@
   }
 
 
+  // ui.css from the config directory, after the page's own styles.
+  let appliedCss = null;
+  function applyCss(css) {
+    if (css === undefined || css === appliedCss) return;
+    appliedCss = css;
+    let style = document.getElementById("user-css");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "user-css";
+      document.head.append(style);
+    }
+    style.textContent = css;
+  }
+
   // ui.theme and colors.*: the browser sends them as --rt-<token> variables.
   let appliedTheme = "";
   function applyTheme(theme) {
@@ -229,6 +243,7 @@
 
   window.rtRender = (payload) => {
     applyTheme(payload.theme);
+    applyCss(payload.css);
     // Replacing the tabs mid-drag would drop the one being dragged.
     if (press?.dragging) {
       deferred = payload;

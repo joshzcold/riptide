@@ -515,6 +515,14 @@ wrap_load_handler! {
             shell::apply(effects.unwrap_or_default());
         }
 
+        fn on_load_start(&self, _browser: Option<&mut Browser>, frame: Option<&mut Frame>, _transition_type: TransitionType) {
+            if self.role == Role::Tab
+                && let Some(frame) = frame.filter(|f| f.is_main() != 0)
+            {
+                crate::userstyle::inject(frame);
+            }
+        }
+
         fn on_load_end(
             &self,
             browser: Option<&mut Browser>,
@@ -549,6 +557,7 @@ wrap_load_handler! {
                         crate::marks::loaded(&browser);
                         crate::view::loaded(&browser);
                         crate::adblock::apply_cosmetic(&browser, &url);
+                        crate::userstyle::inject(frame);
                         // scrolling.bar = never.
                         if shell::with(|s| s.engine.settings().str("scrolling.bar") == "never").unwrap_or(false) {
                             crate::adblock::inject_css(&browser, "::-webkit-scrollbar { display: none !important; }");
