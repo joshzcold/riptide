@@ -511,6 +511,10 @@ wrap_load_handler! {
                         crate::marks::loaded(&browser);
                         crate::view::loaded(&browser);
                         crate::adblock::apply_cosmetic(&browser, &url);
+                        // scrolling.bar = never.
+                        if shell::with(|s| s.engine.settings().str("scrolling.bar") == "never").unwrap_or(false) {
+                            crate::adblock::inject_css(&browser, "::-webkit-scrollbar { display: none !important; }");
+                        }
                     }
                     crate::lua::emit("load_finished", &[("url", &url)]);
                     return;

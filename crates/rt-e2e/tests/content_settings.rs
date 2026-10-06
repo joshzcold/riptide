@@ -238,3 +238,24 @@ fn content_webgl_and_reduced_motion_apply_at_startup() {
         "WebGL by default: {webgl_by_default}"
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn scrolling_bar_never_hides_page_scrollbars() {
+    // Width taken by the page's vertical scrollbar, once the page is taller than the window.
+    const BAR: &str = "(() => { document.body.style.height = '5000px'; \
+        return String(innerWidth - document.documentElement.clientWidth); })()";
+    let b = Browser::start("page.html");
+    assert_ne!(b.eval(BAR), "0", "a scrollbar by default");
+    b.run("set scrolling.bar never");
+    b.run("reload");
+    b.wait_until("reloaded", |s| !s.tab().loading);
+    let start = std::time::Instant::now();
+    while b.eval(BAR) != "0" {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the scrollbar is still there"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

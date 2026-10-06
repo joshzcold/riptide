@@ -160,6 +160,11 @@
     if (dragging) endDrag();
   });
 
+  // tabs.close_mouse_button on the empty part of the bar: tabs.close_mouse_button_on_bar.
+  let barButton = 1;
+  bar.addEventListener("mousedown", (e) => { if (e.button === barButton && !e.target.closest(".tab")) e.preventDefault(); });
+  bar.addEventListener("auxclick", (e) => { if (e.button === barButton && !e.target.closest(".tab")) send("bar-click", {}); });
+
   // One wheel notch switches one tab, however finely the device scrolls.
   let wheelAt = 0;
   bar.addEventListener("wheel", (e) => {
@@ -215,6 +220,7 @@
       return;
     }
     const { tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button, selected_accent } = payload;
+    barButton = { middle: 1, right: 2 }[close_button];
     document.body.classList.toggle("vertical", vertical);
     const root = document.documentElement.style;
     root.setProperty("--title-align", alignment || "left");

@@ -98,6 +98,10 @@ wrap_app! {
                 for (name, value) in self.startup.as_ref().map_or(&[][..], |s| &s.switches) {
                     let name = CefString::from(*name);
                     match value {
+                        // Keep features the user passed on the command line.
+                        Some(value) if name.to_string() == "enable-features" => {
+                            append_to_list_switch(command_line, "enable-features", value)
+                        }
                         Some(value) => command_line.append_switch_with_value(Some(&name), Some(&CefString::from(value.as_str()))),
                         None => command_line.append_switch(Some(&name)),
                     }
@@ -356,6 +360,9 @@ pub fn run() -> i32 {
         }
         if !settings.bool("content.webgl") {
             switches.push(("disable-webgl", None));
+        }
+        if settings.str("scrolling.bar") == "overlay" {
+            switches.push(("enable-features", Some("OverlayScrollbar".to_string())));
         }
         if settings.bool("content.prefers_reduced_motion") {
             switches.push(("force-prefers-reduced-motion", None));

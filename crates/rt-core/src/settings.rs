@@ -1070,6 +1070,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Which window URLs from a second riptide invocation open in"
     ),
     def!(
+        "scrolling.bar",
+        Kind::Enum(&["always", "never", "overlay"]),
+        s("always"),
+        "Page scrollbars: always, never, or overlay (thin, shown while scrolling; after a restart)"
+    ),
+    def!(
         "scrolling.smooth",
         Kind::Bool,
         Value::Bool(false),
@@ -1156,6 +1162,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(&["middle", "right", "none"]),
         s("middle"),
         "Which mouse button closes a tab clicked in the tab bar"
+    ),
+    def!(
+        "tabs.close_mouse_button_on_bar",
+        Kind::Enum(&["new-tab", "close-current", "close-last", "ignore"]),
+        s("new-tab"),
+        "What tabs.close_mouse_button does on the empty part of the tab bar"
     ),
     def!(
         "tabs.favicons.show",

@@ -14,10 +14,16 @@ pub enum UiMessage {
     CycleTab { forward: bool },
     /// A tab dragged to another position.
     MoveTab { from: usize, to: usize },
+    /// `tabs.close_mouse_button` clicked on the bar outside any tab.
+    BarClick,
 }
 
 /// Pages allowed to send messages, by `riptide://ui/` path.
 pub const UI_PREFIX: &str = "riptide://ui/";
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Nothing {}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -77,6 +83,10 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let Move { from, to } = payload(name, json)?;
             Ok(UiMessage::MoveTab { from, to })
         }
+        ("tabbar.html", "bar-click") => {
+            let Nothing {} = payload(name, json)?;
+            Ok(UiMessage::BarClick)
+        }
         _ => Err(format!("{page} may not send {name:?}")),
     }
 }
@@ -117,6 +127,8 @@ mod tests {
             Ok(UiMessage::MoveTab { from: 0, to: 3 })
         );
         assert!(parse(tabbar, "move-tab", r#"{"from": 0}"#).is_err());
+        assert_eq!(parse(tabbar, "bar-click", "{}"), Ok(UiMessage::BarClick));
+        assert!(parse(tabbar, "bar-click", r#"{"x": 1}"#).is_err());
         assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());
     }
 

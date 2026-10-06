@@ -98,6 +98,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |
 | `new_instance_open_target` | tab \| tab-bg \| window | `tab` | Where URLs from a second riptide invocation open |
 | `new_instance_open_target_window` | first-opened \| last-opened \| last-focused | `last-focused` | Which window URLs from a second riptide invocation open in |
+| `scrolling.bar` | always \| never \| overlay | `always` | Page scrollbars: always, never, or overlay (thin, shown while scrolling; after a restart) |
 | `scrolling.smooth` | boolean | `false` | Animate scrolling by keys instead of jumping |
 | `search.ignore_case` | smart \| always \| never | `smart` | Case in searches: smart ignores it unless the text has a capital, always, or never |
 | `search.incremental` | boolean | `true` | Search while typing after / or ? |
@@ -110,6 +111,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `statusbar.show` | always \| never \| in-mode | `always` | When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode) |
 | `statusbar.widgets` | string[] | `["keypress","downloads","muted","zoom","search_match","url","scroll","history","tabs","progress"]` | What the right side of the status bar shows, in order: keypress, downloads, muted, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:… |
 | `tabs.close_mouse_button` | middle \| right \| none | `middle` | Which mouse button closes a tab clicked in the tab bar |
+| `tabs.close_mouse_button_on_bar` | new-tab \| close-current \| close-last \| ignore | `new-tab` | What tabs.close_mouse_button does on the empty part of the tab bar |
 | `tabs.favicons.show` | always \| never \| pinned | `always` | Show site icons in the tab bar: always, never, or only on pinned tabs |
 | `tabs.indicator.width` | integer | `3` | Width in pixels of the loading indicator at the left of each tab (0 hides it) |
 | `tabs.last_close` | ignore \| blank \| startpage \| default-page \| close | `ignore` | What closing the last tab does |

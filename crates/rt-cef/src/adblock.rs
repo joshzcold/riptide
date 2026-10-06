@@ -398,7 +398,8 @@ wrap_task! {
     }
 }
 
-fn inject_css(browser: &Browser, css: &str) {
+/// Add CSS rules to the page's riptide style element (skipping ones it has).
+pub(crate) fn inject_css(browser: &Browser, css: &str) {
     if css.is_empty() {
         return;
     }

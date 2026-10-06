@@ -21,7 +21,34 @@ pub fn handle_message(message: UiMessage) {
         }
         UiMessage::CycleTab { forward } => crate::tabs::cycle(forward),
         UiMessage::MoveTab { from, to } => crate::tabs::move_tab(from, to),
+        UiMessage::BarClick => bar_click(),
     }
+}
+
+/// `tabs.close_mouse_button_on_bar`: what the close button does on the
+/// empty part of the tab bar.
+fn bar_click() {
+    let Some((action, current, len)) = crate::shell::with(|s| {
+        let action = s
+            .engine
+            .settings()
+            .str("tabs.close_mouse_button_on_bar")
+            .to_string();
+        (action, s.tabs.current_index(), s.tabs.len())
+    }) else {
+        return;
+    };
+    match action.as_str() {
+        "new-tab" => {
+            if let Some(effects) = crate::shell::with(|s| s.engine.execute_str("open -t", None)) {
+                crate::shell::apply(effects);
+            }
+        }
+        "close-current" => crate::tabs::close_unless_pinned(current, false),
+        "close-last" if len > 0 => crate::tabs::close_unless_pinned(len - 1, false),
+        _ => {}
+    }
+    crate::shell::refresh_ui();
 }
 
 /// JavaScript that replaces the current document with an error description.

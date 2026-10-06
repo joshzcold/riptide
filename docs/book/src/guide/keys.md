@@ -89,7 +89,7 @@ w = "https://en.wikipedia.org/w/index.php?search={}"
 
 `/` and `?` search the page, and `n`/`N` move between matches. Searches go on from the top after the last match, saying so, unless you set `search.wrap = false` (they stop at the last match) or `search.wrap_messages = false` (they wrap quietly). `search.ignore_case` (`smart`, `always`, `never`) and `search.incremental` set how matching works.
 
-`scrolling.smooth = true` animates scrolling by keys. `+` and `-` step through `zoom.levels`, and `=` goes back to `zoom.default`:
+`scrolling.smooth = true` animates scrolling by keys, and `scrolling.bar` shows page scrollbars `always`, `never` or as thin `overlay` ones (after a restart). `+` and `-` step through `zoom.levels`, and `=` goes back to `zoom.default`:
 
 ```toml
 "zoom.levels" = ["50%", "75%", "100%", "125%", "150%", "200%"]

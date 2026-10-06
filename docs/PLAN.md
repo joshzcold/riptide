@@ -650,7 +650,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ (2026-10-05) `tabs.title.format` and `format_pinned` (`{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}`, `{audio}`, `{private}`), formatted in `rt_core::title::tab_label`, and `tabs.tooltips`.
   - ✅ (2026-10-05) `tabs.title.alignment`, `min_width`, `max_width`, `indicator.width` and `close_mouse_button`, with e2e tests in `crates/rt-e2e/tests/tab_bar.rs` (through a new `EvalBar` test request that runs JavaScript in the tab bar or status bar).
   - ✅ (2026-10-05) `tabs.select_on_remove` (next, prev, last-used), `tabs.wrap`, `tabs.undo_stack_size`. `tabs.background` isn't needed: Chromium's link dispositions already open middle-clicks in the background. Still to do: a focus stack (`tab-focus stack-prev/stack-next`, `tabs.focus_stack_size`).
-  - `tabs.close_mouse_button_on_bar`, `tabs.tabs_are_windows`.
+  - ✅ (2026-10-06) `tabs.close_mouse_button_on_bar` (new-tab, close-current, close-last, ignore), through a validated `bar-click` message.
+  - `tabs.tabs_are_windows`.
 - **Status bar** (tier 1):
   - ✅ (2026-10-05) `statusbar.position` (top, bottom) and `statusbar.show`, where `never` still shows the bar while a command is typed or a prompt answered, and `in-mode` also outside normal mode and while a message is up. Both bars are arranged by `window::arrange_bars`, and the completion overlay opens on the page's side of the status bar.
   - ✅ (2026-10-05) `statusbar.widgets` with qutebrowser's names (keypress, search_match, url, scroll, scroll_raw, history, tabs, progress, `clock[:format]`, `text:…`) plus downloads, muted and zoom. Unknown names are rejected.
@@ -703,7 +704,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`.
 - **Scrolling, search, zoom:**
   - ✅ (2026-10-05) `scrolling.smooth`, `search.wrap` and `search.wrap_messages`, and `zoom.levels`. Chromium always wraps searches, so `search.wrap = false` steps back when a result wraps.
-  - Still to do: `scrolling.bar`.
+  - ✅ (2026-10-06) `scrolling.bar`: `always`, `never` (CSS injected on load) and `overlay` (Chromium's overlay scrollbars, after a restart). qutebrowser's `when-searching` isn't offered.
   - Not possible: `zoom.text_only` (Chromium has no text-only zoom) and `zoom.mouse_divider` (Ctrl+wheel zoom is Chromium's own).
 - **Sessions and window:**
   - ✅ Tier 1 (2026-10-05): `session.lazy_restore` (background tabs keep their URL and title and load when first shown) and `confirm_quit` (always, multiple-tabs, downloads, never; asked on `:quit` and when closing the last window), each with a smoke step.

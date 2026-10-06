@@ -180,3 +180,16 @@ fn tab_bar_a_wide_tab_drags_past_narrow_pinned_ones() {
     let nav2 = b.url("nav2.html");
     b.wait_until("the wide tab is first", |s| s.tabs()[0].url == nav2);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_middle_click_on_empty_space_opens_a_tab() {
+    let b = Browser::start("nav1.html");
+    wait_bar(&b, "String(document.querySelectorAll('.tab').length)", "1");
+    let click = "document.getElementById('tabs').dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true })), ''";
+    b.eval_bar("tabbar", click);
+    b.wait_until("a new tab", |s| s.tabs().len() == 2);
+    b.run("set tabs.close_mouse_button_on_bar close-current");
+    b.eval_bar("tabbar", click);
+    b.wait_until("the current tab closes", |s| s.tabs().len() == 1);
+}

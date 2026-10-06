@@ -8,7 +8,7 @@ Pinned tabs stay where you put them (drag or `:tab-move` them anywhere, between 
 
 ## The tab bar
 
-The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder: the tab shrinks and follows the pointer, and the others move aside to show where it lands.
+The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`; on the empty part of the bar it opens a new tab, see `tabs.close_mouse_button_on_bar`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder: the tab shrinks and follows the pointer, and the others move aside to show where it lands.
 
 The current tab is the darkest in the bar. To also underline it (or, in a vertical bar, mark its right edge), set `colors.tabs.selected.accent` to a CSS color, e.g. `:set colors.tabs.selected.accent #2ec4b6`; `:config-unset colors.tabs.selected.accent` removes the line again.
 
