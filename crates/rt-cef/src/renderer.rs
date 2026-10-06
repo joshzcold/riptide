@@ -11,6 +11,8 @@ use rt_config::greasemonkey::{RunAt, Script};
 pub const FOCUS_MESSAGE: &str = "rt.focus";
 /// Browser → renderer: evaluate argument 1 (code) in the frame; argument 0 is a request id.
 pub const EVAL_MESSAGE: &str = "rt.eval";
+/// Browser → renderer, from the test channel only: abort the renderer process.
+pub const CRASH_MESSAGE: &str = "rt.crash";
 /// Renderer → browser: id, success flag, and the string result or error message.
 pub const EVAL_RESULT_MESSAGE: &str = "rt.eval-result";
 /// Renderer → browser, from `riptide://ui/` pages only: message name and JSON payload.
@@ -303,6 +305,10 @@ wrap_render_process_handler! {
                     xhr_done(args.int(0), &CefString::from(&args.string(1)));
                 }
                 return 1;
+            }
+            #[cfg(any(debug_assertions, feature = "test-control"))]
+            if name == CRASH_MESSAGE {
+                std::process::abort();
             }
             if name == GM_VALUES_MESSAGE {
                 if let Some(args) = message.argument_list() {

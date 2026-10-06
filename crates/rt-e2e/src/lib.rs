@@ -345,6 +345,12 @@ impl Browser {
             .unwrap_or_default())
     }
 
+    /// Crash the current tab's renderer process.
+    pub fn crash_tab(&self) {
+        self.request(TestRequest::CrashTab)
+            .unwrap_or_else(|e| panic!("crash tab: {e}"));
+    }
+
     /// Evaluate JavaScript in the `tabbar`, `statusbar`, `completion` overlay or `crash_notice`; its value must be a string.
     pub fn eval_bar(&self, bar: &str, code: &str) -> String {
         self.request(TestRequest::EvalBar {

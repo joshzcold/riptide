@@ -46,6 +46,8 @@ pub enum TestRequest {
     Eval { code: String, tab: Option<usize> },
     /// Evaluate JavaScript in the current window's `tabbar`, `statusbar` or `completion` overlay.
     EvalBar { code: String, bar: String },
+    /// Crash the current tab's renderer process.
+    CrashTab,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -8,8 +8,7 @@ use rt_e2e::Browser;
 fn a_crashed_tab_shows_a_notice_and_r_reloads_it() {
     let b = Browser::start("page.html");
     let url = b.url("page.html");
-    // A debug URL: Chromium crashes the renderer it would load in.
-    b.run("open chrome://crash");
+    b.crash_tab();
     let state = b.wait_until("the tab is crashed", |s| {
         s.tab().crashed && s.window().crash_notice
     });
@@ -32,23 +31,22 @@ fn a_crashed_tab_shows_a_notice_and_r_reloads_it() {
 #[ignore = "starts a browser; run with ./task e2e"]
 fn the_notice_follows_the_crashed_tab() {
     let b = Browser::start("page.html");
-    let url = b.url("page.html");
-    b.run("open -b chrome://crash");
-    let state = b.wait_until("the background tab is crashed", |s| {
-        s.tabs().len() == 2 && s.tabs()[1].crashed
+    let first = b.url("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("the second tab loads", |s| s.tab().is_loaded(&second));
+    b.crash_tab();
+    b.wait_until("the second tab is crashed", |s| {
+        s.tabs()[1].crashed && s.window().crash_notice
     });
-    assert!(
-        !state.window().crash_notice,
-        "only the current tab's crash is shown"
-    );
 
-    b.keys("J");
-    b.wait_until("the notice shows", |s| {
-        s.window().current_tab == 1 && s.window().crash_notice
-    });
     b.keys("K");
-    b.wait_until("the page shows again", |s| {
+    b.wait_until("the first tab shows", |s| {
         s.window().current_tab == 0 && !s.window().crash_notice
     });
-    b.wait_eval("location.href", &url);
+    b.wait_eval("location.href", &first);
+    b.keys("J");
+    b.wait_until("the notice shows again", |s| {
+        s.window().current_tab == 1 && s.window().crash_notice && s.tab().crashed
+    });
 }

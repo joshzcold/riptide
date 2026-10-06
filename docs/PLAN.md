@@ -873,7 +873,7 @@ Whatever path wins:
     - `on_render_process_terminated` marks the tab crashed and logs the reason. Before this, a dead renderer left a blank grey tab.
     - A dead renderer can't draw, and navigating to an error page would add a history entry. So each window has a `riptide://ui/crashed.html` view, created on first use, that's shown in the content panel in place of the current tab while it's crashed.
     - Any new load clears the mark, so `r` brings the page back with its history.
-    - Tests: `renderer_crash.rs` (via `chrome://crash`), plus unit tests for the reason text and the notice URL.
+    - Tests: `renderer_crash.rs`, plus unit tests for the reason text and the notice URL. The test channel's `CrashTab` makes the renderer abort. `chrome://crash` can't be used, because with the sandbox on it leaves the tab loading instead of crashing.
 - **Crash reports** (complements `:report` in M19):
   - **Capture:**
     - A Rust panic hook writes the message, backtrace and version (M18's `--version` string) to `<data>/crashes/<timestamp>.txt`.

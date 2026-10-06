@@ -52,6 +52,7 @@ mod enabled {
             TestRequest::State => Ok(Some(state())),
             TestRequest::Eval { code, tab } => return eval(&code, tab, tx),
             TestRequest::EvalBar { code, bar } => return eval_bar(&code, &bar, tx),
+            TestRequest::CrashTab => crash_tab(),
         };
         let _ = tx.send(reply);
     }
@@ -77,6 +78,20 @@ mod enabled {
         crate::eval::eval(&browser, code, move |result| {
             let _ = tx.send(result.map(|text| Some(Value::String(text))));
         });
+    }
+
+    /// The renderer aborts, as a real crash would; `chrome://crash` doesn't
+    /// crash a sandboxed renderer.
+    fn crash_tab() -> Reply {
+        let frame = shell::with(|s| s.current_browser())
+            .flatten()
+            .and_then(|b| b.main_frame())
+            .ok_or("no current tab")?;
+        let mut message =
+            process_message_create(Some(&CefString::from(crate::renderer::CRASH_MESSAGE)))
+                .ok_or("could not create process message")?;
+        frame.send_process_message(ProcessId::RENDERER, Some(&mut message));
+        Ok(None)
     }
 
     fn eval_bar(code: &str, bar: &str, tx: Sender<Reply>) {
