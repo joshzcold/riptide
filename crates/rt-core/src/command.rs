@@ -260,6 +260,14 @@ pub enum Command {
     CompletionFocus(FocusDirection),
     /// Fill a file-name prompt with a folder from `fileselect.folder.command`.
     PromptFileselectExternal,
+    /// Copy the prompt's URL (or its text) to the clipboard, or the primary selection.
+    PromptYank {
+        primary: bool,
+    },
+    /// Answer a download's save prompt by opening the file once it's downloaded.
+    PromptOpenDownload {
+        command: Option<String>,
+    },
     /// Follow the hint with this label, or the one waiting for Return.
     HintFollow {
         label: Option<String>,
@@ -1002,6 +1010,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Quit the browser; --save keeps the tabs as the default session",
     ),
     hidden(
+        "prompt-yank",
+        "Yank the prompt's URL (or text): [--sel] for the primary selection (Alt-y)",
+    ),
+    hidden(
+        "prompt-open-download",
+        "Open the download in a program instead of saving it: [command] (Ctrl-x)",
+    ),
+    hidden(
         "completion-item-focus",
         "Select the next or previous completion",
     ),
@@ -1734,6 +1750,15 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }),
         "completion-item-del" => Command::CompletionItemDel,
         "prompt-fileselect-external" => Command::PromptFileselectExternal,
+        "prompt-yank" => Command::PromptYank {
+            primary: args.flag(&["-s", "--sel"]).is_some(),
+        },
+        "prompt-open-download" => {
+            let command = args.rest();
+            Command::PromptOpenDownload {
+                command: (!command.is_empty()).then(|| command.to_string()),
+            }
+        }
         "hint-follow" => Command::HintFollow {
             label: args.optional().map(String::from),
         },

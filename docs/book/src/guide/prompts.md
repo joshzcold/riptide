@@ -59,7 +59,7 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 | `:download-clear` | Forget finished downloads |
 | `:downloads` | A page listing this session's downloads with their numbers and progress |
 
-In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell, and `Alt-e` picks the folder with `fileselect.folder.command` (see below).
+In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell, and `Alt-e` picks the folder with `fileselect.folder.command` (see below). `Ctrl-x` opens the file instead of keeping it: it downloads to a temporary folder and opens with `downloads.open_dispatcher` or your desktop's default; `:prompt-open-download zathura` names a program. `Alt-y` copies the download's URL, in any prompt that has one.
 
 `:download-open` uses `downloads.open_dispatcher` if you set one (`{}` is the file, or it goes at the end), and the system's opener (`xdg-open`, `open` or `start`) otherwise.
 

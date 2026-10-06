@@ -196,6 +196,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Alt-d>` | `rl-kill-word` |
 | `<Alt-e>` | `prompt-fileselect-external` |
 | `<Alt-f>` | `rl-forward-word` |
+| `<Alt-y>` | `prompt-yank` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
 | `<Ctrl-b>` | `rl-backward-char` |
@@ -206,6 +207,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-u>` | `rl-unix-line-discard` |
 | `<Ctrl-v>` | `rl-paste` |
 | `<Ctrl-w>` | `rl-filename-rubout` |
+| `<Ctrl-x>` | `prompt-open-download` |
 | `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
 | `<End>` | `rl-end-of-line` |
@@ -221,6 +223,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Alt-y>` | `prompt-yank` |
 | `<Escape>` | `mode-leave` |
 | `<Return>` | `prompt-accept` |
 | `A` | `prompt-accept --save yes` |

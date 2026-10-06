@@ -78,3 +78,42 @@ fn downloads_location_remember_starts_in_the_last_folder() {
         .to_string();
     assert!(input.contains("/dl/subdir/"), "{input:?}");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn download_prompt_open_and_yank() {
+    let b = Browser::launch()
+        .toml("downloads.location.directory = \"{scratch}/dl\"\ndownloads.location.prompt = true\n")
+        .start("download.html");
+    let opener = b.scratch().join("opener.sh");
+    let opened = b.scratch().join("opened");
+    std::fs::write(
+        &opener,
+        format!("#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n", opened.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&opener, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+
+    // Alt-y copies the download's URL; paste it into the command line to check.
+    b.follow_hint("hint", |h| h.text == "download");
+    b.wait_mode("prompt");
+    b.keys("<Alt-y><Escape>");
+    b.wait_mode("normal");
+    b.keys(":open <Ctrl-v>");
+    b.wait_until("the URL is pasted", |s| {
+        s.status["command_line"]["text"].as_str() == Some(":open data:text/plain,hello")
+    });
+    b.keys("<Escape>");
+    b.wait_mode("normal");
+
+    // prompt-open-download saves it somewhere temporary and opens it.
+    b.follow_hint("hint", |h| h.text == "download");
+    b.wait_mode("prompt");
+    b.run(&format!("prompt-open-download {}", opener.display()));
+    let path = b.wait_file(&opened);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello");
+    assert!(
+        !b.scratch().join("dl/saved.txt").exists(),
+        "it wasn't saved"
+    );
+}

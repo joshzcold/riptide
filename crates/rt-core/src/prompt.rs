@@ -36,6 +36,10 @@ pub struct Prompt {
     pub title: String,
     pub message: String,
     pub kind: PromptKind,
+    /// What `prompt-yank` copies, e.g. a download's URL.
+    pub url: Option<String>,
+    /// A download's save prompt, which `prompt-open-download` can answer.
+    pub download: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,6 +54,11 @@ pub enum PromptAnswer {
     },
     Ok,
     Cancelled,
+    /// `prompt-open-download`: save to a temporary folder and open the file
+    /// with `command` (or the desktop's default) once it's done.
+    OpenDownload {
+        command: Option<String>,
+    },
 }
 
 /// What the overlay draws for the active prompt.

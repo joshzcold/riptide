@@ -1294,6 +1294,28 @@ impl Engine {
             Command::PromptFileselectExternal => {
                 self.show_message(Level::Error, "This prompt doesn't ask for a file");
             }
+            Command::PromptYank { primary } => {
+                let text = match self.prompts.front() {
+                    Some(prompt) => prompt.url.clone().or_else(|| {
+                        matches!(prompt.kind, PromptKind::Text { masked: false, .. })
+                            .then(|| self.prompt_editor.text().to_string())
+                    }),
+                    None => None,
+                };
+                match text.filter(|t| !t.is_empty()) {
+                    Some(text) => effects.push(Effect::YankText { text, primary }),
+                    None => {
+                        self.show_message(Level::Error, "This prompt has nothing to yank");
+                    }
+                }
+            }
+            Command::PromptOpenDownload { command } => {
+                if self.prompts.front().is_some_and(|p| p.download) {
+                    self.answer_prompt(PromptAnswer::OpenDownload { command }, effects);
+                } else {
+                    self.show_message(Level::Error, "This prompt isn't about a download");
+                }
+            }
             Command::PromptComplete => {
                 let path = matches!(
                     self.prompts.front().map(|p| &p.kind),
@@ -3100,6 +3122,8 @@ mod tests {
             title: "t".into(),
             message: "m".into(),
             kind,
+            url: None,
+            download: false,
         }
     }
 
@@ -3131,6 +3155,47 @@ mod tests {
         assert!(runs(&press(&mut e, "<Alt-e>")).is_empty());
         e.set_path_prompt_text("/nope");
         assert_eq!(e.prompt_view().unwrap().input, "~/x.txt");
+    }
+
+    #[test]
+    fn prompt_yank_and_open_download() {
+        let mut e = engine();
+        let mut download = prompt(
+            7,
+            PromptKind::Text {
+                default: "/tmp/f.pdf".into(),
+                masked: false,
+                path: true,
+            },
+        );
+        download.url = Some("https://a.example/f.pdf".into());
+        download.download = true;
+        e.push_prompt(download);
+        assert!(
+            all_effects(&press(&mut e, "<Alt-y>")).contains(&Effect::YankText {
+                text: "https://a.example/f.pdf".into(),
+                primary: false
+            })
+        );
+        assert_eq!(
+            answers(&press(&mut e, "<Ctrl-x>")),
+            [(7, PromptAnswer::OpenDownload { command: None })]
+        );
+        e.push_prompt(prompt(
+            8,
+            PromptKind::YesNo {
+                default: false,
+                remember: Remember::Never,
+            },
+        ));
+        e.execute_str("prompt-open-download", None);
+        assert!(
+            e.status()
+                .message
+                .unwrap()
+                .text
+                .contains("isn't about a download")
+        );
     }
 
     #[test]

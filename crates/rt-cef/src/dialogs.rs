@@ -43,7 +43,9 @@ wrap_jsdialog_handler! {
                 let (ok, input) = match answer {
                     PromptAnswer::Ok | PromptAnswer::Yes { .. } => (1, String::new()),
                     PromptAnswer::Text(text) => (1, text),
-                    PromptAnswer::No { .. } | PromptAnswer::Cancelled => (0, String::new()),
+                    PromptAnswer::No { .. } | PromptAnswer::Cancelled | PromptAnswer::OpenDownload { .. } => {
+                        (0, String::new())
+                    }
                 };
                 callback.cont(ok, Some(&CefString::from(input.as_str())));
             });

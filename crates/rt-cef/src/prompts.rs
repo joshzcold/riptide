@@ -35,6 +35,22 @@ pub fn ask(
     kind: PromptKind,
     on_answer: impl FnOnce(PromptAnswer) + 'static,
 ) -> u64 {
+    ask_about(browser, scope, title, message, kind, None, false, on_answer)
+}
+
+/// [`ask`], with the URL `prompt-yank` copies and whether it's a download's
+/// save prompt (`prompt-open-download`).
+#[allow(clippy::too_many_arguments)]
+pub fn ask_about(
+    browser: Option<i32>,
+    scope: Scope,
+    title: impl Into<String>,
+    message: impl Into<String>,
+    kind: PromptKind,
+    url: Option<String>,
+    download: bool,
+    on_answer: impl FnOnce(PromptAnswer) + 'static,
+) -> u64 {
     let id = NEXT_ID.with(|n| {
         let id = n.get();
         n.set(id + 1);
@@ -55,6 +71,8 @@ pub fn ask(
         title: title.into(),
         message: message.into(),
         kind,
+        url,
+        download,
     };
     if let Some(effects) = shell::with(|s| s.engine.push_prompt(prompt)) {
         shell::apply(effects);

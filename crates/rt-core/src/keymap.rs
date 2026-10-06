@@ -294,6 +294,8 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
 
 const PROMPT_DEFAULTS: &[(&str, &str)] = &[
     ("<Tab>", "prompt-complete"),
+    ("<Alt-y>", "prompt-yank"),
+    ("<Ctrl-x>", "prompt-open-download"),
     ("<Alt-e>", "prompt-fileselect-external"),
     ("<Ctrl-w>", "rl-filename-rubout"),
     ("<Return>", "prompt-accept"),
@@ -307,6 +309,7 @@ const YESNO_DEFAULTS: &[(&str, &str)] = &[
     ("N", "prompt-accept --save no"),
     ("<Return>", "prompt-accept"),
     ("<Escape>", "mode-leave"),
+    ("<Alt-y>", "prompt-yank"),
 ];
 
 /// Caret mode, as in qutebrowser.

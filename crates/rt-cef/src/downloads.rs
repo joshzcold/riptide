@@ -32,6 +32,9 @@ struct Download {
     percent: Option<i32>,
     state: State,
     callback: Option<DownloadItemCallback>,
+    /// `prompt-open-download`: open it when done, with this command or
+    /// (`None`) the desktop's default.
+    open_when_done: Option<Option<String>>,
 }
 
 thread_local! {
@@ -106,6 +109,7 @@ fn save_to(
     url: String,
     callback: BeforeDownloadCallback,
     browser: Option<i32>,
+    open_when_done: Option<Option<String>>,
 ) {
     let begin = move |path: PathBuf| {
         if let Some(dir) = path.parent() {
@@ -120,6 +124,7 @@ fn save_to(
                 percent: None,
                 state: State::Running,
                 callback: None,
+                open_when_done,
             })
         });
         publish();
@@ -187,7 +192,7 @@ wrap_download_handler! {
                 .unwrap_or_else(download_dir);
             let suggestion = unique_path(&dir, &name, &|p: &Path| p.exists());
             if !ask {
-                save_to(suggestion, id, url, callback, browser);
+                save_to(suggestion, id, url, callback, browser, None);
                 return 1;
             }
             let default = match suggest.as_str() {
@@ -195,21 +200,41 @@ wrap_download_handler! {
                 "filename" => suggestion.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
                 _ => suggestion.to_string_lossy().into_owned(),
             };
-            prompts::ask(browser, Scope::Other, "Save file to", name.clone(), PromptKind::Text { default, masked: false, path: true }, move |answer| {
-                let PromptAnswer::Text(text) = answer else { return };
-                let mut path = expand_home(text.trim(), home().as_deref());
-                // A bare file name goes in the folder the prompt was about.
-                if path.is_relative() {
-                    path = dir.join(path);
-                }
-                if path.is_dir() {
-                    path = path.join(&name);
-                }
-                if let Some(parent) = path.parent() {
-                    LAST_DIR.with(|d| *d.borrow_mut() = Some(parent.to_path_buf()));
-                }
-                save_to(path, id, url, callback, browser);
-            });
+            let prompt_url = url.clone();
+            prompts::ask_about(
+                browser,
+                Scope::Other,
+                "Save file to",
+                name.clone(),
+                PromptKind::Text { default, masked: false, path: true },
+                Some(prompt_url),
+                true,
+                move |answer| {
+                    let (path, open) = match answer {
+                        PromptAnswer::Text(text) => {
+                            let mut path = expand_home(text.trim(), home().as_deref());
+                            // A bare file name goes in the folder the prompt was about.
+                            if path.is_relative() {
+                                path = dir.join(path);
+                            }
+                            if path.is_dir() {
+                                path = path.join(&name);
+                            }
+                            if let Some(parent) = path.parent() {
+                                LAST_DIR.with(|d| *d.borrow_mut() = Some(parent.to_path_buf()));
+                            }
+                            (path, None)
+                        }
+                        // Into a temporary folder, to be opened when it's done.
+                        PromptAnswer::OpenDownload { command } => {
+                            let folder = std::env::temp_dir().join(format!("riptide-open-{}", std::process::id()));
+                            (folder.join(&name), Some(command))
+                        }
+                        _ => return,
+                    };
+                    save_to(path, id, url, callback, browser, open);
+                },
+            );
             1
         }
 
@@ -242,10 +267,15 @@ wrap_download_handler! {
                 } else {
                     download.callback = None;
                 }
-                changed.then(|| (state, download.path.clone()))
+                changed.then(|| (state, download.path.clone(), download.open_when_done.clone()))
             });
             match finished {
-                Some((State::Done, path)) => {
+                Some((State::Done, path, Some(command))) => {
+                    if let Err(e) = open_with(&path, command.as_deref()) {
+                        shell::show_message(Level::Error, format!("Can't open {}: {e}", path.display()));
+                    }
+                }
+                Some((State::Done, path, None)) => {
                     shell::show_message(Level::Info, format!("Download finished: {}", path.display()));
                     let delay = shell::with(|s| s.engine.settings().int("downloads.remove_finished")).unwrap_or(-1);
                     if delay >= 0 {
@@ -253,8 +283,8 @@ wrap_download_handler! {
                         post_delayed_task(ThreadId::UI, Some(&mut task), delay);
                     }
                 }
-                Some((State::Cancelled, path)) => shell::show_message(Level::Warning, format!("Download cancelled: {}", path.display())),
-                Some((State::Failed, path)) => shell::show_message(Level::Error, format!("Download failed: {}", path.display())),
+                Some((State::Cancelled, path, _)) => shell::show_message(Level::Warning, format!("Download cancelled: {}", path.display())),
+                Some((State::Failed, path, _)) => shell::show_message(Level::Error, format!("Download failed: {}", path.display())),
                 _ => {}
             }
             publish();
@@ -308,13 +338,22 @@ fn pick_from(
 /// Open a finished download with `downloads.open_dispatcher`, or the
 /// desktop's default application.
 fn open_with_system(path: &Path) -> std::io::Result<()> {
-    let dispatcher = shell::with(|s| {
-        s.engine
-            .settings()
-            .str("downloads.open_dispatcher")
-            .to_string()
-    })
-    .unwrap_or_default();
+    open_with(path, None)
+}
+
+/// Open a file with `command` (the path is appended, or replaces `{}`), or
+/// with `downloads.open_dispatcher` or the desktop's default when `None`.
+fn open_with(path: &Path, command: Option<&str>) -> std::io::Result<()> {
+    let dispatcher = match command {
+        Some(command) => command.to_string(),
+        None => shell::with(|s| {
+            s.engine
+                .settings()
+                .str("downloads.open_dispatcher")
+                .to_string()
+        })
+        .unwrap_or_default(),
+    };
     if !dispatcher.trim().is_empty() {
         let file = path.to_string_lossy();
         let mut argv = rt_core::shell_words::split(&dispatcher).map_err(std::io::Error::other)?;
