@@ -15,7 +15,7 @@ Releases are cut from GitHub Actions; nothing needs to run locally.
 |---|---|
 | prepare | Sets `workspace.package.version` in `Cargo.toml`, updates `Cargo.lock`, regenerates `CHANGELOG.md`, commits `chore(release): vX.Y.Z` to `main` and tags it `vX.Y.Z`. The commit and tag are pushed together, so if `main` moved on in the meantime, neither lands and you can run it again. Real releases only run on `main`. |
 | build | Runs [`build-release.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/build-release.yml) on the tag (below). |
-| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release with that version's section of the changelog. |
+| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release with that version's section of the changelog. Then [`scripts/update-packages.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/update-packages.sh) points the AUR and Nix packages at the new tarball, and the change is committed to `main` as `chore(release): update the AUR and Nix packages for vX.Y.Z`. Pre-releases leave the packages alone, and a dry run only prints the change. |
 
 Pushing a `vX.Y.Z` tag by hand still works, as long as `Cargo.toml` already has that version; it skips the prepare step.
 
@@ -42,10 +42,8 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 ## After a release
 
 **Packages:**
-- The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) download the release tarball by version. After a release, update their version and checksum:
-  - `sha256sums` is the tarball's line in the release's `SHA256SUMS`.
-  - The Nix `hash` is the same hash in SRI form: `nix hash convert --hash-algo sha256 --to sri <hex>`.
-  - Run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
+- The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) are updated by the publish job. If that step fails (for example `main` kept moving), run `scripts/update-packages.sh X.Y.Z riptide-X.Y.Z-linux-x86_64.tar.gz` with the released tarball and commit the result.
+- To check the Nix package, run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
 
 **In the browser:**
 

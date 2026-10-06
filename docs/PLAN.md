@@ -400,7 +400,7 @@ Gaps:
     - The PKGBUILD's `package()` was run against the same tarball (`makepkg` isn't on this machine). It installs to `/opt/riptide`, with a `/usr/bin` symlink, the desktop entry, the icon and a setuid `chrome-sandbox` fallback.
     - ✅ **v0.1.0 released (2026-10-06):** the checksums are filled in, and a root `flake.nix` (`nix run github:joshzcold/riptide`) builds the release. Its Nix build passes the smoke test.
     - **Not done:**
-      - `release.yml` should update the version and checksums in both files.
+      - ✅ `release.yml` updates the version and checksums in both files after publishing (`scripts/update-packages.sh`, 2026-10-06).
       - `riptide-bin` isn't published to the AUR, which needs the maintainer's AUR account.
   - Not done: the macOS app bundle and Windows packaging (neither can be tested on this machine).
 

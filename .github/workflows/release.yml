@@ -7,6 +7,7 @@ name: release
 #   3. build-release.yml: the Linux tarball and AppImage (smoke-tested), plus
 #      experimental macOS and Windows packages
 #   4. a GitHub release with SHA256SUMS, build provenance and the changelog section
+#   5. a commit pointing the AUR and Nix packages at it (not for pre-releases)
 # "Dry run" (the default) does everything except pushing and publishing, and keeps
 # the files as a workflow artifact for a day. Pushing a v* tag by hand still works.
 on:
@@ -162,6 +163,30 @@ jobs:
           flags=()
           [[ $VERSION == *-* ]] && flags+=(--prerelease)
           gh release create "v$VERSION" --verify-tag --title "riptide v$VERSION" --notes-file notes.md "${flags[@]}" dist/*
+      # The AUR and Nix packages download the release tarball, so they're
+      # pointed at the new version once it's published. A dry run shows the change.
+      - name: Update the AUR and Nix packages
+        if: ${{ !contains(needs.prepare.outputs.version, '-') }}
+        run: |
+          if [[ $PUBLISH == true ]]; then
+            git fetch -q origin main
+            git checkout -q -B main origin/main
+          fi
+          scripts/update-packages.sh "$VERSION" "dist/riptide-$VERSION-linux-x86_64.tar.gz"
+          git diff -- packaging
+          if [[ $PUBLISH != true ]] || git diff --quiet -- packaging; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "chore(release): update the AUR and Nix packages for v$VERSION" -- packaging
+          # main may have moved since the release commit; rebase and retry.
+          for _ in 1 2 3; do
+            git push -q origin HEAD:main && exit 0
+            git pull -q --rebase origin main
+          done
+          echo "::error::couldn't push the package update; run scripts/update-packages.sh $VERSION by hand"
+          exit 1
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v4
