@@ -4,6 +4,12 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::{EnvFilter, fmt, reload};
 
 fn main() -> ExitCode {
+    // Chromium names its desktop notifications' app (and so their icon) after
+    // this desktop file; it would otherwise say chromium-browser.desktop.
+    if std::env::var_os("CHROME_DESKTOP").is_none() {
+        // SAFETY: the first thing main does, before any other thread exists.
+        unsafe { std::env::set_var("CHROME_DESKTOP", "riptide.desktop") };
+    }
     let default = std::env::var("RT_LOG").unwrap_or_else(|_| "info".into());
     let filter = EnvFilter::try_new(&default).unwrap_or_else(|_| EnvFilter::new("info"));
     // Reloadable, so :debug-log-filter can change it while running.
