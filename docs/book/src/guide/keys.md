@@ -165,7 +165,7 @@ In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` comp
 | `completion.use_best_match` | `Return` on an unknown command runs the first one it starts, so `:rel` runs `:reload` |
  `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
-The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
+The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, `Ctrl-v` to paste the clipboard and `Shift-Insert` the primary selection, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
 
 To clean up what completion offers, select an entry with `Tab` and press `Ctrl-d` (`:completion-item-del`). It deletes history entries, quickmarks, bookmarks and sessions, and closes tabs listed by `T`. `Ctrl-c` (`:completion-item-yank`) copies the selected entry, and `Ctrl-Shift-c` copies it to the primary selection.
 

@@ -158,6 +158,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-n>` | `command-history-next` |
 | `<Ctrl-p>` | `command-history-prev` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
+| `<Ctrl-v>` | `rl-paste` |
 | `<Ctrl-w>` | `rl-rubout` |
 | `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
@@ -168,6 +169,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Left>` | `rl-backward-char` |
 | `<Return>` | `command-accept` |
 | `<Right>` | `rl-forward-char` |
+| `<Shift-Insert>` | `rl-paste --sel` |
 | `<Shift-Tab>` | `completion-item-focus prev` |
 | `<Tab>` | `completion-item-focus next` |
 | `<Up>` | `command-history-prev` |
@@ -202,6 +204,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-h>` | `rl-backward-delete-char` |
 | `<Ctrl-k>` | `rl-kill-line` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
+| `<Ctrl-v>` | `rl-paste` |
 | `<Ctrl-w>` | `rl-filename-rubout` |
 | `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
@@ -211,6 +214,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Left>` | `rl-backward-char` |
 | `<Return>` | `prompt-accept` |
 | `<Right>` | `rl-forward-char` |
+| `<Shift-Insert>` | `rl-paste --sel` |
 | `<Tab>` | `prompt-complete` |
 
 ## yesno mode

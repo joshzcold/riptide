@@ -368,6 +368,8 @@ const COMMAND_DEFAULTS: &[(&str, &str)] = &[
     ("<Alt-d>", "rl-kill-word"),
     ("<Alt-Backspace>", "rl-backward-kill-word"),
     ("<Ctrl-y>", "rl-yank"),
+    ("<Ctrl-v>", "rl-paste"),
+    ("<Shift-Insert>", "rl-paste --sel"),
 ];
 
 #[cfg(test)]

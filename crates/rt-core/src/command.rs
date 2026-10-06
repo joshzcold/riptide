@@ -260,6 +260,11 @@ pub enum Command {
     /// bookmark or session, or close a tab.
     CompletionItemDel,
     /// Yank the selected completion's text (to the primary selection with `sel`).
+    /// Paste the clipboard (or with `primary`, the primary selection) into
+    /// the command line or prompt.
+    RlPaste {
+        primary: bool,
+    },
     CompletionItemYank {
         sel: bool,
     },
@@ -1040,6 +1045,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Delete from the start of the word to the cursor",
     ),
     hidden("rl-yank", "Paste the text the last delete removed"),
+    hidden(
+        "rl-paste",
+        "Paste the clipboard into the command line or prompt: [--sel] for the primary selection",
+    ),
 ];
 
 /// Parse a full command line, which may chain commands with `;;`.
@@ -1718,6 +1727,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "quit" => Command::Quit {
             save: args.flag(&["-s", "--save"]).is_some(),
+        },
+        "rl-paste" => Command::RlPaste {
+            primary: args.flag(&["-s", "--sel"]).is_some(),
         },
         name => match parse_readline(name) {
             Some(rl) => Command::Readline(rl),

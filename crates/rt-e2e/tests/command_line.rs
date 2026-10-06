@@ -52,3 +52,18 @@ fn set_changes_a_setting() {
         s.message()
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn ctrl_v_pastes_the_clipboard_into_the_command_line() {
+    let b = Browser::start("page.html");
+    let url = b.url("page.html");
+    b.keys("yy");
+    b.wait_until("the URL is yanked", |s| {
+        s.message().is_some_and(|m| m.contains("Yanked"))
+    });
+    b.keys(":open <Ctrl-v>");
+    b.wait_until("the URL is pasted", |s| {
+        s.status["command_line"]["text"].as_str() == Some(&format!(":open {url}"))
+    });
+}

@@ -28,6 +28,13 @@ impl LineEditor {
         self.cursor = 0;
     }
 
+    /// Insert pasted text at the cursor, on one line.
+    pub fn insert_str(&mut self, text: &str) {
+        for c in text.trim_end_matches(['\n', '\r']).chars() {
+            self.insert(if c == '\n' || c == '\r' { ' ' } else { c });
+        }
+    }
+
     pub fn insert(&mut self, c: char) {
         let at = self.byte_index(self.cursor);
         self.text.insert(at, c);

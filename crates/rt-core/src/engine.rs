@@ -1290,6 +1290,23 @@ impl Engine {
                     self.dirty = true;
                 }
             }
+            Command::RlPaste { primary } => {
+                let reader = if primary {
+                    self.primary.as_ref().or(self.clipboard.as_ref())
+                } else {
+                    self.clipboard.as_ref()
+                };
+                let Some(text) = reader.and_then(|read| read()) else {
+                    return;
+                };
+                if self.mode == Mode::Prompt {
+                    self.prompt_editor.insert_str(&text);
+                } else {
+                    self.cmdline.insert_str(&text);
+                    self.history.reset();
+                }
+                self.dirty = true;
+            }
             Command::Readline(action) if self.mode == Mode::Prompt => {
                 self.prompt_editor.apply(action);
                 self.dirty = true;
@@ -2268,6 +2285,34 @@ mod tests {
             runs(&press(&mut e, ":stop<Return>")).as_slice(),
             [(Command::Stop, None)]
         ));
+    }
+
+    #[test]
+    fn ctrl_v_and_shift_insert_paste_into_the_command_line() {
+        let mut e = engine();
+        e.set_clipboard_reader(|| Some("https://a.org/x\n".into()));
+        e.set_primary_reader(|| Some("two\nlines".into()));
+        press(&mut e, ":open <Ctrl-v>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open https://a.org/x"
+        );
+        press(&mut e, " <Shift-Insert>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open https://a.org/x two lines"
+        );
+        press(&mut e, "<Escape>");
+        e.push_prompt(prompt(
+            1,
+            PromptKind::Text {
+                default: String::new(),
+                masked: false,
+                path: false,
+            },
+        ));
+        press(&mut e, "<Ctrl-v>");
+        assert_eq!(e.prompt_view().unwrap().input, "https://a.org/x");
     }
 
     #[test]
