@@ -21,6 +21,16 @@ end)
 
 In callbacks, `rt.url()`, `rt.title()`, `rt.mode()`, `rt.count()` and `rt.tabs()` (the window's tabs, with `title`, `url`, `current` and `pinned`) describe the current state. `rt.run(line)`, `rt.open(url, target)`, `rt.message(text, level)` and `rt.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
 
+`rt.spawn(argv, [opts], [callback])` runs a program in the background, without a shell, and calls `callback` with `{code, stdout, stderr, error}` when it exits. `argv` is a list, or a command line split as `:spawn` splits it. `opts` can set `stdin`, `cwd` and `env`:
+
+```lua
+rt.command("translate", function(text)
+  rt.spawn({ "trans", "-brief", ":en" }, { stdin = text }, function(r)
+    if r.code == 0 then rt.message(r.stdout) else rt.message(r.stderr, "error") end
+  end)
+end)
+```
+
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh

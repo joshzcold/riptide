@@ -183,6 +183,24 @@ function rt.open(url, target) end
 ---@param level? "info"|"error"
 function rt.message(text, level) end
 
+---@class rt.SpawnOpts
+---@field stdin? string written to the program's standard input
+---@field cwd? string the directory to run it in
+---@field env? table<string, string> extra environment variables
+
+---@class rt.SpawnResult
+---@field code integer|nil the exit code; nil if a signal ended it or it didn't start
+---@field stdout string
+---@field stderr string
+---@field error string|nil why it couldn't run
+
+---Run a program in the background (in callbacks); no shell is involved.
+---`argv` is a list, or a command line split like `:spawn` does.
+---@param argv string[]|string
+---@param opts? rt.SpawnOpts|fun(result: rt.SpawnResult)
+---@param callback? fun(result: rt.SpawnResult) called when it exits
+function rt.spawn(argv, opts, callback) end
+
 "#
     );
     write_class(&mut out, "", &root);

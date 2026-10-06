@@ -61,6 +61,7 @@ fn carry_out(result: Result<Vec<Action>, String>) {
             Action::Message { error, text } => {
                 shell::show_message(if error { Level::Error } else { Level::Info }, text)
             }
+            Action::Spawn(request) => crate::spawn::run_for_lua(request),
         }
     }
     DEPTH.with(|d| d.set(d.get() - 1));
@@ -79,4 +80,9 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
 /// Run the `rt.on(event, fn)` hooks.
 pub fn emit(event: &str, fields: &[(&str, &str)]) {
     carry_out(lua::emit(event, fields, &context(None)));
+}
+
+/// Hand an `rt.spawn` program's result to its callback.
+pub fn spawned(callback: u32, result: &lua::SpawnResult) {
+    carry_out(lua::spawned(callback, result, &context(None)));
 }

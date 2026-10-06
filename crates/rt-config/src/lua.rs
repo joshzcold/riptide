@@ -84,6 +84,30 @@ pub enum Action {
         error: bool,
         text: String,
     },
+    /// `rt.spawn`: run a program; [`spawned`] hands the result to `callback`.
+    Spawn(SpawnRequest),
+}
+
+/// A program for the browser to run for `rt.spawn`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpawnRequest {
+    pub argv: Vec<String>,
+    pub stdin: Option<String>,
+    pub cwd: Option<String>,
+    pub env: Vec<(String, String)>,
+    /// Kept in `rt._spawned`; `None` when there's no callback.
+    pub callback: Option<u32>,
+}
+
+/// How an `rt.spawn` program ended, for its callback.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SpawnResult {
+    /// The exit code; `None` if it was killed by a signal or didn't start.
+    pub code: Option<i32>,
+    pub stdout: String,
+    pub stderr: String,
+    /// Why it couldn't run.
+    pub error: Option<String>,
 }
 
 /// The Lua VM `config.lua` ran in, kept for its callbacks. It lives on the
@@ -145,6 +169,42 @@ fn invoke(
             .map(|()| actions)
             .map_err(|e| tidy_error(&e.to_string(), &rt.config_dir))
     })
+}
+
+/// Call an `rt.spawn` callback with the program's result, once.
+pub fn spawned(
+    callback: u32,
+    result: &SpawnResult,
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    let prepared = RUNTIME.with(|r| -> Option<mlua::Result<mlua::MultiValue>> {
+        let runtime = r.borrow();
+        let rt = runtime.as_ref()?;
+        Some((|| {
+            let table = rt.lua.create_table()?;
+            table.set("code", result.code)?;
+            table.set("stdout", result.stdout.as_str())?;
+            table.set("stderr", result.stderr.as_str())?;
+            table.set("error", result.error.as_deref())?;
+            Ok(mlua::MultiValue::from_vec(vec![mlua::Value::Table(table)]))
+        })())
+    });
+    let args = match prepared {
+        None => return Ok(Vec::new()),
+        Some(Err(e)) => return Err(e.to_string()),
+        Some(Ok(args)) => args,
+    };
+    let key = mlua::Value::Integer(callback.into());
+    let actions = invoke("_spawned", key.clone(), args, context);
+    RUNTIME.with(|r| {
+        if let Some(rt) = r.borrow().as_ref() {
+            let api: mlua::Result<mlua::Table> = rt.lua.globals().get("rt");
+            if let Ok(table) = api.and_then(|api| api.get::<mlua::Table>("_spawned")) {
+                let _ = table.set(key, mlua::Value::Nil);
+            }
+        }
+    });
+    actions
 }
 
 /// Run the function bound with `rt.bind(keys, function)`.
@@ -375,6 +435,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set("_callbacks", lua.create_table()?)?;
     api.set("_commands", lua.create_table()?)?;
     api.set("_hooks", lua.create_table()?)?;
+    api.set("_spawned", lua.create_table()?)?;
 
     let s = state.clone();
     api.set(
@@ -534,6 +595,62 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
     let s = state.clone();
     api.set(
+        "spawn",
+        lua.create_function(move |lua, (argv, second, third): (Value, Value, Value)| {
+            let argv: Vec<String> = match argv {
+                Value::Table(list) => list
+                    .sequence_values::<String>()
+                    .collect::<mlua::Result<_>>()?,
+                Value::String(line) => {
+                    rt_core::shell_words::split(&line.to_str()?).map_err(mlua::Error::runtime)?
+                }
+                _ => {
+                    return Err(mlua::Error::runtime(
+                        "rt.spawn takes a list of arguments or a command line",
+                    ));
+                }
+            };
+            if argv.is_empty() {
+                return Err(mlua::Error::runtime("rt.spawn: nothing to run"));
+            }
+            // rt.spawn(argv, fn) or rt.spawn(argv, opts, fn).
+            let (opts, callback) = match (second, third) {
+                (Value::Function(f), _) => (None, Some(f)),
+                (Value::Table(opts), Value::Function(f)) => (Some(opts), Some(f)),
+                (Value::Table(opts), Value::Nil) => (Some(opts), None),
+                (Value::Nil, Value::Nil) => (None, None),
+                _ => return Err(mlua::Error::runtime("rt.spawn(argv, [opts], [callback])")),
+            };
+            let mut request = SpawnRequest {
+                argv,
+                ..SpawnRequest::default()
+            };
+            if let Some(opts) = opts {
+                request.stdin = opts.get("stdin")?;
+                request.cwd = opts.get("cwd")?;
+                if let Some(env) = opts.get::<Option<mlua::Table>>("env")? {
+                    for pair in env.pairs::<String, String>() {
+                        request.env.push(pair?);
+                    }
+                    request.env.sort();
+                }
+            }
+            if let Some(f) = callback {
+                let id = {
+                    let mut state = s.borrow_mut();
+                    state.next_callback += 1;
+                    state.next_callback - 1
+                };
+                let api: mlua::Table = lua.globals().get("rt")?;
+                api.get::<mlua::Table>("_spawned")?.set(id, f)?;
+                request.callback = Some(id);
+            }
+            s.borrow_mut().actions.push(Action::Spawn(request));
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
         "message",
         lua.create_function(move |_, (text, level): (String, Option<String>)| {
             let error = level.as_deref() == Some("error");
@@ -568,6 +685,60 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spawn_records_the_program_and_calls_back_once() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-spawn-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.command("words", function()
+  rt.spawn({"wc", "-w"}, { stdin = "a b c", env = { LANG = "C" } }, function(r)
+    rt.message(r.stdout:match("%d+") .. " words, code " .. r.code)
+  end)
+end)
+rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let ctx = Context::default();
+        let actions = run_command("words", "", &ctx).unwrap();
+        let [Action::Spawn(request)] = actions.as_slice() else {
+            panic!("no spawn in {actions:?}");
+        };
+        assert_eq!(request.argv, ["wc", "-w"]);
+        assert_eq!(request.stdin.as_deref(), Some("a b c"));
+        assert_eq!(request.env, [("LANG".to_string(), "C".to_string())]);
+        let callback = request.callback.unwrap();
+        let result = SpawnResult {
+            code: Some(0),
+            stdout: "3\n".into(),
+            ..SpawnResult::default()
+        };
+        assert_eq!(
+            spawned(callback, &result, &ctx).unwrap(),
+            [Action::Message {
+                error: false,
+                text: "3 words, code 0".into()
+            }]
+        );
+        assert!(
+            spawned(callback, &result, &ctx).unwrap().is_empty(),
+            "called once"
+        );
+        assert_eq!(
+            run_command("fire", "", &ctx).unwrap(),
+            [Action::Spawn(SpawnRequest {
+                argv: vec!["notify-send".into(), "hi there".into()],
+                ..SpawnRequest::default()
+            })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn callbacks_commands_and_hooks() {

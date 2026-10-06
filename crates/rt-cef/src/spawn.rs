@@ -48,6 +48,8 @@ enum Then {
     FileSelect { file: PathBuf, id: u32 },
     /// Load the config again after `:config-edit`.
     ConfigEdited { file: PathBuf },
+    /// Hand the result to an `rt.spawn` callback.
+    Lua { callback: Option<u32> },
 }
 
 thread_local! {
@@ -344,6 +346,61 @@ fn start(
     );
 }
 
+/// `rt.spawn` from `config.lua`.
+pub fn run_for_lua(request: rt_config::lua::SpawnRequest) {
+    let Some((program, args)) = request.argv.split_first() else {
+        return;
+    };
+    let mut process = Process::new(program);
+    process.args(args).envs(request.env);
+    if let Some(cwd) = request.cwd {
+        process.current_dir(crate::screenshot::expand_home(&cwd));
+    }
+    process.stdout(Stdio::piped()).stderr(Stdio::piped());
+    process.stdin(if request.stdin.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
+    run_with_input(
+        process,
+        request.stdin,
+        Then::Lua {
+            callback: request.callback,
+        },
+    );
+}
+
+/// Like [`run_in_background`], writing `input` to the program's stdin first.
+fn run_with_input(mut process: Process, input: Option<String>, then: Then) {
+    std::thread::spawn(move || {
+        let output = process.spawn().and_then(|mut child| {
+            if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
+                use std::io::Write;
+                // A program that doesn't read its input closes the pipe early.
+                let _ = stdin.write_all(input.as_bytes());
+            }
+            child.wait_with_output()
+        });
+        let finished = match output {
+            Ok(out) => Finished {
+                status: Ok(out.status.code()),
+                stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+                temp_dir: None,
+            },
+            Err(e) => Finished {
+                status: Err(e.to_string()),
+                stdout: String::new(),
+                stderr: String::new(),
+                temp_dir: None,
+            },
+        };
+        let mut task = Done::new(Arc::new(Mutex::new(Some((then, finished)))));
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
 fn run_in_background(mut process: Process, then: Then, temp_dir: Option<PathBuf>) {
     std::thread::spawn(move || {
         let finished = match process.output() {
@@ -395,6 +452,26 @@ fn finished(then: Then, done: Finished) {
             }
         }
         Then::FileSelect { file, id } => files_picked(&file, id, &done),
+        Then::Lua { callback } => {
+            let (code, error) = match &done.status {
+                Ok(code) => (*code, None),
+                Err(e) => (None, Some(e.clone())),
+            };
+            if let Some(error) = &error {
+                shell::show_message(Level::Error, format!("rt.spawn: {error}"));
+            }
+            if let Some(callback) = callback {
+                crate::lua::spawned(
+                    callback,
+                    &rt_config::lua::SpawnResult {
+                        code,
+                        stdout: done.stdout.clone(),
+                        stderr: done.stderr.clone(),
+                        error,
+                    },
+                );
+            }
+        }
         Then::ConfigEdited { file } => {
             if editor_result(&file, &done).is_some()
                 && let Some(effects) = shell::with(|s| s.engine.execute_str("config-source", None))
