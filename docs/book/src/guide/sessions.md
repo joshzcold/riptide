@@ -31,7 +31,7 @@ confirm_quit = ["multiple-tabs", "downloads"]
 
 ## Crash recovery
 
-Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. A normal exit deletes that save.
+Every `auto_save.interval` milliseconds (15 s by default, `0` turns it off), the open tabs are saved for crash recovery. Quitting riptide deletes that save. Being stopped from outside keeps it, like a crash: Ctrl-C in its terminal, the terminal closing, `kill`, or logging out.
 
 After a crash, the next start keeps the saved tabs as a session named after the time of the crash, such as `_crashed-2026-10-06-115803` (UTC). The last five crashes are kept, and `:session-load _crashed-` completes their names.
 

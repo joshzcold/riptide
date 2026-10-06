@@ -1228,6 +1228,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "cef",
+ "libc",
  "rt-adblock",
  "rt-config",
  "rt-core",

@@ -179,7 +179,7 @@ impl Launch {
             port,
             display,
             browser: RefCell::new(browser),
-            xvfb,
+            xvfb: RefCell::new(xvfb),
         };
         b.wait_until("the start page loads", |s| {
             s.tabs().len() == 1 && s.tab().is_loaded(&url)
@@ -196,7 +196,7 @@ pub struct Browser {
     port: u16,
     display: String,
     browser: RefCell<Child>,
-    xvfb: Child,
+    xvfb: RefCell<Child>,
 }
 
 impl Browser {
@@ -270,10 +270,26 @@ impl Browser {
 
     /// Send SIGTERM, as `kill`, `pkill` or a logout would.
     pub fn terminate(&self) {
+        self.signal("TERM");
+    }
+
+    /// Send a signal to the browser process, e.g. `INT` (Ctrl-C in its
+    /// terminal) or `HUP` (the terminal closing).
+    pub fn signal(&self, name: &str) {
         let pid = self.browser.borrow().id();
         let _ = Command::new("kill")
-            .args(["-s", "TERM", &pid.to_string()])
+            .args(["-s", name, &pid.to_string()])
             .status();
+    }
+
+    /// Stop the X server under the browser, as ending the desktop session
+    /// does. [`Browser::restart`] starts a new one on the same display.
+    pub fn lose_display(&self) {
+        let mut xvfb = self.xvfb.borrow_mut();
+        let _ = Command::new("kill")
+            .args(["-s", "TERM", &xvfb.id().to_string()])
+            .status();
+        let _ = xvfb.wait();
     }
 
     /// Kill the browser without letting it shut down, as a crash would.
@@ -293,6 +309,9 @@ impl Browser {
             matches!(self.browser.borrow_mut().try_wait(), Ok(Some(_))),
             "restart() needs the browser to have exited first"
         );
+        if matches!(self.xvfb.borrow_mut().try_wait(), Ok(Some(_))) {
+            *self.xvfb.borrow_mut() = start_xvfb_on(&self.display);
+        }
         // A crash can leave the socket behind; the new browser replaces it.
         *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, args);
         self.wait_until("the browser is back", |s| !s.tabs().is_empty());
@@ -497,8 +516,9 @@ impl Drop for Browser {
             );
         }
         self.stop_browser();
-        let _ = self.xvfb.kill();
-        let _ = self.xvfb.wait();
+        let mut xvfb = self.xvfb.borrow_mut();
+        let _ = xvfb.kill();
+        let _ = xvfb.wait();
         if !std::thread::panicking() {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
@@ -578,6 +598,31 @@ fn set_private(dir: &Path) {
 }
 
 /// Xvfb picks a free display itself and reports it on stdout (`-displayfd 1`).
+/// Xvfb on a display number given back by [`start_xvfb`], once that one has stopped.
+fn start_xvfb_on(display: &str) -> Child {
+    let xvfb = Command::new("Xvfb")
+        .args([
+            &format!(":{display}"),
+            "-screen",
+            "0",
+            "1280x800x24",
+            "-nolisten",
+            "tcp",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("can't start Xvfb");
+    // Ready once its socket exists.
+    let socket = PathBuf::from(format!("/tmp/.X11-unix/X{display}"));
+    let start = Instant::now();
+    while !socket.exists() && start.elapsed() < TIMEOUT {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    xvfb
+}
+
 fn start_xvfb() -> (Child, String) {
     let (reader, writer) = std::io::pipe().unwrap();
     let mut xvfb = Command::new("Xvfb")

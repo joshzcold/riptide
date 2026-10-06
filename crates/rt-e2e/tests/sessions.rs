@@ -80,6 +80,42 @@ fn tabs_come_back_after_sigterm() {
     });
 }
 
+/// Open a second tab, wait for it to be autosaved, end the browser with
+/// `stop`, and check that a restart brings both tabs back.
+fn tabs_survive(stop: impl Fn(&Browser), what: &str) {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| s.tabs().len() == 2 && s.tab().url == second);
+    let autosave = wait_for_autosave(&b, "second.html");
+    stop(&b);
+    b.wait_exit();
+    assert!(autosave.exists(), "{what} removed the crash-recovery save");
+    b.restart();
+    b.wait_until("the tabs are restored", |s| {
+        s.tabs().len() == 2 && s.tabs()[1].url == second
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tabs_come_back_after_ctrl_c() {
+    tabs_survive(|b| b.signal("INT"), "SIGINT");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tabs_come_back_after_the_terminal_closes() {
+    tabs_survive(|b| b.signal("HUP"), "SIGHUP");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tabs_come_back_after_the_desktop_session_ends() {
+    // Logging out ends the X server; the browser loses its display.
+    tabs_survive(Browser::lose_display, "losing the X display");
+}
+
 /// Wait until auto_save.interval has saved a tab whose URL contains `page`.
 fn wait_for_autosave(b: &Browser, page: &str) -> std::path::PathBuf {
     let autosave = b.data_dir().join("sessions/_autosave.toml");

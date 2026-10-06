@@ -32,6 +32,8 @@ mod scheme;
 mod screenshot;
 mod search;
 mod shell;
+#[cfg(unix)]
+mod signals;
 mod spawn;
 mod spell;
 mod statusbar;
@@ -399,18 +401,28 @@ pub fn run() -> i32 {
         tracing::error!("CEF failed to initialize");
         return 1;
     }
+    #[cfg(unix)]
+    signals::install();
     run_message_loop();
-    // A clean exit: no crash to recover from next time.
-    let autosave = data_dir
-        .join("sessions")
-        .join(format!("{}.toml", storage::AUTOSAVE_SESSION));
-    if let Err(e) = std::fs::remove_file(&autosave)
-        && e.kind() != std::io::ErrorKind::NotFound
-    {
-        tracing::warn!("can't remove {}: {e}", autosave.display());
+    #[cfg(unix)]
+    let signaled = signals::received();
+    #[cfg(not(unix))]
+    let signaled = false;
+    if client::CLOSED_EVERY_BROWSER.load(std::sync::atomic::Ordering::SeqCst) && !signaled {
+        // A clean exit: no crash to recover from next time.
+        let autosave = data_dir
+            .join("sessions")
+            .join(format!("{}.toml", storage::AUTOSAVE_SESSION));
+        if let Err(e) = std::fs::remove_file(&autosave)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!("can't remove {}: {e}", autosave.display());
+        }
+        // Reopened crashed tabs that got as far as a clean exit are fine.
+        rt_storage::Sessions::new(&data_dir.join("sessions")).set_recovering(false);
+    } else {
+        tracing::warn!("stopped by a signal; keeping the tabs for crash recovery");
     }
-    // Reopened crashed tabs that got as far as a clean exit are fine.
-    rt_storage::Sessions::new(&data_dir.join("sessions")).set_recovering(false);
     shutdown();
     remote::cleanup();
     if RESTART.load(std::sync::atomic::Ordering::SeqCst) {

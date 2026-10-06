@@ -20,6 +20,11 @@ const EVENTFLAG_CONTROL_DOWN: u32 = 1 << 2;
 const EVENTFLAG_ALT_DOWN: u32 = 1 << 3;
 const EVENTFLAG_COMMAND_DOWN: u32 = 1 << 7;
 
+/// Set when the last browser closed and riptide ended the message loop.
+/// Anything else ending it isn't a clean quit.
+pub static CLOSED_EVERY_BROWSER: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Which part of the window a browser belongs to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -710,6 +715,7 @@ wrap_life_span_handler! {
                 s.open_browsers
             });
             if remaining == Some(0) {
+                CLOSED_EVERY_BROWSER.store(true, std::sync::atomic::Ordering::SeqCst);
                 quit_message_loop();
             }
         }
