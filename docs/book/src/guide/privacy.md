@@ -32,6 +32,10 @@ The preferences are written into the profile (`Local State`, `Default/Preference
 | `content.cookies.store` | `false` makes every cookie last only until the browser closes |
 | `content.javascript.enabled` | `false` turns JavaScript off; set it per site to block or allow it on chosen sites only |
 | `content.headers.user_agent` | The user agent sites see, in requests and in `navigator.userAgent`; empty for Chromium's own. Set it per site for sites that check it |
+| `content.headers.do_not_track` | Sends `DNT: 1` (the default); `false` stops it |
+| `content.headers.referer` | `same-domain` (default) sends the Referer only within a site and its subdomains; `always` or `never` |
+| `content.headers.accept_language` | The languages sites are asked for, e.g. `de-DE,de;q=0.9`. Requests follow a change at once; `navigator.languages` after a restart |
+| `content.headers.custom` | Extra headers for every request, e.g. `{ "X-Requested-By" = "me" }` |
 | `content.images` | `false` stops loading images |
 | `content.mute` | `true` mutes pages; `:tab-mute` mutes one tab instead |
 | `content.javascript.can_open_tabs_automatically` | `true` lets pages open tabs without a click (popups) |

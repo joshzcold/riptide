@@ -55,6 +55,8 @@ struct State {
     applied: HashMap<&'static str, String>,
     /// Whether the protocol handler default stored by an earlier version is gone.
     cleared_protocol_handlers: bool,
+    /// The header preferences last given to Chromium.
+    prefs: Option<bool>,
     /// The cookie settings last given to Chromium.
     cookies: Option<(String, bool)>,
     /// (setting, origin) pairs given their own value, to undo when no override matches.
@@ -67,11 +69,90 @@ thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
+/// What the IO thread changes in every request: `content.headers.referer`
+/// and `content.headers.custom`.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct HeaderRules {
+    referer: String,
+    /// `content.headers.accept_language`; empty leaves Chromium's.
+    accept_language: String,
+    custom: Vec<(String, String)>,
+}
+
+static HEADER_RULES: std::sync::RwLock<Option<HeaderRules>> = std::sync::RwLock::new(None);
+
+/// On the IO thread, before a request goes out: drop a referrer
+/// `content.headers.referer` doesn't allow and add the custom headers.
+pub fn before_request(request: &mut Request) {
+    let Some(rules) = HEADER_RULES.read().ok().and_then(|r| r.clone()) else {
+        return;
+    };
+    let referrer = CefString::from(&request.referrer_url()).to_string();
+    if !referrer.is_empty() {
+        let url = CefString::from(&request.url()).to_string();
+        if !rt_core::url::keep_referrer(&rules.referer, &referrer, &url) {
+            request.set_referrer(None, ReferrerPolicy::NO_REFERRER);
+        }
+    }
+    if !rules.accept_language.is_empty() {
+        request.set_header_by_name(
+            Some(&CefString::from("Accept-Language")),
+            Some(&CefString::from(rules.accept_language.as_str())),
+            1,
+        );
+    }
+    for (name, value) in &rules.custom {
+        request.set_header_by_name(
+            Some(&CefString::from(name.as_str())),
+            Some(&CefString::from(value.as_str())),
+            1,
+        );
+    }
+}
+
+/// `content.headers.do_not_track`, a profile preference: set on the profile
+/// and on the private windows' context.
+pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
+    let set = |name: &str, value: Option<cef::Value>| {
+        let Some(mut value) = value else { return };
+        let mut error = CefString::from(" ");
+        let name = CefString::from(name);
+        if context.set_preference(Some(&name), Some(&mut value), Some(&mut error)) == 0 {
+            tracing::warn!(%error, "could not set a header preference");
+        }
+    };
+    set(
+        "enable_do_not_track",
+        value_create().inspect(|v| {
+            v.set_bool(settings.bool("content.headers.do_not_track").into());
+        }),
+    );
+}
+
 /// Apply the content settings as Chromium's defaults for every site.
 pub fn apply_globals(settings: &Settings) {
     let Some(context) = request_context_get_global_context() else {
         return;
     };
+    let rules = HeaderRules {
+        referer: settings.str("content.headers.referer").to_string(),
+        accept_language: settings.str("content.headers.accept_language").to_string(),
+        custom: settings
+            .map("content.headers.custom")
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default(),
+    };
+    if let Ok(mut current) = HEADER_RULES.write() {
+        *current = Some(rules);
+    }
+    let prefs = settings.bool("content.headers.do_not_track");
+    if STATE.with(|s| s.borrow().prefs.as_ref() != Some(&prefs)) {
+        apply_prefs(&context, settings);
+        if let Some(private) = shell::with(|s| s.private_context.clone()).flatten() {
+            apply_prefs(&private, settings);
+        }
+        STATE.with(|s| s.borrow_mut().prefs = Some(prefs));
+    }
     // A stored PROTOCOL_HANDLERS default makes private windows crash a Chromium CHECK.
     if !STATE.with(|s| std::mem::replace(&mut s.borrow_mut().cleared_protocol_handlers, true)) {
         context.set_content_setting(

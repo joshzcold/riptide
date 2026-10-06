@@ -182,6 +182,7 @@ wrap_resource_request_handler! {
             if crate::adblock::should_block(&url, &page, request.resource_type()) {
                 ReturnValue::CANCEL
             } else {
+                crate::content::before_request(request);
                 ReturnValue::CONTINUE
             }
         }

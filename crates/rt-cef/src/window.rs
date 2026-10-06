@@ -144,18 +144,27 @@ fn open(
 /// The request context for new tabs in the active window: the shared
 /// in-memory one for private windows, the profile's otherwise.
 pub fn request_context() -> Option<RequestContext> {
-    shell::with(|s| {
+    let (context, created) = shell::with(|s| {
         if !s.private {
-            return None;
+            return (None, false);
         }
-        if s.private_context.is_none() {
+        let created = s.private_context.is_none();
+        if created {
             // An empty cache path keeps everything in memory.
             s.private_context =
                 request_context_create_context(Some(&RequestContextSettings::default()), None);
         }
-        s.private_context.clone()
+        (s.private_context.clone(), created)
     })
-    .flatten()
+    .unwrap_or((None, false));
+    // Outside the shell borrow: setting preferences can call back into us.
+    if created
+        && let Some(context) = &context
+        && let Some(settings) = shell::with(|s| s.engine.settings().clone())
+    {
+        crate::content::apply_prefs(context, &settings);
+    }
+    context
 }
 
 pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {

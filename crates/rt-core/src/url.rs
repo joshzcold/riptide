@@ -270,6 +270,21 @@ pub fn origin(url: &str) -> Option<String> {
     (!authority.is_empty()).then(|| format!("{scheme}://{authority}/"))
 }
 
+/// `content.headers.referer`: whether a request to `url` may carry
+/// `referrer`. `always`, `never`, or `same-domain`: the same host, or one a
+/// subdomain of the other.
+pub fn keep_referrer(policy: &str, referrer: &str, url: &str) -> bool {
+    match policy {
+        "always" => true,
+        "never" => false,
+        _ => {
+            let (a, b) = (host(referrer).to_lowercase(), host(url).to_lowercase());
+            !a.is_empty()
+                && (a == b || a.ends_with(&format!(".{b}")) || b.ends_with(&format!(".{a}")))
+        }
+    }
+}
+
 pub fn host(url: &str) -> &str {
     let Some((_, rest)) = url.split_once("://") else {
         return "";
@@ -329,6 +344,34 @@ fn encode_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn referrers_by_policy() {
+        let page = "https://news.example.com/story";
+        assert!(keep_referrer(
+            "same-domain",
+            page,
+            "https://news.example.com/img.png"
+        ));
+        assert!(keep_referrer("same-domain", page, "https://example.com/"));
+        assert!(keep_referrer(
+            "same-domain",
+            page,
+            "https://cdn.news.example.com/a.js"
+        ));
+        assert!(!keep_referrer(
+            "same-domain",
+            page,
+            "https://tracker.test/pixel"
+        ));
+        assert!(!keep_referrer(
+            "same-domain",
+            page,
+            "https://badexample.com/"
+        ));
+        assert!(keep_referrer("always", page, "https://tracker.test/"));
+        assert!(!keep_referrer("never", page, "https://news.example.com/"));
+    }
 
     #[test]
     fn url_patterns() {

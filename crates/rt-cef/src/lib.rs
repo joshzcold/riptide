@@ -163,13 +163,18 @@ pub(crate) fn report_config_errors(errors: &[String]) {
     }
 }
 
-/// A setting's value from config read before the engine exists.
-fn startup_bool(loaded: &rt_config::Loaded, name: &str) -> bool {
+/// The settings from config read before the engine exists.
+fn startup_settings(loaded: &rt_config::Loaded) -> rt_core::settings::Settings {
     let mut engine = Engine::new(Keymap::defaults());
     for op in &loaded.ops {
         let _ = engine.apply_config(op);
     }
-    engine.settings().bool(name)
+    engine.settings().clone()
+}
+
+/// A setting's value from config read before the engine exists.
+fn startup_bool(loaded: &rt_config::Loaded, name: &str) -> bool {
+    startup_settings(loaded).bool(name)
 }
 
 /// Add `value` to a comma-separated switch, keeping what the user passed.
@@ -300,6 +305,10 @@ pub fn run() -> i32 {
         root_cache_path: path_string(&paths.data_dir),
         cache_path: path_string(&profile),
         log_file: path_string(&paths.data_dir.join("cef.log")),
+        // Also what navigator.languages reports; the header follows changes made later.
+        accept_language_list: CefString::from(
+            startup_settings(&loaded).str("content.headers.accept_language"),
+        ),
         ..Default::default()
     };
     let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");

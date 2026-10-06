@@ -34,6 +34,10 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.cookies.store` | boolean | `true` | Keep cookies after the browser closes; false makes every cookie last only for the session |
 | `content.desktop_capture` | ask \| true \| false | `ask` | Let sites capture your screen or desktop audio: ask, true or false |
 | `content.geolocation` | ask \| true \| false | `ask` | Let sites know your location: ask, true or false |
+| `content.headers.accept_language` | string | `` | Languages sites are asked for, e.g. en-US,en;q=0.9 (also navigator.languages); empty for the system's |
+| `content.headers.custom` | table<string, string> | `{}` | Extra headers sent with every request: name → value |
+| `content.headers.do_not_track` | boolean | `true` | Send DNT: 1 with every request, asking sites not to track you |
+| `content.headers.referer` | always \| never \| same-domain | `same-domain` | When to send the Referer header: always, never, or only within the same domain and its subdomains |
 | `content.headers.user_agent` | string | `` | User agent sent to sites and shown to their scripts; empty for Chromium's own. Can be set per site |
 | `content.images` | boolean | `true` | Load images; can be set per site |
 | `content.javascript.can_open_tabs_automatically` | boolean | `false` | Let pages open tabs and windows without a click (popups); can be set per site |

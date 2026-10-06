@@ -607,7 +607,17 @@ fn serve(mut stream: std::net::TcpStream, root: &Path) {
         .unwrap_or("/")
         .trim_start_matches('/');
     let file = (!path.contains("..")).then(|| root.join(path));
-    let (status, body) = match file.and_then(|f| std::fs::read(f).ok()) {
+    // `/headers` echoes the request's headers, lowercased, for header tests.
+    let echo = (path == "headers").then(|| {
+        request
+            .lines()
+            .skip(1)
+            .take_while(|l| !l.is_empty())
+            .map(|l| l.to_lowercase() + "\n")
+            .collect::<String>()
+            .into_bytes()
+    });
+    let (status, body) = match echo.or_else(|| file.and_then(|f| std::fs::read(f).ok())) {
         Some(body) => ("200 OK", body),
         None => ("404 Not Found", b"not found".to_vec()),
     };

@@ -609,6 +609,30 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites know your location: ask, true or false"
     ),
     def!(
+        "content.headers.accept_language",
+        Kind::Str,
+        s(""),
+        "Languages sites are asked for, e.g. en-US,en;q=0.9 (also navigator.languages); empty for the system's"
+    ),
+    def!(
+        "content.headers.custom",
+        Kind::Map,
+        Value::Map(BTreeMap::new()),
+        "Extra headers sent with every request: name → value"
+    ),
+    def!(
+        "content.headers.do_not_track",
+        Kind::Bool,
+        Value::Bool(true),
+        "Send DNT: 1 with every request, asking sites not to track you"
+    ),
+    def!(
+        "content.headers.referer",
+        Kind::Enum(&["always", "never", "same-domain"]),
+        s("same-domain"),
+        "When to send the Referer header: always, never, or only within the same domain and its subdomains"
+    ),
+    def!(
         "content.headers.user_agent",
         Kind::Str,
         s(""),
