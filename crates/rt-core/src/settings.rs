@@ -1470,6 +1470,13 @@ pub static SETTINGS: &[SettingDef] = &[
         "Link texts ]] follows to the next page, as JavaScript regular expressions (case doesn't matter)"
     ),
     def!(
+        "hints.padding",
+        Kind::Str,
+        s("0 3px"),
+        "Space around a hint label's text, as CSS padding, e.g. 1px 4px",
+        padding
+    ),
+    def!(
         "hints.prev_regexes",
         Kind::List,
         Value::List(vec![
@@ -1480,6 +1487,12 @@ pub static SETTINGS: &[SettingDef] = &[
             r"\b(<<|«)\b".to_string()
         ]),
         "Link texts [[ follows to the previous page, as JavaScript regular expressions (case doesn't matter)"
+    ),
+    def!(
+        "hints.radius",
+        Kind::Int { min: 0, max: 50 },
+        Value::Int(3),
+        "Corner radius of hint labels in pixels; 0 is square"
     ),
     def!(
         "hints.scatter",

@@ -67,6 +67,24 @@ Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and 
 
 The default, `docked`, keeps the list full width above the status bar, as in qutebrowser. Questions have their own setting, `prompt.position`.
 
+## Hint labels
+
+Hint labels take the theme's `colors.hints.*` and `fonts.hints`. `hints.radius` rounds their corners (in pixels, `0` for square) and `hints.padding` sets the room around the letters:
+
+```toml
+"hints.radius" = 0
+"hints.padding" = "1px 4px"
+```
+
+For anything else, put CSS in `hints.css` in the config directory. Labels are `.label` elements and the typed part of a label is `.matched`; the page's own CSS can't reach them, and yours applies only to them:
+
+```css
+.label { box-shadow: 0 1px 3px rgb(0 0 0 / 40%); }
+.matched { opacity: 0.5; }
+```
+
+`hints.css` is read again each time hints are shown.
+
 ## Custom CSS
 
 `ui.css` in the config directory is added to riptide's tab bar, status bar and overlay after their own styles, for anything the settings don't cover. The theme's colors are there as CSS variables (`--rt-statusbar-bg`, `--rt-tabs-selected-bg`, … one per `colors.*` setting), so a rule can reuse them:

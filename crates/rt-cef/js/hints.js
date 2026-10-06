@@ -8,9 +8,9 @@
     .label {
       position: fixed;
       z-index: 2147483647;
-      padding: 0 3px;
+      padding: var(--rt-hints-padding, 0 3px);
       border: 1px solid var(--rt-hints-border, #e3be23);
-      border-radius: 3px;
+      border-radius: var(--rt-hints-radius, 3px);
       background: var(--rt-hints-bg, #ffc542);
       color: var(--rt-hints-fg, #000);
       font: var(--rt-font-hints, bold 10pt "DejaVu Sans Mono", monospace);
@@ -153,14 +153,15 @@
       });
     },
 
-    show(texts, uppercase, theme = {}) {
+    show(texts, uppercase, theme = {}, css = "") {
       clear();
       host = document.createElement("rt-hints");
       // The theme's hint colors, inherited into the shadow root.
       for (const [token, color] of Object.entries(theme)) host.style.setProperty(`--rt-${token}`, color);
       const root = host.attachShadow({ mode: "closed" });
       const style = document.createElement("style");
-      style.textContent = STYLE;
+      // hints.css comes after, so it can restyle .label and .matched.
+      style.textContent = STYLE + css;
       root.append(style);
       labels = texts.map((text, i) => {
         // Number hints give elements the text filter hid no label.

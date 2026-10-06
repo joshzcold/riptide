@@ -348,6 +348,14 @@ pub fn ui_vars(settings: &Settings) -> BTreeMap<String, String> {
         settings.str("statusbar.padding").to_string(),
     );
     vars.insert(
+        "hints-padding".into(),
+        settings.str("hints.padding").to_string(),
+    );
+    vars.insert(
+        "hints-radius".into(),
+        format!("{}px", settings.int("hints.radius")),
+    );
+    vars.insert(
         "tabs-padding".into(),
         settings.str("tabs.padding").to_string(),
     );

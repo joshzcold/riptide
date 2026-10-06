@@ -56,6 +56,12 @@ pub fn ui_css(config_dir: &Path) -> String {
     read(&config_dir.join("ui.css"))
 }
 
+/// The text of `hints.css` in the config directory, added to hint labels'
+/// own style.
+pub fn hints_css() -> String {
+    config_dir().map_or_else(String::new, |d| read(&d.join("hints.css")))
+}
+
 /// A `content.user_stylesheets` entry as a path: `~/` is the home folder,
 /// and a relative path is in the config directory.
 fn resolve(entry: &str, config_dir: &Path) -> PathBuf {

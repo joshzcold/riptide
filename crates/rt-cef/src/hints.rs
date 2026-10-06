@@ -326,6 +326,7 @@ pub fn show(labels: &[String]) {
         )
     })
     .unwrap_or((false, serde_json::Value::Null));
+    let css = serde_json::to_string(&crate::userstyle::hints_css()).unwrap_or_default();
     let frames: Vec<(Frame, usize, usize)> = FRAMES.with(|f| {
         f.borrow()
             .iter()
@@ -339,7 +340,7 @@ pub fn show(labels: &[String]) {
         let slice = serde_json::to_string(slice).unwrap_or_default();
         eval::eval_frame(
             &frame,
-            &format!("window.__rtHints.show({slice}, {upper}, {theme})"),
+            &format!("window.__rtHints.show({slice}, {upper}, {theme}, {css})"),
             |_| {},
         );
     }
