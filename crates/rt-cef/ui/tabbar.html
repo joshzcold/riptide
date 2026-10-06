@@ -93,15 +93,16 @@
     for (const [i, el] of [...bar.children].entries()) if (i !== press.index) el.classList.add("shifting");
   }
 
-  // Move the dragged tab by `delta` pixels and slide the others out of its way.
-  function dragTo(delta) {
+  // Move the dragged tab by `delta` pixels and slide the others out of its
+  // way. Where it lands follows the pointer, not the tab's centre, so a wide
+  // tab can still pass narrow ones near the edge of the bar.
+  function dragTo(delta, pointer) {
     const { index, spans } = press;
-    const center = spans[index].start + spans[index].size / 2 + delta;
     let target = index;
     spans.forEach((other, i) => {
       const middle = other.start + other.size / 2;
-      if (i > index && center > middle) target = Math.max(target, i);
-      if (i < index && center < middle) target = Math.min(target, i);
+      if (i > index && pointer > middle) target = Math.max(target, i);
+      if (i < index && pointer < middle) target = Math.min(target, i);
     });
     press.target = target;
     const axis = vertical() ? "Y" : "X";
@@ -139,7 +140,8 @@
     const moved = Math.max(Math.abs(e.clientX - press.x), Math.abs(e.clientY - press.y));
     if (!press.dragging && moved < DRAG_THRESHOLD) return;
     if (!press.dragging) startDrag();
-    dragTo(vertical() ? e.clientY - press.y : e.clientX - press.x);
+    const pointer = vertical() ? e.clientY : e.clientX;
+    dragTo(pointer - (vertical() ? press.y : press.x), pointer);
   });
   bar.addEventListener("pointerup", () => {
     if (!press) return;

@@ -133,3 +133,46 @@ fn tab_bar_unpinned_tabs_can_sit_between_pinned_ones() {
         s.tabs()[2].url == second && !s.tabs()[2].pinned && s.tabs()[1].pinned
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_a_wide_tab_drags_past_narrow_pinned_ones() {
+    let b = Browser::start("nav1.html");
+    for page in ["second.html", "nav2.html"] {
+        let url = b.url(page);
+        b.run(&format!("open -t {url}"));
+        b.wait_until("the tab loads", |s| s.tab().is_loaded(&url));
+    }
+    // The first two tabs pinned and shrunk; the last one is wide.
+    for n in [1, 2] {
+        b.run(&format!("tab-focus {n}"));
+        b.run("tab-pin");
+    }
+    b.wait_until("two pinned tabs", |s| {
+        s.tabs().iter().filter(|t| t.pinned).count() == 2
+    });
+    wait_bar(
+        &b,
+        "String(document.querySelectorAll('.tab.shrunk').length)",
+        "2",
+    );
+    // Grab the wide tab near its left edge and move the pointer onto the first tab.
+    b.eval_bar(
+        "tabbar",
+        r#"(() => {
+          const bar = document.getElementById('tabs');
+          const tabs = [...bar.children];
+          const wide = tabs[2].getBoundingClientRect();
+          const first = tabs[0].getBoundingClientRect();
+          const y = wide.top + wide.height / 2;
+          const fire = (type, x) => bar.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: y }));
+          fire('pointerdown', wide.left + 4);
+          fire('pointermove', wide.left + 14);
+          fire('pointermove', first.left + 2);
+          fire('pointerup', first.left + 2);
+          return '';
+        })()"#,
+    );
+    let nav2 = b.url("nav2.html");
+    b.wait_until("the wide tab is first", |s| s.tabs()[0].url == nav2);
+}
