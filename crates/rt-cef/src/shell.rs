@@ -1068,6 +1068,14 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let theme = json!(rt_core::theme::ui_vars(s.engine.settings()));
     // ui.css, after the pages' own styles.
     let css = crate::userstyle::ui_css(&s.paths.config_dir);
+    // ui.overlay.position = floating: the box shows the command line, so the
+    // status bar doesn't.
+    let palette = focused && floating_overlay(s) && s.engine.prompt_view().is_none();
+    let palette_command = if palette {
+        status.command_line.take()
+    } else {
+        None
+    };
     let status_json = json!({
         "theme": theme,
         "css": css,
@@ -1227,7 +1235,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                 }
             }
             // Without completions, show the messages the status bar replaced.
-            if rows.is_empty() && status.command_line.is_none() {
+            if rows.is_empty() && status.command_line.is_none() && palette_command.is_none() {
                 rows = s
                     .engine
                     .earlier_messages()
@@ -1243,6 +1251,18 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             )
         }
         None => (json!({ "kind": "rows", "rows": [] }), 0),
+    };
+    let (payload, rows) = if palette {
+        let mut payload = payload;
+        // A list held by completion.delay already counts the command's row.
+        let held = payload.get("command_line").is_some_and(|c| !c.is_null());
+        let command = palette_command.is_some() && !held;
+        payload["floating"] = true.into();
+        payload["command_line"] = json!(palette_command);
+        // The command's own row comes first.
+        (payload, rows + usize::from(command))
+    } else {
+        (payload, rows)
     };
     let is_prompt = payload["kind"] == "prompt";
     let mut payload = payload;
@@ -1264,7 +1284,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                     if is_prompt {
                         prompt_bounds(s, rows, prompt_height)
                     } else {
-                        completion_bounds(s, rows)
+                        rows_bounds(s, rows)
                     }
                 })
                 .flatten();
@@ -1501,10 +1521,13 @@ fn keyhints(s: &mut Shell) -> (Option<(serde_json::Value, usize)>, Option<i64>) 
         return (None, Some(delay - waited + 10));
     }
     // As many columns as fit, filled top to bottom; a header row above them.
-    let width = s
-        .statusbar
-        .as_ref()
-        .map_or(800, |v| View::from(v).bounds().width);
+    let width = if floating_overlay(s) {
+        rows_bounds(s, 1).map_or(800, |b| b.width - 2 * OVERLAY_FRAME)
+    } else {
+        s.statusbar
+            .as_ref()
+            .map_or(800, |v| View::from(v).bounds().width)
+    };
     let columns = (width / (KEYHINT_COLUMN_CHARS * OVERLAY_CHAR_WIDTH)).max(1) as usize;
     let rows = items.len().div_ceil(columns).min(OVERLAY_MAX_ROWS - 1);
     let items: Vec<_> = items
@@ -1601,8 +1624,35 @@ fn overlay_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     if s.last_overlay_prompt {
         prompt_bounds(s, rows, s.last_prompt_height)
     } else {
-        completion_bounds(s, rows)
+        rows_bounds(s, rows)
     }
+}
+
+fn floating_overlay(s: &Shell) -> bool {
+    s.engine.settings().str("ui.overlay.position") == "floating"
+}
+
+/// Border and padding around the floating overlay's rows, on each side.
+const OVERLAY_FRAME: i32 = 5;
+
+/// Completions, key hints and messages: docked, or in a box centred near the
+/// top of the page area, `ui.overlay.width` wide at most.
+fn rows_bounds(s: &Shell, rows: usize) -> Option<Rect> {
+    if !floating_overlay(s) {
+        return completion_bounds(s, rows);
+    }
+    let area = View::from(s.row.as_ref()?).bounds();
+    let max = s.engine.settings().int("ui.overlay.width") as i32;
+    let width = max.min(area.width - 2 * PROMPT_MARGIN).max(200);
+    let top = area.height / 6;
+    let rows = rows.min(OVERLAY_MAX_ROWS.max(completion_max_rows(s)) + 1) as i32;
+    let height = (rows * row_height() + 2 * OVERLAY_FRAME).min(area.height - top);
+    Some(Rect {
+        x: area.x + (area.width - width) / 2,
+        y: area.y + top,
+        width,
+        height,
+    })
 }
 
 /// Next to the status bar, on the page's side of it; at the page area's

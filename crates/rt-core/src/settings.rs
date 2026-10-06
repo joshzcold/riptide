@@ -1890,6 +1890,21 @@ pub static SETTINGS: &[SettingDef] = &[
         "Wrap around from the last tab to the first (and back) when switching tabs"
     ),
     def!(
+        "ui.overlay.position",
+        Kind::Enum(&["docked", "floating"]),
+        s("docked"),
+        "Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command"
+    ),
+    def!(
+        "ui.overlay.width",
+        Kind::Int {
+            min: 200,
+            max: 4000
+        },
+        Value::Int(800),
+        "Width in pixels of the floating overlay (ui.overlay.position = floating), at most the page's"
+    ),
+    def!(
         "ui.theme",
         Kind::Enum(crate::theme::THEMES),
         s("riptide"),

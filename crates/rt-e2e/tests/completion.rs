@@ -207,3 +207,25 @@ fn completion_set_shows_current_values_then_the_choices() {
         |t| t == "word",
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn floating_overlay_shows_the_command_in_a_box() {
+    let b = Browser::start("page.html");
+    b.run("set ui.overlay.position floating");
+    b.run("set ui.overlay.width 500");
+    b.keys(":set ui.over");
+    let first = "document.querySelector('.command-input')?.innerText ?? ''";
+    wait_overlay(&b, first, |t| t.starts_with(":set ui.over"));
+    wait_overlay(&b, LIST, |t| t.contains("ui.overlay.width"));
+    wait_overlay(&b, "String(innerWidth)", |w| w == "500");
+    // The status bar leaves the command to the box.
+    let bar = b.eval_bar("statusbar", "document.body.innerText");
+    assert!(!bar.contains(":set"), "the status bar shows {bar:?}");
+    b.keys("<Escape>");
+    b.run("set ui.overlay.position docked");
+    b.keys(":set ui.over");
+    wait_overlay(&b, first, |t| t.is_empty());
+    let bar = b.eval_bar("statusbar", "document.body.innerText");
+    assert!(bar.contains(":set ui.over"), "the status bar shows {bar:?}");
+}

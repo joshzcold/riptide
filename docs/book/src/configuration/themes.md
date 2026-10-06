@@ -56,6 +56,17 @@ Padding or font sizes set in `ui.css` resize the bars too.
 
 Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and `.sans_serif` (empty keeps Chromium's) and `fonts.web.size.default`, `.default_fixed` and `.minimum` in pixels. Pages pick them up when they reload.
 
+## Floating command line
+
+`ui.overlay.position = "floating"` turns the command line into a box near the top of the page, like a command palette: what you type shows in the box, with its completions under it, and the key hints appear there too. `ui.overlay.width` sets the box's width in pixels.
+
+```toml
+"ui.overlay.position" = "floating"
+"ui.overlay.width" = 900
+```
+
+The default, `docked`, keeps the list full width above the status bar, as in qutebrowser. Questions have their own setting, `prompt.position`.
+
 ## Custom CSS
 
 `ui.css` in the config directory is added to riptide's tab bar, status bar and overlay after their own styles, for anything the settings don't cover. The theme's colors are there as CSS variables (`--rt-statusbar-bg`, `--rt-tabs-selected-bg`, … one per `colors.*` setting), so a rule can reuse them:
