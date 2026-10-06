@@ -40,10 +40,17 @@ pub const GM_OPEN_MESSAGE: &str = "rt.gm-open";
 pub struct Scripts {
     pub generation: u64,
     pub scripts: Vec<Script>,
+    /// `input.mouse.rocker_gestures`, which pages need to know about too.
+    #[serde(default)]
+    pub rocker_gestures: bool,
 }
+
+/// Renderer → browser: a rocker gesture; argument 0 is `back` or `forward`.
+pub const ROCKER_MESSAGE: &str = "rt.rocker";
 
 thread_local! {
     static SCRIPTS: RefCell<(u64, Vec<Script>)> = const { RefCell::new((0, Vec::new())) };
+    static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static NEXT_XHR: std::cell::Cell<i32> = const { std::cell::Cell::new(1) };
     /// `GM_xmlhttpRequest` callbacks waiting for the browser, by request id.
     static XHR_CALLBACKS: RefCell<std::collections::HashMap<i32, (V8Context, V8Value)>> =
@@ -69,7 +76,17 @@ fn granted_api(script: &Script) -> String {
 
 fn set_scripts(json: &str) {
     match serde_json::from_str::<Scripts>(json) {
-        Ok(scripts) => SCRIPTS.with(|s| apply_scripts(&mut s.borrow_mut(), scripts)),
+        Ok(scripts) => {
+            let (generation, rocker) = (scripts.generation, scripts.rocker_gestures);
+            let current = SCRIPTS.with(|s| {
+                let mut state = s.borrow_mut();
+                apply_scripts(&mut state, scripts);
+                state.0
+            });
+            if current == generation {
+                ROCKER.with(|r| r.set(rocker));
+            }
+        }
         Err(e) => tracing::warn!("bad greasemonkey scripts from the browser: {e}"),
     }
 }
@@ -209,6 +226,9 @@ wrap_render_process_handler! {
             if !url.starts_with(rt_core::ui_message::UI_PREFIX) {
                 if !url.starts_with("riptide://") {
                     run_greasemonkey(frame, context, &url);
+                    if ROCKER.with(std::cell::Cell::get) {
+                        install_rocker(context);
+                    }
                 }
                 return;
             }
@@ -359,6 +379,69 @@ wrap_v8_handler! {
                 }
                 frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
             }
+            1
+        }
+    }
+}
+
+/// `input.mouse.rocker_gestures`: with the right button held, a left click
+/// goes back; with the left held, a right click goes forward. As in
+/// qutebrowser, the page's context menu goes away.
+const ROCKER_JS: &str = r#"(function (go) {
+  let left = false, right = false, used = false;
+  const stop = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  addEventListener("mousedown", (e) => {
+    if (e.button === 0) left = true;
+    if (e.button === 2) right = true;
+    if (left && right) { go(e.button === 0 ? "back" : "forward"); used = true; stop(e); }
+  }, true);
+  addEventListener("mouseup", (e) => {
+    if (e.button === 0) left = false;
+    if (e.button === 2) right = false;
+    if (used) stop(e);
+  }, true);
+  addEventListener("click", (e) => { if (used) { stop(e); if (!left && !right) used = false; } }, true);
+  addEventListener("contextmenu", stop, true);
+})"#;
+
+fn install_rocker(context: &V8Context) {
+    let mut retval = None;
+    let mut exception = None;
+    context.enter();
+    let ok = context.eval(
+        Some(&CefString::from(ROCKER_JS)),
+        Some(&CefString::from("riptide:rocker")),
+        0,
+        Some(&mut retval),
+        Some(&mut exception),
+    );
+    let mut handler = RtRockerHandler::new();
+    let go = v8_value_create_function(Some(&CefString::from("go")), Some(&mut handler));
+    if ok != 0
+        && let (Some(function), Some(go)) = (retval, go)
+    {
+        function.execute_function(None, Some(&[Some(go)]));
+    }
+    context.exit();
+}
+
+// The rocker listener's way to the browser.
+wrap_v8_handler! {
+    struct RtRockerHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let Some(direction) = arguments.and_then(|a| a.first().cloned().flatten()).filter(|v| v.is_string() != 0) else {
+                return 1;
+            };
+            send_to_browser(ROCKER_MESSAGE, &[&CefString::from(&direction.string_value())]);
             1
         }
     }
@@ -524,6 +607,7 @@ mod tests {
             Scripts {
                 generation: 1,
                 scripts: vec![script("old")],
+                rocker_gestures: false,
             },
         );
         assert_eq!(state.1[0].name, "new");
@@ -532,6 +616,7 @@ mod tests {
             Scripts {
                 generation: 3,
                 scripts: vec![script("newer")],
+                rocker_gestures: false,
             },
         );
         assert_eq!((state.0, state.1[0].name.as_str()), (3, "newer"));
@@ -559,6 +644,7 @@ mod tests {
             Scripts {
                 generation: 1,
                 scripts: vec![script("b")],
+                rocker_gestures: false,
             },
         );
         assert_eq!(state.1[1].values, values);

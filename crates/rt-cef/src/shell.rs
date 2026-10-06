@@ -431,6 +431,7 @@ fn apply_chromium_settings() {
     // Cloned so no CEF call happens while the shell is borrowed.
     if let Some(settings) = with(|s| s.engine.settings().clone()) {
         crate::content::apply_globals(&settings);
+        crate::greasemonkey::sync_settings(&settings);
     }
     crate::permissions::apply_site_settings(sites);
     let variant = match scheme.as_str() {

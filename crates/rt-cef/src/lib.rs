@@ -99,8 +99,8 @@ wrap_app! {
                     let name = CefString::from(*name);
                     match value {
                         // Keep features the user passed on the command line.
-                        Some(value) if name.to_string() == "enable-features" => {
-                            append_to_list_switch(command_line, "enable-features", value)
+                        Some(value) if matches!(name.to_string().as_str(), "enable-features" | "disable-features") => {
+                            append_to_list_switch(command_line, &name.to_string(), value)
                         }
                         Some(value) => command_line.append_switch_with_value(Some(&name), Some(&CefString::from(value.as_str()))),
                         None => command_line.append_switch(Some(&name)),
@@ -360,6 +360,15 @@ pub fn run() -> i32 {
         }
         if !settings.bool("content.webgl") {
             switches.push(("disable-webgl", None));
+        }
+        if settings.bool("input.spatial_navigation") {
+            switches.push(("enable-spatial-navigation", None));
+        }
+        if !settings.bool("input.media_keys") {
+            switches.push((
+                "disable-features",
+                Some("HardwareMediaKeyHandling".to_string()),
+            ));
         }
         if settings.bool("content.local_content_can_access_file_urls") {
             switches.push(("allow-file-access-from-files", None));

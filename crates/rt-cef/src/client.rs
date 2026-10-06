@@ -94,6 +94,25 @@ wrap_client! {
                 }
                 return 1;
             }
+            if name == crate::renderer::ROCKER_MESSAGE {
+                let direction = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string());
+                let enabled = shell::with(|s| s.engine.settings().bool("input.mouse.rocker_gestures")).unwrap_or(false);
+                let command = match direction.as_deref() {
+                    Some("back") => "back",
+                    Some("forward") => "forward",
+                    _ => return 1,
+                };
+                // Only for the tab the gesture happened in, and only while it's on.
+                let mut tab = browser.as_ref().map(|b| (**b).clone());
+                if enabled
+                    && let Some(Some(effects)) = shell::with_tab(tab.as_mut(), |s, _, current| {
+                        current.then(|| s.engine.execute_str(command, None))
+                    })
+                {
+                    shell::apply(effects);
+                }
+                return 1;
+            }
             if name == crate::renderer::GM_XHR_MESSAGE {
                 if let (Some(frame), Some(args)) = (frame.as_ref(), message.argument_list()) {
                     let text = |i| CefString::from(&args.string(i)).to_string();

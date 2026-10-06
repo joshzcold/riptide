@@ -24,3 +24,37 @@ fn input_mode_override_enters_the_sites_mode_on_load() {
     b.open("second.html");
     b.wait_mode("passthrough");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn input_mouse_rocker_gestures_go_back_and_drop_the_context_menu() {
+    let b = Browser::launch()
+        .toml("\"input.mouse.rocker_gestures\" = true\n")
+        .start("page.html");
+    b.open("second.html");
+    let menu = b.eval(
+        "String(!document.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))",
+    );
+    assert_eq!(menu, "true", "the context menu is cancelled");
+    // Right button held, then the left: back.
+    b.eval(
+        "for (const button of [2, 0]) document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button })); ''",
+    );
+    let first = b.url("page.html");
+    b.wait_until("back on the first page", |s| s.tab().is_loaded(&first));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn input_spatial_navigation_moves_focus_with_arrows() {
+    let b = Browser::launch()
+        .toml("\"input.spatial_navigation\" = true\n")
+        .start("links.html");
+    b.keys("<Ctrl-v>");
+    b.wait_mode("passthrough");
+    b.keys("<Right>");
+    b.wait_until("a link has focus", |_| {
+        b.try_eval("document.activeElement.tagName")
+            .is_ok_and(|t| t == "A")
+    });
+}

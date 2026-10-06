@@ -18,6 +18,8 @@ thread_local! {
     /// The scripts as JSON, for new browsers' `extra_info`.
     static JSON: RefCell<String> = const { RefCell::new(String::new()) };
     static GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// `input.mouse.rocker_gestures`, handed to renderers with the scripts.
+    static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// `@require` URLs already tried this session, so a failing one isn't
     /// fetched again on every reload.
     static TRIED: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
@@ -43,6 +45,15 @@ pub fn load() -> (usize, Vec<String>) {
     (count, errors)
 }
 
+/// Settings renderers need: tell them when one changes. Outside the shell borrow.
+pub fn sync_settings(settings: &rt_core::settings::Settings) {
+    let rocker = settings.bool("input.mouse.rocker_gestures");
+    if ROCKER.with(|r| r.replace(rocker)) != rocker {
+        publish();
+        send_to_renderers();
+    }
+}
+
 /// Rebuild the JSON new browsers get; returns its generation.
 fn publish() -> u64 {
     let generation = GENERATION.with(|g| {
@@ -53,6 +64,7 @@ fn publish() -> u64 {
         serde_json::to_string(&Scripts {
             generation,
             scripts: s.borrow().clone(),
+            rocker_gestures: ROCKER.with(std::cell::Cell::get),
         })
         .unwrap_or_default()
     });

@@ -1043,10 +1043,22 @@ pub static SETTINGS: &[SettingDef] = &[
         "Read digits typed before a binding as a count (3j); false lets digits be bindings themselves"
     ),
     def!(
+        "input.media_keys",
+        Kind::Bool,
+        Value::Bool(true),
+        "Let the keyboard's media keys (play, pause, next) control audio and video in pages (after a restart)"
+    ),
+    def!(
         "input.mode_override",
         Kind::Enum(&["none", "normal", "insert", "passthrough"]),
         s("none"),
         "Mode to enter when a page loads or its tab is focused; set it per site, e.g. passthrough for a web terminal"
+    ),
+    def!(
+        "input.mouse.rocker_gestures",
+        Kind::Bool,
+        Value::Bool(false),
+        "Hold the right button and click the left to go back, or the other way round to go forward; turns off the page's context menu"
     ),
     def!(
         "input.partial_timeout",
@@ -1056,6 +1068,12 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         Value::Int(0),
         "Milliseconds before a half-typed key chain or count is forgotten; 0 waits forever"
+    ),
+    def!(
+        "input.spatial_navigation",
+        Kind::Bool,
+        Value::Bool(false),
+        "Move focus between links and fields with the arrow keys, as on a TV (after a restart)"
     ),
     def!(
         "keyhint.blacklist",
