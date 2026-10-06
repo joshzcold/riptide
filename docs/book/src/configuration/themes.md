@@ -19,6 +19,16 @@
 ui.theme = "gruvbox-dark"
 ```
 
+`ui.theme = "auto"` follows your desktop's light or dark preference and switches as soon as it changes, using `ui.auto_theme.dark` and `ui.auto_theme.light`:
+
+```toml
+ui.theme = "auto"
+"ui.auto_theme.dark" = "tokyo-night"
+"ui.auto_theme.light" = "solarized-light"
+```
+
+If you set `colors.webpage.preferred_color_scheme` to `light` or `dark`, `auto` follows that instead, so riptide matches the pages.
+
 ## Changing single colors
 
 `colors.*` settings change one color on top of the theme, with qutebrowser's names where there is one. An empty value (the default) uses the theme's. Colors are `#rrggbb`, `#rgb`, `rgb(…)`, `hsl(…)` or a CSS color name:

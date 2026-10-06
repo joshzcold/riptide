@@ -212,9 +212,11 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.undo_stack_size` | integer | `100` | How many closed tabs u can reopen; 0 keeps none |
 | `tabs.width` | integer | `200` | Width of the tab bar in pixels when tabs.position is left or right |
 | `tabs.wrap` | boolean | `true` | Wrap around from the last tab to the first (and back) when switching tabs |
+| `ui.auto_theme.dark` | riptide \| riptide-light \| gruvbox-dark \| gruvbox-light \| catppuccin-mocha \| catppuccin-latte \| nord \| dracula \| solarized-dark \| solarized-light \| tokyo-night | `riptide` | The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark |
+| `ui.auto_theme.light` | riptide \| riptide-light \| gruvbox-dark \| gruvbox-light \| catppuccin-mocha \| catppuccin-latte \| nord \| dracula \| solarized-dark \| solarized-light \| tokyo-night | `riptide-light` | The theme ui.theme = auto uses when light is preferred |
 | `ui.overlay.position` | docked \| floating | `docked` | Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command |
 | `ui.overlay.width` | integer | `800` | Width in pixels of the floating overlay (ui.overlay.position = floating), at most the page's |
-| `ui.theme` | riptide \| riptide-light \| gruvbox-dark \| gruvbox-light \| catppuccin-mocha \| catppuccin-latte \| nord \| dracula \| solarized-dark \| solarized-light \| tokyo-night | `riptide` | Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme) |
+| `ui.theme` | auto \| riptide \| riptide-light \| gruvbox-dark \| gruvbox-light \| catppuccin-mocha \| catppuccin-latte \| nord \| dracula \| solarized-dark \| solarized-light \| tokyo-night | `riptide` | Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme); auto follows the light or dark preference |
 | `url.auto_search` | naive \| schemeless \| never | `naive` | When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never |
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.incdec_segments` | string[] | `["path","query"]` | Parts of the URL Ctrl-a and Ctrl-x change: host, port, path, query, anchor |

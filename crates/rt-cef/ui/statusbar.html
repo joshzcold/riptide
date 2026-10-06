@@ -216,6 +216,12 @@
     }
     renderWidgets(state);
   };
+  // ui.theme = auto: tell the browser whether pages are asked for dark
+  // colors, now and whenever that changes.
+  const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+  const sendScheme = () => rt.send("color-scheme", JSON.stringify({ dark: darkQuery.matches }));
+  darkQuery.addEventListener("change", sendScheme);
+  sendScheme();
 </script>
 </body>
 </html>

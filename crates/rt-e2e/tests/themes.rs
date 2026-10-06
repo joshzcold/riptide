@@ -152,3 +152,23 @@ fn bars_grow_with_their_fonts_and_padding() {
         s.message().is_some_and(|m| m.contains("padding"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn auto_theme_follows_the_light_or_dark_preference() {
+    let b = Browser::launch()
+        .toml("\"ui.theme\" = \"auto\"\n\"ui.auto_theme.light\" = \"nord\"\n")
+        .start("page.html");
+    b.run("set colors.webpage.preferred_color_scheme dark");
+    // riptide's own #061826.
+    wait_bg(&b, "rgb(6, 24, 38)");
+    b.run("set colors.webpage.preferred_color_scheme light");
+    // nord's #242933.
+    wait_bg(&b, "rgb(36, 41, 51)");
+    b.run("set ui.auto_theme.light dracula");
+    let start = std::time::Instant::now();
+    while statusbar_bg(&b) == "rgb(36, 41, 51)" {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "still nord");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

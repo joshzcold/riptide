@@ -134,6 +134,41 @@ pub const THEMES: &[&str] = &[
     "tokyo-night",
 ];
 
+/// `ui.theme`'s choices: `auto`, then [`THEMES`].
+pub const THEME_CHOICES: &[&str] = &[
+    "auto",
+    "riptide",
+    "riptide-light",
+    "gruvbox-dark",
+    "gruvbox-light",
+    "catppuccin-mocha",
+    "catppuccin-latte",
+    "nord",
+    "dracula",
+    "solarized-dark",
+    "solarized-light",
+    "tokyo-night",
+];
+
+/// Whether pages are asked for dark colors (the desktop's preference, or
+/// `colors.webpage.preferred_color_scheme`), as the status bar last saw.
+static PREFERS_DARK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Record the light/dark preference; true if it changed.
+pub fn set_prefers_dark(dark: bool) -> bool {
+    PREFERS_DARK.swap(dark, std::sync::atomic::Ordering::Relaxed) != dark
+}
+
+/// The theme `ui.theme` means now: `auto` picks `ui.auto_theme.dark` or
+/// `ui.auto_theme.light`.
+pub fn theme_name(settings: &Settings, dark: bool) -> &str {
+    match settings.str("ui.theme") {
+        "auto" if dark => settings.str("ui.auto_theme.dark"),
+        "auto" => settings.str("ui.auto_theme.light"),
+        name => name,
+    }
+}
+
 fn palette(name: &str) -> Option<Palette> {
     let p =
         |base, surface, surface2, surface3, fg, muted, accent, yellow, red, orange, green, blue| {
@@ -369,7 +404,15 @@ pub fn is_font(text: &str) -> bool {
 
 /// The colors to use: `ui.theme`, with any `colors.*` setting on top.
 pub fn resolve(settings: &Settings) -> BTreeMap<&'static str, String> {
-    let mut colors = theme(settings.str("ui.theme"))
+    resolve_for(
+        settings,
+        PREFERS_DARK.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
+
+/// [`resolve`], with `auto` following `dark`.
+pub fn resolve_for(settings: &Settings, dark: bool) -> BTreeMap<&'static str, String> {
+    let mut colors = theme(theme_name(settings, dark))
         .or_else(|| theme("riptide"))
         .unwrap_or_default();
     for (token, setting) in TOKENS {
@@ -484,6 +527,38 @@ fn mix(a: &str, b: &str, amount: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_follows_the_preference_with_the_configured_pair() {
+        assert_eq!(THEME_CHOICES[0], "auto");
+        assert_eq!(&THEME_CHOICES[1..], THEMES);
+        let mut settings = Settings::default();
+        settings
+            .set("ui.theme", crate::settings::Value::Str("auto".into()))
+            .unwrap();
+        assert_eq!(theme_name(&settings, true), "riptide");
+        assert_eq!(theme_name(&settings, false), "riptide-light");
+        settings
+            .set(
+                "ui.auto_theme.light",
+                crate::settings::Value::Str("nord".into()),
+            )
+            .unwrap();
+        assert_eq!(
+            resolve_for(&settings, false),
+            resolve_for(
+                &{
+                    let mut nord = Settings::default();
+                    nord.set("ui.theme", crate::settings::Value::Str("nord".into()))
+                        .unwrap();
+                    nord
+                },
+                true
+            )
+        );
+        let dark = crate::settings::find("ui.auto_theme.dark").unwrap();
+        assert!(dark.parse("auto").is_err());
+    }
 
     #[test]
     fn every_theme_defines_every_token_with_valid_colors() {

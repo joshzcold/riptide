@@ -226,7 +226,7 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "set" => return complete_set(&parsed, settings),
         "theme" => {
             let current = settings.str("ui.theme");
-            return ranked(crate::theme::THEMES.iter(), parsed.pattern, |t| t)
+            return ranked(crate::theme::THEME_CHOICES.iter(), parsed.pattern, |t| t)
                 .into_iter()
                 .map(|t| Completion {
                     category: "Themes",

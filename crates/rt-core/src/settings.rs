@@ -1903,6 +1903,18 @@ pub static SETTINGS: &[SettingDef] = &[
         "Wrap around from the last tab to the first (and back) when switching tabs"
     ),
     def!(
+        "ui.auto_theme.dark",
+        Kind::Enum(crate::theme::THEMES),
+        s("riptide"),
+        "The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark"
+    ),
+    def!(
+        "ui.auto_theme.light",
+        Kind::Enum(crate::theme::THEMES),
+        s("riptide-light"),
+        "The theme ui.theme = auto uses when light is preferred"
+    ),
+    def!(
         "ui.overlay.position",
         Kind::Enum(&["docked", "floating"]),
         s("docked"),
@@ -1919,9 +1931,9 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "ui.theme",
-        Kind::Enum(crate::theme::THEMES),
+        Kind::Enum(crate::theme::THEME_CHOICES),
         s("riptide"),
-        "Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme)"
+        "Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme); auto follows the light or dark preference"
     ),
     def!(
         "url.auto_search",

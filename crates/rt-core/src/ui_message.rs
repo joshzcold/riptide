@@ -22,6 +22,8 @@ pub enum UiMessage {
     BarHeight { bar: Bar, height: u32 },
     /// The overlay's row height for its fonts.
     RowHeight { height: u32 },
+    /// Whether pages are asked for dark colors, for `ui.theme = auto`.
+    ColorScheme { dark: bool },
 }
 
 /// Which bar a size is for.
@@ -36,7 +38,9 @@ impl UiMessage {
     pub fn is_input(&self) -> bool {
         !matches!(
             self,
-            UiMessage::BarHeight { .. } | UiMessage::RowHeight { .. }
+            UiMessage::BarHeight { .. }
+                | UiMessage::RowHeight { .. }
+                | UiMessage::ColorScheme { .. }
         )
     }
 }
@@ -58,6 +62,12 @@ struct Height {
 #[serde(deny_unknown_fields)]
 struct RowHeight {
     row_height: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Scheme {
+    dark: bool,
 }
 
 /// Sizes a page may ask for, in pixels.
@@ -143,6 +153,10 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             };
             Ok(UiMessage::BarHeight { bar, height })
         }
+        ("statusbar.html", "color-scheme") => {
+            let Scheme { dark } = payload(name, json)?;
+            Ok(UiMessage::ColorScheme { dark })
+        }
         ("completion.html", "size") => {
             let RowHeight { row_height } = payload(name, json)?;
             if !SIZES.contains(&row_height) {
@@ -216,6 +230,12 @@ mod tests {
             parse(overlay, "size", r#"{"row_height": 22}"#),
             Ok(UiMessage::RowHeight { height: 22 })
         );
+        let statusbar = "riptide://ui/statusbar.html";
+        assert_eq!(
+            parse(statusbar, "color-scheme", r#"{"dark": false}"#),
+            Ok(UiMessage::ColorScheme { dark: false })
+        );
+        assert!(parse(tabbar, "color-scheme", r#"{"dark": false}"#).is_err());
         assert!(parse(overlay, "prompt-key", r#"{"key": ""}"#).is_err());
         assert!(parse(tabbar, "bar-click", r#"{"x": 1}"#).is_err());
         assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());
