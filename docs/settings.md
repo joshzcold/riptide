@@ -11,7 +11,47 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
 | `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
 | `changelog_after_upgrade` | major \| minor \| patch \| never | `minor` | Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never |
+| `colors.completion.category.bg` | string | `` | Background of completion category headers; empty uses ui.theme's |
+| `colors.completion.category.fg` | string | `` | Text of completion category headers; empty uses ui.theme's |
+| `colors.completion.description.fg` | string | `` | Descriptions and details in the completion list; empty uses ui.theme's |
+| `colors.completion.fg` | string | `` | Completion list text; empty uses ui.theme's |
+| `colors.completion.item.selected.bg` | string | `` | Background of the selected completion; empty uses ui.theme's |
+| `colors.completion.item.selected.fg` | string | `` | Text of the selected completion; empty uses ui.theme's |
+| `colors.completion.odd.bg` | string | `` | Completion list background; empty uses ui.theme's |
+| `colors.hints.bg` | string | `` | Background of hint labels; empty uses ui.theme's |
+| `colors.hints.border` | string | `` | Border of hint labels; empty uses ui.theme's |
+| `colors.hints.fg` | string | `` | Text of hint labels; empty uses ui.theme's |
+| `colors.hints.match.fg` | string | `` | The typed part of hint labels; empty uses ui.theme's |
+| `colors.keyhint.suffix.fg` | string | `` | The keys still to type in the key hint popup; empty uses ui.theme's |
+| `colors.messages.error.bg` | string | `` | Background of error messages; empty uses ui.theme's |
+| `colors.messages.error.fg` | string | `` | Text of error messages; empty uses ui.theme's |
+| `colors.messages.warning.bg` | string | `` | Background of warnings; empty uses ui.theme's |
+| `colors.messages.warning.fg` | string | `` | Text of warnings; empty uses ui.theme's |
+| `colors.prompts.bg` | string | `` | Background of prompts; empty uses ui.theme's |
+| `colors.prompts.border` | string | `` | Frame, title and keys of floating prompts; empty uses ui.theme's |
+| `colors.prompts.fg` | string | `` | Text of prompts; empty uses ui.theme's |
+| `colors.prompts.key.bg` | string | `` | Background of a floating prompt's keys; empty uses ui.theme's |
+| `colors.statusbar.insert.bg` | string | `` | Status bar background in insert mode; empty uses ui.theme's |
+| `colors.statusbar.insert.fg` | string | `` | Status bar text in insert mode; empty uses ui.theme's |
+| `colors.statusbar.normal.bg` | string | `` | Status bar background; empty uses ui.theme's |
+| `colors.statusbar.normal.fg` | string | `` | Status bar text; empty uses ui.theme's |
+| `colors.statusbar.passthrough.bg` | string | `` | Status bar background in passthrough mode; empty uses ui.theme's |
+| `colors.statusbar.passthrough.fg` | string | `` | Status bar text in passthrough mode; empty uses ui.theme's |
+| `colors.statusbar.private.bg` | string | `` | Status bar background in private windows; empty uses ui.theme's |
+| `colors.statusbar.private.fg` | string | `` | Status bar text in private windows; empty uses ui.theme's |
+| `colors.statusbar.url.error.fg` | string | `` | The address of a page that failed to load; empty uses ui.theme's |
+| `colors.statusbar.url.success.http.fg` | string | `` | An http:// address in the status bar; empty uses ui.theme's |
+| `colors.statusbar.url.success.https.fg` | string | `` | An https:// address in the status bar; empty uses ui.theme's |
+| `colors.tabs.bar.bg` | string | `` | Tab bar background behind the tabs; empty uses ui.theme's |
+| `colors.tabs.even.bg` | string | `` | Background of even-numbered tabs; empty uses ui.theme's |
+| `colors.tabs.indicator.error` | string | `` | A tab's indicator when its page failed to load; empty uses ui.theme's |
+| `colors.tabs.indicator.start` | string | `` | A tab's loading indicator; empty uses ui.theme's |
+| `colors.tabs.odd.bg` | string | `` | Background of odd-numbered tabs; empty uses ui.theme's |
+| `colors.tabs.odd.fg` | string | `` | Text of tabs; empty uses ui.theme's |
+| `colors.tabs.pinned.odd.bg` | string | `` | Background of pinned tabs; empty uses ui.theme's |
 | `colors.tabs.selected.accent` | string | `` | Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows |
+| `colors.tabs.selected.odd.bg` | string | `` | Background of the current tab; empty uses ui.theme's |
+| `colors.tabs.selected.odd.fg` | string | `` | Text of the current tab; empty uses ui.theme's |
 | `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode (takes effect after a restart) |
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
 | `completion.cmd_history_max_items` | integer | `100` | How many command lines Up and Down remember |
@@ -147,6 +187,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.undo_stack_size` | integer | `100` | How many closed tabs u can reopen; 0 keeps none |
 | `tabs.width` | integer | `200` | Width of the tab bar in pixels when tabs.position is left or right |
 | `tabs.wrap` | boolean | `true` | Wrap around from the last tab to the first (and back) when switching tabs |
+| `ui.theme` | riptide \| riptide-light \| gruvbox-dark \| gruvbox-light \| catppuccin-mocha \| catppuccin-latte \| nord \| dracula \| solarized-dark \| solarized-light \| tokyo-night | `riptide` | Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme) |
 | `url.auto_search` | naive \| schemeless \| never | `naive` | When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never |
 | `url.default_page` | string | `https://start.duckduckgo.com/` | Page for :open without a URL |
 | `url.incdec_segments` | string[] | `["path","query"]` | Parts of the URL Ctrl-a and Ctrl-x change: host, port, path, query, anchor |

@@ -4,16 +4,21 @@
 <meta charset="utf-8">
 <style>
   :root {
-    --bg: #061826;
-    --fg: #e9f7f6;
-    --insert-bg: #0d6e5a;
-    --passthrough-bg: #24418f;
-    --error-bg: #b8323f;
-    --warning-bg: #a8651a;
-    --private-bg: #3b4a5a;
-    --https: #2ec4b6;
-    --http: #e9f7f6;
-    --error-fg: #f4c56a;
+    --bg: var(--rt-statusbar-bg, #061826);
+    --fg: var(--rt-statusbar-fg, #e9f7f6);
+    --insert-bg: var(--rt-statusbar-insert-bg, #0d6e5a);
+    --insert-fg: var(--rt-statusbar-insert-fg, #e9f7f6);
+    --passthrough-bg: var(--rt-statusbar-passthrough-bg, #24418f);
+    --passthrough-fg: var(--rt-statusbar-passthrough-fg, #e9f7f6);
+    --error-bg: var(--rt-messages-error-bg, #b8323f);
+    --error-msg-fg: var(--rt-messages-error-fg, #e9f7f6);
+    --warning-bg: var(--rt-messages-warning-bg, #a8651a);
+    --warning-msg-fg: var(--rt-messages-warning-fg, #e9f7f6);
+    --private-bg: var(--rt-statusbar-private-bg, #3b4a5a);
+    --private-fg: var(--rt-statusbar-private-fg, #e9f7f6);
+    --https: var(--rt-statusbar-https-fg, #2ec4b6);
+    --http: var(--rt-statusbar-http-fg, #e9f7f6);
+    --error-fg: var(--rt-statusbar-url-error-fg, #f4c56a);
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
   html, body {
@@ -34,11 +39,11 @@
     white-space: pre;
     gap: 1ch;
   }
-  #bar.private { background: var(--private-bg); }
-  #bar.insert { background: var(--insert-bg); }
-  #bar.passthrough { background: var(--passthrough-bg); }
-  #bar.msg-error { background: var(--error-bg); }
-  #bar.msg-warning { background: var(--warning-bg); }
+  #bar.private { background: var(--private-bg); color: var(--private-fg); }
+  #bar.insert { background: var(--insert-bg); color: var(--insert-fg); }
+  #bar.passthrough { background: var(--passthrough-bg); color: var(--passthrough-fg); }
+  #bar.msg-error { background: var(--error-bg); color: var(--error-msg-fg); }
+  #bar.msg-warning { background: var(--warning-bg); color: var(--warning-msg-fg); }
   #left, #right { line-height: 1.5; }
   #left { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #right { display: flex; gap: 1ch; flex-shrink: 1; min-width: 0; overflow: hidden; }
@@ -131,7 +136,21 @@
     for (const el of document.querySelectorAll(".clock")) el.textContent = strftime(el.dataset.format, new Date());
   }, 1000);
 
+
+  // ui.theme and colors.*: the browser sends them as --rt-<token> variables.
+  let appliedTheme = "";
+  function applyTheme(theme) {
+    if (!theme) return;
+    const key = JSON.stringify(theme);
+    if (key === appliedTheme) return;
+    appliedTheme = key;
+    for (const [token, color] of Object.entries(theme)) {
+      document.documentElement.style.setProperty(`--rt-${token}`, color);
+    }
+  }
+
   window.rtRender = (state) => {
+    applyTheme(state.theme);
     const bar = $("bar");
     const left = $("left");
     bar.className = state.mode;

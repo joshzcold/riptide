@@ -20,6 +20,7 @@ pub mod prompt;
 pub mod settings;
 pub mod shell_words;
 pub mod tabs;
+pub mod theme;
 pub mod title;
 pub mod ui_message;
 pub mod url;

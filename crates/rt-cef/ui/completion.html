@@ -4,13 +4,20 @@
 <meta charset="utf-8">
 <style>
   :root {
-    --bg: #0b2a3f;
-    --fg: #e9f7f6;
-    --header-bg: #061826;
-    --desc-fg: #8fb3c4;
-    --selected-bg: #2ec4b6;
-    --selected-fg: #061826;
-    --keyhint-fg: #2ec4b6;
+    --bg: var(--rt-completion-bg, #0b2a3f);
+    --fg: var(--rt-completion-fg, #e9f7f6);
+    --header-bg: var(--rt-completion-category-bg, #061826);
+    --header-fg: var(--rt-completion-category-fg, #e9f7f6);
+    --desc-fg: var(--rt-completion-description-fg, #8fb3c4);
+    --selected-bg: var(--rt-completion-selected-bg, #2ec4b6);
+    --selected-fg: var(--rt-completion-selected-fg, #061826);
+    --keyhint-fg: var(--rt-keyhint-fg, #2ec4b6);
+    --error-bg: var(--rt-messages-error-bg, #b8323f);
+    --error-fg: var(--rt-messages-error-fg, #e9f7f6);
+    --warning-bg: var(--rt-messages-warning-bg, #a8651a);
+    --warning-fg: var(--rt-messages-warning-fg, #e9f7f6);
+    --prompt-bg: var(--rt-prompts-bg, #0b2a3f);
+    --prompt-fg: var(--rt-prompts-fg, #e9f7f6);
     --row-height: 18px;
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
@@ -31,15 +38,15 @@
     padding: 0 4px;
     white-space: pre;
   }
-  .header { background: var(--header-bg); font-weight: bold; }
+  .header { background: var(--header-bg); color: var(--header-fg); font-weight: bold; }
   .keyhints { display: grid; grid-auto-flow: column; grid-auto-columns: 40ch; }
   .keyhint { height: var(--row-height); line-height: var(--row-height); padding: 0 4px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
   .keyhint .rest { margin-right: 1ch; }
   .keyhint .typed { color: var(--desc-fg); }
   .keyhint .rest { color: var(--keyhint-fg); font-weight: bold; }
-  .message { background: #061826; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
-  .message.error { background: #b8323f; }
-  .message.warning { background: #a8651a; }
+  .message { background: var(--header-bg); color: var(--header-fg); overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+  .message.error { background: var(--error-bg); color: var(--error-fg); }
+  .message.warning { background: var(--warning-bg); color: var(--warning-fg); }
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
@@ -55,15 +62,17 @@
     max-height: calc(var(--row-height) * 8);
     overflow: hidden;
   }
-  .prompt-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: #061826; }
+  .prompt-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: var(--header-bg); }
   .prompt-hint { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); color: var(--desc-fg); }
   .cursor { background: var(--fg); color: var(--bg); }
   /* A floating prompt: the overlay view is the box, so frame it and pad it.
      Amber marks it as a question without shouting. */
-  :root { --prompt-accent: #d9b44a; --prompt-key-bg: #3a3420; }
+  :root { --prompt-accent: var(--rt-prompts-border, #d9b44a); --prompt-key-bg: var(--rt-prompts-key-bg, #3a3420); }
   body.floating {
     box-sizing: border-box;
     padding: 11px;
+    background: var(--prompt-bg);
+    color: var(--prompt-fg);
     border: 1px solid var(--prompt-accent);
     border-left-width: 4px;
     padding-left: 8px;
@@ -79,7 +88,7 @@
     height: 22px;
     padding: 0 4px;
     font: var(--font);
-    color: var(--fg);
+    color: var(--prompt-fg);
     cursor: pointer;
   }
   .prompt-option:hover { background: var(--prompt-key-bg); }
@@ -183,7 +192,21 @@
   // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format},
   // where rows are {header}, {name, description, detail, time, selected}, or {message, level}
   // for messages older than the one in the status bar.
+
+  // ui.theme and colors.*: the browser sends them as --rt-<token> variables.
+  let appliedTheme = "";
+  function applyTheme(theme) {
+    if (!theme) return;
+    const key = JSON.stringify(theme);
+    if (key === appliedTheme) return;
+    appliedTheme = key;
+    for (const [token, color] of Object.entries(theme)) {
+      document.documentElement.style.setProperty(`--rt-${token}`, color);
+    }
+  }
+
   window.rtRender = (payload) => {
+    applyTheme(payload.theme);
     const list = document.getElementById("list");
     // prompt.position = bottom: a framed box floating over the page.
     document.body.classList.toggle("floating", payload.kind === "prompt" && !!payload.floating);

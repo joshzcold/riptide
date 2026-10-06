@@ -1020,7 +1020,10 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     let expire_message = expire_message.filter(|_| timeout > 0);
 
     let current = s.tabs.current();
+    // ui.theme and colors.*, sent with every bar's update.
+    let theme = json!(rt_core::theme::resolve(s.engine.settings()));
     let status_json = json!({
+        "theme": theme,
         "mode": status.mode,
         "command_line": status.command_line,
         "keystring": status.keystring,
@@ -1093,6 +1096,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         })
         .collect();
     let tabbar_json = json!({
+        "theme": theme,
         "tabs": tabs,
         "current": s.tabs.current_index(),
         "shrink": settings.bool("tabs.pinned.shrink"),
@@ -1193,6 +1197,8 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         None => (json!({ "kind": "rows", "rows": [] }), 0),
     };
     let is_prompt = payload["kind"] == "prompt";
+    let mut payload = payload;
+    payload["theme"] = theme;
     let payload = payload.to_string();
     let overlay_changed = payload != s.last_overlay;
     if s.completion_ready

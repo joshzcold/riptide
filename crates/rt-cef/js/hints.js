@@ -9,16 +9,16 @@
       position: fixed;
       z-index: 2147483647;
       padding: 0 3px;
-      border: 1px solid #e3be23;
+      border: 1px solid var(--rt-hints-border, #e3be23);
       border-radius: 3px;
-      background: linear-gradient(to bottom, #fff785, #ffc542);
-      color: #000;
+      background: var(--rt-hints-bg, #ffc542);
+      color: var(--rt-hints-fg, #000);
       font: bold 10pt "DejaVu Sans Mono", monospace;
       line-height: 1.2;
       pointer-events: none;
       white-space: pre;
     }
-    .matched { color: #008000; }
+    .matched { color: var(--rt-hints-match-fg, #006400); }
   `;
 
   // Each hintable element with the iframes it sits in, outermost first:
@@ -153,9 +153,11 @@
       });
     },
 
-    show(texts, uppercase) {
+    show(texts, uppercase, theme = {}) {
       clear();
       host = document.createElement("rt-hints");
+      // The theme's hint colors, inherited into the shadow root.
+      for (const [token, color] of Object.entries(theme)) host.style.setProperty(`--rt-${token}`, color);
       const root = host.attachShadow({ mode: "closed" });
       const style = document.createElement("style");
       style.textContent = STYLE;

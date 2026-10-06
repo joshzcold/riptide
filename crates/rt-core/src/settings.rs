@@ -339,6 +339,17 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+fn color(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(text) if !text.trim().is_empty() && !crate::theme::is_color(text) => {
+            Err(format!(
+                "{text:?} isn't a color: use #rrggbb, rgb(…), a color name, or empty for the theme's"
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn log_levels(value: &Value) -> Result<(), String> {
     const LEVELS: &[&str] = &["debug", "info", "warning", "error"];
     match value {
@@ -477,10 +488,290 @@ pub static SETTINGS: &[SettingDef] = &[
         "Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never"
     ),
     def!(
+        "colors.completion.category.bg",
+        Kind::Str,
+        s(""),
+        "Background of completion category headers; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.category.fg",
+        Kind::Str,
+        s(""),
+        "Text of completion category headers; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.description.fg",
+        Kind::Str,
+        s(""),
+        "Descriptions and details in the completion list; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.fg",
+        Kind::Str,
+        s(""),
+        "Completion list text; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.item.selected.bg",
+        Kind::Str,
+        s(""),
+        "Background of the selected completion; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.item.selected.fg",
+        Kind::Str,
+        s(""),
+        "Text of the selected completion; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.completion.odd.bg",
+        Kind::Str,
+        s(""),
+        "Completion list background; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.hints.bg",
+        Kind::Str,
+        s(""),
+        "Background of hint labels; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.hints.border",
+        Kind::Str,
+        s(""),
+        "Border of hint labels; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.hints.fg",
+        Kind::Str,
+        s(""),
+        "Text of hint labels; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.hints.match.fg",
+        Kind::Str,
+        s(""),
+        "The typed part of hint labels; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.keyhint.suffix.fg",
+        Kind::Str,
+        s(""),
+        "The keys still to type in the key hint popup; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.messages.error.bg",
+        Kind::Str,
+        s(""),
+        "Background of error messages; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.messages.error.fg",
+        Kind::Str,
+        s(""),
+        "Text of error messages; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.messages.warning.bg",
+        Kind::Str,
+        s(""),
+        "Background of warnings; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.messages.warning.fg",
+        Kind::Str,
+        s(""),
+        "Text of warnings; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.prompts.bg",
+        Kind::Str,
+        s(""),
+        "Background of prompts; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.prompts.border",
+        Kind::Str,
+        s(""),
+        "Frame, title and keys of floating prompts; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.prompts.fg",
+        Kind::Str,
+        s(""),
+        "Text of prompts; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.prompts.key.bg",
+        Kind::Str,
+        s(""),
+        "Background of a floating prompt's keys; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.insert.bg",
+        Kind::Str,
+        s(""),
+        "Status bar background in insert mode; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.insert.fg",
+        Kind::Str,
+        s(""),
+        "Status bar text in insert mode; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.normal.bg",
+        Kind::Str,
+        s(""),
+        "Status bar background; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.normal.fg",
+        Kind::Str,
+        s(""),
+        "Status bar text; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.passthrough.bg",
+        Kind::Str,
+        s(""),
+        "Status bar background in passthrough mode; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.passthrough.fg",
+        Kind::Str,
+        s(""),
+        "Status bar text in passthrough mode; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.private.bg",
+        Kind::Str,
+        s(""),
+        "Status bar background in private windows; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.private.fg",
+        Kind::Str,
+        s(""),
+        "Status bar text in private windows; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.url.error.fg",
+        Kind::Str,
+        s(""),
+        "The address of a page that failed to load; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.url.success.http.fg",
+        Kind::Str,
+        s(""),
+        "An http:// address in the status bar; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.statusbar.url.success.https.fg",
+        Kind::Str,
+        s(""),
+        "An https:// address in the status bar; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.bar.bg",
+        Kind::Str,
+        s(""),
+        "Tab bar background behind the tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.even.bg",
+        Kind::Str,
+        s(""),
+        "Background of even-numbered tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.indicator.error",
+        Kind::Str,
+        s(""),
+        "A tab's indicator when its page failed to load; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.indicator.start",
+        Kind::Str,
+        s(""),
+        "A tab's loading indicator; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.odd.bg",
+        Kind::Str,
+        s(""),
+        "Background of odd-numbered tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.odd.fg",
+        Kind::Str,
+        s(""),
+        "Text of tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.pinned.odd.bg",
+        Kind::Str,
+        s(""),
+        "Background of pinned tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
         "colors.tabs.selected.accent",
         Kind::Str,
         s(""),
         "Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows"
+    ),
+    def!(
+        "colors.tabs.selected.odd.bg",
+        Kind::Str,
+        s(""),
+        "Background of the current tab; empty uses ui.theme's",
+        color
+    ),
+    def!(
+        "colors.tabs.selected.odd.fg",
+        Kind::Str,
+        s(""),
+        "Text of the current tab; empty uses ui.theme's",
+        color
     ),
     def!(
         "colors.webpage.darkmode.enabled",
@@ -1393,6 +1684,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Bool,
         Value::Bool(true),
         "Wrap around from the last tab to the first (and back) when switching tabs"
+    ),
+    def!(
+        "ui.theme",
+        Kind::Enum(crate::theme::THEMES),
+        s("riptide"),
+        "Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme)"
     ),
     def!(
         "url.auto_search",

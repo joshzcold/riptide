@@ -87,6 +87,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-mute` | `<Alt-m>` | Mute or unmute this tab (Alt-m) |
 | `:messages` |  | Show this session's messages |
 | `:repeat-command` | `.` | Run the last command again (.) |
+| `:theme` |  | Switch the color theme (ui.theme), or list the themes: :theme [name] |
 | `:cmd-repeat-last` |  | Run the last command again, as . does |
 | `:cmd-repeat` |  | Run a command several times: :cmd-repeat N command |
 | `:cmd-run-with-count` |  | Run a command with a count, multiplied by any count typed first: :cmd-run-with-count N command |

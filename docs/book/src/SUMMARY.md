@@ -18,6 +18,7 @@
 
 - [Config files](configuration/files.md)
 - [Lua](configuration/lua.md)
+- [Themes and colors](configuration/themes.md)
 
 # Reference
 

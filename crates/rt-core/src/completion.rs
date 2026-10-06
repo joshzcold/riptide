@@ -174,6 +174,24 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
     };
     let kind = match parsed.command {
         "set" => return complete_set(&parsed, settings),
+        "theme" => {
+            let current = settings.str("ui.theme");
+            return crate::theme::THEMES
+                .iter()
+                .filter(|t| t.starts_with(parsed.pattern))
+                .map(|t| Completion {
+                    category: "Themes",
+                    name: t.to_string(),
+                    description: if *t == current {
+                        "current".into()
+                    } else {
+                        String::new()
+                    },
+                    time: None,
+                    detail: None,
+                })
+                .collect();
+        }
         "open" => CompletionKind::Url,
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,

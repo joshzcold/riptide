@@ -418,6 +418,10 @@ pub enum Command {
     Messages,
     /// Run the last command again (`.`).
     RepeatCommand,
+    /// `:theme [name]`: switch `ui.theme`, or list the themes.
+    Theme {
+        name: Option<String>,
+    },
     /// `:cmd-repeat N command`: run `command` N times.
     CmdRepeat {
         times: u32,
@@ -872,6 +876,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
+    spec(
+        "theme",
+        "Switch the color theme (ui.theme), or list the themes: :theme [name]",
+    ),
     spec("cmd-repeat-last", "Run the last command again, as . does"),
     spec(
         "cmd-repeat",
@@ -1535,6 +1543,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-mute" => Command::TabMute,
         "messages" => Command::Messages,
         "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,
+        "theme" => Command::Theme {
+            name: args.optional().map(String::from),
+        },
         which @ ("cmd-repeat" | "cmd-run-with-count") => {
             let n: u32 = args
                 .required("count")?

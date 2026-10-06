@@ -1,0 +1,436 @@
+//! Themes: the colors of riptide's own bars, overlay, prompts and hint
+//! labels. A theme is a small palette that every color token is derived
+//! from; `colors.*` settings override single tokens. The UI pages read the
+//! tokens as `--rt-<token>` CSS variables.
+
+use std::collections::BTreeMap;
+
+use crate::settings::Settings;
+
+/// Every token, with the `colors.*` setting that overrides it.
+pub const TOKENS: &[(&str, &str)] = &[
+    ("statusbar-bg", "colors.statusbar.normal.bg"),
+    ("statusbar-fg", "colors.statusbar.normal.fg"),
+    ("statusbar-insert-bg", "colors.statusbar.insert.bg"),
+    ("statusbar-insert-fg", "colors.statusbar.insert.fg"),
+    (
+        "statusbar-passthrough-bg",
+        "colors.statusbar.passthrough.bg",
+    ),
+    (
+        "statusbar-passthrough-fg",
+        "colors.statusbar.passthrough.fg",
+    ),
+    ("statusbar-private-bg", "colors.statusbar.private.bg"),
+    ("statusbar-private-fg", "colors.statusbar.private.fg"),
+    (
+        "statusbar-https-fg",
+        "colors.statusbar.url.success.https.fg",
+    ),
+    ("statusbar-http-fg", "colors.statusbar.url.success.http.fg"),
+    ("statusbar-url-error-fg", "colors.statusbar.url.error.fg"),
+    ("messages-error-bg", "colors.messages.error.bg"),
+    ("messages-error-fg", "colors.messages.error.fg"),
+    ("messages-warning-bg", "colors.messages.warning.bg"),
+    ("messages-warning-fg", "colors.messages.warning.fg"),
+    ("tabs-bar-bg", "colors.tabs.bar.bg"),
+    ("tabs-odd-bg", "colors.tabs.odd.bg"),
+    ("tabs-even-bg", "colors.tabs.even.bg"),
+    ("tabs-fg", "colors.tabs.odd.fg"),
+    ("tabs-selected-bg", "colors.tabs.selected.odd.bg"),
+    ("tabs-selected-fg", "colors.tabs.selected.odd.fg"),
+    ("tabs-pinned-bg", "colors.tabs.pinned.odd.bg"),
+    ("tabs-indicator-start", "colors.tabs.indicator.start"),
+    ("tabs-indicator-error", "colors.tabs.indicator.error"),
+    ("completion-bg", "colors.completion.odd.bg"),
+    ("completion-fg", "colors.completion.fg"),
+    ("completion-category-bg", "colors.completion.category.bg"),
+    ("completion-category-fg", "colors.completion.category.fg"),
+    (
+        "completion-description-fg",
+        "colors.completion.description.fg",
+    ),
+    (
+        "completion-selected-bg",
+        "colors.completion.item.selected.bg",
+    ),
+    (
+        "completion-selected-fg",
+        "colors.completion.item.selected.fg",
+    ),
+    ("keyhint-fg", "colors.keyhint.suffix.fg"),
+    ("prompts-bg", "colors.prompts.bg"),
+    ("prompts-fg", "colors.prompts.fg"),
+    ("prompts-border", "colors.prompts.border"),
+    ("prompts-key-bg", "colors.prompts.key.bg"),
+    ("hints-bg", "colors.hints.bg"),
+    ("hints-fg", "colors.hints.fg"),
+    ("hints-border", "colors.hints.border"),
+    ("hints-match-fg", "colors.hints.match.fg"),
+];
+
+/// Pairs of text and background tokens that must stay readable.
+pub const TEXT_PAIRS: &[(&str, &str)] = &[
+    ("statusbar-fg", "statusbar-bg"),
+    ("statusbar-insert-fg", "statusbar-insert-bg"),
+    ("statusbar-passthrough-fg", "statusbar-passthrough-bg"),
+    ("statusbar-private-fg", "statusbar-private-bg"),
+    ("messages-error-fg", "messages-error-bg"),
+    ("messages-warning-fg", "messages-warning-bg"),
+    ("tabs-fg", "tabs-odd-bg"),
+    ("tabs-fg", "tabs-even-bg"),
+    ("tabs-selected-fg", "tabs-selected-bg"),
+    ("completion-fg", "completion-bg"),
+    ("completion-category-fg", "completion-category-bg"),
+    ("completion-selected-fg", "completion-selected-bg"),
+    ("prompts-fg", "prompts-bg"),
+    ("hints-fg", "hints-bg"),
+];
+
+/// A theme's base colors, as `#rrggbb`.
+struct Palette {
+    /// Darkest background: the status bar and headers.
+    base: &'static str,
+    /// Main background: the overlay and the tab bar.
+    surface: &'static str,
+    /// Alternating tabs.
+    surface2: &'static str,
+    surface3: &'static str,
+    fg: &'static str,
+    muted: &'static str,
+    accent: &'static str,
+    yellow: &'static str,
+    red: &'static str,
+    orange: &'static str,
+    green: &'static str,
+    blue: &'static str,
+}
+
+/// The built-in themes, `ui.theme`'s choices. `riptide` keeps the colors
+/// riptide had before themes.
+pub const THEMES: &[&str] = &[
+    "riptide",
+    "riptide-light",
+    "gruvbox-dark",
+    "gruvbox-light",
+    "catppuccin-mocha",
+    "catppuccin-latte",
+    "nord",
+    "dracula",
+    "solarized-dark",
+    "solarized-light",
+    "tokyo-night",
+];
+
+fn palette(name: &str) -> Option<Palette> {
+    let p =
+        |base, surface, surface2, surface3, fg, muted, accent, yellow, red, orange, green, blue| {
+            Palette {
+                base,
+                surface,
+                surface2,
+                surface3,
+                fg,
+                muted,
+                accent,
+                yellow,
+                red,
+                orange,
+                green,
+                blue,
+            }
+        };
+    Some(match name {
+        "riptide" => p(
+            "#061826", "#0b2a3f", "#12364f", "#164260", "#e9f7f6", "#8fb3c4", "#2ec4b6", "#d9b44a",
+            "#b8323f", "#a8651a", "#0d6e5a", "#24418f",
+        ),
+        "riptide-light" => p(
+            "#d7e6ec", "#eef5f7", "#e2edf1", "#d5e4ea", "#0b2a3f", "#4b6a7a", "#0f8a80", "#9a7210",
+            "#b8323f", "#a8651a", "#1f7a5a", "#2d55b0",
+        ),
+        "gruvbox-dark" => p(
+            "#1d2021", "#282828", "#32302f", "#3c3836", "#ebdbb2", "#a89984", "#83a598", "#fabd2f",
+            "#cc241d", "#d65d0e", "#98971a", "#458588",
+        ),
+        "gruvbox-light" => p(
+            "#ebdbb2", "#fbf1c7", "#f2e5bc", "#ebdbb2", "#3c3836", "#7c6f64", "#076678", "#b57614",
+            "#9d0006", "#af3a03", "#79740e", "#076678",
+        ),
+        "catppuccin-mocha" => p(
+            "#11111b", "#1e1e2e", "#313244", "#45475a", "#cdd6f4", "#a6adc8", "#89b4fa", "#f9e2af",
+            "#f38ba8", "#fab387", "#a6e3a1", "#89b4fa",
+        ),
+        "catppuccin-latte" => p(
+            "#dce0e8", "#eff1f5", "#e6e9ef", "#ccd0da", "#4c4f69", "#6c6f85", "#1e66f5", "#df8e1d",
+            "#d20f39", "#fe640b", "#40a02b", "#1e66f5",
+        ),
+        "nord" => p(
+            "#242933", "#2e3440", "#3b4252", "#434c5e", "#eceff4", "#a3abb9", "#88c0d0", "#ebcb8b",
+            "#bf616a", "#d08770", "#a3be8c", "#5e81ac",
+        ),
+        "dracula" => p(
+            "#191a21", "#282a36", "#343746", "#44475a", "#f8f8f2", "#a6accd", "#bd93f9", "#f1fa8c",
+            "#ff5555", "#ffb86c", "#50fa7b", "#6272a4",
+        ),
+        "solarized-dark" => p(
+            "#00212b", "#002b36", "#073642", "#0a4050", "#eee8d5", "#93a1a1", "#268bd2", "#b58900",
+            "#dc322f", "#cb4b16", "#859900", "#268bd2",
+        ),
+        "solarized-light" => p(
+            "#eee8d5", "#fdf6e3", "#f5efdc", "#eee8d5", "#073642", "#586e75", "#268bd2", "#b58900",
+            "#dc322f", "#cb4b16", "#859900", "#268bd2",
+        ),
+        "tokyo-night" => p(
+            "#16161e", "#1a1b26", "#24283b", "#292e42", "#c0caf5", "#9aa5ce", "#7aa2f7", "#e0af68",
+            "#f7768e", "#ff9e64", "#9ece6a", "#7aa2f7",
+        ),
+        _ => return None,
+    })
+}
+
+/// The tokens of built-in theme `name`.
+pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
+    let p = palette(name)?;
+    let readable = |bg: &str| best_text(bg, &[p.fg, p.base, "#000000", "#ffffff"]);
+    let mut t: BTreeMap<&'static str, String> = BTreeMap::new();
+    let mut set = |k: &'static str, v: &str| {
+        t.insert(k, v.to_string());
+    };
+    set("statusbar-bg", p.base);
+    set("statusbar-fg", p.fg);
+    set("statusbar-insert-bg", p.green);
+    set("statusbar-insert-fg", &readable(p.green));
+    set("statusbar-passthrough-bg", p.blue);
+    set("statusbar-passthrough-fg", &readable(p.blue));
+    set("statusbar-private-bg", p.surface3);
+    set("statusbar-private-fg", &readable(p.surface3));
+    set(
+        "statusbar-https-fg",
+        &best_text(p.base, &[p.accent, p.green, p.fg]),
+    );
+    set("statusbar-http-fg", p.fg);
+    set(
+        "statusbar-url-error-fg",
+        &best_text(p.base, &[p.yellow, p.orange, p.fg]),
+    );
+    set("messages-error-bg", p.red);
+    set("messages-error-fg", &readable(p.red));
+    set("messages-warning-bg", p.orange);
+    set("messages-warning-fg", &readable(p.orange));
+    set("tabs-bar-bg", p.surface);
+    set("tabs-odd-bg", p.surface2);
+    set("tabs-even-bg", p.surface3);
+    set("tabs-fg", p.fg);
+    set("tabs-selected-bg", p.base);
+    set("tabs-selected-fg", &readable(p.base));
+    set("tabs-pinned-bg", p.blue);
+    set("tabs-indicator-start", p.accent);
+    set("tabs-indicator-error", p.red);
+    set("completion-bg", p.surface);
+    set("completion-fg", p.fg);
+    set("completion-category-bg", p.base);
+    set("completion-category-fg", p.fg);
+    set("completion-description-fg", p.muted);
+    set("completion-selected-bg", p.accent);
+    set("completion-selected-fg", &readable(p.accent));
+    set("keyhint-fg", p.accent);
+    set("prompts-bg", p.surface);
+    set("prompts-fg", p.fg);
+    set("prompts-border", p.yellow);
+    set("prompts-key-bg", &mix(p.surface, p.yellow, 0.18));
+    set("hints-bg", p.yellow);
+    set("hints-fg", &readable(p.yellow));
+    set("hints-border", &mix(p.yellow, "#000000", 0.25));
+    set(
+        "hints-match-fg",
+        &best_text(p.yellow, &[p.green, p.blue, p.red, "#008000"]),
+    );
+    // The riptide theme's exact colors from before themes.
+    if name == "riptide" {
+        for (k, v) in [
+            ("tabs-selected-bg", "#04121c"),
+            ("tabs-selected-fg", "#ffffff"),
+            ("tabs-pinned-bg", "#1b5e86"),
+            ("tabs-indicator-start", "#8fe3dc"),
+            ("tabs-indicator-error", "#ff6b6b"),
+            ("statusbar-private-bg", "#3b4a5a"),
+            ("statusbar-url-error-fg", "#f4c56a"),
+            ("hints-bg", "#ffc542"),
+            ("hints-fg", "#000000"),
+            ("hints-border", "#e3be23"),
+            ("hints-match-fg", "#006400"),
+        ] {
+            t.insert(k, v.to_string());
+        }
+    }
+    Some(t)
+}
+
+/// The colors to use: `ui.theme`, with any `colors.*` setting on top.
+pub fn resolve(settings: &Settings) -> BTreeMap<&'static str, String> {
+    let mut colors = theme(settings.str("ui.theme"))
+        .or_else(|| theme("riptide"))
+        .unwrap_or_default();
+    for (token, setting) in TOKENS {
+        let value = settings.str(setting).trim();
+        if !value.is_empty() {
+            colors.insert(token, value.to_string());
+        }
+    }
+    colors
+}
+
+/// Whether `text` is a CSS color riptide accepts in a `colors.*` setting:
+/// `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb(…)`/`rgba(…)`/`hsl(…)`, or a name.
+pub fn is_color(text: &str) -> bool {
+    let text = text.trim();
+    if let Some(hex) = text.strip_prefix('#') {
+        return matches!(hex.len(), 3 | 4 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
+    }
+    if let Some((function, rest)) = text.split_once('(') {
+        return matches!(function, "rgb" | "rgba" | "hsl" | "hsla")
+            && rest.ends_with(')')
+            && rest[..rest.len() - 1]
+                .chars()
+                .all(|c| c.is_ascii_digit() || " ,.%/".contains(c));
+    }
+    !text.is_empty() && text.chars().all(|c| c.is_ascii_alphabetic())
+}
+
+fn rgb(hex: &str) -> Option<(f64, f64, f64)> {
+    let hex = hex.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok().map(f64::from);
+    Some((byte(0)?, byte(2)?, byte(4)?))
+}
+
+/// WCAG relative luminance of a `#rrggbb` color.
+fn luminance(hex: &str) -> f64 {
+    let Some((r, g, b)) = rgb(hex) else {
+        return 0.0;
+    };
+    let channel = |c: f64| {
+        let c = c / 255.0;
+        if c <= 0.03928 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+/// WCAG contrast ratio between two `#rrggbb` colors, from 1 to 21.
+pub fn contrast(a: &str, b: &str) -> f64 {
+    let (la, lb) = (luminance(a), luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+}
+
+/// The first of `candidates` readable on `bg` (WCAG AA, 4.5:1), or else the most readable.
+fn best_text(bg: &str, candidates: &[&str]) -> String {
+    candidates
+        .iter()
+        .find(|c| contrast(c, bg) >= 4.5)
+        .or_else(|| {
+            candidates
+                .iter()
+                .max_by(|a, b| contrast(a, bg).total_cmp(&contrast(b, bg)))
+        })
+        .map_or_else(|| "#ffffff".to_string(), |c| c.to_string())
+}
+
+/// `a` moved `amount` (0 to 1) of the way to `b`.
+fn mix(a: &str, b: &str, amount: f64) -> String {
+    let (Some((ar, ag, ab)), Some((br, bg, bb))) = (rgb(a), rgb(b)) else {
+        return a.to_string();
+    };
+    let m = |x: f64, y: f64| (x + (y - x) * amount).round() as u8;
+    format!("#{:02x}{:02x}{:02x}", m(ar, br), m(ag, bg), m(ab, bb))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_theme_defines_every_token_with_valid_colors() {
+        for name in THEMES {
+            let t = theme(name).unwrap_or_else(|| panic!("{name} has no palette"));
+            for (token, _) in TOKENS {
+                let color = t
+                    .get(token)
+                    .unwrap_or_else(|| panic!("{name} lacks {token}"));
+                assert!(rgb(color).is_some(), "{name}: {token} = {color}");
+            }
+            assert_eq!(
+                t.len(),
+                TOKENS.len(),
+                "{name} has tokens that aren't in TOKENS"
+            );
+        }
+    }
+
+    #[test]
+    fn every_theme_keeps_its_text_readable() {
+        for name in THEMES {
+            let t = theme(name).unwrap();
+            for (fg, bg) in TEXT_PAIRS {
+                let ratio = contrast(&t[fg], &t[bg]);
+                assert!(
+                    ratio >= 4.5,
+                    "{name}: {fg} {} on {bg} {} is only {ratio:.2}:1",
+                    t[fg],
+                    t[bg]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn settings_override_the_theme() {
+        let mut settings = Settings::default();
+        assert_eq!(resolve(&settings)["statusbar-bg"], "#061826");
+        settings
+            .set("ui.theme", crate::settings::Value::Str("nord".into()))
+            .unwrap();
+        assert_eq!(resolve(&settings)["statusbar-bg"], "#242933");
+        settings
+            .set(
+                "colors.statusbar.normal.bg",
+                crate::settings::Value::Str("#123456".into()),
+            )
+            .unwrap();
+        assert_eq!(resolve(&settings)["statusbar-bg"], "#123456");
+    }
+
+    #[test]
+    fn colors() {
+        for good in [
+            "#fff",
+            "#a1b2c3",
+            "#a1b2c3cc",
+            "rgb(1, 2, 3)",
+            "rgba(1,2,3,0.5)",
+            "hsl(120, 50%, 50%)",
+            "teal",
+        ] {
+            assert!(is_color(good), "{good}");
+        }
+        for bad in [
+            "",
+            "#12",
+            "#ggg",
+            "rgb(1;2)",
+            "url(x)",
+            "red;",
+            "expression(alert(1))",
+        ] {
+            assert!(!is_color(bad), "{bad}");
+        }
+        assert!((contrast("#000000", "#ffffff") - 21.0).abs() < 0.01);
+        assert_eq!(mix("#000000", "#ffffff", 0.5), "#808080");
+    }
+}

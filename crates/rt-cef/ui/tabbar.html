@@ -4,18 +4,18 @@
 <meta charset="utf-8">
 <style>
   :root {
-    --bar-bg: #0b2a3f;
-    --odd-bg: #12364f;
-    --even-bg: #164260;
-    --fg: #e9f7f6;
+    --bar-bg: var(--rt-tabs-bar-bg, #0b2a3f);
+    --odd-bg: var(--rt-tabs-odd-bg, #12364f);
+    --even-bg: var(--rt-tabs-even-bg, #164260);
+    --fg: var(--rt-tabs-fg, #e9f7f6);
     /* The current tab is the darkest. Its accent line is the same color
        unless colors.tabs.selected.accent sets one. */
-    --selected-bg: #04121c;
-    --selected-fg: #ffffff;
+    --selected-bg: var(--rt-tabs-selected-bg, #04121c);
+    --selected-fg: var(--rt-tabs-selected-fg, #ffffff);
     --selected-accent: var(--selected-bg);
-    --pinned-bg: #1b5e86;
-    --indicator-loading: #8fe3dc;
-    --indicator-error: #ff6b6b;
+    --pinned-bg: var(--rt-tabs-pinned-bg, #1b5e86);
+    --indicator-loading: var(--rt-tabs-indicator-start, #8fe3dc);
+    --indicator-error: var(--rt-tabs-indicator-error, #ff6b6b);
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
   html, body {
@@ -213,7 +213,21 @@
     return el;
   }
 
+
+  // ui.theme and colors.*: the browser sends them as --rt-<token> variables.
+  let appliedTheme = "";
+  function applyTheme(theme) {
+    if (!theme) return;
+    const key = JSON.stringify(theme);
+    if (key === appliedTheme) return;
+    appliedTheme = key;
+    for (const [token, color] of Object.entries(theme)) {
+      document.documentElement.style.setProperty(`--rt-${token}`, color);
+    }
+  }
+
   window.rtRender = (payload) => {
+    applyTheme(payload.theme);
     // Replacing the tabs mid-drag would drop the one being dragged.
     if (press?.dragging) {
       deferred = payload;

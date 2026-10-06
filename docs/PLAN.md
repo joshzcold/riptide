@@ -762,6 +762,10 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
 
 Today the bar colors are hardcoded CSS variables in each UI page; the Riptide palette landed on 2026-10-05.
 
+- ✅ (2026-10-06) **Phase 1, themes and colors:**
+  - `rt_core::theme`: 40 tokens, each overridable by a `colors.*` setting (qutebrowser's names where they exist), sent to the tab bar, status bar and overlay as `--rt-<token>` CSS variables with their updates, and to hint labels.
+  - Eleven built-in themes from small palettes (`ui.theme`, `:theme` with completion). Text colors on coloured backgrounds are picked for contrast; unit tests check that every theme defines every token and that every text pair reaches WCAG AA. The `riptide` theme keeps the exact colors from before.
+  - e2e test in `crates/rt-e2e/tests/themes.rs`; checked by screenshot in three themes. Not yet: `ui.theme = auto`, a live preview while picking, user theme files, importers, and the downloads/history pages.
 - **One token set:** named tokens (bg, fg, accent, selected, insert, passthrough, private, warning, error, https, http, hint fg/bg/border, prompt, completion, downloads, keyhint) feed every UI page as CSS variables. They're sent over the UI channel (M13), so a change applies live without reloading anything.
 - **Settings:**
   - `colors.*` uses qutebrowser's names where they map (`colors.statusbar.insert.bg`, `colors.tabs.selected.odd.bg`, `colors.hints.bg`, `colors.completion.item.selected.bg`, `colors.messages.error.bg`, `colors.webpage.bg`…) and overrides the theme's tokens one by one.

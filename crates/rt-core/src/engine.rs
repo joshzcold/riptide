@@ -1546,6 +1546,14 @@ impl Engine {
                     self.show_message(Level::Error, "No command to repeat yet");
                 }
             },
+            Command::Theme { name: Some(name) } => {
+                effects.extend(self.execute_str(&format!("set ui.theme {name}"), None));
+            }
+            Command::Theme { name: None } => {
+                let current = self.settings.str("ui.theme").to_string();
+                let list = crate::theme::THEMES.join(", ");
+                self.show_message(Level::Info, format!("Theme: {current}. Themes: {list}"));
+            }
             Command::CmdRepeat { times, command } => {
                 for _ in 0..times {
                     effects.extend(self.execute_str(&command, count));

@@ -313,7 +313,19 @@ fn related_position() -> Position {
 
 /// Each frame draws its own share of the labels.
 pub fn show(labels: &[String]) {
-    let upper = shell::with(|s| s.engine.settings().bool("hints.uppercase")).unwrap_or(false);
+    let (upper, theme) = shell::with(|s| {
+        let colors = rt_core::theme::resolve(s.engine.settings());
+        let theme: serde_json::Map<String, serde_json::Value> = colors
+            .into_iter()
+            .filter(|(token, _)| token.starts_with("hints-"))
+            .map(|(token, color)| (token.to_string(), color.into()))
+            .collect();
+        (
+            s.engine.settings().bool("hints.uppercase"),
+            serde_json::Value::Object(theme),
+        )
+    })
+    .unwrap_or((false, serde_json::Value::Null));
     let frames: Vec<(Frame, usize, usize)> = FRAMES.with(|f| {
         f.borrow()
             .iter()
@@ -327,7 +339,7 @@ pub fn show(labels: &[String]) {
         let slice = serde_json::to_string(slice).unwrap_or_default();
         eval::eval_frame(
             &frame,
-            &format!("window.__rtHints.show({slice}, {upper})"),
+            &format!("window.__rtHints.show({slice}, {upper}, {theme})"),
             |_| {},
         );
     }
