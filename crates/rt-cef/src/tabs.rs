@@ -168,8 +168,12 @@ pub fn move_tab(from: usize, to: usize) {
     }
 }
 
-/// Open `url` in a new tab.
+/// Open `url` in a new tab, or a new window with `tabs.tabs_are_windows`.
 pub fn open(url: &str, position: Position, focus: bool) {
+    if window::tabs_are_windows() {
+        let private = shell::with(|s| s.private).unwrap_or(false);
+        return window::create(vec![url.to_string()], Vec::new(), private);
+    }
     match window::create_browser_view(Role::Tab, url) {
         Some(view) => {
             // Known before the page commits, so closing it early can still be undone.
@@ -440,6 +444,13 @@ fn last_close() {
     }) else {
         return;
     };
+    // With tabs.tabs_are_windows, a window is its one tab.
+    let action =
+        if shell::with(|s| s.engine.settings().bool("tabs.tabs_are_windows")).unwrap_or(false) {
+            "close".to_string()
+        } else {
+            action
+        };
     match (action.as_str(), url, browser) {
         ("close", _, _) => {
             if let Some(window) = window {

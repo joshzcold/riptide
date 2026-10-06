@@ -1197,7 +1197,12 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
 fn bars_change(s: &mut Shell, mode: Mode, message: bool) -> (Option<BarsChange>, Option<i64>) {
     let settings = s.engine.settings();
     let placement = crate::window::BarPlacement::from_settings(settings);
-    let show = settings.str("tabs.show").to_string();
+    // With tabs.tabs_are_windows every window has one tab, so no tab bar.
+    let show = if settings.bool("tabs.tabs_are_windows") {
+        "never".to_string()
+    } else {
+        settings.str("tabs.show").to_string()
+    };
     let delay = settings.int("tabs.show_switching_delay");
     let statusbar_visible =
         rt_core::mode::statusbar_visible(settings.str("statusbar.show"), mode, message);

@@ -66,3 +66,33 @@ fn changelog_after_upgrade_opens_the_changelog_once() {
     std::thread::sleep(std::time::Duration::from_millis(500));
     assert!(!changelog(&b.state()), "the changelog opened again");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tabs_are_windows_opens_tabs_and_popups_as_windows() {
+    let b = Browser::start("page.html");
+    let height = |b: &Browser| -> i64 { b.eval("String(innerHeight)").parse().unwrap() };
+    let with_bar = height(&b);
+    b.run("set tabs.tabs_are_windows true");
+    let start = std::time::Instant::now();
+    while height(&b) <= with_bar {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the tab bar is still shown"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("the tab is a new window", |s| {
+        s.windows.len() == 2 && s.windows.iter().all(|w| w.tabs.len() == 1)
+    });
+    // d closes the window that is the tab.
+    b.keys("d");
+    b.wait_until("one window again", |s| s.windows.len() == 1);
+    b.run("set content.javascript.can_open_tabs_automatically true");
+    b.run(&format!("open {}", b.url("popup.html")));
+    b.wait_until("the popup is a new window", |s| {
+        s.windows.len() == 2 && s.windows.iter().all(|w| w.tabs.len() == 1)
+    });
+}

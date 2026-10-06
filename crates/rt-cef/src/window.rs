@@ -120,12 +120,23 @@ pub fn arrange_bars(
 /// `commands` (from the command line) run once the tabs are open. The first
 /// window may restore the saved session instead.
 pub fn create(urls: Vec<String>, commands: Vec<String>, private: bool) {
-    open(urls, commands, private, None);
+    open(urls, commands, private, None, None);
 }
 
 /// A window for one window of a saved session.
 pub fn create_from_session(window: rt_storage::WindowState) {
-    open(Vec::new(), Vec::new(), false, Some(window));
+    open(Vec::new(), Vec::new(), false, Some(window), None);
+}
+
+/// A window for a page's popup, under `tabs.tabs_are_windows`.
+pub fn create_for_popup(popup: BrowserView, private: bool) {
+    open(Vec::new(), Vec::new(), private, None, Some(popup));
+}
+
+/// `tabs.tabs_are_windows`: whether a new tab should get its own window.
+pub fn tabs_are_windows() -> bool {
+    shell::with(|s| s.engine.settings().bool("tabs.tabs_are_windows") && !s.tabs.is_empty())
+        .unwrap_or(false)
 }
 
 fn open(
@@ -133,11 +144,12 @@ fn open(
     commands: Vec<String>,
     private: bool,
     session: Option<rt_storage::WindowState>,
+    popup: Option<BrowserView>,
 ) {
     let Some(id) = shell::with(|s| s.new_window(private)) else {
         return;
     };
-    let mut delegate = RtWindowDelegate::new(id, urls, commands, session);
+    let mut delegate = RtWindowDelegate::new(id, urls, commands, session, popup);
     window_create_top_level(Some(&mut delegate));
 }
 
@@ -248,6 +260,8 @@ wrap_window_delegate! {
         urls: Vec<String>,
         commands: Vec<String>,
         session: Option<rt_storage::WindowState>,
+        // A popup to show as this window's tab (`tabs.tabs_are_windows`).
+        popup: Option<BrowserView>,
     }
 
     impl ViewDelegate {
@@ -340,7 +354,9 @@ wrap_window_delegate! {
             }
 
             window.show();
-            if let Some(session) = &self.session {
+            if let Some(popup) = &self.popup {
+                tabs::add_view(popup.clone(), Position::Last, true);
+            } else if let Some(session) = &self.session {
                 tabs::restore_window(session);
             } else {
                 let recovered = first && recover_crashed_tabs(!self.urls.is_empty());
@@ -514,6 +530,11 @@ wrap_browser_view_delegate! {
                 shell::activate_browser(opener.identifier());
             }
             let background = shell::with(|s| std::mem::take(&mut s.popup_in_background)).unwrap_or(false);
+            if tabs_are_windows() {
+                let private = shell::with(|s| s.private).unwrap_or(false);
+                create_for_popup(popup.clone(), private);
+                return 1;
+            }
             let position = shell::with(|s| s.new_tab_position(true)).unwrap_or(Position::Next);
             tabs::add_view(popup.clone(), position, !background);
             1

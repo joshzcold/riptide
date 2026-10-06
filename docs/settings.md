@@ -137,6 +137,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.select_on_remove` | next \| prev \| last-used | `next` | Which tab to show after closing the current one: the next, the previous, or the one used before |
 | `tabs.show` | always \| never \| multiple \| switching | `always` | When to show the tab bar: always, never, with more than one tab, or briefly after switching tabs |
 | `tabs.show_switching_delay` | integer | `800` | How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds |
+| `tabs.tabs_are_windows` | boolean | `false` | Open every tab in its own window and hide the tab bar, for tiling window managers |
 | `tabs.title.alignment` | left \| center \| right | `left` | Where tab titles sit in their tab: left, center or right |
 | `tabs.title.format` | string | `{audio}{index}: {current_title}` | Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {private} |
 | `tabs.title.format_pinned` | string | `{index}` | Titles of pinned tabs while tabs.pinned.shrink shrinks them; same fields as tabs.title.format |

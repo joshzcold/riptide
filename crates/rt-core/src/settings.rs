@@ -1329,6 +1329,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "How long the tab bar stays after switching tabs with tabs.show = switching, in milliseconds"
     ),
     def!(
+        "tabs.tabs_are_windows",
+        Kind::Bool,
+        Value::Bool(false),
+        "Open every tab in its own window and hide the tab bar, for tiling window managers"
+    ),
+    def!(
         "tabs.title.alignment",
         Kind::Enum(&["left", "center", "right"]),
         s("left"),
