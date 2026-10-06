@@ -308,17 +308,26 @@ fn handle_key_event(event: &KeyEvent) -> bool {
                 .is_some_and(|at| at.elapsed().as_millis() < timeout as u128)
         {
             s.suppress_char = true;
-            return rt_core::engine::KeyOutcome {
-                consumed: true,
-                effects: Vec::new(),
-            };
+            return (
+                rt_core::engine::KeyOutcome {
+                    consumed: true,
+                    effects: Vec::new(),
+                },
+                None,
+            );
         }
         let outcome = s.engine.handle_key(key);
         s.suppress_char = outcome.consumed;
-        outcome
+        let timeout = s.engine.settings().int("input.partial_timeout");
+        let partial = s.engine.partial_keys().filter(|_| timeout > 0);
+        (outcome, partial.map(|generation| (generation, timeout)))
     }) else {
         return false;
     };
+    let (outcome, partial) = outcome;
+    if let Some((generation, timeout)) = partial {
+        shell::expire_partial_after(generation, timeout);
+    }
     tracing::trace!(
         %key,
         vk = event.windows_key_code,
@@ -480,15 +489,17 @@ wrap_load_handler! {
             match self.role {
                 Role::Tab => {
                     let browser_ref = browser.as_deref().cloned();
-                    let done = shell::with_tab(browser, |s, index, _| {
+                    let done = shell::with_tab(browser, |s, index, current| {
                         let private = s.private;
+                        let effects = if current { s.engine.apply_mode_override() } else { Vec::new() };
                         let tab = s.tabs.get_mut(index)?;
                         // Private windows leave no history.
                         let visit = (!tab.load_error && !private && tab.pending.is_none())
                             .then(|| (tab.url.clone(), tab.title.clone()));
-                        Some((tab.pending_error.take(), visit))
+                        Some((tab.pending_error.take(), visit, effects))
                     });
-                    let Some(Some((error, visit))) = done else { return };
+                    let Some(Some((error, visit, effects))) = done else { return };
+                    shell::apply(effects);
                     if let Some((url, error)) = error {
                         shell::exec_js(frame, &ui::error_page_js(&url, &error));
                     }

@@ -111,6 +111,8 @@ pub struct Engine {
     mode: Mode,
     pending: Vec<Key>,
     count: Option<u32>,
+    /// Numbers each partly typed key chain, for `input.partial_timeout`.
+    partial_generation: u64,
     cmdline: LineEditor,
     history: History,
     /// Messages on screen, newest last, each with the generation that
@@ -196,6 +198,7 @@ impl Engine {
             mode: Mode::Normal,
             pending: Vec::new(),
             count: None,
+            partial_generation: 0,
             cmdline: LineEditor::default(),
             history: History::default(),
             messages: Vec::new(),
@@ -753,6 +756,40 @@ impl Engine {
         {
             self.set_mode(target, &mut effects);
         }
+        effects.extend(self.apply_mode_override());
+        effects
+    }
+
+    /// A key chain or count is half typed: its generation, for
+    /// [`Engine::expire_partial`] once `input.partial_timeout` runs out.
+    pub fn partial_keys(&self) -> Option<u64> {
+        (!self.pending.is_empty() || self.count.is_some()).then_some(self.partial_generation)
+    }
+
+    /// Forget the half-typed keys, if nothing was typed since `generation`.
+    pub fn expire_partial(&mut self, generation: u64) {
+        if generation == self.partial_generation && self.partial_keys().is_some() {
+            self.pending.clear();
+            self.count = None;
+            self.dirty = true;
+        }
+    }
+
+    /// `input.mode_override`: the mode the current page's site asks for.
+    /// The command line, prompts and hints aren't interrupted.
+    pub fn apply_mode_override(&mut self) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        let wanted = match self.settings.str_for("input.mode_override", &self.url) {
+            "normal" => Mode::Normal,
+            "insert" => Mode::Insert,
+            "passthrough" => Mode::Passthrough,
+            _ => return effects,
+        };
+        if self.mode != wanted
+            && matches!(self.mode, Mode::Normal | Mode::Insert | Mode::Passthrough)
+        {
+            self.set_mode(wanted, &mut effects);
+        }
         effects
     }
 
@@ -887,6 +924,7 @@ impl Engine {
             self.dirty = true;
         }
         if self.pending.is_empty()
+            && self.settings.bool("input.match_counts")
             && let Some(d) = key.digit()
             && (d != 0 || self.count.is_some())
         {
@@ -895,6 +933,7 @@ impl Engine {
             return consumed(Vec::new());
         }
         self.pending.push(key);
+        self.partial_generation += 1;
         self.dirty = true;
         match self.keymap.lookup(mode, &self.pending) {
             Lookup::Exact(cmd) => {
@@ -2313,6 +2352,58 @@ mod tests {
         ));
         press(&mut e, "<Ctrl-v>");
         assert_eq!(e.prompt_view().unwrap().input, "https://a.org/x");
+    }
+
+    #[test]
+    fn match_counts_and_partial_keys() {
+        let mut e = engine();
+        press(&mut e, "3g");
+        let generation = e.partial_keys().expect("3g is half typed");
+        press(&mut e, "g");
+        assert_eq!(e.partial_keys(), None, "gg finished the chain");
+        press(&mut e, "g");
+        let stale = generation;
+        let current = e.partial_keys().unwrap();
+        e.expire_partial(stale);
+        assert!(
+            e.partial_keys().is_some(),
+            "an older timer doesn't clear newer keys"
+        );
+        e.expire_partial(current);
+        assert_eq!(e.partial_keys(), None);
+        assert_eq!(e.status().keystring, "");
+        set(&mut e, "input.match_counts", Value::Bool(false));
+        e.keymap.bind(Mode::Normal, "1", "tab-focus 1").unwrap();
+        assert!(matches!(
+            runs(&press(&mut e, "1")).as_slice(),
+            [(Command::TabFocus(_), None)]
+        ));
+    }
+
+    #[test]
+    fn mode_override_follows_the_page() {
+        let mut e = engine();
+        e.settings
+            .set_for(
+                "term.example",
+                "input.mode_override",
+                Value::Str("passthrough".into()),
+            )
+            .unwrap();
+        e.set_url("https://term.example/");
+        e.apply_mode_override();
+        assert_eq!(e.mode(), Mode::Passthrough);
+        e.set_url("https://other.example/");
+        e.tab_switched(Some(Mode::Normal));
+        assert_eq!(e.mode(), Mode::Normal);
+        e.set_url("https://term.example/");
+        press(&mut e, ":");
+        e.apply_mode_override();
+        assert_eq!(
+            e.mode(),
+            Mode::Command,
+            "the command line isn't interrupted"
+        );
     }
 
     #[test]

@@ -89,6 +89,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `input.insert_mode.auto_leave` | boolean | `true` | Leave insert mode when focus leaves an editable element |
 | `input.insert_mode.auto_load` | boolean | `false` | Enter insert mode when a page focuses a text field by itself, as autofocus does on load |
 | `input.insert_mode.leave_on_load` | boolean | `true` | Leave insert mode when a new page starts loading |
+| `input.match_counts` | boolean | `true` | Read digits typed before a binding as a count (3j); false lets digits be bindings themselves |
+| `input.mode_override` | none \| normal \| insert \| passthrough | `none` | Mode to enter when a page loads or its tab is focused; set it per site, e.g. passthrough for a web terminal |
+| `input.partial_timeout` | integer | `0` | Milliseconds before a half-typed key chain or count is forgotten; 0 waits forever |
 | `keyhint.blacklist` | string[] | `[]` | Key chains the key hint popup leaves out, as globs on the whole chain (e.g. g* for every chain starting with g) |
 | `keyhint.delay` | integer | `500` | How long after a partial key chain the popup listing its continuations appears, in milliseconds |
 | `messages.timeout` | integer | `3000` | Milliseconds before a status bar message clears (0 keeps it) |

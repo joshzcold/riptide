@@ -1219,6 +1219,26 @@ wrap_task! {
     }
 }
 
+/// `input.partial_timeout`: forget half-typed keys `timeout` ms from now,
+/// unless more were typed since.
+pub fn expire_partial_after(generation: u64, timeout: i64) {
+    let mut task = ExpirePartial::new(generation);
+    post_delayed_task(ThreadId::UI, Some(&mut task), timeout);
+}
+
+wrap_task! {
+    struct ExpirePartial {
+        generation: u64,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            with(|s| s.engine.expire_partial(self.generation));
+            refresh_ui();
+        }
+    }
+}
+
 wrap_task! {
     struct ExpireMessage {
         generation: u64,

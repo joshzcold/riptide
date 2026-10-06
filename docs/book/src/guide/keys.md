@@ -99,6 +99,10 @@ w = "https://en.wikipedia.org/w/index.php?search={}"
 
 Clicking into a text field enters insert mode (`input.insert_mode.auto_enter`), and loading a new page leaves it (`input.insert_mode.leave_on_load`). A field the page focuses by itself, like a search box with `autofocus`, doesn't take insert mode unless you set `input.insert_mode.auto_load = true`. Your keys keep working in normal mode until you click or press `i`.
 
+`input.mode_override` picks the mode a site's pages start in, and when you switch to their tab. Set it per site, e.g. `:set -u ssh.example.com input.mode_override passthrough` for a web terminal.
+
+Digits before a binding are a count (`3j`); `input.match_counts = false` lets you bind digits themselves. A half-typed chain like `g` waits for the next key, or for `input.partial_timeout` milliseconds if you set one.
+
 `bindings.key_mappings` treats one key as another in every mode, before bindings are looked up. By default `Ctrl-[` is `Escape`, `Ctrl-m` and `Ctrl-j` are `Return`, `Ctrl-i` is `Tab` and `Ctrl-6` is `Ctrl-^`. To add your own, include the defaults you want to keep:
 
 ```toml

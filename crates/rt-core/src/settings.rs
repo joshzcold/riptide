@@ -1007,6 +1007,27 @@ pub static SETTINGS: &[SettingDef] = &[
         "Leave insert mode when a new page starts loading"
     ),
     def!(
+        "input.match_counts",
+        Kind::Bool,
+        Value::Bool(true),
+        "Read digits typed before a binding as a count (3j); false lets digits be bindings themselves"
+    ),
+    def!(
+        "input.mode_override",
+        Kind::Enum(&["none", "normal", "insert", "passthrough"]),
+        s("none"),
+        "Mode to enter when a page loads or its tab is focused; set it per site, e.g. passthrough for a web terminal"
+    ),
+    def!(
+        "input.partial_timeout",
+        Kind::Int {
+            min: 0,
+            max: 600_000
+        },
+        Value::Int(0),
+        "Milliseconds before a half-typed key chain or count is forgotten; 0 waits forever"
+    ),
+    def!(
         "keyhint.blacklist",
         Kind::List,
         Value::List(Vec::new()),
@@ -1385,6 +1406,7 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.media.video_capture",
     "content.notifications.enabled",
     "content.tls.certificate_errors",
+    "input.mode_override",
 ];
 
 #[derive(Clone, Debug)]

@@ -699,7 +699,8 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - `bindings.key_mappings` (qutebrowser's defaults, applied in every mode before bindings).
     - `input.insert_mode.auto_load`: the renderer now reports `navigator.userActivation` with each focus change, so a field the page focuses by itself no longer takes insert mode unless this is on.
     - The mouse's back and forward buttons already work in Alloy windows (checked with X11 buttons 8 and 9). A setting to turn them off would need a page hook, so it isn't planned.
-  - `input.partial_timeout`, `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`, `input.match_counts`, `input.mode_override`.
+  - ✅ (2026-10-06) `input.partial_timeout` (a delayed task clears the chain if no key came since), `input.match_counts` and `input.mode_override` (per site, on load and on tab focus; never interrupts the command line, prompts or hints). Unit tests in `engine.rs`, e2e tests in `crates/rt-e2e/tests/input_settings.rs`.
+  - `input.mouse.rocker_gestures`, `input.spatial_navigation`, `input.media_keys`.
 - **Scrolling, search, zoom:**
   - ✅ (2026-10-05) `scrolling.smooth`, `search.wrap` and `search.wrap_messages`, and `zoom.levels`. Chromium always wraps searches, so `search.wrap = false` steps back when a result wraps.
   - Still to do: `scrolling.bar`.
