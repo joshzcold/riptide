@@ -36,13 +36,15 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             }
         }
         Command::TabOnly { force } => {
-            let (current, len, pinned) =
-                shell::with(|s| (s.tabs.current_index(), s.tabs.len(), s.tabs.pinned_count()))
-                    .unwrap_or_default();
-            // Pinned tabs come first, so closing from the end keeps indices valid.
-            for index in (0..len)
+            let (current, pinned) = shell::with(|s| {
+                let pinned: Vec<bool> = (0..s.tabs.len()).map(|i| s.tabs.is_pinned(i)).collect();
+                (s.tabs.current_index(), pinned)
+            })
+            .unwrap_or_default();
+            // Closing from the end keeps the earlier indices valid.
+            for index in (0..pinned.len())
                 .rev()
-                .filter(|&i| i != current && (*force || i >= pinned))
+                .filter(|&i| i != current && (*force || !pinned[i]))
             {
                 close(index);
             }
@@ -375,7 +377,7 @@ pub fn restore_window(window: &rt_storage::WindowState) {
     for _ in 0..old {
         close(0);
     }
-    // Saved sessions list pinned tabs first, so pinning in order keeps it.
+    // Pinning doesn't move tabs, so each keeps its saved place.
     shell::with(|s| {
         for (index, tab) in window.tabs.iter().enumerate() {
             if tab.pinned {

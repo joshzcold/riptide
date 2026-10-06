@@ -4,7 +4,7 @@ The tab keys are in [Keys and modes](keys.md#common-keys): `J`/`K` switch tabs, 
 
 ## Pinned tabs
 
-Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shrink`), and survive `co` unless you add `--force`. `d` on a pinned tab asks first (`tabs.pinned.close`: `ask`, `refuse` or `close`); `:tab-close --force` doesn't, and `u` reopens it pinned. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
+Pinned tabs stay where you put them (drag or `:tab-move` them anywhere, between unpinned tabs too), shrink to their icon and number (`tabs.pinned.shrink`), and survive `co` unless you add `--force`. `d` on a pinned tab asks first (`tabs.pinned.close`: `ask`, `refuse` or `close`); `:tab-close --force` doesn't, and `u` reopens it pinned. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
 
 ## The tab bar
 

@@ -141,6 +141,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] **Closing a pinned tab asks instead of refusing** (2026-10-06). `d`, `:tab-close` and a middle-click ask "Close pinned tab <title>?" (default no); `--force` doesn't ask, `tabs.pinned.close` (`ask`, `refuse`, `close`) chooses, `:tab-only` still keeps pinned tabs, and `u` reopens the tab pinned. Covered by the e2e test `pinned_tabs_ask_before_d_closes_them`.
 - [x] `gt` lists the open tabs (`:tab-select`), this window's first; a number picks that tab, words filter by title or URL. `gD` is `tab-give`, as in qutebrowser (2026-10-06).
 - [x] Dragging a tab moves it with the pointer while the others slide aside, instead of only marking the drop point (2026-10-06).
+- [x] Pinned tabs can sit anywhere, as in qutebrowser: pinning is a per-tab flag in `TabList` that no longer moves the tab, and unpinned tabs can go between pinned ones (2026-10-06).
 
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid

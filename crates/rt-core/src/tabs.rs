@@ -14,23 +14,24 @@ pub enum Position {
 }
 
 /// Ordered tabs with a current one. Generic so the browser layer can store
-/// CEF views while the index logic stays testable here. Pinned tabs always
-/// come first: indices `0..pinned_count()`.
+/// CEF views while the index logic stays testable here. Pinned tabs can sit
+/// anywhere, as in qutebrowser.
 #[derive(Debug)]
 pub struct TabList<T> {
     tabs: Vec<T>,
+    /// One flag per tab.
+    pinned: Vec<bool>,
     current: usize,
     previous: Option<usize>,
-    pinned: usize,
 }
 
 impl<T> Default for TabList<T> {
     fn default() -> Self {
         Self {
             tabs: Vec::new(),
+            pinned: Vec::new(),
             current: 0,
             previous: None,
-            pinned: 0,
         }
     }
 }
@@ -89,46 +90,38 @@ impl<T> TabList<T> {
     }
 
     pub fn pinned_count(&self) -> usize {
-        self.pinned
+        self.pinned.iter().filter(|&&p| p).count()
     }
 
     pub fn is_pinned(&self, index: usize) -> bool {
-        index < self.pinned
+        self.pinned.get(index).copied().unwrap_or(false)
     }
 
-    /// Pin or unpin a tab, moving it to the edge of the pinned block.
-    /// Returns whether anything changed.
+    /// Pin or unpin a tab where it is. Returns whether anything changed.
     pub fn set_pinned(&mut self, index: usize, pinned: bool) -> bool {
-        if index >= self.tabs.len() || self.is_pinned(index) == pinned {
-            return false;
+        match self.pinned.get_mut(index) {
+            Some(flag) if *flag != pinned => {
+                *flag = pinned;
+                true
+            }
+            _ => false,
         }
-        if pinned {
-            self.relocate(index, self.pinned);
-            self.pinned += 1;
-        } else {
-            self.relocate(index, self.pinned - 1);
-            self.pinned -= 1;
-        }
-        true
     }
 
-    /// Move any tab, staying within its block (pinned or not).
+    /// Move any tab to `to` (clamped), pinned or not.
     pub fn move_tab(&mut self, from: usize, to: usize) {
         if from >= self.tabs.len() {
             return;
         }
-        let to = if self.is_pinned(from) {
-            to.min(self.pinned - 1)
-        } else {
-            to.clamp(self.pinned, self.tabs.len() - 1)
-        };
-        self.relocate(from, to);
+        self.relocate(from, to.min(self.tabs.len() - 1));
     }
 
     /// Move a tab, keeping `current` and `previous` on the same tabs.
     fn relocate(&mut self, from: usize, to: usize) {
         let tab = self.tabs.remove(from);
         self.tabs.insert(to, tab);
+        let pinned = self.pinned.remove(from);
+        self.pinned.insert(to, pinned);
         self.current = shifted(self.current, from, to);
         self.previous = self.previous.map(|p| shifted(p, from, to));
     }
@@ -143,9 +136,8 @@ impl<T> TabList<T> {
             Position::Last => self.tabs.len(),
             Position::At(i) => i.min(self.tabs.len()),
         };
-        // New tabs are unpinned, so they never land inside the pinned block.
-        let index = index.max(self.pinned);
         self.tabs.insert(index, tab);
+        self.pinned.insert(index, false);
         if self.tabs.len() > 1 && index <= self.current {
             self.current += 1;
         }
@@ -162,9 +154,7 @@ impl<T> TabList<T> {
             return None;
         }
         let tab = self.tabs.remove(index);
-        if index < self.pinned {
-            self.pinned -= 1;
-        }
+        self.pinned.remove(index);
         self.previous = match self.previous {
             Some(p) if p == index => None,
             Some(p) if p > index => Some(p - 1),
@@ -406,48 +396,31 @@ mod tests {
     }
 
     #[test]
-    fn pinning_moves_tabs_into_the_pinned_block() {
+    fn pinned_tabs_stay_where_they_are_and_move_anywhere() {
         let mut tabs = list(&["a", "b", "c", "d"]);
         tabs.focus(2);
         assert!(tabs.set_pinned(2, true));
-        assert_eq!(names(&tabs), ["c", "a", "b", "d"]);
-        assert_eq!(tabs.current(), Some(&"c"));
-        assert_eq!(tabs.previous(), Some(1));
-        assert!(tabs.set_pinned(3, true));
-        assert_eq!(names(&tabs), ["c", "d", "a", "b"]);
+        assert_eq!(
+            names(&tabs),
+            ["a", "b", "c", "d"],
+            "pinning doesn't move a tab"
+        );
+        assert!(!tabs.set_pinned(2, true));
+        assert!(tabs.set_pinned(0, true));
         assert_eq!(tabs.pinned_count(), 2);
-        assert!(!tabs.set_pinned(0, true));
-        // Unpinning puts the tab first among the unpinned ones.
-        assert!(tabs.set_pinned(0, false));
-        assert_eq!(names(&tabs), ["d", "c", "a", "b"]);
+        // An unpinned tab can sit between pinned ones, and the flags travel with their tabs.
+        tabs.move_tab(3, 1);
+        assert_eq!(names(&tabs), ["a", "d", "b", "c"]);
+        assert!(tabs.is_pinned(0) && !tabs.is_pinned(1) && !tabs.is_pinned(2) && tabs.is_pinned(3));
         assert_eq!(tabs.current(), Some(&"c"));
+        tabs.insert("x", Position::First, false);
+        assert_eq!(names(&tabs), ["x", "a", "d", "b", "c"]);
+        assert!(!tabs.is_pinned(0) && tabs.is_pinned(1));
+        tabs.remove(1);
         assert_eq!(tabs.pinned_count(), 1);
-    }
-
-    #[test]
-    fn new_and_moved_tabs_stay_out_of_the_pinned_block() {
-        let mut tabs = list(&["a", "b", "c"]);
-        tabs.set_pinned(0, true);
-        tabs.set_pinned(1, true);
-        tabs.insert("x", Position::First, false);
-        assert_eq!(names(&tabs), ["a", "b", "x", "c"]);
-        tabs.focus(3);
-        tabs.move_current(0);
-        assert_eq!(names(&tabs), ["a", "b", "c", "x"]);
-        // A pinned tab can't move past the pinned block either.
-        tabs.move_tab(0, 10);
-        assert_eq!(names(&tabs), ["b", "a", "c", "x"]);
-        assert_eq!(tabs.current(), Some(&"c"));
-    }
-
-    #[test]
-    fn removing_a_pinned_tab_shrinks_the_block() {
-        let mut tabs = list(&["a", "b", "c"]);
-        tabs.set_pinned(0, true);
-        tabs.remove(0);
+        assert!(tabs.is_pinned(3));
+        assert!(tabs.set_pinned(3, false));
         assert_eq!(tabs.pinned_count(), 0);
-        tabs.insert("x", Position::First, false);
-        assert_eq!(names(&tabs), ["x", "b", "c"]);
     }
 
     #[test]

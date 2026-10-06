@@ -106,3 +106,30 @@ fn tab_bar_dragging_shows_the_tab_moving_and_drops_it_there() {
     let first = b.url("nav1.html");
     b.wait_until("nav1 is now last", |s| s.tabs()[2].url == first);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_unpinned_tabs_can_sit_between_pinned_ones() {
+    let b = Browser::start("nav1.html");
+    for page in ["second.html", "nav2.html"] {
+        let url = b.url(page);
+        b.run(&format!("open -t {url}"));
+        b.wait_until("the tab loads", |s| s.tab().is_loaded(&url));
+    }
+    // Pin the first and last tabs; pinning leaves them in place.
+    b.run("tab-pin");
+    b.run("tab-focus 1");
+    b.run("tab-pin");
+    let s = b.wait_until("two pinned tabs", |s| {
+        s.tabs().iter().filter(|t| t.pinned).count() == 2
+    });
+    let pins: Vec<bool> = s.tabs().iter().map(|t| t.pinned).collect();
+    assert_eq!(pins, [true, false, true]);
+    // Dragging the unpinned tab to the end, past a pinned one, works too.
+    wait_bar(&b, "String(document.querySelectorAll('.tab').length)", "3");
+    b.eval_bar("tabbar", &DRAG.replace("FROM", "1").replace("OVER", "2"));
+    let second = b.url("second.html");
+    b.wait_until("the unpinned tab is last", |s| {
+        s.tabs()[2].url == second && !s.tabs()[2].pinned && s.tabs()[1].pinned
+    });
+}
