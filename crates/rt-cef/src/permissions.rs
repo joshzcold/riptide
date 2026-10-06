@@ -67,12 +67,14 @@ fn resolve(
         default: false,
         remember,
     };
-    let id = prompts::ask(
+    let id = prompts::ask_about(
         browser,
         Scope::Other,
         "Permission request",
         message,
         kind,
+        Some(origin.clone()),
+        false,
         move |answer| {
             let (outcome, saved) = answer_outcome(&answer);
             if let Some(allow) = saved {
