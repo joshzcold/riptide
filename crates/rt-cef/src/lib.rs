@@ -66,7 +66,6 @@ struct Startup {
     /// The config, read before CEF starts so startup-only settings can
     /// become Chromium switches; taken once CEF is up.
     config: std::sync::Arc<std::sync::Mutex<Option<rt_config::Loaded>>>,
-    dark_mode: bool,
     /// Switches from startup-only settings such as `content.cache.size`,
     /// `content.canvas_reading` and `content.webgl`.
     switches: Vec<(&'static str, Option<String>)>,
@@ -107,9 +106,6 @@ wrap_app! {
                         Some(value) => command_line.append_switch_with_value(Some(&name), Some(&CefString::from(value.as_str()))),
                         None => command_line.append_switch(Some(&name)),
                     }
-                }
-                if self.startup.as_ref().is_some_and(|s| s.dark_mode) {
-                    append_to_list_switch(command_line, "blink-settings", "forceDarkModeEnabled=true");
                 }
             }
         }
@@ -345,7 +341,6 @@ pub fn run() -> i32 {
         ),
         ..Default::default()
     };
-    let dark_mode = startup_bool(&loaded, "colors.webpage.darkmode.enabled");
     let switches = {
         let settings = startup_settings(&loaded);
         let mut switches = Vec::new();
@@ -390,7 +385,6 @@ pub fn run() -> i32 {
         urls,
         commands,
         config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
-        dark_mode,
         switches,
         fetch_widevine,
     }));

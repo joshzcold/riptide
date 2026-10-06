@@ -767,6 +767,7 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
   - Eleven built-in themes from small palettes (`ui.theme`, `:theme` with completion). Text colors on coloured backgrounds are picked for contrast; unit tests check that every theme defines every token and that every text pair reaches WCAG AA. The `riptide` theme keeps the exact colors from before.
   - ✅ Fonts: `fonts.default_family`/`default_size` and per-part fonts (statusbar, tabs, completion, prompts, hints, keyhint) as `--rt-font-*` variables, and `fonts.web.*` through Chromium's `webkit.webprefs` preferences. Bigger fonts are cut off until phase 3 sizes the bars.
   - ✅ Custom CSS: `ui.css` (sent to the bars and overlay with their updates) and `content.user_stylesheets` (injected at load start and load end, per site), both re-read within a second of a change (`userstyle.rs`).
+  - ✅ Pages: `colors.webpage.bg` (each new tab's background color), and `colors.webpage.darkmode.enabled` now live and per site through DevTools' `Emulation.setAutoDarkModeOverride` instead of a startup switch. Both checked by screenshot pixels (neither shows to page JavaScript).
   - e2e test in `crates/rt-e2e/tests/themes.rs`; checked by screenshot in three themes. Not yet: `ui.theme = auto`, a live preview while picking, user theme files, importers, and the downloads/history pages.
 - **One token set:** named tokens (bg, fg, accent, selected, insert, passthrough, private, warning, error, https, http, hint fg/bg/border, prompt, completion, downloads, keyhint) feed every UI page as CSS variables. They're sent over the UI channel (M13), so a change applies live without reloading anything.
 - **Settings:**
@@ -782,9 +783,9 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
   - `ui.css` in the config directory is added to every UI page, for anything tokens can't do (tab shape, padding, fonts).
   - `content.user_stylesheets` applies files to web pages, and can be set per site with patterns.
   - Both reload when the file changes.
-- **Pages:**
+- ✅ **Pages** (2026-10-06):
   - `colors.webpage.bg` sets the background shown while a page loads, so dark themes don't flash white.
-  - The dark-mode setting becomes live and per site; today it's startup-only.
+  - The dark-mode setting is live and per site.
 - **Size, shape and position.** Today each bar is a separate CEF view whose height is a Rust constant (`TABBAR_HEIGHT`, `STATUSBAR_HEIGHT`). The overlay that holds completion and prompts is sized as rows × a fixed row height. CSS alone can't resize any of them, so:
   - **Pages report their size:** each UI page measures its content (fonts, padding, rows) and reports its height or width over the UI channel, and Rust lays the views out to match. Fonts, padding and `ui.css` then change real sizes, with no clipping.
   - **Placement:**

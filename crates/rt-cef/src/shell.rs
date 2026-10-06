@@ -496,6 +496,7 @@ fn apply_chromium_settings() {
     if let Some(settings) = with(|s| s.engine.settings().clone()) {
         crate::content::apply_globals(&settings);
         crate::greasemonkey::sync_settings(&settings);
+        crate::content::apply_dark_mode();
         note_restart_settings(settings);
     }
     crate::permissions::apply_site_settings(sites);

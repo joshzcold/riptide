@@ -345,6 +345,26 @@ fn rgb(hex: &str) -> Option<(f64, f64, f64)> {
     Some((byte(0)?, byte(2)?, byte(4)?))
 }
 
+/// An opaque `0xAARRGGBB` for CEF from `#rgb`, `#rrggbb`, `white` or `black`.
+pub fn argb(text: &str) -> Option<u32> {
+    let text = text.trim().to_ascii_lowercase();
+    let hex = match text.as_str() {
+        "white" => "ffffff".to_string(),
+        "black" => "000000".to_string(),
+        _ => {
+            let hex = text.strip_prefix('#')?;
+            match hex.len() {
+                3 => hex.chars().flat_map(|c| [c, c]).collect(),
+                6 => hex.to_string(),
+                _ => return None,
+            }
+        }
+    };
+    u32::from_str_radix(&hex, 16)
+        .ok()
+        .map(|rgb| 0xFF00_0000 | rgb)
+}
+
 /// WCAG relative luminance of a `#rrggbb` color.
 fn luminance(hex: &str) -> f64 {
     let Some((r, g, b)) = rgb(hex) else {
@@ -470,6 +490,10 @@ mod tests {
         }
         assert!((contrast("#000000", "#ffffff") - 21.0).abs() < 0.01);
         assert_eq!(mix("#000000", "#ffffff", 0.5), "#808080");
+        assert_eq!(argb("#1e1e2e"), Some(0xFF1E_1E2E));
+        assert_eq!(argb("#fff"), Some(0xFFFF_FFFF));
+        assert_eq!(argb("Black"), Some(0xFF00_0000));
+        assert_eq!(argb("teal"), None);
     }
 
     #[test]

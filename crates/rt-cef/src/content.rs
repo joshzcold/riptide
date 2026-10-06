@@ -63,6 +63,8 @@ struct State {
     site_values: HashSet<(&'static str, String)>,
     /// The user agent last set per browser id ("" is Chromium's own).
     user_agents: HashMap<i32, String>,
+    /// Browsers forced into Chromium's automatic dark mode.
+    dark: HashSet<i32>,
 }
 
 thread_local! {
@@ -316,7 +318,7 @@ pub fn apply_globals(settings: &Settings) {
 /// A tab is about to load `url`: give its site the content settings and
 /// user agent the per-site settings ask for.
 pub fn before_navigation(browser: &Browser, url: &str) {
-    let Some((site, user_agent)) = shell::with(|s| {
+    let Some((site, (user_agent, dark))) = shell::with(|s| {
         let settings = s.engine.settings();
         let site: Vec<(
             &'static str,
@@ -337,9 +339,12 @@ pub fn before_navigation(browser: &Browser, url: &str) {
             .collect();
         (
             site,
-            settings
-                .str_for("content.headers.user_agent", url)
-                .to_string(),
+            (
+                settings
+                    .str_for("content.headers.user_agent", url)
+                    .to_string(),
+                settings.bool_for("colors.webpage.darkmode.enabled", url),
+            ),
         )
     }) else {
         return;
@@ -350,6 +355,58 @@ pub fn before_navigation(browser: &Browser, url: &str) {
         }
     }
     set_user_agent(browser, &user_agent);
+    set_dark(browser, dark);
+}
+
+/// `colors.webpage.darkmode.enabled` for every open tab, after a change.
+pub fn apply_dark_mode() {
+    let tabs: Vec<(Browser, bool)> = shell::with(|s| {
+        let settings = s.engine.settings();
+        s.windows
+            .iter()
+            .flat_map(|w| w.tabs.iter())
+            .filter_map(|t| {
+                let dark = settings.bool_for("colors.webpage.darkmode.enabled", &t.url);
+                t.browser().map(|b| (b, dark))
+            })
+            .collect()
+    })
+    .unwrap_or_default();
+    for (browser, dark) in tabs {
+        set_dark(&browser, dark);
+    }
+}
+
+/// Chromium's automatic dark mode for one tab, through DevTools'
+/// `Emulation.setAutoDarkModeOverride`, so it applies at once and per site.
+fn set_dark(browser: &Browser, dark: bool) {
+    let id = browser.identifier();
+    if STATE.with(|s| s.borrow().dark.contains(&id)) == dark {
+        return;
+    }
+    let Some(host) = browser.host() else { return };
+    // Without `enabled`, the override is cleared.
+    let params = if dark {
+        serde_json::json!({ "enabled": true })
+    } else {
+        serde_json::json!({})
+    };
+    let message = serde_json::json!({
+        "id": 2,
+        "method": "Emulation.setAutoDarkModeOverride",
+        "params": params,
+    })
+    .to_string();
+    if host.send_dev_tools_message(Some(message.as_bytes())) != 0 {
+        STATE.with(|s| {
+            let dark_tabs = &mut s.borrow_mut().dark;
+            if dark {
+                dark_tabs.insert(id);
+            } else {
+                dark_tabs.remove(&id);
+            }
+        });
+    }
 }
 
 /// Give `origin` its own value for one content setting, or (`None`) take it away.

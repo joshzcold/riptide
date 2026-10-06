@@ -232,8 +232,11 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
 pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
     let mut client = RtClient::new(role);
     let settings = BrowserSettings {
+        // colors.webpage.bg: what a new tab shows before its page paints.
         background_color: if role == Role::Tab {
-            0xFFFF_FFFF
+            shell::with(|s| rt_core::theme::argb(s.engine.settings().str("colors.webpage.bg")))
+                .flatten()
+                .unwrap_or(0xFFFF_FFFF)
         } else {
             CHROME_BACKGROUND
         },

@@ -3,7 +3,8 @@
 ## Dark mode
 
 - `colors.webpage.preferred_color_scheme` (`auto`, `light` or `dark`) is what pages see in `prefers-color-scheme`. It applies immediately.
-- `colors.webpage.darkmode.enabled = true` renders light pages dark with Chromium's automatic dark mode. It takes effect after a restart: it's a Chromium switch, so `config.toml`/`config.lua` are read before Chromium starts.
+- `colors.webpage.darkmode.enabled = true` renders light pages dark with Chromium's automatic dark mode. It applies at once to open tabs, and can be set per site, e.g. `:set -u docs.example.com colors.webpage.darkmode.enabled false` for a site that's already dark.
+- `colors.webpage.bg` is the color a new tab shows before its page paints; set it to a dark color such as `#1e1e2e` so loading pages don't flash white.
 
 ## Saving and printing
 

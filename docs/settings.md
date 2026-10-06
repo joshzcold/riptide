@@ -52,7 +52,8 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `colors.tabs.selected.accent` | string | `` | Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows |
 | `colors.tabs.selected.odd.bg` | string | `` | Background of the current tab; empty uses ui.theme's |
 | `colors.tabs.selected.odd.fg` | string | `` | Text of the current tab; empty uses ui.theme's |
-| `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode (takes effect after a restart) |
+| `colors.webpage.bg` | string | `white` | Background of a new tab before its page paints, e.g. #1e1e2e so dark themes don't flash white; #rrggbb, white or black |
+| `colors.webpage.darkmode.enabled` | boolean | `false` | Render light pages dark with Chromium's automatic dark mode; applies at once and can be set per site |
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
 | `completion.cmd_history_max_items` | integer | `100` | How many command lines Up and Down remember |
 | `completion.delay` | integer | `0` | Milliseconds to wait after a key press before updating completions |

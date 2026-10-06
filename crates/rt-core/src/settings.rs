@@ -355,6 +355,15 @@ fn font_or_empty(value: &Value) -> Result<(), String> {
     }
 }
 
+fn webpage_bg(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(text) if crate::theme::argb(text).is_none() => {
+            Err(format!("{text:?} isn't #rrggbb, #rgb, white or black"))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn color(value: &Value) -> Result<(), String> {
     match value {
         Value::Str(text) if !text.trim().is_empty() && !crate::theme::is_color(text) => {
@@ -790,10 +799,17 @@ pub static SETTINGS: &[SettingDef] = &[
         color
     ),
     def!(
+        "colors.webpage.bg",
+        Kind::Str,
+        s("white"),
+        "Background of a new tab before its page paints, e.g. #1e1e2e so dark themes don't flash white; #rrggbb, white or black",
+        webpage_bg
+    ),
+    def!(
         "colors.webpage.darkmode.enabled",
         Kind::Bool,
         Value::Bool(false),
-        "Render light pages dark with Chromium's automatic dark mode (takes effect after a restart)"
+        "Render light pages dark with Chromium's automatic dark mode; applies at once and can be set per site"
     ),
     def!(
         "colors.webpage.preferred_color_scheme",
@@ -1927,7 +1943,6 @@ pub fn find(name: &str) -> Option<&'static SettingDef> {
 /// Settings that can differ per site (`:set -u <pattern>`, `[per_domain]`).
 /// Settings Chromium only reads at startup.
 pub const RESTART_REQUIRED: &[&str] = &[
-    "colors.webpage.darkmode.enabled",
     "content.autoplay",
     "content.cache.size",
     "content.canvas_reading",
@@ -1966,6 +1981,7 @@ pub fn needs_restart(started: &Settings, before: &Settings, now: &Settings) -> V
 }
 
 pub const PER_DOMAIN: &[&str] = &[
+    "colors.webpage.darkmode.enabled",
     "content.blocking.enabled",
     "content.desktop_capture",
     "content.geolocation",
