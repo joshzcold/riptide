@@ -49,6 +49,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `colors.tabs.odd.bg` | string | `` | Background of odd-numbered tabs; empty uses ui.theme's |
 | `colors.tabs.odd.fg` | string | `` | Text of tabs; empty uses ui.theme's |
 | `colors.tabs.pinned.odd.bg` | string | `` | Background of pinned tabs; empty uses ui.theme's |
+| `colors.tabs.pinned.odd.fg` | string | `` | Text of pinned tabs; empty uses ui.theme's |
 | `colors.tabs.selected.accent` | string | `` | Color of the line marking the current tab, any CSS color such as #2ec4b6; empty matches the tab, so no line shows |
 | `colors.tabs.selected.odd.bg` | string | `` | Background of the current tab; empty uses ui.theme's |
 | `colors.tabs.selected.odd.fg` | string | `` | Text of the current tab; empty uses ui.theme's |

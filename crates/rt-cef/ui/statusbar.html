@@ -54,6 +54,10 @@
   .url.https { color: var(--https); }
   .url.http { color: var(--http); }
   .url.error { color: var(--error-fg); }
+  /* On a coloured bar (a mode, a private window, a message), everything
+     takes the bar's own text colour so it stays readable. */
+  #bar.insert .url, #bar.passthrough .url, #bar.private .url,
+  #bar.msg-error .url, #bar.msg-warning .url { color: inherit; }
   .cursor { background: var(--fg); color: var(--bg); }
 </style>
 </head>

@@ -40,6 +40,7 @@ pub const TOKENS: &[(&str, &str)] = &[
     ("tabs-selected-bg", "colors.tabs.selected.odd.bg"),
     ("tabs-selected-fg", "colors.tabs.selected.odd.fg"),
     ("tabs-pinned-bg", "colors.tabs.pinned.odd.bg"),
+    ("tabs-pinned-fg", "colors.tabs.pinned.odd.fg"),
     ("tabs-indicator-start", "colors.tabs.indicator.start"),
     ("tabs-indicator-error", "colors.tabs.indicator.error"),
     ("completion-bg", "colors.completion.odd.bg"),
@@ -85,6 +86,15 @@ pub const TEXT_PAIRS: &[(&str, &str)] = &[
     ("completion-selected-fg", "completion-selected-bg"),
     ("prompts-fg", "prompts-bg"),
     ("hints-fg", "hints-bg"),
+    ("tabs-pinned-fg", "tabs-pinned-bg"),
+    ("statusbar-https-fg", "statusbar-bg"),
+    ("statusbar-http-fg", "statusbar-bg"),
+    ("statusbar-url-error-fg", "statusbar-bg"),
+    ("completion-description-fg", "completion-bg"),
+    ("keyhint-fg", "completion-bg"),
+    ("prompts-border", "prompts-bg"),
+    ("prompts-border", "prompts-key-bg"),
+    ("hints-match-fg", "hints-bg"),
 ];
 
 /// A theme's base colors, as `#rrggbb`.
@@ -197,54 +207,78 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
     let mut set = |k: &'static str, v: &str| {
         t.insert(k, v.to_string());
     };
+    // Colored text (accents, links, keys) moved toward readable where the
+    // palette's own color is too faint on its background.
+    let legible = |color: &str, bg: &str| legible(color, bg);
+    // A label background must be light enough for dark text: light themes'
+    // yellows are too dark for that.
+    let mut hint_bg = p.yellow.to_string();
+    while luminance(&hint_bg) < 0.45 {
+        hint_bg = mix(&hint_bg, "#ffffff", 0.2);
+    }
+    let pinned_bg = mix(p.surface2, p.blue, 0.35);
+    // The current tab: tinted with the accent so it stands out from the rest.
+    let selected_tab = mix(p.surface2, p.accent, 0.4);
+    // In dark themes, very bright colors would glare across a whole bar.
+    let dark = luminance(p.base) < 0.2;
+    let bar = |c: &str| -> String {
+        if dark && luminance(c) > 0.3 {
+            mix(c, p.base, 0.35)
+        } else {
+            c.to_string()
+        }
+    };
+    let (green, blue, red, orange) = (bar(p.green), bar(p.blue), bar(p.red), bar(p.orange));
     set("statusbar-bg", p.base);
     set("statusbar-fg", p.fg);
-    set("statusbar-insert-bg", p.green);
-    set("statusbar-insert-fg", &readable(p.green));
-    set("statusbar-passthrough-bg", p.blue);
-    set("statusbar-passthrough-fg", &readable(p.blue));
+    set("statusbar-insert-bg", &green);
+    set("statusbar-insert-fg", &readable(&green));
+    set("statusbar-passthrough-bg", &blue);
+    set("statusbar-passthrough-fg", &readable(&blue));
     set("statusbar-private-bg", p.surface3);
     set("statusbar-private-fg", &readable(p.surface3));
-    set(
-        "statusbar-https-fg",
-        &best_text(p.base, &[p.accent, p.green, p.fg]),
-    );
+    set("statusbar-https-fg", &legible(p.accent, p.base));
     set("statusbar-http-fg", p.fg);
-    set(
-        "statusbar-url-error-fg",
-        &best_text(p.base, &[p.yellow, p.orange, p.fg]),
-    );
-    set("messages-error-bg", p.red);
-    set("messages-error-fg", &readable(p.red));
-    set("messages-warning-bg", p.orange);
-    set("messages-warning-fg", &readable(p.orange));
+    set("statusbar-url-error-fg", &legible(p.yellow, p.base));
+    set("messages-error-bg", &red);
+    set("messages-error-fg", &readable(&red));
+    set("messages-warning-bg", &orange);
+    set("messages-warning-fg", &readable(&orange));
     set("tabs-bar-bg", p.surface);
     set("tabs-odd-bg", p.surface2);
     set("tabs-even-bg", p.surface3);
     set("tabs-fg", p.fg);
-    set("tabs-selected-bg", p.base);
-    set("tabs-selected-fg", &readable(p.base));
-    set("tabs-pinned-bg", p.blue);
+    set("tabs-selected-bg", &selected_tab);
+    set("tabs-selected-fg", &readable(&selected_tab));
+    set("tabs-pinned-bg", &pinned_bg);
+    set("tabs-pinned-fg", &readable(&pinned_bg));
     set("tabs-indicator-start", p.accent);
     set("tabs-indicator-error", p.red);
     set("completion-bg", p.surface);
     set("completion-fg", p.fg);
     set("completion-category-bg", p.base);
     set("completion-category-fg", p.fg);
-    set("completion-description-fg", p.muted);
+    set("completion-description-fg", &legible(p.muted, p.surface));
     set("completion-selected-bg", p.accent);
     set("completion-selected-fg", &readable(p.accent));
-    set("keyhint-fg", p.accent);
+    set("keyhint-fg", &legible(p.accent, p.surface));
     set("prompts-bg", p.surface);
     set("prompts-fg", p.fg);
-    set("prompts-border", p.yellow);
-    set("prompts-key-bg", &mix(p.surface, p.yellow, 0.18));
-    set("hints-bg", p.yellow);
-    set("hints-fg", &readable(p.yellow));
-    set("hints-border", &mix(p.yellow, "#000000", 0.25));
+    let key_bg = mix(p.surface, p.yellow, 0.18);
+    set(
+        "prompts-border",
+        &legible(&legible(p.yellow, p.surface), &key_bg),
+    );
+    set("prompts-key-bg", &key_bg);
+    set("hints-bg", &hint_bg);
+    set("hints-fg", &readable(&hint_bg));
+    set("hints-border", &mix(&hint_bg, "#000000", 0.3));
     set(
         "hints-match-fg",
-        &best_text(p.yellow, &[p.green, p.blue, p.red, "#008000"]),
+        &legible(
+            &best_text(&hint_bg, &[p.green, p.blue, p.red, "#006400"]),
+            &hint_bg,
+        ),
     );
     // The riptide theme's exact colors from before themes.
     if name == "riptide" {
@@ -252,6 +286,7 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
             ("tabs-selected-bg", "#04121c"),
             ("tabs-selected-fg", "#ffffff"),
             ("tabs-pinned-bg", "#1b5e86"),
+            ("tabs-pinned-fg", "#e9f7f6"),
             ("tabs-indicator-start", "#8fe3dc"),
             ("tabs-indicator-error", "#ff6b6b"),
             ("statusbar-private-bg", "#3b4a5a"),
@@ -398,6 +433,16 @@ fn best_text(bg: &str, candidates: &[&str]) -> String {
                 .max_by(|a, b| contrast(a, bg).total_cmp(&contrast(b, bg)))
         })
         .map_or_else(|| "#ffffff".to_string(), |c| c.to_string())
+}
+
+/// `color`, or the nearest step from it toward black or white (whichever
+/// suits `bg`) that is readable on `bg` (4.5:1).
+fn legible(color: &str, bg: &str) -> String {
+    let target = best_text(bg, &["#000000", "#ffffff"]);
+    (0..=20)
+        .map(|step| mix(color, &target, f64::from(step) / 20.0))
+        .find(|c| contrast(c, bg) >= 4.5)
+        .unwrap_or(target)
 }
 
 /// `a` moved `amount` (0 to 1) of the way to `b`.

@@ -14,6 +14,7 @@
     --selected-fg: var(--rt-tabs-selected-fg, #ffffff);
     --selected-accent: var(--selected-bg);
     --pinned-bg: var(--rt-tabs-pinned-bg, #1b5e86);
+    --pinned-fg: var(--rt-tabs-pinned-fg, #e9f7f6);
     --indicator-loading: var(--rt-tabs-indicator-start, #8fe3dc);
     --indicator-error: var(--rt-tabs-indicator-error, #ff6b6b);
     --font: var(--rt-font-tabs-unselected, 10pt "DejaVu Sans Mono", "Monospace", monospace);
@@ -43,7 +44,7 @@
   }
   .tab:nth-child(odd) { background: var(--odd-bg); }
   .tab:nth-child(even) { background: var(--even-bg); }
-  .tab.pinned { background: var(--pinned-bg); }
+  .tab.pinned { background: var(--pinned-bg); color: var(--pinned-fg); }
   .tab.shrunk { flex: 0 0 auto; }
   /* A dragged tab follows the pointer; the others slide aside to show where it lands. */
   .tab.dragging { position: relative; z-index: 1; opacity: 0.9; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }

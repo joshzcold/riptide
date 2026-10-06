@@ -779,6 +779,13 @@ pub static SETTINGS: &[SettingDef] = &[
         color
     ),
     def!(
+        "colors.tabs.pinned.odd.fg",
+        Kind::Str,
+        s(""),
+        "Text of pinned tabs; empty uses ui.theme's",
+        color
+    ),
+    def!(
         "colors.tabs.selected.accent",
         Kind::Str,
         s(""),
