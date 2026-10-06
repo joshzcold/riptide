@@ -84,6 +84,7 @@ mod enabled {
             "tabbar" => s.tabbar.clone(),
             "statusbar" => s.statusbar.clone(),
             "completion" => s.completion.clone(),
+            "crash_notice" => s.crash_notice.clone(),
             _ => None,
         })
         .flatten();
@@ -115,14 +116,20 @@ mod enabled {
                                 "loading": t.progress.is_some(),
                                 "mode": t.mode,
                                 "zoom": t.zoom,
+                                "crashed": t.crashed.is_some(),
                                 "muted": t.muted,
                             })
                         })
                         .collect();
+                    let crash_notice = w
+                        .crash_notice
+                        .as_ref()
+                        .is_some_and(|v| cef::View::from(v).is_visible() != 0);
                     json!({
                         "private": w.private,
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
+                        "crash_notice": crash_notice,
                     })
                 })
                 .collect();

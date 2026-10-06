@@ -50,6 +50,8 @@ pub struct WindowState {
     pub private: bool,
     pub current_tab: usize,
     pub tabs: Vec<TabState>,
+    /// The notice shown in place of a crashed tab is on screen.
+    pub crash_notice: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -61,6 +63,8 @@ pub struct TabState {
     pub mode: String,
     /// Percent, e.g. 100.
     pub zoom: u32,
+    /// Its renderer process died and it hasn't loaded since.
+    pub crashed: bool,
 }
 
 impl TabState {
@@ -341,7 +345,7 @@ impl Browser {
             .unwrap_or_default())
     }
 
-    /// Evaluate JavaScript in the `tabbar`, `statusbar` or `completion` overlay; its value must be a string.
+    /// Evaluate JavaScript in the `tabbar`, `statusbar`, `completion` overlay or `crash_notice`; its value must be a string.
     pub fn eval_bar(&self, bar: &str, code: &str) -> String {
         self.request(TestRequest::EvalBar {
             code: code.into(),

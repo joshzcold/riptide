@@ -39,6 +39,10 @@ After a crash, the next start keeps the saved tabs as a session named after the 
 | With URLs on the command line | Only those URLs open. A message names the session holding the crashed tabs, and the new run's autosaves don't touch it. |
 | The browser crashed again within a minute of reopening a crash's tabs | They aren't reopened a second time, in case they caused the crash. The start page opens, and a message names the session to load them from when you choose. |
 
+### A crashed tab
+
+Pages run in processes separate from the browser. If a page's process crashes, runs out of memory or is killed, the browser keeps running and the tab shows a notice saying why. `r` reloads the page, and the tab keeps its back and forward history.
+
 ## History
 
 `:history` (`-t` for a new tab) shows your browsing history by day, with a search box. `:open` completes from history as you type, with every typed word matching somewhere in the title or URL. `completion.web_history.max_items` sets how many entries completion shows. `:history-clear --force` empties it, and `:history-import` brings in qutebrowser's.

@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tab crashed</title>
+<style>
+  :root {
+    --bg: #0b2a3f;
+    --fg: #e9f7f6;
+    --dim: #8fb3c4;
+    --accent: #2ec4b6;
+    --font: 11pt "DejaVu Sans Mono", "Monospace", monospace;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font: var(--font);
+    cursor: default;
+  }
+  main { padding: 3em; max-width: 70ch; }
+  h1 { font-size: 14pt; margin: 0 0 1em; }
+  p { margin: 0 0 0.75em; line-height: 1.5; }
+  #url { color: var(--dim); overflow-wrap: anywhere; }
+  kbd { color: var(--accent); font: inherit; font-weight: bold; }
+</style>
+</head>
+<body>
+<main>
+  <h1>This tab crashed</h1>
+  <p id="reason"></p>
+  <p id="url"></p>
+  <p>Press <kbd>r</kbd> to reload it.</p>
+</main>
+<script>
+  // The browser puts {"url", "reason"} in the fragment, encoded for a query string.
+  function show() {
+    let info = {};
+    try {
+      info = JSON.parse(decodeURIComponent(location.hash.slice(1).replace(/\+/g, " ")));
+    } catch (e) {}
+    document.getElementById("reason").textContent = info.reason || "";
+    document.getElementById("url").textContent = info.url || "";
+  }
+  addEventListener("hashchange", show);
+  show();
+</script>
+</body>
+</html>

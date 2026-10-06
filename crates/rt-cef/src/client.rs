@@ -27,6 +27,8 @@ pub enum Role {
     Tabbar,
     Statusbar,
     Completion,
+    /// The notice shown in place of a tab whose renderer died.
+    Crashed,
 }
 
 wrap_client! {
@@ -488,6 +490,7 @@ wrap_load_handler! {
             if self.role != Role::Tab {
                 return;
             }
+            let window = browser.as_deref().and_then(crate::tabs::window_of_crashed);
             let effects = shell::with_tab(browser, |s, index, current| {
                 let tab = s.tabs.get_mut(index)?;
                 tab.can_go_back = can_go_back != 0;
@@ -500,9 +503,15 @@ wrap_load_handler! {
                 }
                 tab.progress = Some(0.0);
                 tab.load_error = false;
+                tab.crashed = None;
                 current.then(|| s.engine.load_started())
             })
             .flatten();
+            if is_loading != 0
+                && let Some(window) = window
+            {
+                crate::tabs::show_current_in(window, true);
+            }
             shell::apply(effects.unwrap_or_default());
         }
 
@@ -551,6 +560,7 @@ wrap_load_handler! {
                 Role::Tabbar => shell::with(|s| s.tabbar_ready = true),
                 Role::Statusbar => shell::with(|s| s.statusbar_ready = true),
                 Role::Completion => shell::with(|s| s.completion_ready = true),
+                Role::Crashed => return,
             };
             shell::refresh_ui();
         }

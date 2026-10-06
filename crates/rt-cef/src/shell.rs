@@ -44,6 +44,8 @@ pub struct Tab {
     /// `session.lazy_restore`: the URL to load when the tab is first shown.
     /// Until then the tab shows `about:blank` but keeps `url` and `title`.
     pub pending: Option<String>,
+    /// Why the tab's renderer process died; cleared when it loads again.
+    pub crashed: Option<String>,
 }
 
 impl Tab {
@@ -64,6 +66,7 @@ impl Tab {
             search_match: None,
             scroll: None,
             pending: None,
+            crashed: None,
         }
     }
 
@@ -97,6 +100,8 @@ pub struct WindowState {
     pub statusbar: Option<BrowserView>,
     pub completion: Option<BrowserView>,
     pub overlay: Option<OverlayController>,
+    /// Shown in place of the current tab when its renderer died; created on first use.
+    pub crash_notice: Option<BrowserView>,
     pub tabbar_ready: bool,
     pub statusbar_ready: bool,
     pub completion_ready: bool,
@@ -135,6 +140,7 @@ impl WindowState {
             statusbar: None,
             completion: None,
             overlay: None,
+            crash_notice: None,
             tabbar_ready: false,
             statusbar_ready: false,
             completion_ready: false,
@@ -270,6 +276,7 @@ impl Shell {
             is(&w.tabbar)
                 || is(&w.statusbar)
                 || is(&w.completion)
+                || is(&w.crash_notice)
                 || w.tabs
                     .iter()
                     .any(|t| t.browser().is_some_and(|b| b.identifier() == id))

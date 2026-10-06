@@ -869,7 +869,11 @@ Whatever path wins:
     - The decision is `rt_storage::recovery::recovery()`, with unit tests and four e2e tests in `sessions.rs`.
     - Not done: a `riptide://recover/` page to pick tabs from.
   - **More state per tab:** save each tab's back/forward history and scroll position, so restoring doesn't drop where you were.
-  - **Crashed tabs:** there's no `on_render_process_terminated` handler, so a crashed or killed renderer leaves a dead tab. Show an error page in the tab with "reload" (`r`) and log the reason.
+  - ✅ **Crashed tabs** (2026-10-06):
+    - `on_render_process_terminated` marks the tab crashed and logs the reason. Before this, a dead renderer left a blank grey tab.
+    - A dead renderer can't draw, and navigating to an error page would add a history entry. So each window has a `riptide://ui/crashed.html` view, created on first use, that's shown in the content panel in place of the current tab while it's crashed.
+    - Any new load clears the mark, so `r` brings the page back with its history.
+    - Tests: `renderer_crash.rs` (via `chrome://crash`), plus unit tests for the reason text and the notice URL.
 - **Crash reports** (complements `:report` in M19):
   - **Capture:**
     - A Rust panic hook writes the message, backtrace and version (M18's `--version` string) to `<data>/crashes/<timestamp>.txt`.

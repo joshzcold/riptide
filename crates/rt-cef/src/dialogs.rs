@@ -144,6 +144,18 @@ wrap_request_handler! {
             crate::tls::certificate_error(browser.map(|b| b.identifier()), code, &url, callback).into()
         }
 
+        fn on_render_process_terminated(
+            &self,
+            browser: Option<&mut Browser>,
+            status: TerminationStatus,
+            error_code: ::std::os::raw::c_int,
+            _error_string: Option<&CefString>,
+        ) {
+            if let Some(browser) = browser {
+                crate::tabs::renderer_gone(browser, status, error_code);
+            }
+        }
+
         fn auth_credentials(
             &self,
             browser: Option<&mut Browser>,

@@ -25,6 +25,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("ui", "/tabbar.html") => embedded(ui::TABBAR_HTML),
         ("ui", "/statusbar.html") => embedded(ui::STATUSBAR_HTML),
         ("ui", "/completion.html") => embedded(ui::COMPLETION_HTML),
+        ("ui", "/crashed.html") => embedded(ui::CRASHED_HTML),
         ("help", "/") => Some((crate::help::page(), html)),
         ("changelog", "/") => Some((crate::help::changelog_page(), html)),
         ("history", "/") => Some((crate::help::history_page(), html)),
@@ -163,7 +164,12 @@ mod tests {
 
     #[test]
     fn ui_pages_are_served_with_their_html() {
-        for path in ["/tabbar.html", "/statusbar.html", "/completion.html"] {
+        for path in [
+            "/tabbar.html",
+            "/statusbar.html",
+            "/completion.html",
+            "/crashed.html",
+        ] {
             let (body, mime) = page("ui", path).unwrap_or_else(|| panic!("{path}"));
             assert_eq!(mime, "text/html");
             assert!(

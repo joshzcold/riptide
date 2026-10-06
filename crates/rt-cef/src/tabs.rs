@@ -232,7 +232,7 @@ fn focus_number(number: i64) {
 
 /// Make `index` the visible, focused tab. `force` re-shows it even if it is already current.
 fn switch_to(index: usize, force: bool) {
-    let Some(Some((views, effects))) = shell::with(|s| {
+    let Some(Some((window_id, view, effects))) = shell::with(|s| {
         let leaving = s.tabs.current_index();
         let mode = s.engine.mode();
         if let Some(tab) = s.tabs.get_mut(leaving) {
@@ -243,26 +243,116 @@ fn switch_to(index: usize, force: bool) {
         }
         let current = s.tabs.current()?;
         let url = current.url.clone();
+        let view = current.view.clone();
         s.engine.set_url(&url);
-        let views: Vec<(BrowserView, bool)> = s
-            .tabs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (t.view.clone(), i == s.tabs.current_index()))
-            .collect();
         let left_in = s.tabs.current().map(|t| t.mode);
-        Some((views, s.engine.tab_switched(left_in)))
+        Some((s.id, view, s.engine.tab_switched(left_in)))
     }) else {
         return;
     };
-    for (view, visible) in &views {
-        View::from(view).set_visible((*visible).into());
-    }
-    if let Some((view, _)) = views.iter().find(|(_, visible)| *visible) {
-        View::from(view).request_focus();
-        load_pending(view);
-    }
+    show_current_in(window_id, true);
+    load_pending(&view);
     shell::apply(effects);
+}
+
+/// Show window `window_id`'s current tab and hide the others. A tab whose
+/// renderer died is replaced by the crash notice, since there's nothing left
+/// to draw the page.
+pub fn show_current_in(window_id: u32, focus: bool) {
+    let Some(Some((views, crashed, content, notice))) = shell::with(|s| {
+        let w = s.windows.iter().find(|w| w.id == window_id)?;
+        let current = w.tabs.current_index();
+        let views: Vec<(BrowserView, bool)> = w
+            .tabs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.view.clone(), i == current))
+            .collect();
+        let crashed = w
+            .tabs
+            .current()
+            .and_then(|t| Some(crate::ui::crashed_url(&t.url, t.crashed.as_deref()?)));
+        Some((views, crashed, w.content.clone()?, w.crash_notice.clone()))
+    }) else {
+        return;
+    };
+    let notice = match (&crashed, notice) {
+        (Some(url), None) => {
+            let view = window::create_browser_view(Role::Crashed, url);
+            if let Some(view) = &view {
+                content.add_child_view(Some(&mut View::from(view)));
+                shell::with(|s| {
+                    if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
+                        w.crash_notice = Some(view.clone());
+                    }
+                });
+            }
+            view
+        }
+        (Some(url), Some(view)) => {
+            // Only the fragment changes, so the notice redraws without reloading.
+            if let Some(frame) = view.browser().and_then(|b| b.main_frame()) {
+                frame.load_url(Some(&CefString::from(url.as_str())));
+            }
+            Some(view)
+        }
+        (None, view) => view,
+    };
+    for (view, current) in &views {
+        View::from(view).set_visible((*current && crashed.is_none()).into());
+    }
+    if let Some(notice) = &notice {
+        View::from(notice).set_visible(crashed.is_some().into());
+    }
+    if !focus {
+        return;
+    }
+    let shown = match (&crashed, notice) {
+        (Some(_), Some(notice)) => Some(notice),
+        _ => views
+            .into_iter()
+            .find(|(_, current)| *current)
+            .map(|(v, _)| v),
+    };
+    if let Some(view) = shown {
+        View::from(&view).request_focus();
+    }
+}
+
+/// CEF says `browser`'s renderer process ended. If it's a tab, mark it
+/// crashed and, if it's showing, put the crash notice in its place.
+pub fn renderer_gone(browser: &mut Browser, status: TerminationStatus, error_code: i32) {
+    let reason = crate::ui::crash_reason(status.into());
+    let Some(Some((window, url, current))) = shell::with_tab(Some(browser), |s, index, _| {
+        let current = index == s.tabs.current_index();
+        let window = s.id;
+        let tab = s.tabs.get_mut(index)?;
+        tab.crashed = Some(reason.to_string());
+        tab.progress = None;
+        Some((window, tab.url.clone(), current))
+    }) else {
+        return;
+    };
+    tracing::warn!("the renderer for {url} ended: {reason} (code {error_code})");
+    if current {
+        show_current_in(window, true);
+        shell::show_message(
+            Level::Error,
+            format!("This tab crashed. {reason} Press r to reload it."),
+        );
+    }
+    shell::refresh_ui();
+}
+
+/// The window of a tab that's marked crashed, for showing it again once it reloads.
+pub fn window_of_crashed(browser: &Browser) -> Option<u32> {
+    shell::with(|s| {
+        let (window, index) = s.find_browser(browser)?;
+        let w = &s.windows[window];
+        w.tabs.get(index)?.crashed.as_ref()?;
+        Some(w.id)
+    })
+    .flatten()
 }
 
 /// A lazily restored tab is shown for the first time: load its page.
