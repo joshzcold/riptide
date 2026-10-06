@@ -135,6 +135,51 @@ pub fn apply_prefs(context: &RequestContext, settings: &Settings) {
             v.set_bool((!settings.bool("content.pdf_viewer")).into());
         }),
     );
+    // fonts.web.*: page fonts and sizes.
+    for (setting, pref) in [
+        (
+            "fonts.web.size.default",
+            "webkit.webprefs.default_font_size",
+        ),
+        (
+            "fonts.web.size.default_fixed",
+            "webkit.webprefs.default_fixed_font_size",
+        ),
+        (
+            "fonts.web.size.minimum",
+            "webkit.webprefs.minimum_font_size",
+        ),
+    ] {
+        let size = settings.int(setting) as i32;
+        set(
+            pref,
+            value_create().inspect(|v| {
+                v.set_int(size);
+            }),
+        );
+    }
+    for (setting, pref) in [
+        (
+            "fonts.web.family.standard",
+            "webkit.webprefs.fonts.standard.Zyyy",
+        ),
+        ("fonts.web.family.fixed", "webkit.webprefs.fonts.fixed.Zyyy"),
+        ("fonts.web.family.serif", "webkit.webprefs.fonts.serif.Zyyy"),
+        (
+            "fonts.web.family.sans_serif",
+            "webkit.webprefs.fonts.sansserif.Zyyy",
+        ),
+    ] {
+        let family = settings.str(setting).trim();
+        if !family.is_empty() {
+            set(
+                pref,
+                value_create().inspect(|v| {
+                    v.set_string(Some(&CefString::from(family)));
+                }),
+            );
+        }
+    }
     // Chromium's NetworkPredictionOptions: 0 standard, 2 disabled.
     let prediction = if settings.bool("content.dns_prefetch") {
         0
@@ -194,6 +239,13 @@ pub fn apply_globals(settings: &Settings) {
         "content.webrtc_ip_handling_policy",
         "content.proxy",
         "content.pdf_viewer",
+        "fonts.web.size.default",
+        "fonts.web.size.default_fixed",
+        "fonts.web.size.minimum",
+        "fonts.web.family.standard",
+        "fonts.web.family.fixed",
+        "fonts.web.family.serif",
+        "fonts.web.family.sans_serif",
     ]
     .map(|name| {
         settings

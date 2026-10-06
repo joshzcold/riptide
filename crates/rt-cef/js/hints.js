@@ -13,7 +13,7 @@
       border-radius: 3px;
       background: var(--rt-hints-bg, #ffc542);
       color: var(--rt-hints-fg, #000);
-      font: bold 10pt "DejaVu Sans Mono", monospace;
+      font: var(--rt-font-hints, bold 10pt "DejaVu Sans Mono", monospace);
       line-height: 1.2;
       pointer-events: none;
       white-space: pre;

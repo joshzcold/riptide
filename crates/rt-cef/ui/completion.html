@@ -19,7 +19,10 @@
     --prompt-bg: var(--rt-prompts-bg, #0b2a3f);
     --prompt-fg: var(--rt-prompts-fg, #e9f7f6);
     --row-height: 18px;
-    --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
+    --font: var(--rt-font-completion-entry, 10pt "DejaVu Sans Mono", "Monospace", monospace);
+    --font-category: var(--rt-font-completion-category, bold 10pt "DejaVu Sans Mono", "Monospace", monospace);
+    --font-prompt: var(--rt-font-prompts, 10pt "DejaVu Sans Mono", "Monospace", monospace);
+    --font-keyhint: var(--rt-font-keyhint, 10pt "DejaVu Sans Mono", "Monospace", monospace);
   }
   html, body {
     margin: 0;
@@ -38,9 +41,9 @@
     padding: 0 4px;
     white-space: pre;
   }
-  .header { background: var(--header-bg); color: var(--header-fg); font-weight: bold; }
+  .header { background: var(--header-bg); color: var(--header-fg); font: var(--font-category); }
   .keyhints { display: grid; grid-auto-flow: column; grid-auto-columns: 40ch; }
-  .keyhint { height: var(--row-height); line-height: var(--row-height); padding: 0 4px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
+  .keyhint { font: var(--font-keyhint); height: var(--row-height); line-height: var(--row-height); padding: 0 4px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
   .keyhint .rest { margin-right: 1ch; }
   .keyhint .typed { color: var(--desc-fg); }
   .keyhint .rest { color: var(--keyhint-fg); font-weight: bold; }
@@ -65,6 +68,7 @@
   .prompt-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: var(--header-bg); }
   .prompt-hint { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); color: var(--desc-fg); }
   .cursor { background: var(--fg); color: var(--bg); }
+  .prompt-message, .prompt-input, .prompt-hint { font: var(--font-prompt); }
   /* A floating prompt: the overlay view is the box, so frame it and pad it.
      Amber marks it as a question without shouting. */
   :root { --prompt-accent: var(--rt-prompts-border, #d9b44a); --prompt-key-bg: var(--rt-prompts-key-bg, #3a3420); }
@@ -87,13 +91,13 @@
     gap: 1ch;
     height: 22px;
     padding: 0 4px;
-    font: var(--font);
+    font: var(--font-prompt);
     color: var(--prompt-fg);
     cursor: pointer;
   }
   .prompt-option:hover { background: var(--prompt-key-bg); }
   .prompt-option kbd {
-    font: var(--font);
+    font: var(--font-prompt);
     min-width: 6ch;
     padding: 0 4px;
     border-radius: 3px;

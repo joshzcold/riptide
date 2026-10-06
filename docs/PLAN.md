@@ -765,6 +765,7 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
 - ✅ (2026-10-06) **Phase 1, themes and colors:**
   - `rt_core::theme`: 40 tokens, each overridable by a `colors.*` setting (qutebrowser's names where they exist), sent to the tab bar, status bar and overlay as `--rt-<token>` CSS variables with their updates, and to hint labels.
   - Eleven built-in themes from small palettes (`ui.theme`, `:theme` with completion). Text colors on coloured backgrounds are picked for contrast; unit tests check that every theme defines every token and that every text pair reaches WCAG AA. The `riptide` theme keeps the exact colors from before.
+  - ✅ Fonts: `fonts.default_family`/`default_size` and per-part fonts (statusbar, tabs, completion, prompts, hints, keyhint) as `--rt-font-*` variables, and `fonts.web.*` through Chromium's `webkit.webprefs` preferences. Bigger fonts are cut off until phase 3 sizes the bars.
   - e2e test in `crates/rt-e2e/tests/themes.rs`; checked by screenshot in three themes. Not yet: `ui.theme = auto`, a live preview while picking, user theme files, importers, and the downloads/history pages.
 - **One token set:** named tokens (bg, fg, accent, selected, insert, passthrough, private, warning, error, https, http, hint fg/bg/border, prompt, completion, downloads, keyhint) feed every UI page as CSS variables. They're sent over the UI channel (M13), so a change applies live without reloading anything.
 - **Settings:**

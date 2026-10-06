@@ -1021,7 +1021,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
 
     let current = s.tabs.current();
     // ui.theme and colors.*, sent with every bar's update.
-    let theme = json!(rt_core::theme::resolve(s.engine.settings()));
+    let theme = json!(rt_core::theme::ui_vars(s.engine.settings()));
     let status_json = json!({
         "theme": theme,
         "mode": status.mode,

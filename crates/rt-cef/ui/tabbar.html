@@ -16,7 +16,7 @@
     --pinned-bg: var(--rt-tabs-pinned-bg, #1b5e86);
     --indicator-loading: var(--rt-tabs-indicator-start, #8fe3dc);
     --indicator-error: var(--rt-tabs-indicator-error, #ff6b6b);
-    --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
+    --font: var(--rt-font-tabs-unselected, 10pt "DejaVu Sans Mono", "Monospace", monospace);
   }
   html, body {
     margin: 0;
@@ -51,6 +51,7 @@
   body:not(.vertical) .tab.dragging { flex: 0 0 auto; width: 10ch; min-width: 0; max-width: none; }
   .tab.shifting { transition: transform 120ms ease; }
   .tab.selected {
+    font: var(--rt-font-tabs-selected, var(--font));
     background: var(--selected-bg);
     color: var(--selected-fg);
     box-shadow: inset 0 -2px 0 var(--selected-accent);

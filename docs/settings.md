@@ -118,6 +118,23 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |
 | `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line |
 | `fileselect.single_file.command` | string[] | `["xterm","-e","ranger","--choosefile={}"]` | Program that picks a file for fileselect.handler = external; {} is the file it writes the path to |
+| `fonts.completion.category` | string | `bold default_size default_family` | Font of completion category headers (default_size and default_family stand for those settings) |
+| `fonts.completion.entry` | string | `default_size default_family` | Font of completion entries |
+| `fonts.default_family` | string | `"DejaVu Sans Mono", Monospace, monospace` | Font family that the other fonts.* settings call default_family |
+| `fonts.default_size` | string | `10pt` | Font size that the other fonts.* settings call default_size, e.g. 10pt or 13px |
+| `fonts.hints` | string | `bold default_size default_family` | Font of hint labels |
+| `fonts.keyhint` | string | `default_size default_family` | Font of the key hint popup |
+| `fonts.prompts` | string | `default_size default_family` | Font of prompts |
+| `fonts.statusbar` | string | `default_size default_family` | Font of the status bar; sizes beyond the bar's height are cut off until bars size to their font |
+| `fonts.tabs.selected` | string | `default_size default_family` | Font of the current tab |
+| `fonts.tabs.unselected` | string | `default_size default_family` | Font of the other tabs |
+| `fonts.web.family.fixed` | string | `` | Monospace font for pages (CSS monospace); empty for Chromium's |
+| `fonts.web.family.sans_serif` | string | `` | Sans-serif font for pages; empty for Chromium's |
+| `fonts.web.family.serif` | string | `` | Serif font for pages; empty for Chromium's |
+| `fonts.web.family.standard` | string | `` | Font for pages that don't choose one; empty for Chromium's |
+| `fonts.web.size.default` | integer | `16` | Default text size of pages, in pixels |
+| `fonts.web.size.default_fixed` | integer | `13` | Default size of monospace text in pages, in pixels |
+| `fonts.web.size.minimum` | integer | `0` | Smallest text size pages may use, in pixels (0 for no minimum) |
 | `hints.auto_follow` | always \| unique-match \| full-match \| never | `unique-match` | When a hint is followed without Return: when one is left (unique-match), only when its label is typed in full (full-match), always, or never |
 | `hints.auto_follow_timeout` | integer | `0` | Ignore keys for this many milliseconds after following a hint, so extra typing doesn't reach the page |
 | `hints.chars` | string | `asdfghjkl` | Characters used for hint labels |

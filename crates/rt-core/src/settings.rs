@@ -339,6 +339,22 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+fn font(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(text) if !crate::theme::is_font(text) => Err(format!(
+            "{text:?} isn't a CSS font (e.g. bold 10pt monospace)"
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn font_or_empty(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(text) if text.trim().is_empty() => Ok(()),
+        other => font(other),
+    }
+}
+
 fn color(value: &Value) -> Result<(), String> {
     match value {
         Value::Str(text) if !text.trim().is_empty() && !crate::theme::is_color(text) => {
@@ -1213,6 +1229,122 @@ pub static SETTINGS: &[SettingDef] = &[
             "--choosefile={}".to_string()
         ]),
         "Program that picks a file for fileselect.handler = external; {} is the file it writes the path to"
+    ),
+    def!(
+        "fonts.completion.category",
+        Kind::Str,
+        s("bold default_size default_family"),
+        "Font of completion category headers (default_size and default_family stand for those settings)",
+        font
+    ),
+    def!(
+        "fonts.completion.entry",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of completion entries",
+        font
+    ),
+    def!(
+        "fonts.default_family",
+        Kind::Str,
+        s("\"DejaVu Sans Mono\", Monospace, monospace"),
+        "Font family that the other fonts.* settings call default_family",
+        font
+    ),
+    def!(
+        "fonts.default_size",
+        Kind::Str,
+        s("10pt"),
+        "Font size that the other fonts.* settings call default_size, e.g. 10pt or 13px",
+        font
+    ),
+    def!(
+        "fonts.hints",
+        Kind::Str,
+        s("bold default_size default_family"),
+        "Font of hint labels",
+        font
+    ),
+    def!(
+        "fonts.keyhint",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of the key hint popup",
+        font
+    ),
+    def!(
+        "fonts.prompts",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of prompts",
+        font
+    ),
+    def!(
+        "fonts.statusbar",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of the status bar; sizes beyond the bar's height are cut off until bars size to their font",
+        font
+    ),
+    def!(
+        "fonts.tabs.selected",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of the current tab",
+        font
+    ),
+    def!(
+        "fonts.tabs.unselected",
+        Kind::Str,
+        s("default_size default_family"),
+        "Font of the other tabs",
+        font
+    ),
+    def!(
+        "fonts.web.family.fixed",
+        Kind::Str,
+        s(""),
+        "Monospace font for pages (CSS monospace); empty for Chromium's",
+        font_or_empty
+    ),
+    def!(
+        "fonts.web.family.sans_serif",
+        Kind::Str,
+        s(""),
+        "Sans-serif font for pages; empty for Chromium's",
+        font_or_empty
+    ),
+    def!(
+        "fonts.web.family.serif",
+        Kind::Str,
+        s(""),
+        "Serif font for pages; empty for Chromium's",
+        font_or_empty
+    ),
+    def!(
+        "fonts.web.family.standard",
+        Kind::Str,
+        s(""),
+        "Font for pages that don't choose one; empty for Chromium's",
+        font_or_empty
+    ),
+    def!(
+        "fonts.web.size.default",
+        Kind::Int { min: 1, max: 100 },
+        Value::Int(16),
+        "Default text size of pages, in pixels"
+    ),
+    def!(
+        "fonts.web.size.default_fixed",
+        Kind::Int { min: 1, max: 100 },
+        Value::Int(13),
+        "Default size of monospace text in pages, in pixels"
+    ),
+    def!(
+        "fonts.web.size.minimum",
+        Kind::Int { min: 0, max: 100 },
+        Value::Int(0),
+        "Smallest text size pages may use, in pixels (0 for no minimum)"
     ),
     def!(
         "hints.auto_follow",

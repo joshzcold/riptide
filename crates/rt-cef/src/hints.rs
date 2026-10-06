@@ -314,11 +314,11 @@ fn related_position() -> Position {
 /// Each frame draws its own share of the labels.
 pub fn show(labels: &[String]) {
     let (upper, theme) = shell::with(|s| {
-        let colors = rt_core::theme::resolve(s.engine.settings());
-        let theme: serde_json::Map<String, serde_json::Value> = colors
+        let vars = rt_core::theme::ui_vars(s.engine.settings());
+        let theme: serde_json::Map<String, serde_json::Value> = vars
             .into_iter()
-            .filter(|(token, _)| token.starts_with("hints-"))
-            .map(|(token, color)| (token.to_string(), color.into()))
+            .filter(|(name, _)| name.starts_with("hints-") || name == "font-hints")
+            .map(|(name, value)| (name, value.into()))
             .collect();
         (
             s.engine.settings().bool("hints.uppercase"),

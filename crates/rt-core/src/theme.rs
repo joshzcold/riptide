@@ -267,6 +267,44 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
     Some(t)
 }
 
+/// riptide's own fonts: the CSS variable (`--rt-<name>`) and its setting.
+pub const FONTS: &[(&str, &str)] = &[
+    ("font-statusbar", "fonts.statusbar"),
+    ("font-tabs-selected", "fonts.tabs.selected"),
+    ("font-tabs-unselected", "fonts.tabs.unselected"),
+    ("font-completion-entry", "fonts.completion.entry"),
+    ("font-completion-category", "fonts.completion.category"),
+    ("font-prompts", "fonts.prompts"),
+    ("font-hints", "fonts.hints"),
+    ("font-keyhint", "fonts.keyhint"),
+];
+
+/// A `fonts.*` value as a CSS `font`: qutebrowser's `default_size` and
+/// `default_family` stand for `fonts.default_size` and `fonts.default_family`.
+pub fn font(value: &str, settings: &Settings) -> String {
+    value
+        .replace("default_family", settings.str("fonts.default_family"))
+        .replace("default_size", settings.str("fonts.default_size"))
+}
+
+/// Everything riptide's own pages style themselves with: the colors and
+/// the fonts, as `--rt-<name>` variables.
+pub fn ui_vars(settings: &Settings) -> BTreeMap<String, String> {
+    let mut vars: BTreeMap<String, String> = resolve(settings)
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+    for (name, setting) in FONTS {
+        vars.insert(name.to_string(), font(settings.str(setting), settings));
+    }
+    vars
+}
+
+/// Whether `text` is safe as a CSS `font` value: no way out of the declaration.
+pub fn is_font(text: &str) -> bool {
+    !text.trim().is_empty() && !text.contains([';', '{', '}', '<', '>', '\\'])
+}
+
 /// The colors to use: `ui.theme`, with any `colors.*` setting on top.
 pub fn resolve(settings: &Settings) -> BTreeMap<&'static str, String> {
     let mut colors = theme(settings.str("ui.theme"))
@@ -432,5 +470,36 @@ mod tests {
         }
         assert!((contrast("#000000", "#ffffff") - 21.0).abs() < 0.01);
         assert_eq!(mix("#000000", "#ffffff", 0.5), "#808080");
+    }
+
+    #[test]
+    fn fonts_fill_in_the_defaults() {
+        let mut settings = Settings::default();
+        let vars = ui_vars(&settings);
+        assert_eq!(
+            vars["font-statusbar"],
+            settings.str("fonts.default_size").to_string()
+                + " "
+                + settings.str("fonts.default_family")
+        );
+        assert!(vars["font-hints"].starts_with("bold "));
+        settings
+            .set(
+                "fonts.default_size",
+                crate::settings::Value::Str("12pt".into()),
+            )
+            .unwrap();
+        settings
+            .set(
+                "fonts.tabs.selected",
+                crate::settings::Value::Str("bold default_size serif".into()),
+            )
+            .unwrap();
+        let vars = ui_vars(&settings);
+        assert_eq!(vars["font-tabs-selected"], "bold 12pt serif");
+        assert!(vars["font-statusbar"].starts_with("12pt "));
+        assert!(is_font("bold 10pt \"Fira Code\", monospace"));
+        assert!(!is_font("10pt x; background: red"));
+        assert!(!is_font("10pt x}"));
     }
 }
