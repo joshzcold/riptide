@@ -844,13 +844,29 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
 | Chrome-style tab `BrowserView` in our Alloy window | Refused: "Cannot add Chrome style BrowserView to Alloy style Window" |
 | Chrome-style window with all views Chrome-style (naive switch) | Exits at startup with no error in either log. Not investigated. |
 
-So with Alloy, sharing one tab or one window isn't possible from the page side. Options, in order:
+So with Alloy, sharing one tab or one window isn't possible from the page side. CEF 154 still has no API for it: `on_request_media_access_permission` can only allow or deny, and allowing desktop video always shares the whole screen.
 
-1. **Chrome style for everything** (spike first, about a day). Chrome style brings Chrome's own picker (tab, window, screen), tab capture with "share this tab instead", tab audio, and the "sharing" bar.
-   - This reopens decision #2. Check what breaks: key handling (`on_pre_key_event`), popups as tabs, the UI pages, DevTools (simpler: it's Chrome style already), and Chrome UI we'd have to hide.
-   - Also find why the naive switch exits.
-2. **The desktop portal on Wayland.** Chromium's PipeWire capturer hands screen requests to xdg-desktop-portal, whose dialog picks a window or screen (not a tab). Check whether Alloy goes through it. On X11 there is no portal. Wayland can't be tested here yet (no compositor).
-3. **A small CEF patch** that lets `on_request_media_access_permission` return a chosen `DesktopMediaID`, plus a picker of our own. It means building CEF ourselves, so only if 1 fails, and it's worth proposing upstream.
+**Chrome-style experiment (2026-10-06).** Chrome style does bring Chrome's picker into riptide, within two CEF rules.
+
+- **Measured** (scratch display, with the patch kept outside the repo):
+  - **Crashes on a plain switch:** a Chrome-style `BrowserView` doesn't exist until it's added to a window, so `set_focusable` before adding it segfaults. That was the "exits at startup" above.
+  - **One Chrome-style tab per window:** CEF allows one Chrome-style `BrowserView` per Chrome-style window, plus any number of Alloy ones. It must be added before any Alloy view; otherwise CEF refuses it ("Cannot add multiple Chrome style BrowserViews"), because the first view added sets the window's profile.
+  - **What works** with a Chrome-style window and first tab, and Alloy bars, overlay and later tabs:
+    - The page renders, and riptide's keys work there: `:open`, `o` and completion.
+    - With `on_request_media_access_permission` returning 0 for that tab, Chrome shows its picker: "Chromium Tab", "Window", "Entire Screen", and "Share with tab audio".
+    - Choosing Entire Screen gives the page a track with `displaySurface` `monitor`, and Chrome's "… is sharing your screen" bar appears.
+  - **Not working yet:** the picker's tab list only offers Chrome-style tabs, so riptide's other tabs aren't listed. Window and Entire Screen work as in Chrome; the window list needs a window manager, so it wasn't checked on Xvfb.
+- **Design this points to: call windows.**
+  - `:open --call URL` (or URL patterns in a `content.desktop_capture.call_sites` setting) opens a new window whose first tab is Chrome style. Its bars are added after that tab, and any further tabs in it are Alloy.
+  - Screen-share requests from that tab go to Chrome's picker. Every other tab keeps riptide's prompt and shares the whole screen, as today.
+  - Moving a call to another window, or making an existing tab a call tab, means reopening it, since a tab's style is fixed when it's created.
+- **To check before building it:**
+  - Every place that touches a tab view before it's in a window: `tabs::add_view` hides views first.
+  - Popups from the call tab, DevTools on it, find-in-page, zoom, fullscreen, and Chrome's own accelerators and context menu in that tab.
+  - Whether `on_pre_key_event` sees every key there, including while the picker is open.
+- **Fallbacks if call windows don't hold up:**
+  - The desktop portal on Wayland: its dialog picks a window or screen, not a tab. Wayland can't be tested here yet.
+  - A CEF patch that lets `on_request_media_access_permission` return a chosen `DesktopMediaID`, plus our own picker.
 
 Whatever path wins:
 
