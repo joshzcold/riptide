@@ -2,7 +2,13 @@
 
 ## Release downloads
 
-Each [GitHub release](https://github.com/joshzcold/riptide/releases) has a Linux x86_64 tarball (`riptide-X.Y.Z-linux-x86_64.tar.gz`) and an AppImage, with `SHA256SUMS`. Both contain the binary and the CEF runtime it needs. Unpack the tarball anywhere and run `riptide`, or make the AppImage executable and run it.
+Each [GitHub release](https://github.com/joshzcold/riptide/releases) has three Linux x86_64 downloads, with `SHA256SUMS`. Each contains the binary and the CEF runtime it needs.
+
+| Download | Install |
+|---|---|
+| `riptide_X.Y.Z_amd64.deb` | Ubuntu 24.04+ and Debian 13+: `sudo apt install ./riptide_X.Y.Z_amd64.deb`. It installs to `/opt/riptide` with `riptide` on your `PATH`, a desktop entry, and apt-managed dependencies. Its setuid sandbox helper works even where user namespaces are blocked. |
+| `riptide-X.Y.Z-linux-x86_64.AppImage` | Any distribution: `chmod +x` it and run it. |
+| `riptide-X.Y.Z-linux-x86_64.tar.gz` | Unpack it anywhere and run `riptide`. |
 
 To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify where it was built with `gh attestation verify <file> --repo joshzcold/riptide`.
 

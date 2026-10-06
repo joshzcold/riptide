@@ -23,7 +23,8 @@ Pushing a `vX.Y.Z` tag by hand still works, as long as `Cargo.toml` already has 
 
 `build-release.yml` is shared by releases and nightlies:
 
-- **Linux (x86_64):** `cargo build --release`, then [`scripts/package-linux.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/package-linux.sh) packs the stripped binary and CEF runtime into `riptide-<version>-linux-x86_64.tar.gz` and an AppImage. The whole [smoke test](testing.md) then runs against the unpacked tarball and against the extracted AppImage, so a broken package never ships. `./task package` and `./task appimage` build the same files locally.
+- **Linux (x86_64):** `cargo build --release`, then [`scripts/package-linux.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/package-linux.sh) packs the stripped binary and CEF runtime into `riptide-<version>-linux-x86_64.tar.gz`, an AppImage and `riptide_<version>_amd64.deb`. The whole [smoke test](testing.md) then runs against the unpacked tarball, the extracted AppImage, and the `.deb` installed with apt (with its setuid sandbox), so a broken package never ships. `./task package`, `./task appimage` and `./task deb` build the same files locally.
+  - The `.deb`'s `Depends:` comes from `dpkg-shlibdeps`, so it names the libraries of the distribution it's built on. CI builds on Ubuntu 24.04, which makes it suit Ubuntu 24.04+ and Debian 13+.
 - **macOS and Windows (experimental):** [`scripts/package-experimental.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/package-experimental.sh) packs the binary with the CEF framework (macOS, `.tar.gz`) or runtime files (Windows, `.zip`). Neither runs the browser yet: they need the app bundle and installer work in M10. If either fails to build, the release goes ahead without it.
 
 ## Nightly builds

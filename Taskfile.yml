@@ -52,6 +52,12 @@ tasks:
     cmds:
       - scripts/package-linux.sh --appimage
 
+  deb:
+    desc: Release build as a tarball and a Debian package in dist/ (Linux; needs dpkg-dev)
+    deps: [release]
+    cmds:
+      - scripts/package-linux.sh --deb
+
   changelog:
     desc: 'Regenerate CHANGELOG.md; for a release: task changelog -- --tag v0.2.0'
     cmds:

@@ -31,13 +31,13 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
-      - name: Install CEF runtime libraries, Xvfb, xdotool and appimagetool's needs
+      - name: Install CEF runtime libraries, Xvfb, xdotool, and what appimagetool and the .deb need
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             xvfb xdotool libnss3 libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
             libcups2t64 libpango-1.0-0 libcairo2 libxkbcommon0 libxcomposite1 libxdamage1 \
-            libxrandr2 libxi6 libdrm2 libdbus-1-3 libfuse2t64 file
+            libxrandr2 libxi6 libdrm2 libdbus-1-3 libfuse2t64 file dpkg-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cache CEF binaries
@@ -48,7 +48,7 @@ jobs:
       - run: ./task setup
       - run: cargo build --release --locked
       - name: Package
-        run: scripts/package-linux.sh --appimage "${{ inputs.version }}"
+        run: scripts/package-linux.sh --appimage --deb "${{ inputs.version }}"
       # Ubuntu 24.04 blocks unprivileged user namespaces, which the sandbox needs.
       - name: Allow user namespaces for the sandbox
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -66,12 +66,21 @@ jobs:
           appimage=$(echo "$GITHUB_WORKSPACE"/dist/*.AppImage)
           (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
           BIN=$RUNNER_TEMP/squashfs-root/AppRun scripts/smoke-test.sh
+      # Installed for real: dependencies from apt, /usr/bin/riptide, and the
+      # setuid chrome-sandbox from the package.
+      - name: Install the .deb and smoke-test it
+        env:
+          EXPECT_SANDBOX: "1"
+        run: |
+          sudo apt-get install -y --no-install-recommends ./dist/riptide_*.deb
+          BIN=/usr/bin/riptide scripts/smoke-test.sh
       - uses: actions/upload-artifact@v4
         with:
           name: dist-linux
           path: |
             dist/*.tar.gz
             dist/*.AppImage
+            dist/*.deb
           retention-days: 3
 
   # Experimental: these can't run the browser yet (M10), so a failure here

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Packs a release build and the CEF runtime it needs into a tarball, and
-# with --appimage also into an AppImage:
-#   scripts/package-linux.sh [--appimage] [version]
-#     -> dist/riptide-<version>-linux-<arch>.tar.gz (and .AppImage)
+# with --appimage and --deb also into an AppImage and a Debian package:
+#   scripts/package-linux.sh [--appimage] [--deb] [version]
+#     -> dist/riptide-<version>-linux-<arch>.tar.gz (.AppImage, riptide_<version>_<arch>.deb)
 # The binary finds libcef.so next to itself through its $ORIGIN rpath.
 set -euo pipefail
 
@@ -15,10 +15,15 @@ appimagetool_sha256() {
 }
 
 appimage=false
-if [[ ${1:-} == --appimage ]]; then
-    appimage=true
+deb=false
+while [[ ${1:-} == --* ]]; do
+    case $1 in
+        --appimage) appimage=true ;;
+        --deb) deb=true ;;
+        *) echo "package-linux.sh: unknown option $1" >&2; exit 1 ;;
+    esac
     shift
-fi
+done
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
@@ -76,5 +81,68 @@ APPRUN
     APPIMAGE_EXTRACT_AND_RUN=1 ARCH=$arch "$tool" --no-appstream "$appdir" "dist/$name.AppImage" >&2
     rm -rf "$appdir"
     echo "dist/$name.AppImage"
+fi
+
+if $deb; then
+    case $(uname -m) in
+        x86_64) deb_arch=amd64 ;;
+        aarch64) deb_arch=arm64 ;;
+        *) echo "package-linux.sh: no Debian architecture for $(uname -m)" >&2; exit 1 ;;
+    esac
+    tree=dist/$name.deb-root
+    rm -rf "$tree"
+    mkdir -p "$tree/opt" "$tree/usr/bin" "$tree/DEBIAN"
+    cp -a "$stage" "$tree/opt/riptide"
+    ln -s /opt/riptide/riptide "$tree/usr/bin/riptide"
+    install -Dm644 packaging/riptide.desktop "$tree/usr/share/applications/riptide.desktop"
+    install -Dm644 packaging/riptide.svg "$tree/usr/share/icons/hicolor/scalable/apps/riptide.svg"
+    install -d "$tree/usr/share/doc/riptide"
+    cat >"$tree/usr/share/doc/riptide/copyright" <<EOF
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: riptide
+Source: https://github.com/joshzcold/riptide
+
+Files: *
+Copyright: Joshua Cold
+License: GPL-3.0-or-later
+ On Debian systems, the full text is in /usr/share/common-licenses/GPL-3.
+ Chromium's and CEF's licenses are in /opt/riptide/CREDITS.html.
+EOF
+    # Packaged files must not be group- or world-writable, whatever the umask.
+    chmod -R go-w "$tree"
+    # The sandbox helper must be setuid root where the kernel doesn't allow
+    # unprivileged user namespaces; --root-owner-group makes it root's.
+    chmod 4755 "$tree/opt/riptide/chrome-sandbox"
+
+    # Depends: the system libraries the binaries link, as packages of the
+    # distribution this runs on (built on Ubuntu 24.04: also Debian 13).
+    shlib=$(mktemp -d)
+    mkdir -p "$shlib/debian"
+    printf 'Source: riptide\n\nPackage: riptide\nArchitecture: any\n' >"$shlib/debian/control"
+    depends=$(cd "$shlib" && dpkg-shlibdeps -O -l"$root/$tree/opt/riptide" \
+        "$root/$tree/opt/riptide/riptide" "$root/$tree/opt/riptide/libcef.so" \
+        "$root/$tree/opt/riptide/libvk_swiftshader.so" 2>/dev/null | sed -n 's/^shlibs:Depends=//p')
+    rm -rf "$shlib"
+    [[ -n $depends ]] || { echo "package-linux.sh: dpkg-shlibdeps found no dependencies" >&2; exit 1; }
+    size=$(du -sk --exclude=DEBIAN "$tree" | cut -f1)
+    cat >"$tree/DEBIAN/control" <<EOF
+Package: riptide
+Version: $version
+Architecture: $deb_arch
+Maintainer: Joshua Cold <joshzcold@users.noreply.github.com>
+Installed-Size: $size
+Depends: $depends, xdg-utils
+Section: web
+Priority: optional
+Homepage: https://joshzcold.github.io/riptide/
+Description: keyboard-driven web browser with vim-like bindings
+ Riptide is a browser in the spirit of qutebrowser, built on the Chromium
+ Embedded Framework (CEF) and controlled from Rust: modes, hints, a command
+ line, and configuration in TOML or Lua.
+EOF
+    deb_file=dist/riptide_${version}_$deb_arch.deb
+    dpkg-deb --root-owner-group -Zxz --build "$tree" "$deb_file" >&2
+    rm -rf "$tree"
+    echo "$deb_file"
 fi
 rm -rf "$stage"
