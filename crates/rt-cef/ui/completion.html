@@ -200,6 +200,35 @@
   // where rows are {header}, {name, description, detail, time, selected}, or {message, level}
   // for messages older than the one in the status bar.
 
+  // The height one line of text needs in `font`, at `lineHeight`.
+  function lineBox(font, lineHeight) {
+    const probe = document.createElement("span");
+    probe.textContent = "Mg";
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font};line-height:${lineHeight}`;
+    document.body.append(probe);
+    const height = probe.getBoundingClientRect().height;
+    probe.remove();
+    return height;
+  }
+  // Tell the browser how big this page wants to be, when that changes, so
+  // fonts, padding and ui.css change the real size instead of clipping.
+  let reportedSize = "";
+  function reportSize(size) {
+    const json = JSON.stringify(size);
+    if (json === reportedSize) return;
+    reportedSize = json;
+    rt.send("size", json);
+  }
+
+  // Rows grow with the completion fonts; the browser sizes the overlay by rows.
+  function measure() {
+    const root = getComputedStyle(document.documentElement);
+    const fonts = ["--font", "--font-category", "--font-prompt", "--font-keyhint"].map((v) => root.getPropertyValue(v));
+    const row = Math.max(18, ...fonts.map((f) => Math.ceil(lineBox(f, 1.35))));
+    document.documentElement.style.setProperty("--row-height", `${row}px`);
+    reportSize({ row_height: row });
+  }
+
   // ui.css from the config directory, after the page's own styles.
   let appliedCss = null;
   function applyCss(css) {
@@ -260,6 +289,7 @@
   window.rtRender = (payload) => {
     applyTheme(payload.theme);
     applyCss(payload.css);
+    measure();
     const list = document.getElementById("list");
     // prompt.position = bottom: a framed box floating over the page.
     document.body.classList.toggle("floating", payload.kind === "prompt" && !!payload.floating);

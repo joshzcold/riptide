@@ -154,14 +154,19 @@ wrap_client! {
                 if self.role != Role::Tab
                     && let Some(args) = message.argument_list()
                 {
-                    // A click in a window's tab bar is about that window.
-                    if let Some(browser) = &browser {
-                        shell::activate_browser(browser.identifier());
-                    }
                     let name = CefString::from(&args.string(0)).to_string();
                     let payload = CefString::from(&args.string(1)).to_string();
                     match rt_core::ui_message::parse(&url, &name, &payload) {
-                        Ok(message) => crate::ui::handle_message(message),
+                        Ok(message) => {
+                            // A click in a window's tab bar is about that window; a
+                            // page reporting its size isn't the user picking it.
+                            if message.is_input()
+                                && let Some(browser) = &browser
+                            {
+                                shell::activate_browser(browser.identifier());
+                            }
+                            crate::ui::handle_message(message)
+                        }
                         Err(e) => tracing::warn!("rejected UI message: {e}"),
                     }
                 }

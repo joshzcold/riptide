@@ -339,6 +339,28 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+fn padding(value: &Value) -> Result<(), String> {
+    let Value::Str(text) = value else {
+        return Ok(());
+    };
+    let parts: Vec<&str> = text.split_whitespace().collect();
+    let length = |p: &&str| {
+        let number = p.strip_suffix("px").unwrap_or(p);
+        number == "0"
+            || (p.ends_with("px")
+                && number
+                    .parse::<f64>()
+                    .is_ok_and(|n| (0.0..=100.0).contains(&n)))
+    };
+    if (1..=4).contains(&parts.len()) && parts.iter().all(length) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{text:?} isn't CSS padding in pixels, e.g. 0 4px or 2px 8px 2px 8px"
+        ))
+    }
+}
+
 fn font(value: &Value) -> Result<(), String> {
     match value {
         Value::Str(text) if !crate::theme::is_font(text) => Err(format!(
@@ -1652,6 +1674,13 @@ pub static SETTINGS: &[SettingDef] = &[
         "Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once"
     ),
     def!(
+        "statusbar.padding",
+        Kind::Str,
+        s("0 4px"),
+        "Space around the status bar's text, as CSS padding (top right bottom left), e.g. 2px 8px; the bar grows to fit",
+        padding
+    ),
+    def!(
         "statusbar.position",
         Kind::Enum(&["top", "bottom"]),
         s("bottom"),
@@ -1756,6 +1785,13 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(POSITIONS),
         s("last"),
         "Where other new tabs go (:open -t)"
+    ),
+    def!(
+        "tabs.padding",
+        Kind::Str,
+        s("0 4px 0 0"),
+        "Space around each tab's title, as CSS padding (top right bottom left); the tab bar grows to fit",
+        padding
     ),
     def!(
         "tabs.pinned.close",

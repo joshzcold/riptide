@@ -24,6 +24,8 @@ thread_local! {
     /// The tab bar's preferred size. CEF asks for it during layout, which
     /// can happen while the shell is borrowed, so it lives outside the shell.
     static TABBAR_SIZE: Cell<(i32, i32)> = const { Cell::new((1, TABBAR_HEIGHT)) };
+    /// The heights the bars' pages asked for (fonts, padding, ui.css).
+    static BAR_HEIGHTS: Cell<(i32, i32)> = const { Cell::new((TABBAR_HEIGHT, STATUSBAR_HEIGHT)) };
 }
 
 /// The DevTools window inspecting browser `id`, if one is open.
@@ -81,6 +83,28 @@ impl BarPlacement {
     pub fn statusbar_on_top(&self) -> bool {
         self.statusbar == "top"
     }
+}
+
+/// A bar's page asked for `height` pixels: lay every window out again.
+pub fn set_bar_height(bar: rt_core::ui_message::Bar, height: i32) {
+    let changed = BAR_HEIGHTS.with(|h| {
+        let (tabbar, statusbar) = h.get();
+        let next = match bar {
+            rt_core::ui_message::Bar::Tabbar => (height, statusbar),
+            rt_core::ui_message::Bar::Statusbar => (tabbar, height),
+        };
+        h.replace(next) != next
+    });
+    if !changed {
+        return;
+    }
+    let windows: Vec<Window> =
+        shell::with(|s| s.windows.iter().filter_map(|w| w.window.clone()).collect())
+            .unwrap_or_default();
+    for window in windows {
+        View::from(&window).invalidate_layout();
+    }
+    shell::position_overlay();
 }
 
 /// Put the bars where `placement` says. Top and bottom bars go in the
@@ -626,13 +650,17 @@ fn open_start_tabs(urls: &[String]) {
 /// Non-empty sizes: a zero dimension counts as "unset" and falls back to the
 /// browser's large default, which squeezes the page out of the layout.
 fn bar_size(role: Role) -> Size {
+    let (tabbar_height, statusbar_height) = BAR_HEIGHTS.with(Cell::get);
     match role {
         Role::Statusbar => Size {
             width: 1,
-            height: STATUSBAR_HEIGHT,
+            height: statusbar_height,
         },
         Role::Tabbar => {
             let (width, height) = TABBAR_SIZE.with(Cell::get);
+            // A row (height above 1) takes the height its page asked for; a
+            // side bar stretches.
+            let height = if height > 1 { tabbar_height } else { height };
             Size { width, height }
         }
         _ => Size {

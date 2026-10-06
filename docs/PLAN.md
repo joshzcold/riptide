@@ -662,7 +662,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ (2026-10-05) `statusbar.widgets` with qutebrowser's names (keypress, search_match, url, scroll, scroll_raw, history, tabs, progress, `clock[:format]`, `text:…`) plus downloads, muted and zoom. Unknown names are rejected.
     - `scroll` reads the current tab's position twice a second while the widget is shown, rather than giving pages a hook that would let them detect the browser.
     - The smoke test can't read the status bar's text, so the widgets were checked by screenshot.
-  - `statusbar.padding` waits for M20's measured bar sizes.
+  - ✅ (2026-10-06) `statusbar.padding`, with M20's measured bar sizes.
 - ✅ **Key hints** (tier 1, 2026-10-05): after `keyhint.delay`, the overlay lists what a pending key chain can still become, minus `keyhint.blacklist` globs.
   - The entries are laid out in columns, letters first.
   - `Engine::keyhints` and `Keymap::continuations` are unit tested; the layout was checked by screenshot.
@@ -772,7 +772,7 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
 - ✅ (2026-10-06) **Phase 1, themes and colors:**
   - `rt_core::theme`: 40 tokens, each overridable by a `colors.*` setting (qutebrowser's names where they exist), sent to the tab bar, status bar and overlay as `--rt-<token>` CSS variables with their updates, and to hint labels.
   - Eleven built-in themes from small palettes (`ui.theme`, `:theme` with completion). Text colors on coloured backgrounds are picked for contrast; unit tests check that every theme defines every token and that every text pair reaches WCAG AA. The `riptide` theme keeps the exact colors from before.
-  - ✅ Fonts: `fonts.default_family`/`default_size` and per-part fonts (statusbar, tabs, completion, prompts, hints, keyhint) as `--rt-font-*` variables, and `fonts.web.*` through Chromium's `webkit.webprefs` preferences. Bigger fonts are cut off until phase 3 sizes the bars.
+  - ✅ Fonts: `fonts.default_family`/`default_size` and per-part fonts (statusbar, tabs, completion, prompts, hints, keyhint) as `--rt-font-*` variables, and `fonts.web.*` through Chromium's `webkit.webprefs` preferences. The bars grow with them (phase 3).
   - ✅ Custom CSS: `ui.css` (sent to the bars and overlay with their updates) and `content.user_stylesheets` (injected at load start and load end, per site), both re-read within a second of a change (`userstyle.rs`).
   - ✅ Pages: `colors.webpage.bg` (each new tab's background color), and `colors.webpage.darkmode.enabled` now live and per site through DevTools' `Emulation.setAutoDarkModeOverride` instead of a startup switch. Both checked by screenshot pixels (neither shows to page JavaScript).
   - ✅ Readability pass (2026-10-06, after user feedback): every theme checked by screenshot in every state. Text on a coloured status bar (the URL too) takes the bar's text colour; accent-coloured text (descriptions, key hints, https URLs, prompt titles and keys, typed hint characters) is nudged until readable; hint labels in light themes get a lighter background; the current tab is tinted with the accent; very bright mode and message bars are toned down in dark themes; pinned tabs get their own text colour (`colors.tabs.pinned.odd.fg`). The contrast test covers all of these pairs.
@@ -795,7 +795,8 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
   - `colors.webpage.bg` sets the background shown while a page loads, so dark themes don't flash white.
   - The dark-mode setting is live and per site.
 - **Size, shape and position.** Today each bar is a separate CEF view whose height is a Rust constant (`TABBAR_HEIGHT`, `STATUSBAR_HEIGHT`). The overlay that holds completion and prompts is sized as rows × a fixed row height. CSS alone can't resize any of them, so:
-  - **Pages report their size:** each UI page measures its content (fonts, padding, rows) and reports its height or width over the UI channel, and Rust lays the views out to match. Fonts, padding and `ui.css` then change real sizes, with no clipping.
+  - ✅ (2026-10-06) **Pages report their size:** the tab bar and status bar report their height and the overlay its row height (`ui_message` `size`), and `window::bar_size` and the overlay's sizing use them. `statusbar.padding` and `tabs.padding` came with it.
+    - The plan was: each UI page measures its content (fonts, padding, rows) and reports its height or width over the UI channel, and Rust lays the views out to match. Fonts, padding and `ui.css` then change real sizes, with no clipping.
   - **Placement:**
     - The tab bar goes top, bottom, left or right (`tabs.position`), with `tabs.width` for vertical tabs; the status bar goes top or bottom (`statusbar.position`); each can be hidden (`tabs.show`, `statusbar.show`).
     - The overlay is either `docked` (full width above the status bar, as now and in qutebrowser) or `floating` (a centered box like a command palette). `ui.overlay.position`, `ui.overlay.width` and `completion.height` (rows or a percent) control it.

@@ -343,6 +343,14 @@ pub fn ui_vars(settings: &Settings) -> BTreeMap<String, String> {
     for (name, setting) in FONTS {
         vars.insert(name.to_string(), font(settings.str(setting), settings));
     }
+    vars.insert(
+        "statusbar-padding".into(),
+        settings.str("statusbar.padding").to_string(),
+    );
+    vars.insert(
+        "tabs-padding".into(),
+        settings.str("tabs.padding").to_string(),
+    );
     vars
 }
 

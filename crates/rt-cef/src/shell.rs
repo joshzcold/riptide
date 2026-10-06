@@ -16,7 +16,26 @@ use crate::{clipboard, hints, storage, tabs};
 
 const SCROLL_JS: &str = include_str!("../js/scroll.js");
 const SCROLL_STEP_PX: u32 = 40;
-const COMPLETION_ROW_HEIGHT: i32 = 18;
+/// The overlay's row height until its page measures one.
+const DEFAULT_ROW_HEIGHT: i32 = 18;
+
+thread_local! {
+    /// The overlay's row height, which grows with the completion fonts.
+    static ROW_HEIGHT: std::cell::Cell<i32> = const { std::cell::Cell::new(DEFAULT_ROW_HEIGHT) };
+}
+
+fn row_height() -> i32 {
+    ROW_HEIGHT.with(std::cell::Cell::get)
+}
+
+/// The overlay's page measured its rows: size it by them from now on.
+pub fn set_row_height(height: i32) {
+    if ROW_HEIGHT.with(|r| r.replace(height)) != height {
+        // Force the overlay to be sized again.
+        with(|s| s.last_overlay.clear());
+        refresh_ui();
+    }
+}
 const COMPLETION_MAX_ROWS: usize = 12;
 const OVERLAY_MAX_ROWS: usize = 14;
 
@@ -1416,7 +1435,7 @@ fn completion_max_rows(s: &Shell) -> usize {
                 .window
                 .as_ref()
                 .map_or(800, |w| View::from(w).bounds().height);
-            ((f64::from(window) * percent / 100.0) as i32 / COMPLETION_ROW_HEIGHT).max(2) as usize
+            ((f64::from(window) * percent / 100.0) as i32 / row_height()).max(2) as usize
         }
         None => COMPLETION_MAX_ROWS,
     }
@@ -1525,7 +1544,10 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
 }
 
 /// Height of one option's button in a floating prompt.
-const PROMPT_OPTION_HEIGHT: i32 = 22;
+/// A floating prompt's option is a row with a little room around its key.
+fn prompt_option_height() -> i32 {
+    row_height() + 4
+}
 /// Space above the buttons.
 const PROMPT_OPTIONS_GAP: i32 = 8;
 
@@ -1533,8 +1555,8 @@ const PROMPT_OPTIONS_GAP: i32 = 8;
 fn floating_prompt_height(rows: usize, prompt: &rt_core::prompt::PromptView) -> i32 {
     let options = prompt.options.len();
     let text_rows = rows.saturating_sub(options) as i32;
-    text_rows * COMPLETION_ROW_HEIGHT
-        + options as i32 * PROMPT_OPTION_HEIGHT
+    text_rows * row_height()
+        + options as i32 * prompt_option_height()
         + PROMPT_OPTIONS_GAP
         + 2 * PROMPT_PADDING
 }
@@ -1586,8 +1608,7 @@ fn overlay_bounds(s: &Shell, rows: usize) -> Option<Rect> {
 /// Next to the status bar, on the page's side of it; at the page area's
 /// edge when the status bar is hidden.
 fn completion_bounds(s: &Shell, rows: usize) -> Option<Rect> {
-    let height =
-        rows.min(OVERLAY_MAX_ROWS.max(completion_max_rows(s))) as i32 * COMPLETION_ROW_HEIGHT;
+    let height = rows.min(OVERLAY_MAX_ROWS.max(completion_max_rows(s))) as i32 * row_height();
     let top = s.bar_placement.statusbar == "top";
     let (x, width, edge) = if s.statusbar_shown {
         let bar = View::from(s.statusbar.as_ref()?).bounds();

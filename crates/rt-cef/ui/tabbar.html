@@ -37,7 +37,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 0 4px 0 0;
+    padding: var(--rt-tabs-padding, 0 4px 0 0);
     white-space: pre;
     line-height: 1.5;
     box-sizing: border-box;
@@ -216,6 +216,41 @@
   }
 
 
+  // The height one line of text needs in `font`, at `lineHeight`.
+  function lineBox(font, lineHeight) {
+    const probe = document.createElement("span");
+    probe.textContent = "Mg";
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font};line-height:${lineHeight}`;
+    document.body.append(probe);
+    const height = probe.getBoundingClientRect().height;
+    probe.remove();
+    return height;
+  }
+  // Tell the browser how big this page wants to be, when that changes, so
+  // fonts, padding and ui.css change the real size instead of clipping.
+  let reportedSize = "";
+  function reportSize(size) {
+    const json = JSON.stringify(size);
+    if (json === reportedSize) return;
+    reportedSize = json;
+    rt.send("size", json);
+  }
+
+  // A row of tabs: the taller of the two tab fonts, plus the tab padding.
+  function measure() {
+    const tab = document.createElement("div");
+    tab.className = "tab";
+    tab.style.visibility = "hidden";
+    bar.append(tab);
+    const style = getComputedStyle(tab);
+    const pad = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    tab.classList.add("selected");
+    const selectedFont = getComputedStyle(tab).font;
+    tab.remove();
+    const line = Math.max(lineBox(style.font, 1.5), lineBox(selectedFont, 1.5));
+    reportSize({ height: Math.ceil(line + pad) });
+  }
+
   // ui.css from the config directory, after the page's own styles.
   let appliedCss = null;
   function applyCss(css) {
@@ -245,6 +280,7 @@
   window.rtRender = (payload) => {
     applyTheme(payload.theme);
     applyCss(payload.css);
+    measure();
     // Replacing the tabs mid-drag would drop the one being dragged.
     if (press?.dragging) {
       deferred = payload;

@@ -118,3 +118,37 @@ fn ui_css_and_user_stylesheets_apply_and_reload() {
     wait_for(&b, "the status bar after the edit", bar, "rgb(7, 8, 9)");
     wait_for(&b, "the page after the edit", page, "rgb(10, 11, 12)");
 }
+
+/// Wait until `bar`'s page is taller (or shorter) than `than` pixels.
+fn wait_height(b: &Browser, bar: &str, what: &str, grow: bool, than: i64) -> i64 {
+    let start = std::time::Instant::now();
+    loop {
+        let height: i64 = b.eval_bar(bar, "String(innerHeight)").parse().unwrap_or(0);
+        if (grow && height > than) || (!grow && height > 0 && height <= than) {
+            return height;
+        }
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "{what}: the {bar} is {height}px"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn bars_grow_with_their_fonts_and_padding() {
+    let b = Browser::start("page.html");
+    wait_height(&b, "statusbar", "the default status bar", false, 20);
+    b.run("set fonts.statusbar 18pt default_family");
+    let tall = wait_height(&b, "statusbar", "a big font", true, 20);
+    b.run("set statusbar.padding 10px 4px");
+    wait_height(&b, "statusbar", "padding", true, tall);
+    b.run("set fonts.tabs.selected 18pt default_family");
+    b.run("set fonts.tabs.unselected 18pt default_family");
+    wait_height(&b, "tabbar", "a big tab font", true, 20);
+    b.run("set statusbar.padding 4em");
+    b.wait_until("a bad padding is refused", |s| {
+        s.message().is_some_and(|m| m.contains("padding"))
+    });
+}

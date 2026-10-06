@@ -179,6 +179,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `session.default_name` | string | `` | Session that :session-save, :wq and auto_save.session use; empty means the last one loaded, or default |
 | `session.lazy_restore` | boolean | `false` | When restoring a session, load background tabs only when they are first shown |
 | `spellcheck.languages` | string[] | `[]` | Spell-check languages such as en-US (empty: off); Chromium downloads each dictionary from Google once |
+| `statusbar.padding` | string | `0 4px` | Space around the status bar's text, as CSS padding (top right bottom left), e.g. 2px 8px; the bar grows to fit |
 | `statusbar.position` | top \| bottom | `bottom` | Where the status bar is |
 | `statusbar.show` | always \| never \| in-mode | `always` | When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode) |
 | `statusbar.widgets` | string[] | `["keypress","downloads","muted","zoom","search_match","url","scroll","history","tabs","progress"]` | What the right side of the status bar shows, in order: keypress, downloads, muted, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:… |
@@ -193,6 +194,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.mousewheel_switching` | boolean | `true` | Switch tabs with the mouse wheel over the tab bar |
 | `tabs.new_position.related` | prev \| next \| first \| last | `next` | Where tabs opened from a page go (popups, hints) |
 | `tabs.new_position.unrelated` | prev \| next \| first \| last | `last` | Where other new tabs go (:open -t) |
+| `tabs.padding` | string | `0 4px 0 0` | Space around each tab's title, as CSS padding (top right bottom left); the tab bar grows to fit |
 | `tabs.pinned.close` | ask \| refuse \| close | `ask` | Closing a pinned tab without --force: ask first, refuse, or just close it |
 | `tabs.pinned.frozen` | boolean | `true` | Keep pinned tabs on their page: :open in a pinned tab opens a new tab |
 | `tabs.pinned.shrink` | boolean | `true` | Shrink pinned tabs to their icon and number |

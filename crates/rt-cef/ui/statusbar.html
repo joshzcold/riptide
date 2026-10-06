@@ -35,7 +35,8 @@
     display: flex;
     align-items: center;
     height: 100%;
-    padding: 0 4px;
+    box-sizing: border-box;
+    padding: var(--rt-statusbar-padding, 0 4px);
     white-space: pre;
     gap: 1ch;
   }
@@ -141,6 +142,33 @@
   }, 1000);
 
 
+  // The height one line of text needs in `font`, at `lineHeight`.
+  function lineBox(font, lineHeight) {
+    const probe = document.createElement("span");
+    probe.textContent = "Mg";
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font};line-height:${lineHeight}`;
+    document.body.append(probe);
+    const height = probe.getBoundingClientRect().height;
+    probe.remove();
+    return height;
+  }
+  // Tell the browser how big this page wants to be, when that changes, so
+  // fonts, padding and ui.css change the real size instead of clipping.
+  let reportedSize = "";
+  function reportSize(size) {
+    const json = JSON.stringify(size);
+    if (json === reportedSize) return;
+    reportedSize = json;
+    rt.send("size", json);
+  }
+
+  function measure() {
+    const bar = $("bar");
+    const style = getComputedStyle(bar);
+    const pad = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    reportSize({ height: Math.ceil(lineBox(style.font, 1.5) + pad) });
+  }
+
   // ui.css from the config directory, after the page's own styles.
   let appliedCss = null;
   function applyCss(css) {
@@ -170,6 +198,7 @@
   window.rtRender = (state) => {
     applyTheme(state.theme);
     applyCss(state.css);
+    measure();
     const bar = $("bar");
     const left = $("left");
     bar.className = state.mode;

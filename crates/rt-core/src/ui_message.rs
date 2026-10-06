@@ -18,6 +18,27 @@ pub enum UiMessage {
     BarClick,
     /// A prompt's button: press its key. Only keys the prompt offers count.
     PromptKey { key: String },
+    /// The tab bar's or status bar's natural height for its font and padding.
+    BarHeight { bar: Bar, height: u32 },
+    /// The overlay's row height for its fonts.
+    RowHeight { height: u32 },
+}
+
+/// Which bar a size is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bar {
+    Tabbar,
+    Statusbar,
+}
+
+impl UiMessage {
+    /// Whether the user did something, as opposed to a page reporting its size.
+    pub fn is_input(&self) -> bool {
+        !matches!(
+            self,
+            UiMessage::BarHeight { .. } | UiMessage::RowHeight { .. }
+        )
+    }
 }
 
 /// Pages allowed to send messages, by `riptide://ui/` path.
@@ -26,6 +47,21 @@ pub const UI_PREFIX: &str = "riptide://ui/";
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Nothing {}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Height {
+    height: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RowHeight {
+    row_height: u32,
+}
+
+/// Sizes a page may ask for, in pixels.
+const SIZES: std::ops::RangeInclusive<u32> = 8..=200;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -95,6 +131,25 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let Nothing {} = payload(name, json)?;
             Ok(UiMessage::BarClick)
         }
+        (page @ ("tabbar.html" | "statusbar.html"), "size") => {
+            let Height { height } = payload(name, json)?;
+            if !SIZES.contains(&height) {
+                return Err(format!("{name}: height {height} out of range"));
+            }
+            let bar = if page == "tabbar.html" {
+                Bar::Tabbar
+            } else {
+                Bar::Statusbar
+            };
+            Ok(UiMessage::BarHeight { bar, height })
+        }
+        ("completion.html", "size") => {
+            let RowHeight { row_height } = payload(name, json)?;
+            if !SIZES.contains(&row_height) {
+                return Err(format!("{name}: row height {row_height} out of range"));
+            }
+            Ok(UiMessage::RowHeight { height: row_height })
+        }
         ("completion.html", "prompt-key") => {
             let PromptKey { key } = payload(name, json)?;
             if key.is_empty() || key.len() > 20 {
@@ -149,6 +204,18 @@ mod tests {
             Ok(UiMessage::PromptKey { key: "y".into() })
         );
         assert!(parse(tabbar, "prompt-key", r#"{"key": "y"}"#).is_err());
+        assert_eq!(
+            parse(tabbar, "size", r#"{"height": 24}"#),
+            Ok(UiMessage::BarHeight {
+                bar: Bar::Tabbar,
+                height: 24
+            })
+        );
+        assert!(parse(tabbar, "size", r#"{"height": 5000}"#).is_err());
+        assert_eq!(
+            parse(overlay, "size", r#"{"row_height": 22}"#),
+            Ok(UiMessage::RowHeight { height: 22 })
+        );
         assert!(parse(overlay, "prompt-key", r#"{"key": ""}"#).is_err());
         assert!(parse(tabbar, "bar-click", r#"{"x": 1}"#).is_err());
         assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());

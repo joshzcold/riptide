@@ -45,7 +45,14 @@ The [settings reference](../reference/settings.md) lists every `colors.*` settin
 "fonts.tabs.selected" = "bold default_size default_family"
 ```
 
-The bars don't grow with the font yet, so sizes much above the default are cut off.
+The tab bar, the status bar and the completion rows grow to fit their fonts. `statusbar.padding` and `tabs.padding` add room around the text, in pixels like CSS `padding`:
+
+```toml
+"statusbar.padding" = "4px 8px"
+"tabs.padding" = "2px 6px"
+```
+
+Padding or font sizes set in `ui.css` resize the bars too.
 
 Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and `.sans_serif` (empty keeps Chromium's) and `fonts.web.size.default`, `.default_fixed` and `.minimum` in pixels. Pages pick them up when they reload.
 
