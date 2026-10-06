@@ -4,11 +4,11 @@ The tab keys are in [Keys and modes](keys.md#common-keys): `J`/`K` switch tabs, 
 
 ## Pinned tabs
 
-Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shrink`), and survive `d` and `co` unless you add `--force`. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
+Pinned tabs stay at the left, shrink to their icon and number (`tabs.pinned.shrink`), and survive `co` unless you add `--force`. `d` on a pinned tab asks first (`tabs.pinned.close`: `ask`, `refuse` or `close`); `:tab-close --force` doesn't, and `u` reopens it pinned. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
 
 ## The tab bar
 
-The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder.
+The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned`) and works with the mouse: click to select, middle-click to close (`tabs.close_mouse_button`: `middle`, `right` or `none`), scroll to switch (`tabs.mousewheel_switching`), and drag to reorder: the tab follows the pointer and the others move aside to show where it lands.
 
 The current tab is the darkest in the bar. To also underline it (or, in a vertical bar, mark its right edge), set `colors.tabs.selected.accent` to a CSS color, e.g. `:set colors.tabs.selected.accent #2ec4b6`; `:config-unset colors.tabs.selected.accent` removes the line again.
 

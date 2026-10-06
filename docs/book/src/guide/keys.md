@@ -29,10 +29,11 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `o` / `O` | `:open ` / `:open -t ` (new tab) |
 | `go` / `gO` | Edit the current URL, in this tab / a new tab |
 | `Ctrl-t` | `open -t` (start page in a new tab) |
-| `J` `K`, `gt` `gT` | `tab-next` / `tab-prev` |
+| `J` `K`, `gT` | `tab-next` / `tab-prev` |
 | `Alt-1`…`Alt-9`, `g0` `g$` | `tab-focus N` / first / last (a count also works, e.g. `3J`) |
 | `Ctrl-Tab`, `Ctrl-^` | `tab-focus last` (previously focused tab) |
-| `T` | `:tab-select`: pick a tab in any window by title or URL, with completion |
+| `gt`, `T` | `:tab-select`: a list of the open tabs, this window's first. Type a number to pick that tab, or words to filter by title or URL, then `Return` |
+| `gD` | `tab-give`: move the tab to a new window |
 | `:tab-clone [-b] [-w]`, `:tab-give [N]`, `:tab-take W/T` | Duplicate the tab (in the background / a new window), move it to window N or a new window, or bring a tab here from another window. Pages are reopened, so their back/forward history stays behind. |
 | `d`, `Ctrl-w` | `tab-close` |
 | `u`, `Ctrl-Shift-t` | `undo` (reopen the last closed tab where it was) |

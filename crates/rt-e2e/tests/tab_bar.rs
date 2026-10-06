@@ -59,3 +59,50 @@ fn tab_bar_title_alignment_and_indicator_width() {
         "7",
     );
 }
+
+/// Press on tab `from`, move the pointer to the middle of tab `over` (and a
+/// little past it), and report each tab's transform before releasing.
+const DRAG: &str = r#"
+(() => {
+  const bar = document.getElementById('tabs');
+  const tabs = [...bar.children];
+  const at = (i) => { const r = tabs[i].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+  const fire = (type, [x, y]) => bar.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: y }));
+  const [x0, y0] = at(FROM);
+  const [x1, y1] = at(OVER);
+  fire('pointerdown', [x0, y0]);
+  fire('pointermove', [x0 + 10, y0]);
+  fire('pointermove', [x1 + 5, y1]);
+  const transforms = tabs.map((t) => t.style.transform || 'none').join('|');
+  fire('pointerup', [x1 + 5, y1]);
+  return transforms;
+})()
+"#;
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_dragging_shows_the_tab_moving_and_drops_it_there() {
+    let b = Browser::start("nav1.html");
+    for page in ["second.html", "nav2.html"] {
+        let url = b.url(page);
+        b.run(&format!("open -t {url}"));
+        b.wait_until("the tab loads", |s| s.tab().is_loaded(&url));
+    }
+    wait_bar(&b, "String(document.querySelectorAll('.tab').length)", "3");
+    let transforms = b.eval_bar("tabbar", &DRAG.replace("FROM", "0").replace("OVER", "2"));
+    let parts: Vec<&str> = transforms.split('|').collect();
+    assert!(
+        parts[0].starts_with("translateX("),
+        "the dragged tab follows: {transforms}"
+    );
+    assert!(
+        parts[1].starts_with("translateX(-"),
+        "the others make room: {transforms}"
+    );
+    assert!(
+        parts[2].starts_with("translateX(-"),
+        "the others make room: {transforms}"
+    );
+    let first = b.url("nav1.html");
+    b.wait_until("nav1 is now last", |s| s.tabs()[2].url == first);
+}

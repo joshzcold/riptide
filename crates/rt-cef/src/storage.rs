@@ -177,6 +177,7 @@ pub fn set_title(url: &str, title: &str) {
 fn item(category: &'static str, name: &str, description: &str) -> Completion {
     Completion {
         time: None,
+        detail: None,
         category,
         name: name.to_string(),
         description: description.to_string(),

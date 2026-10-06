@@ -82,7 +82,8 @@ pub struct WindowState {
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
     /// Closed tabs as (index, url), newest last, for `undo`.
-    pub closed: Vec<(usize, String)>,
+    /// Closed tabs for `u`: index, URL and whether it was pinned.
+    pub closed: Vec<(usize, String, bool)>,
     pub tabbar: Option<BrowserView>,
     /// The page area's row, which also holds a left or right tab bar.
     pub row: Option<Panel>,
@@ -1298,6 +1299,7 @@ fn completion_rows(view: &CompletionView, max_rows: usize) -> Vec<serde_json::Va
                 "name": item.name,
                 "description": item.description,
                 "time": item.time,
+                "detail": item.detail,
                 "selected": view.selected == Some(i),
             }));
         }

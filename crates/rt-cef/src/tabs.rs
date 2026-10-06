@@ -59,7 +59,15 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         }
         Command::TabMove(target) => move_current(*target, count),
         Command::Undo => match shell::with(|s| s.closed.pop()).flatten() {
-            Some((index, url)) => open(&url, Position::At(index), true),
+            Some((index, url, pinned)) => {
+                open(&url, Position::At(index), true);
+                if pinned {
+                    shell::with(|s| {
+                        let current = s.tabs.current_index();
+                        s.tabs.set_pinned(current, true);
+                    });
+                }
+            }
             None => shell::show_message(Level::Error, "No closed tabs to restore"),
         },
         _ => return false,
@@ -68,15 +76,61 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     true
 }
 
-/// Close a tab from a command or a middle-click; pinned tabs need `force`.
+/// Close a tab from a command or a middle-click. A pinned tab follows
+/// `tabs.pinned.close` (ask, refuse or close) unless `force`.
 pub fn close_unless_pinned(index: usize, force: bool) {
-    if !force && shell::with(|s| s.tabs.is_pinned(index)).unwrap_or(false) {
-        return shell::show_message(
-            Level::Error,
-            "Tab is pinned! Use :tab-close --force to close it",
-        );
+    let pinned = shell::with(|s| {
+        let tab = s.tabs.get(index)?;
+        let policy = s.engine.settings().str("tabs.pinned.close").to_string();
+        s.tabs.is_pinned(index).then(|| {
+            let title = if tab.title.is_empty() {
+                tab.url.clone()
+            } else {
+                tab.title.clone()
+            };
+            (tab.view.browser().map(|b| b.identifier()), title, policy)
+        })
+    })
+    .flatten();
+    let Some((browser, title, policy)) = pinned.filter(|_| !force) else {
+        return close(index);
+    };
+    match policy.as_str() {
+        "close" => return close(index),
+        "refuse" => {
+            return shell::show_message(
+                Level::Error,
+                "Tab is pinned! Use :tab-close --force to close it",
+            );
+        }
+        _ => {}
     }
-    close(index);
+    crate::prompts::ask(
+        browser,
+        crate::prompts::Scope::Other,
+        "Close pinned tab?",
+        format!("Close pinned tab {title}?"),
+        rt_core::prompt::PromptKind::YesNo {
+            default: false,
+            remember: rt_core::prompt::Remember::Never,
+        },
+        move |answer| {
+            if !matches!(answer, rt_core::prompt::PromptAnswer::Yes { .. }) {
+                return;
+            }
+            // The tab may have moved while the question was up.
+            let index = shell::with(|s| {
+                s.tabs
+                    .iter()
+                    .position(|t| t.view.browser().map(|b| b.identifier()) == browser)
+            })
+            .flatten();
+            if let Some(index) = index {
+                close(index);
+                shell::refresh_ui();
+            }
+        },
+    );
 }
 
 fn toggle_pin(index: usize) {
@@ -252,9 +306,10 @@ pub fn close(index: usize) {
         let was_current = index == s.tabs.current_index();
         let select = SelectOnRemove::from_setting(s.engine.settings().str("tabs.select_on_remove"));
         let undo = s.engine.settings().int("tabs.undo_stack_size").max(0) as usize;
+        let pinned = s.tabs.is_pinned(index);
         let tab = s.tabs.remove_selecting(index, select)?;
         if !tab.url.is_empty() {
-            s.closed.push((index, tab.url.clone()));
+            s.closed.push((index, tab.url.clone(), pinned));
             if s.closed.len() > undo {
                 s.closed.remove(0);
             }
@@ -412,6 +467,8 @@ fn move_current(target: Option<TabMoveTarget>, count: Option<u32>) {
 pub struct OpenTab {
     pub window: usize,
     pub tab: usize,
+    /// In the window the command line is in.
+    pub current_window: bool,
     pub title: String,
     pub url: String,
 }
@@ -426,12 +483,15 @@ pub fn remember_open_tabs(s: &shell::Shell) {
     let tabs = s
         .windows
         .iter()
-        .filter(|w| w.window.is_some())
         .enumerate()
-        .flat_map(|(w, state)| {
+        .filter(|(_, w)| w.window.is_some())
+        .enumerate()
+        .flat_map(|(w, (index, state))| {
+            let current_window = index == s.active;
             state.tabs.iter().enumerate().map(move |(t, tab)| OpenTab {
                 window: w + 1,
                 tab: t + 1,
+                current_window,
                 title: tab.title.clone(),
                 url: tab.url.clone(),
             })
@@ -440,19 +500,36 @@ pub fn remember_open_tabs(s: &shell::Shell) {
     OPEN_TABS.with(|o| *o.borrow_mut() = tabs);
 }
 
-/// Completions for `:tab-select`: every word typed must appear in the
-/// position, title or URL.
+/// Whether an open tab matches what was typed: a number is a tab in the
+/// current window, `w/t` a position, and every other word must appear in
+/// the title or URL.
+fn tab_matches(t: &OpenTab, words: &[String]) -> bool {
+    let hay = format!("{} {}", t.title, t.url).to_lowercase();
+    words.iter().all(|w| {
+        if let Ok(n) = w.parse::<usize>() {
+            return t.current_window && t.tab == n;
+        }
+        w.starts_with(&format!("{}/", t.window))
+            && format!("{}/{}", t.window, t.tab).starts_with(w.as_str())
+            || hay.contains(w.as_str())
+    })
+}
+
+/// Completions for `:tab-select` (`gt`): the current window's tabs first,
+/// narrowed by [`tab_matches`].
 pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
     let words: Vec<String> = pattern.split_whitespace().map(str::to_lowercase).collect();
     OPEN_TABS.with(|o| {
-        o.borrow()
-            .iter()
-            .filter(|t| {
-                let hay = format!("{}/{} {} {}", t.window, t.tab, t.title, t.url).to_lowercase();
-                words.iter().all(|w| hay.contains(w.as_str()))
-            })
+        let tabs = o.borrow();
+        let (current, others): (Vec<&OpenTab>, Vec<&OpenTab>) =
+            tabs.iter().partition(|t| t.current_window);
+        current
+            .into_iter()
+            .chain(others)
+            .filter(|t| tab_matches(t, &words))
             .map(|t| rt_core::completion::Completion {
                 time: None,
+                detail: None,
                 category: "Tabs",
                 name: format!("{}/{}", t.window, t.tab),
                 description: if t.title.is_empty() {
@@ -483,11 +560,12 @@ fn select_tab(target: &str) {
                 .map(|t| (t.window, t.tab)),
             None => {
                 let words: Vec<String> = target.split_whitespace().map(str::to_lowercase).collect();
-                tabs.iter()
-                    .find(|t| {
-                        let hay = format!("{} {}", t.title, t.url).to_lowercase();
-                        !words.is_empty() && words.iter().all(|w| hay.contains(w.as_str()))
-                    })
+                let (current, others): (Vec<&OpenTab>, Vec<&OpenTab>) =
+                    tabs.iter().partition(|t| t.current_window);
+                current
+                    .into_iter()
+                    .chain(others)
+                    .find(|t| !words.is_empty() && tab_matches(t, &words))
                     .map(|t| (t.window, t.tab))
             }
         }

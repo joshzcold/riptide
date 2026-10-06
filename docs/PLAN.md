@@ -130,7 +130,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Marks (`` ` ``-style in-page marks; `m` is the quickmark key, as in qutebrowser) (M9)
 
 ### Tabs
-- [x] `J` / `K` next/prev, `d` close, `u` undo close, `gt` / `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
+- [x] `J` / `K` next/prev, `d` close, `u` undo close, `gT`, `Alt-<n>`, `Ctrl-Tab` last-focused
 - [x] `:tab-move`, `:tab-only`, `:open -t/-b/-r`, popups as tabs (keeping `window.opener`)
 - [x] `:tab-pin` and pinned tabs (M14)
 - [x] `:tab-clone`, `:tab-give`, `:tab-take` (2026-10-02; the page is reopened, so its back/forward history doesn't move)
@@ -138,12 +138,9 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Favicons in the tab bar (M14); not yet in completion
 - [x] Multiple windows (2026-10-02)
 - [x] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Each tab stores the mode it was left in; with `restore`, switching back brings insert or passthrough mode back (2026-10-02). Hints, the caret and the like end on any switch; the command line and prompts stay.
-- [ ] **Closing a pinned tab asks instead of refusing.** Today `d`, `Ctrl-w`, `:tab-close` and a middle-click on a pinned tab only show "Tab is pinned! Use :tab-close --force to close it" (`tabs::close_unless_pinned`).
-  - Ask "Close pinned tab <title>?" as a yes/no prompt, defaulting to no so a stray `Return` keeps the tab; `y` closes it.
-  - `--force` still closes without asking. `tabs.pinned.close` (`ask`, the default; `refuse`, today's behaviour and qutebrowser's; or `close`) chooses what happens.
-  - `:tab-only` keeps pinned tabs as it does now, without asking about each one.
-  - `u` should reopen the tab pinned: today `closed` remembers only the index and URL.
-  - **Tests:** a smoke step: `d` on a pinned tab asks, `n` keeps it, `d` then `y` closes it, and `u` brings it back pinned.
+- [x] **Closing a pinned tab asks instead of refusing** (2026-10-06). `d`, `:tab-close` and a middle-click ask "Close pinned tab <title>?" (default no); `--force` doesn't ask, `tabs.pinned.close` (`ask`, `refuse`, `close`) chooses, `:tab-only` still keeps pinned tabs, and `u` reopens the tab pinned. Covered by the e2e test `pinned_tabs_ask_before_d_closes_them`.
+- [x] `gt` lists the open tabs (`:tab-select`), this window's first; a number picks that tab, words filter by title or URL. `gD` is `tab-give`, as in qutebrowser (2026-10-06).
+- [x] Dragging a tab moves it with the pointer while the others slide aside, instead of only marking the drop point (2026-10-06).
 
 ### Hints
 - [x] `f` / `F` follow (current / new tab), `;b` background, `;y` yank, `;i` / `;I` image, `;o` / `;O` fill, `;h` hover, `;t` inputs, `;r` rapid
@@ -152,7 +149,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Number hint mode (`hints.mode = number`: digit labels, letters filter by element text, a unique match is followed) (2026-10-02)
 
 ### Command line
-- [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings, open tabs via `:tab-select`/`T`)
+- [x] `:` command entry with history, completion (commands, URLs, history, bookmarks, settings, open tabs via `:tab-select`/`T`/`gt`). `:set` shows each setting's current value, then completes its values (2026-10-06)
 - [x] Command chaining (`;;`), aliases, `:bind` / `:unbind`, `:set`
 
 ### Yank / paste

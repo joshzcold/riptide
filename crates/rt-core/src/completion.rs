@@ -4,7 +4,7 @@
 use serde::Serialize;
 
 use crate::command::COMMANDS;
-use crate::settings::SETTINGS;
+use crate::settings::{Kind, SETTINGS, Settings, Value};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Completion {
@@ -15,6 +15,9 @@ pub struct Completion {
     /// When a history entry was last visited, in seconds since the Unix epoch.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<i64>,
+    /// Shown at the right, e.g. a setting's current value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// Dynamic sources the browser layer provides.
@@ -72,8 +75,82 @@ fn parse(text: &str) -> Option<Parsed<'_>> {
     })
 }
 
+/// A value as `:set` takes it: plain text for strings, JSON otherwise.
+fn set_text(value: &Value) -> String {
+    match value {
+        Value::Str(text) => text.clone(),
+        other => other.to_json().to_string(),
+    }
+}
+
+/// `:set` completions: setting names with their current values, then the
+/// values a setting can take.
+fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
+    // `:set -u pattern …`: the pattern isn't part of what completes.
+    let mut words = parsed.pattern.split_whitespace();
+    if parsed.prefix.contains("-u") || parsed.prefix.contains("--pattern") {
+        words.next();
+    }
+    let words: Vec<&str> = words.collect();
+    let typing_new_word =
+        parsed.pattern.ends_with(char::is_whitespace) || parsed.pattern.is_empty();
+    let (name, partial) = match (words.as_slice(), typing_new_word) {
+        ([], _) => (None, ""),
+        ([name], false) => (None, *name),
+        ([name], true) => (Some(*name), ""),
+        ([name, value], false) => (Some(*name), *value),
+        _ => return Vec::new(),
+    };
+    let current = |def: &crate::settings::SettingDef| {
+        settings.get(def.name).map(set_text).unwrap_or_default()
+    };
+    let Some(name) = name else {
+        return SETTINGS
+            .iter()
+            .filter(|d| d.name.starts_with(partial))
+            .map(|d| Completion {
+                category: "Settings",
+                name: d.name.to_string(),
+                description: d.description.to_string(),
+                time: None,
+                detail: Some(current(d)),
+            })
+            .collect();
+    };
+    let Some(def) = crate::settings::find(name) else {
+        return Vec::new();
+    };
+    let now = current(def);
+    let default = set_text(&def.default_value());
+    let candidates: Vec<String> = match def.kind {
+        Kind::Bool => vec!["true".into(), "false".into()],
+        Kind::Enum(options) => options.iter().map(|o| o.to_string()).collect(),
+        _ if now == default => vec![now.clone()],
+        _ => vec![now.clone(), default.clone()],
+    };
+    candidates
+        .into_iter()
+        .filter(|v| v.starts_with(partial))
+        .map(|v| {
+            let note = match (v == now, v == default) {
+                (true, true) => "current, default",
+                (true, false) => "current",
+                (false, true) => "default",
+                _ => "",
+            };
+            Completion {
+                category: "Values",
+                description: note.to_string(),
+                name: v,
+                time: None,
+                detail: None,
+            }
+        })
+        .collect()
+}
+
 /// Items for the current command line text.
-pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
+pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<Completion> {
     let Some(typed) = text.strip_prefix(':') else {
         return Vec::new();
     };
@@ -83,6 +160,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
             .filter(|c| !c.hidden && c.name.starts_with(typed))
             .map(|c| Completion {
                 time: None,
+                detail: None,
                 category: "Commands",
                 name: c.name.to_string(),
                 description: c.description.to_string(),
@@ -93,18 +171,7 @@ pub fn compute(text: &str, source: Option<&Source>) -> Vec<Completion> {
         return Vec::new();
     };
     let kind = match parsed.command {
-        "set" if !parsed.pattern.contains(char::is_whitespace) => {
-            return SETTINGS
-                .iter()
-                .filter(|d| d.name.starts_with(parsed.pattern))
-                .map(|d| Completion {
-                    time: None,
-                    category: "Settings",
-                    name: d.name.to_string(),
-                    description: d.description.to_string(),
-                })
-                .collect();
-        }
+        "set" => return complete_set(&parsed, settings),
         "open" => CompletionKind::Url,
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
@@ -121,7 +188,21 @@ pub fn insert(base: &str, item: &Completion) -> String {
     match parse(base) {
         Some(parsed) if item.category != "Commands" => {
             let space = if item.category == "Settings" { " " } else { "" };
-            format!(":{} {}{space}", parsed.prefix, item.name)
+            // Keep earlier words: `:set -u site name` or `:set name value`.
+            let head = if matches!(item.category, "Settings" | "Values") {
+                parsed
+                    .pattern
+                    .rsplit_once(char::is_whitespace)
+                    .map_or("", |(head, _)| head.trim_end())
+            } else {
+                ""
+            };
+            let head = if head.is_empty() {
+                String::new()
+            } else {
+                format!("{head} ")
+            };
+            format!(":{} {head}{}{space}", parsed.prefix, item.name)
         }
         _ => format!(":{} ", item.name),
     }
@@ -134,6 +215,7 @@ mod tests {
     fn item(category: &'static str, name: &str) -> Completion {
         Completion {
             time: None,
+            detail: None,
             category,
             name: name.into(),
             description: String::new(),
@@ -148,22 +230,31 @@ mod tests {
     fn picks_the_source_from_the_command() {
         let s = source();
         assert_eq!(
-            compute(":open -t rust docs", Some(&s))[0].name,
+            compute(":open -t rust docs", Some(&s), &Settings::default())[0].name,
             "Url:rust docs"
         );
         assert_eq!(
-            compute(":quickmark-load -b gh", Some(&s))[0].name,
+            compute(":quickmark-load -b gh", Some(&s), &Settings::default())[0].name,
             "Quickmark:gh"
         );
-        assert_eq!(compute(":session-load ", Some(&s))[0].name, "Session:");
         assert_eq!(
-            compute(":spell-replace th", Some(&s))[0].name,
+            compute(":session-load ", Some(&s), &Settings::default())[0].name,
+            "Session:"
+        );
+        assert_eq!(
+            compute(":spell-replace th", Some(&s), &Settings::default())[0].name,
             "Spelling:th"
         );
-        assert!(compute(":reload x", Some(&s)).is_empty());
-        assert!(compute(":open x", None).is_empty());
-        assert_eq!(compute(":tab-c", None)[0].name, "tab-close");
-        assert_eq!(compute(":set hints.c", None)[0].name, "hints.chars");
+        assert!(compute(":reload x", Some(&s), &Settings::default()).is_empty());
+        assert!(compute(":open x", None, &Settings::default()).is_empty());
+        assert_eq!(
+            compute(":tab-c", None, &Settings::default())[0].name,
+            "tab-close"
+        );
+        assert_eq!(
+            compute(":set hints.c", None, &Settings::default())[0].name,
+            "hints.chars"
+        );
     }
 
     #[test]

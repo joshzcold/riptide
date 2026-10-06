@@ -16,7 +16,6 @@
     --pinned-bg: #1b5e86;
     --indicator-loading: #8fe3dc;
     --indicator-error: #ff6b6b;
-    --drop-mark: #f4c56a;
     --font: 10pt "DejaVu Sans Mono", "Monospace", monospace;
   }
   html, body {
@@ -46,14 +45,13 @@
   .tab:nth-child(even) { background: var(--even-bg); }
   .tab.pinned { background: var(--pinned-bg); }
   .tab.shrunk { flex: 0 0 auto; }
+  /* A dragged tab follows the pointer; the others slide aside to show where it lands. */
+  .tab.dragging { position: relative; z-index: 1; opacity: 0.9; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }
+  .tab.shifting { transition: transform 120ms ease; }
   .tab.selected {
     background: var(--selected-bg);
     color: var(--selected-fg);
     box-shadow: inset 0 -2px 0 var(--selected-accent);
-  }
-  .tab.drop-before { box-shadow: inset 3px 0 0 var(--drop-mark); }
-  .tab.selected.drop-before {
-    box-shadow: inset 3px 0 0 var(--drop-mark), inset 0 -2px 0 var(--selected-accent);
   }
   .indicator { width: var(--indicator-width, 3px); align-self: stretch; flex-shrink: 0; }
   .loading .indicator { background: var(--indicator-loading); }
@@ -63,12 +61,8 @@
   /* tabs.position left or right: one tab per row, scrolling when they don't fit. */
   .vertical #tabs { flex-direction: column; overflow-y: auto; scrollbar-width: none; }
   .vertical .tab { flex: 0 0 auto; padding: 1px 4px 1px 0; }
-  .vertical .tab.drop-before { box-shadow: inset 0 3px 0 var(--drop-mark); }
   /* The left edge holds the loading indicator, so the accent goes on the right. */
   .vertical .tab.selected { box-shadow: inset -3px 0 0 var(--selected-accent); }
-  .vertical .tab.selected.drop-before {
-    box-shadow: inset 0 3px 0 var(--drop-mark), inset -3px 0 0 var(--selected-accent);
-  }
 </style>
 </head>
 <body>
@@ -78,41 +72,88 @@
   const send = (name, data) => rt.send(name, JSON.stringify(data));
 
   // Drag to reorder with plain pointer events: press on a tab, move a few
-  // pixels, release over another. (HTML5 drag and drop would involve the
-  // OS and let tabs be dropped into other applications.)
+  // pixels, and it follows the pointer while the others make room. (HTML5
+  // drag and drop would involve the OS and let tabs leave the browser.)
   const DRAG_THRESHOLD = 5;
   let press = null;
+  // A render that arrived mid-drag, shown once the tab is dropped.
+  let deferred = null;
   const tabIndexAt = (x, y) => {
     const el = document.elementFromPoint(x, y)?.closest(".tab");
     return el ? Number(el.dataset.index) : null;
   };
-  const clearMarks = () => bar.querySelectorAll(".drop-before").forEach((el) => el.classList.remove("drop-before"));
+  const vertical = () => document.body.classList.contains("vertical");
+  const span = (rect) => (vertical() ? { start: rect.top, size: rect.height } : { start: rect.left, size: rect.width });
+
+  function startDrag() {
+    press.dragging = true;
+    press.spans = [...bar.children].map((el) => span(el.getBoundingClientRect()));
+    press.target = press.index;
+    bar.children[press.index].classList.add("dragging");
+    for (const [i, el] of [...bar.children].entries()) if (i !== press.index) el.classList.add("shifting");
+  }
+
+  // Move the dragged tab by `delta` pixels and slide the others out of its way.
+  function dragTo(delta) {
+    const { index, spans } = press;
+    const center = spans[index].start + spans[index].size / 2 + delta;
+    let target = index;
+    spans.forEach((other, i) => {
+      const middle = other.start + other.size / 2;
+      if (i > index && center > middle) target = Math.max(target, i);
+      if (i < index && center < middle) target = Math.min(target, i);
+    });
+    press.target = target;
+    const axis = vertical() ? "Y" : "X";
+    [...bar.children].forEach((el, i) => {
+      let shift = 0;
+      if (i === index) shift = delta;
+      else if (i > index && i <= target) shift = -spans[index].size;
+      else if (i < index && i >= target) shift = spans[index].size;
+      el.style.transform = shift ? `translate${axis}(${shift}px)` : "";
+    });
+  }
+
+  function endDrag() {
+    for (const el of bar.children) {
+      el.classList.remove("dragging", "shifting");
+      el.style.transform = "";
+    }
+    if (deferred) {
+      const payload = deferred;
+      deferred = null;
+      window.rtRender(payload);
+    }
+  }
+
   bar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     const index = tabIndexAt(e.clientX, e.clientY);
     if (index === null) return;
     press = { index, x: e.clientX, y: e.clientY, dragging: false };
-    bar.setPointerCapture(e.pointerId);
+    // Synthetic events (tests) have no pointer to capture.
+    try { bar.setPointerCapture(e.pointerId); } catch {}
   });
   bar.addEventListener("pointermove", (e) => {
     if (!press) return;
     const moved = Math.max(Math.abs(e.clientX - press.x), Math.abs(e.clientY - press.y));
     if (!press.dragging && moved < DRAG_THRESHOLD) return;
-    press.dragging = true;
-    clearMarks();
-    const over = tabIndexAt(e.clientX, e.clientY);
-    if (over !== null && over !== press.index) bar.children[over].classList.add("drop-before");
+    if (!press.dragging) startDrag();
+    dragTo(vertical() ? e.clientY - press.y : e.clientX - press.x);
   });
-  bar.addEventListener("pointerup", (e) => {
+  bar.addEventListener("pointerup", () => {
     if (!press) return;
-    const { index, dragging } = press;
+    const { index, dragging, target } = press;
     press = null;
-    clearMarks();
-    const over = tabIndexAt(e.clientX, e.clientY);
     if (!dragging) send("select-tab", { index });
-    else if (over !== null && over !== index) send("move-tab", { from: index, to: over });
+    else if (target !== index) send("move-tab", { from: index, to: target });
+    if (dragging) endDrag();
   });
-  bar.addEventListener("pointercancel", () => { press = null; clearMarks(); });
+  bar.addEventListener("pointercancel", () => {
+    const dragging = press?.dragging;
+    press = null;
+    if (dragging) endDrag();
+  });
 
   // One wheel notch switches one tab, however finely the device scrolls.
   let wheelAt = 0;
@@ -162,7 +203,13 @@
     return el;
   }
 
-  window.rtRender = ({ tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button, selected_accent }) => {
+  window.rtRender = (payload) => {
+    // Replacing the tabs mid-drag would drop the one being dragged.
+    if (press?.dragging) {
+      deferred = payload;
+      return;
+    }
+    const { tabs, current, shrink, vertical, tooltips, alignment, min_width, max_width, indicator_width, close_button, selected_accent } = payload;
     document.body.classList.toggle("vertical", vertical);
     const root = document.documentElement.style;
     root.setProperty("--title-align", alignment || "left");

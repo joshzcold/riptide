@@ -44,8 +44,9 @@
   .row.selected .desc { color: var(--selected-fg); }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
   .desc { flex: 1 1 auto; min-width: 0; color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
-  .time { flex-shrink: 0; padding-left: 2ch; color: var(--desc-fg); }
-  .row.selected .time { color: var(--selected-fg); }
+  .time, .detail { flex-shrink: 0; padding-left: 2ch; color: var(--desc-fg); }
+  .detail { max-width: 40%; overflow: hidden; text-overflow: ellipsis; }
+  .row.selected .time, .row.selected .detail { color: var(--selected-fg); }
   .prompt-message {
     padding: 0 4px;
     line-height: var(--row-height);
@@ -130,7 +131,7 @@
   }
 
   // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format},
-  // where rows are {header}, {name, description, time, selected}, or {message, level}
+  // where rows are {header}, {name, description, detail, time, selected}, or {message, level}
   // for messages older than the one in the status bar.
   window.rtRender = (payload) => {
     const list = document.getElementById("list");
@@ -156,6 +157,12 @@
       desc.className = "desc";
       desc.textContent = row.description;
       el.append(name, desc);
+      if (row.detail != null) {
+        const detail = document.createElement("span");
+        detail.className = "detail";
+        detail.textContent = row.detail;
+        el.append(detail);
+      }
       if (row.time != null && payload.timestamp_format) {
         const time = document.createElement("span");
         time.className = "time";

@@ -67,7 +67,7 @@ fn u_reopens_a_tab_closed_before_its_page_loaded() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
-fn pinned_tabs_refuse_d_but_close_with_force() {
+fn pinned_tabs_ask_before_d_closes_them() {
     let b = Browser::start("page.html");
     let second = b.url("second.html");
     b.run(&format!("open -t {second}"));
@@ -75,12 +75,28 @@ fn pinned_tabs_refuse_d_but_close_with_force() {
     b.keys("<Ctrl-p>");
     b.wait_until("the tab is pinned", |s| s.tab().pinned);
     b.keys("d");
-    let s = b.wait_until("d refuses", |s| {
+    b.wait_mode("yesno");
+    b.keys("n");
+    let s = b.wait_mode("normal");
+    assert_eq!(s.tabs().len(), 2, "n keeps the tab");
+    b.keys("d");
+    b.wait_mode("yesno");
+    b.keys("y");
+    b.wait_until("y closes it", |s| s.tabs().len() == 1);
+    b.keys("u");
+    b.wait_until("u brings it back pinned", |s| {
+        s.tabs().len() == 2 && s.tabs().iter().any(|t| t.url == second && t.pinned)
+    });
+    b.run("tab-close --force");
+    b.wait_until("--force closes it without asking", |s| s.tabs().len() == 1);
+    b.keys("u");
+    b.wait_until("the tab is back", |s| s.tabs().len() == 2 && s.tab().pinned);
+    b.run("set tabs.pinned.close refuse");
+    b.keys("d");
+    let s = b.wait_until("refuse says why", |s| {
         s.message().is_some_and(|m| m.contains("pinned"))
     });
     assert_eq!(s.tabs().len(), 2);
-    b.run("tab-close --force");
-    b.wait_until("--force closes it", |s| s.tabs().len() == 1);
 }
 
 /// Three tabs (nav1, second, nav2) with the middle one current.

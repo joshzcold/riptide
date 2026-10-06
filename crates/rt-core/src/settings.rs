@@ -1091,6 +1091,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where other new tabs go (:open -t)"
     ),
     def!(
+        "tabs.pinned.close",
+        Kind::Enum(&["ask", "refuse", "close"]),
+        s("ask"),
+        "Closing a pinned tab without --force: ask first, refuse, or just close it"
+    ),
+    def!(
         "tabs.pinned.frozen",
         Kind::Bool,
         Value::Bool(true),

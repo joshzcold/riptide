@@ -103,6 +103,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.mousewheel_switching` | boolean | `true` | Switch tabs with the mouse wheel over the tab bar |
 | `tabs.new_position.related` | prev \| next \| first \| last | `next` | Where tabs opened from a page go (popups, hints) |
 | `tabs.new_position.unrelated` | prev \| next \| first \| last | `last` | Where other new tabs go (:open -t) |
+| `tabs.pinned.close` | ask \| refuse \| close | `ask` | Closing a pinned tab without --force: ask first, refuse, or just close it |
 | `tabs.pinned.frozen` | boolean | `true` | Keep pinned tabs on their page: :open in a pinned tab opens a new tab |
 | `tabs.pinned.shrink` | boolean | `true` | Shrink pinned tabs to their icon and number |
 | `tabs.position` | top \| bottom \| left \| right | `top` | Where the tab bar is; left and right list the tabs vertically |

@@ -164,3 +164,29 @@ fn completion_delay_waits_for_typing_to_pause() {
     wait_overlay(&b, LIST, |t| t.contains("page.html"));
     assert!(typed.elapsed() >= std::time::Duration::from_millis(1900));
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn completion_set_shows_current_values_then_the_choices() {
+    let b = Browser::launch()
+        .toml("hints.mode = \"number\"\n")
+        .start("page.html");
+    b.keys(":set hints.mod");
+    wait_overlay(
+        &b,
+        "document.querySelector('.row .detail')?.textContent ?? ''",
+        |t| t == "number",
+    );
+    b.keys("<Tab>");
+    wait_overlay(&b, LIST, |t| t.contains("letter") && t.contains("word"));
+    let list = b.eval_bar("completion", LIST);
+    assert!(list.contains("current"), "{list}");
+    b.keys("w<Tab><Return>");
+    b.wait_mode("normal");
+    b.keys(":set hints.mode");
+    wait_overlay(
+        &b,
+        "document.querySelector('.row .detail')?.textContent ?? ''",
+        |t| t == "word",
+    );
+}

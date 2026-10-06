@@ -360,7 +360,8 @@ impl Engine {
             None => true,
         };
         if fresh {
-            let mut items = completion::compute(text, self.completion_source.as_ref());
+            let mut items =
+                completion::compute(text, self.completion_source.as_ref(), &self.settings);
             // Commands from config.lua complete next to the built-in ones.
             if let Some(typed) = text
                 .strip_prefix(':')
@@ -375,6 +376,7 @@ impl Engine {
                             name: n.clone(),
                             description: d.clone(),
                             time: None,
+                            detail: None,
                         }),
                 );
             }
@@ -2115,8 +2117,33 @@ mod tests {
                 ("Settings", "tabs.new_position.unrelated")
             ]
         );
+        assert!(
+            view.items.iter().all(|c| c.detail.is_some()),
+            "current values show"
+        );
         press(&mut e, "_position.related ");
-        assert!(e.completions().items.is_empty());
+        let view = e.completions();
+        let values: Vec<_> = view
+            .items
+            .iter()
+            .map(|c| (c.category, c.name.as_str(), c.description.as_str()))
+            .collect();
+        assert!(
+            values.contains(&("Values", "next", "current, default")),
+            "{values:?}"
+        );
+        assert!(values.iter().all(|v| v.0 == "Values"));
+        press(&mut e, "pr<Tab>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":set tabs.new_position.related prev"
+        );
+        press(&mut e, "<Escape>");
+        press(&mut e, ":set -u example.com hints.mo<Tab>");
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":set -u example.com hints.mode "
+        );
     }
 
     #[test]
@@ -2127,6 +2154,7 @@ mod tests {
                 .iter()
                 .map(|u| Completion {
                     time: None,
+                    detail: None,
                     category: "History",
                     name: u.to_string(),
                     description: String::new(),
@@ -2263,6 +2291,7 @@ mod tests {
                 .filter(|u| u.contains(pattern))
                 .map(|u| Completion {
                     time: None,
+                    detail: None,
                     category: "History",
                     name: u.to_string(),
                     description: String::new(),

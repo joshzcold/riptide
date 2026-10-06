@@ -10,7 +10,7 @@ Run `riptide --paths` to see where config and data live. All config files are op
 
 The directories for each platform are listed in [Installing](../guide/installing.md#where-things-live).
 
-Every setting is listed in the [settings reference](../reference/settings.md), and the completion popup lists them as you type `:set `. In the browser:
+Every setting is listed in the [settings reference](../reference/settings.md), and the completion popup lists them as you type `:set `, with each one's current value. After a name it offers the values: `true`/`false`, a setting's choices, or its current and default values. In the browser:
 
 - `:set hints.chars asdf` changes a setting; `:set hints.uppercase!` toggles one; `:set hints.chars` shows the value.
 - `:bind <Ctrl-x> tab-close` adds a binding (`--mode insert` for other modes); `:bind <Ctrl-x>` shows one; `:unbind d` removes one.

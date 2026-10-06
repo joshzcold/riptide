@@ -92,6 +92,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `g$` | `tab-focus -1` |
 | `g0` | `tab-focus 1` |
 | `gB` | `cmd-set-text -s :bookmark-load -t` |
+| `gD` | `tab-give` |
 | `gJ` | `tab-move +` |
 | `gK` | `tab-move -` |
 | `gO` | `cmd-set-text :open -t -r {url}` |
@@ -103,7 +104,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `gg` | `scroll-to-perc 0` |
 | `gm` | `tab-move` |
 | `go` | `cmd-set-text :open {url}` |
-| `gt` | `tab-next` |
+| `gt` | `cmd-set-text -s :tab-select` |
 | `gu` | `navigate up` |
 | `h` | `scroll left` |
 | `i` | `mode-enter insert` |
