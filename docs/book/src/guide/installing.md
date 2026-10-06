@@ -10,18 +10,20 @@ The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/ni
 
 macOS and Windows builds compile and pass their unit tests, but can't run the browser yet; they need the app bundle and installer work that's still planned.
 
-## Arch Linux (AUR) and Nix
+## Nix and Arch Linux
 
-Both repackage the release tarball. They become installable with the first release, which fills in the download's checksum.
+Both install the latest release's Linux tarball.
 
-- **Arch Linux:** [`packaging/aur/PKGBUILD`](https://github.com/joshzcold/riptide/blob/main/packaging/aur/PKGBUILD) builds `riptide-bin`, which installs to `/opt/riptide` with `riptide` on your `PATH`, plus a desktop entry and icon. Build it with `makepkg -si` in that directory.
-- **Nix:** [`packaging/nix/package.nix`](https://github.com/joshzcold/riptide/blob/main/packaging/nix/package.nix) is a `callPackage` derivation that patches the binaries for NixOS. To try it with a tarball you built yourself:
-  ```sh
-  ./task package
-  nix-build -E 'with import <nixpkgs> {}; callPackage ./packaging/nix/package.nix {
-    src = ./dist/riptide-0.1.0-linux-x86_64.tar.gz; version = "0.1.0"; }'
-  ```
-  The Nix store can't hold a setuid sandbox helper, so the Nix package relies on user namespaces for the sandbox, which NixOS allows.
+- **Nix** (flakes): `nix run github:joshzcold/riptide`, or add `github:joshzcold/riptide` as a flake input and use its `packages.x86_64-linux.default`. The package ([`packaging/nix/package.nix`](https://github.com/joshzcold/riptide/blob/main/packaging/nix/package.nix)) patches the binaries for NixOS. The Nix store can't hold a setuid sandbox helper, so it relies on user namespaces for the sandbox, which NixOS allows.
+- **Arch Linux:** [`packaging/aur/PKGBUILD`](https://github.com/joshzcold/riptide/blob/main/packaging/aur/PKGBUILD) builds `riptide-bin`. It installs to `/opt/riptide` with `riptide` on your `PATH`, plus a desktop entry and icon. Run `makepkg -si` in that directory. It isn't published to the AUR yet.
+
+To package a tarball you built yourself with Nix:
+
+```sh
+./task package
+nix-build -E 'with import <nixpkgs> {}; callPackage ./packaging/nix/package.nix {
+  tarball = ./dist/riptide-0.1.0-linux-x86_64.tar.gz; }'
+```
 
 ## Building from source
 

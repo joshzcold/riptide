@@ -42,12 +42,10 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 ## After a release
 
 **Packages:**
-- The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`) download the release tarball by version. After a release, update their version and checksum:
-  - `sha256sums` comes from the release's `SHA256SUMS`.
-  - The Nix `hash` is `nix hash convert --hash-algo sha256 <hex>`, or the hash `nix-build` reports when it's run with the old one.
-- Both were tested against a locally built tarball:
-  - The Nix package builds, and the whole smoke test passes against it (`BIN=result/bin/riptide scripts/smoke-test.sh`).
-  - The PKGBUILD's `package()` produces the expected tree.
+- The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) download the release tarball by version. After a release, update their version and checksum:
+  - `sha256sums` is the tarball's line in the release's `SHA256SUMS`.
+  - The Nix `hash` is the same hash in SRI form: `nix hash convert --hash-algo sha256 --to sri <hex>`.
+  - Run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
 
 **In the browser:**
 

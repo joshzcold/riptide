@@ -15,8 +15,7 @@ provides=('riptide')
 conflicts=('riptide')
 options=('!strip' '!debug')
 source=("https://github.com/joshzcold/riptide/releases/download/v${pkgver}/riptide-${pkgver}-linux-x86_64.tar.gz")
-# Filled in at the first release.
-sha256sums=('SKIP')
+sha256sums=('e9441d8c8eb2568376f5734220cf8b72179ca5208eede4fa381a272839b1efda')
 
 package() {
     cd "riptide-${pkgver}-linux-x86_64" || return 1

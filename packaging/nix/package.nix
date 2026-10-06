@@ -2,8 +2,9 @@
 # patched to run on NixOS. Build a local tarball with:
 #   ./task package
 #   nix-build -E 'with import <nixpkgs> {}; callPackage ./packaging/nix/package.nix {
-#     src = ./dist/riptide-0.1.0-linux-x86_64.tar.gz; version = "0.1.0"; }'
-# Without `src`, it fetches the release for `version` from GitHub.
+#     tarball = ./dist/riptide-0.1.0-linux-x86_64.tar.gz; }'
+# Without `tarball`, it fetches the release for `version` from GitHub; the
+# flake at the repository root does that (`nix run github:joshzcold/riptide`).
 {
   lib,
   stdenv,
@@ -31,16 +32,23 @@
   vulkan-loader,
   xorg,
   version ? "0.1.0",
-  src ? fetchurl {
-    url = "https://github.com/joshzcold/riptide/releases/download/v${version}/riptide-${version}-linux-x86_64.tar.gz";
-    # Filled in at each release from the tarball's sha256 (see docs: Releasing).
-    hash = lib.fakeHash;
-  },
+  # A local tarball instead of the release's. (Not `src`: callPackage would
+  # fill that in from nixpkgs.)
+  tarball ? null,
 }:
 
 stdenv.mkDerivation {
   pname = "riptide";
-  inherit version src;
+  inherit version;
+  src =
+    if tarball != null then
+      tarball
+    else
+      fetchurl {
+        url = "https://github.com/joshzcold/riptide/releases/download/v${version}/riptide-${version}-linux-x86_64.tar.gz";
+        # Updated at each release from the tarball's sha256 (see docs: Releasing).
+        hash = "sha256-6UQdjI6yVoN29XNCIM+LchecpSCO7eT6OBonKDmx79o=";
+      };
 
   nativeBuildInputs = [
     autoPatchelfHook
