@@ -1073,7 +1073,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         .and_then(|c| rt_core::theme::previewed(&c.text));
     let theme = json!(rt_core::theme::ui_vars_previewing(
         s.engine.settings(),
-        preview
+        preview.as_deref()
     ));
     // ui.css, after the pages' own styles.
     let css = crate::userstyle::ui_css(&s.paths.config_dir);

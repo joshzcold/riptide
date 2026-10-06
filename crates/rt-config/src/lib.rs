@@ -17,6 +17,7 @@ pub mod paths;
 pub mod reference;
 pub mod remote;
 pub mod sandbox;
+pub mod themes;
 pub mod toml_file;
 pub mod userscripts;
 
@@ -42,7 +43,10 @@ pub struct Loaded {
 }
 
 pub fn load(paths: &Paths) -> Loaded {
+    // First, so the config files can pick a user theme.
+    let theme_errors = themes::load(&paths.config_dir.join("themes"));
     let (autoconfig, mut ops, mut errors) = AutoConfig::load(&paths.autoconfig());
+    errors.extend(theme_errors);
     let auto_ops = ops.len();
     let mut files: Vec<std::path::PathBuf> = Vec::new();
     if paths.autoconfig().exists() {

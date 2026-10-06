@@ -100,22 +100,22 @@ pub const TEXT_PAIRS: &[(&str, &str)] = &[
 ];
 
 /// A theme's base colors, as `#rrggbb`.
-struct Palette {
+struct Palette<'a> {
     /// Darkest background: the status bar and headers.
-    base: &'static str,
+    base: &'a str,
     /// Main background: the overlay and the tab bar.
-    surface: &'static str,
+    surface: &'a str,
     /// Alternating tabs.
-    surface2: &'static str,
-    surface3: &'static str,
-    fg: &'static str,
-    muted: &'static str,
-    accent: &'static str,
-    yellow: &'static str,
-    red: &'static str,
-    orange: &'static str,
-    green: &'static str,
-    blue: &'static str,
+    surface2: &'a str,
+    surface3: &'a str,
+    fg: &'a str,
+    muted: &'a str,
+    accent: &'a str,
+    yellow: &'a str,
+    red: &'a str,
+    orange: &'a str,
+    green: &'a str,
+    blue: &'a str,
 }
 
 /// The built-in themes, `ui.theme`'s choices. `riptide` keeps the colors
@@ -173,7 +173,7 @@ fn auto_name<'a>(settings: &'a Settings, name: &'a str, dark: bool) -> &'a str {
     }
 }
 
-fn palette(name: &str) -> Option<Palette> {
+fn palette(name: &str) -> Option<Palette<'static>> {
     let p =
         |base, surface, surface2, surface3, fg, muted, accent, yellow, red, orange, green, blue| {
             Palette {
@@ -240,9 +240,16 @@ fn palette(name: &str) -> Option<Palette> {
     })
 }
 
-/// The tokens of built-in theme `name`.
+/// The tokens of theme `name`: a built-in one, or one from `themes/`.
 pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
-    let p = palette(name)?;
+    match palette(name) {
+        Some(p) => Some(derive(&p, name)),
+        None => user_themes().get(name).cloned(),
+    }
+}
+
+/// Every token from a palette. `name` is only for riptide's own exceptions.
+fn derive(p: &Palette, name: &str) -> BTreeMap<&'static str, String> {
     let readable = |bg: &str| best_text(bg, &[p.fg, p.base, "#000000", "#ffffff"]);
     let mut t: BTreeMap<&'static str, String> = BTreeMap::new();
     let mut set = |k: &'static str, v: &str| {
@@ -349,7 +356,99 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
             t.insert(k, v.to_string());
         }
     }
-    Some(t)
+    t
+}
+
+/// Themes from `themes/*.toml` in the config directory, by name.
+static USER_THEMES: std::sync::RwLock<BTreeMap<String, BTreeMap<&'static str, String>>> =
+    std::sync::RwLock::new(BTreeMap::new());
+
+fn user_themes()
+-> std::sync::RwLockReadGuard<'static, BTreeMap<String, BTreeMap<&'static str, String>>> {
+    USER_THEMES.read().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Replace the user's themes (on loading the config).
+pub fn set_user_themes(themes: BTreeMap<String, BTreeMap<&'static str, String>>) {
+    *USER_THEMES.write().unwrap_or_else(|e| e.into_inner()) = themes;
+}
+
+/// Every theme name `ui.theme` accepts: `auto`, the built-in themes, then the user's.
+pub fn names() -> Vec<String> {
+    THEME_CHOICES
+        .iter()
+        .map(|t| t.to_string())
+        .chain(user_themes().keys().cloned())
+        .collect()
+}
+
+/// The palette keys a theme file's `[palette]` may set; the first eight are required.
+pub const PALETTE_KEYS: &[&str] = &[
+    "base", "surface", "fg", "accent", "yellow", "red", "green", "blue", "surface2", "surface3",
+    "muted", "orange",
+];
+
+/// A user theme from its `[palette]` and `[colors]` tables. `colors` uses
+/// `colors.*` setting names, with or without the `colors.` prefix.
+pub fn user_theme(
+    palette: &BTreeMap<String, String>,
+    colors: &BTreeMap<String, String>,
+) -> Result<BTreeMap<&'static str, String>, String> {
+    for (key, value) in palette {
+        if !PALETTE_KEYS.contains(&key.as_str()) {
+            return Err(format!(
+                "unknown palette color {key:?}; use {}",
+                PALETTE_KEYS.join(", ")
+            ));
+        }
+        if rgb(value).is_none() {
+            return Err(format!("palette.{key}: {value:?} isn't a #rrggbb color"));
+        }
+    }
+    let get = |key: &str| palette.get(key).map(String::as_str);
+    let need = |key: &str| get(key).ok_or_else(|| format!("palette.{key} is missing"));
+    let (base, surface, fg, accent) = (
+        need("base")?,
+        need("surface")?,
+        need("fg")?,
+        need("accent")?,
+    );
+    let (yellow, red, green, blue) = (need("yellow")?, need("red")?, need("green")?, need("blue")?);
+    // Colors a palette may leave out, made from the others.
+    let surface2 = get("surface2").map_or_else(|| mix(surface, fg, 0.06), str::to_string);
+    let surface3 = get("surface3").map_or_else(|| mix(surface, fg, 0.11), str::to_string);
+    let muted = get("muted").map_or_else(|| mix(fg, surface, 0.4), str::to_string);
+    let orange = get("orange").map_or_else(|| mix(red, yellow, 0.5), str::to_string);
+    let p = Palette {
+        base,
+        surface,
+        surface2: &surface2,
+        surface3: &surface3,
+        fg,
+        muted: &muted,
+        accent,
+        yellow,
+        red,
+        orange: &orange,
+        green,
+        blue,
+    };
+    let mut tokens = derive(&p, "");
+    for (setting, value) in colors {
+        let full = if setting.starts_with("colors.") {
+            setting.clone()
+        } else {
+            format!("colors.{setting}")
+        };
+        let Some((token, _)) = TOKENS.iter().find(|(_, s)| *s == full) else {
+            return Err(format!("colors: unknown color {setting:?}"));
+        };
+        if !is_color(value) {
+            return Err(format!("colors.{setting}: {value:?} isn't a color"));
+        }
+        tokens.insert(token, value.clone());
+    }
+    Ok(tokens)
 }
 
 /// riptide's own fonts: the CSS variable (`--rt-<name>`) and its setting.
@@ -428,14 +527,14 @@ pub fn resolve_for(settings: &Settings, dark: bool) -> BTreeMap<&'static str, St
 
 /// The theme a command line like `:theme nord` is about to pick, to show
 /// it before it's chosen.
-pub fn previewed(command_line: &str) -> Option<&'static str> {
+pub fn previewed(command_line: &str) -> Option<String> {
     let rest = command_line.strip_prefix(':')?.trim_start();
     let name = rest.strip_prefix("theme")?;
     if !name.starts_with(char::is_whitespace) {
         return None;
     }
     let name = name.trim();
-    THEME_CHOICES.iter().copied().find(|t| *t == name)
+    names().into_iter().find(|t| t == name)
 }
 
 /// Theme `name` (`auto` follows `dark`), with any `colors.*` setting on top.
@@ -558,8 +657,8 @@ mod tests {
 
     #[test]
     fn theme_command_lines_preview_their_theme() {
-        assert_eq!(previewed(":theme nord"), Some("nord"));
-        assert_eq!(previewed(": theme  dracula "), Some("dracula"));
+        assert_eq!(previewed(":theme nord"), Some("nord".into()));
+        assert_eq!(previewed(": theme  dracula "), Some("dracula".into()));
         assert_eq!(previewed(":theme no"), None);
         assert_eq!(previewed(":themenord"), None);
         assert_eq!(previewed(":set ui.theme nord"), None);

@@ -179,6 +179,11 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
     let candidates: Vec<String> = match def.kind {
         Kind::Bool => vec!["true".into(), "false".into()],
         Kind::Enum(options) => options.iter().map(|o| o.to_string()).collect(),
+        _ if name == "ui.theme" => crate::theme::names(),
+        _ if name.starts_with("ui.auto_theme.") => crate::theme::names()
+            .into_iter()
+            .filter(|n| n != "auto")
+            .collect(),
         _ if now == default => vec![now.clone()],
         _ => vec![now.clone(), default.clone()],
     };
@@ -226,12 +231,12 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "set" => return complete_set(&parsed, settings),
         "theme" => {
             let current = settings.str("ui.theme");
-            return ranked(crate::theme::THEME_CHOICES.iter(), parsed.pattern, |t| t)
+            return ranked(crate::theme::names(), parsed.pattern, |t| t.as_str())
                 .into_iter()
                 .map(|t| Completion {
                     category: "Themes",
                     name: t.to_string(),
-                    description: if *t == current {
+                    description: if t == current {
                         "current".into()
                     } else {
                         String::new()

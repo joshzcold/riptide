@@ -195,3 +195,36 @@ fn theme_command_previews_the_theme_until_escape() {
         s.message().is_some_and(|m| m.contains("riptide"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn themes_from_the_config_directory_can_be_picked() {
+    let palette = "[palette]\nbase = \"#0a0c0f\"\nsurface = \"#181616\"\nfg = \"#c5c9c5\"\n\
+                   accent = \"#8ba4b0\"\nyellow = \"#c4b28a\"\nred = \"#c4746e\"\n\
+                   green = \"#8a9a7b\"\nblue = \"#658594\"\n";
+    let b = Browser::launch()
+        .file("config/themes/ink.toml", palette)
+        .file(
+            "config/themes/broken.toml",
+            "[palette]\nbase = \"#000000\"\n",
+        )
+        .toml("ui.theme = \"ink\"\n")
+        .start("page.html");
+    wait_bg(&b, "rgb(10, 12, 15)");
+    b.run("theme");
+    b.wait_until("ink is listed", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("Theme: ink") && m.contains(", ink"))
+    });
+    b.run("set ui.theme broken");
+    b.wait_until("a theme that failed to load is refused", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("no theme \"broken\""))
+    });
+    wait_bg(&b, "rgb(10, 12, 15)");
+    // Edits apply on :config-source.
+    let edited = palette.replace("#0a0c0f", "#102030");
+    std::fs::write(b.config_dir().join("themes/ink.toml"), edited).unwrap();
+    b.run("config-source");
+    wait_bg(&b, "rgb(16, 32, 48)");
+}

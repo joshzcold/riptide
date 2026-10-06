@@ -29,6 +29,36 @@ ui.theme = "auto"
 
 If you set `colors.webpage.preferred_color_scheme` to `light` or `dark`, `auto` follows that instead, so riptide matches the pages.
 
+## Your own themes
+
+A file in `themes/` in the config directory adds a theme named after the file. `themes/kanagawa-dragon.toml` makes `kanagawa-dragon`, which `:theme`, `ui.theme` and `ui.auto_theme.*` then accept. Give a palette of base colors, and riptide works out every color from them as it does for the built-in themes (readable text included):
+
+```toml
+# ~/.config/riptide/themes/kanagawa-dragon.toml
+[palette]
+base = "#0a0c0f"      # status bar and headers: the darkest background
+surface = "#181616"   # tab bar, completion and prompts
+fg = "#c5c9c5"
+accent = "#8ba4b0"    # https URLs, the selected completion, key hints
+yellow = "#c4b28a"    # hint labels, prompt frames, matches
+red = "#c4746e"       # errors
+green = "#8a9a7b"     # insert mode
+blue = "#658594"      # passthrough mode, pinned tabs
+
+[colors]              # optional: any colors.* setting, without "colors."
+"completion.item.selected.bg" = "#2d4f67"
+"completion.item.selected.fg" = "#c8c093"
+```
+
+| Palette color | Required | If left out |
+|---|---|---|
+| `base`, `surface`, `fg`, `accent`, `yellow`, `red`, `green`, `blue` | yes | |
+| `surface2`, `surface3` (alternating tabs) | no | `surface` mixed with a little `fg` |
+| `muted` (descriptions) | no | `fg` mixed toward `surface` |
+| `orange` (warnings) | no | between `red` and `yellow` |
+
+Palette colors are `#rrggbb`; `[colors]` takes any CSS color. Theme files are read with the config, so after editing one run `:config-source`. A file with a mistake is skipped with a message saying what's wrong.
+
 ## Changing single colors
 
 `colors.*` settings change one color on top of the theme, with qutebrowser's names where there is one. An empty value (the default) uses the theme's. Colors are `#rrggbb`, `#rgb`, `rgb(…)`, `hsl(…)` or a CSS color name:

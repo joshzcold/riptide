@@ -1554,7 +1554,7 @@ impl Engine {
             }
             Command::Theme { name: None } => {
                 let current = self.settings.str("ui.theme").to_string();
-                let list = crate::theme::THEME_CHOICES.join(", ");
+                let list = crate::theme::names().join(", ");
                 self.show_message(Level::Info, format!("Theme: {current}. Themes: {list}"));
             }
             Command::CmdRepeat { times, command } => {

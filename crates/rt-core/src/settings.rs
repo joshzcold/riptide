@@ -339,6 +339,27 @@ fn open_categories(value: &Value) -> Result<(), String> {
     }
 }
 
+/// `ui.theme`: a built-in theme, one from `themes/`, or `auto`.
+fn theme_choice(value: &Value) -> Result<(), String> {
+    let Value::Str(name) = value else {
+        return Ok(());
+    };
+    let names = crate::theme::names();
+    if names.iter().any(|n| n == name) {
+        Ok(())
+    } else {
+        Err(format!("no theme {name:?}; themes: {}", names.join(", ")))
+    }
+}
+
+/// `ui.auto_theme.*`: a theme, not `auto`.
+fn fixed_theme(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Str(name) if name == "auto" => Err("auto can't pick auto".into()),
+        _ => theme_choice(value),
+    }
+}
+
 fn padding(value: &Value) -> Result<(), String> {
     let Value::Str(text) = value else {
         return Ok(());
@@ -1904,15 +1925,17 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "ui.auto_theme.dark",
-        Kind::Enum(crate::theme::THEMES),
+        Kind::Str,
         s("riptide"),
-        "The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark"
+        "The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark",
+        fixed_theme
     ),
     def!(
         "ui.auto_theme.light",
-        Kind::Enum(crate::theme::THEMES),
+        Kind::Str,
         s("riptide-light"),
-        "The theme ui.theme = auto uses when light is preferred"
+        "The theme ui.theme = auto uses when light is preferred",
+        fixed_theme
     ),
     def!(
         "ui.overlay.position",
@@ -1931,9 +1954,10 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "ui.theme",
-        Kind::Enum(crate::theme::THEME_CHOICES),
+        Kind::Str,
         s("riptide"),
-        "Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme); auto follows the light or dark preference"
+        "Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized, tokyo-night or a theme from themes/ in the config directory (:theme); auto follows the light or dark preference",
+        theme_choice
     ),
     def!(
         "url.auto_search",

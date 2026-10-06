@@ -572,11 +572,11 @@ function rt.spawn(argv, opts, callback) end
 ---@class rt.c.ui
 ---@field auto_theme rt.c.ui.auto_theme
 ---@field overlay rt.c.ui.overlay
----@field theme "auto"|"riptide"|"riptide-light"|"gruvbox-dark"|"gruvbox-light"|"catppuccin-mocha"|"catppuccin-latte"|"nord"|"dracula"|"solarized-dark"|"solarized-light"|"tokyo-night" Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized or tokyo-night (:theme); auto follows the light or dark preference
+---@field theme string Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized, tokyo-night or a theme from themes/ in the config directory (:theme); auto follows the light or dark preference
 
 ---@class rt.c.ui.auto_theme
----@field dark "riptide"|"riptide-light"|"gruvbox-dark"|"gruvbox-light"|"catppuccin-mocha"|"catppuccin-latte"|"nord"|"dracula"|"solarized-dark"|"solarized-light"|"tokyo-night" The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark
----@field light "riptide"|"riptide-light"|"gruvbox-dark"|"gruvbox-light"|"catppuccin-mocha"|"catppuccin-latte"|"nord"|"dracula"|"solarized-dark"|"solarized-light"|"tokyo-night" The theme ui.theme = auto uses when light is preferred
+---@field dark string The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark
+---@field light string The theme ui.theme = auto uses when light is preferred
 
 ---@class rt.c.ui.overlay
 ---@field position "docked"|"floating" Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command
