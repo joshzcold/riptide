@@ -789,9 +789,9 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
   - **Window:** `window.hide_decoration` and `window.transparent` (M19).
 - **Dialogs and prompts.** JavaScript `alert`/`confirm`/`prompt`, leave-page warnings, HTTP logins, permission requests, certificate warnings and download prompts all use the prompt area in the overlay today (M7).
   - **Style:** `colors.prompts.*` (fg, bg, border, selected), `fonts.prompts`, `prompt.radius`, and `ui.css`. Each kind of prompt gets a CSS class (`.prompt.alert`, `.prompt.auth`, `.prompt.permission`, `.prompt.certificate`, `.prompt.download`), so a theme can, for example, make certificate warnings red and loud.
-  - ✅ (2026-10-06, early, from user feedback) **Placement:** `prompt.position`: `bottom` (the default: a framed box centred near the bottom of the page area, `prompt.width` wide at most, with the key hints wrapping inside) or `docked` (the full-width strip above the status bar). A centered modal (`center`, dimming the page) is still to do. e2e test in `crates/rt-e2e/tests/window_settings.rs`.
+  - ✅ (2026-10-06, early, from user feedback) **Placement:** `prompt.position`: `bottom` (the default: a framed box centred near the bottom of the page area, `prompt.width` wide at most, with an amber frame and one button per answer, each showing its key; a click sends that key, and only keys the prompt offers are accepted) or `docked` (the full-width strip above the status bar). A centered modal (`center`, dimming the page) is still to do. e2e test in `crates/rt-e2e/tests/window_settings.rs`.
   - **Content:** the asking site's origin is always shown and can't be styled away, because it's how users spot a spoofed dialog. A theme can reorder or restyle the key hints (`y: yes…`) but not hide the origin.
-  - **Mouse:** optional buttons for each answer (`prompt.buttons`), off by default, for mouse users and touch screens.
+  - ✅ (2026-10-06) **Mouse:** floating prompts have a button for each answer (`PromptView::options`), checked against the prompt's own options when clicked.
 - **Tests:**
   - Unit tests that every built-in theme defines every token with valid colors and passes a WCAG AA contrast check for its text pairs.
   - A smoke step switches themes and reads a CSS variable from the status bar.

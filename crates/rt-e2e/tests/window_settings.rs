@@ -131,3 +131,32 @@ fn prompts_float_near_the_bottom_by_default() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn prompt_buttons_answer_with_their_key_and_nothing_else() {
+    let b = Browser::start("page.html");
+    b.eval(
+        "Notification.requestPermission().then((p) => { document.title = 'answered ' + p; }); ''",
+    );
+    b.wait_mode("yesno");
+    let click = |b: &Browser, keys: &str| {
+        b.eval_bar(
+            "completion",
+            &format!(
+                "[...document.querySelectorAll('.prompt-option')].find((o) => o.querySelector('kbd').textContent === {keys:?})?.click(), ''"
+            ),
+        );
+    };
+    // A key this prompt doesn't offer is ignored, even sent straight from the page.
+    b.eval_bar(
+        "completion",
+        "rt.send('prompt-key', JSON.stringify({ key: 'q' })), ''",
+    );
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(b.state().mode, "yesno");
+    click(&b, "n");
+    b.wait_until("n answered it", |s| {
+        s.mode == "normal" && s.tab().title == "answered default"
+    });
+}

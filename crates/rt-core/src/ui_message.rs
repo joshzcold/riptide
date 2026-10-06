@@ -16,6 +16,8 @@ pub enum UiMessage {
     MoveTab { from: usize, to: usize },
     /// `tabs.close_mouse_button` clicked on the bar outside any tab.
     BarClick,
+    /// A prompt's button: press its key. Only keys the prompt offers count.
+    PromptKey { key: String },
 }
 
 /// Pages allowed to send messages, by `riptide://ui/` path.
@@ -24,6 +26,12 @@ pub const UI_PREFIX: &str = "riptide://ui/";
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Nothing {}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PromptKey {
+    key: String,
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -87,6 +95,13 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let Nothing {} = payload(name, json)?;
             Ok(UiMessage::BarClick)
         }
+        ("completion.html", "prompt-key") => {
+            let PromptKey { key } = payload(name, json)?;
+            if key.is_empty() || key.len() > 20 {
+                return Err(format!("{name}: bad key {key:?}"));
+            }
+            Ok(UiMessage::PromptKey { key })
+        }
         _ => Err(format!("{page} may not send {name:?}")),
     }
 }
@@ -128,6 +143,13 @@ mod tests {
         );
         assert!(parse(tabbar, "move-tab", r#"{"from": 0}"#).is_err());
         assert_eq!(parse(tabbar, "bar-click", "{}"), Ok(UiMessage::BarClick));
+        let overlay = "riptide://ui/completion.html";
+        assert_eq!(
+            parse(overlay, "prompt-key", r#"{"key": "y"}"#),
+            Ok(UiMessage::PromptKey { key: "y".into() })
+        );
+        assert!(parse(tabbar, "prompt-key", r#"{"key": "y"}"#).is_err());
+        assert!(parse(overlay, "prompt-key", r#"{"key": ""}"#).is_err());
         assert!(parse(tabbar, "bar-click", r#"{"x": 1}"#).is_err());
         assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());
     }

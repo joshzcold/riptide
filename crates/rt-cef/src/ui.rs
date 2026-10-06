@@ -24,7 +24,33 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::CycleTab { forward } => crate::tabs::cycle(forward),
         UiMessage::MoveTab { from, to } => crate::tabs::move_tab(from, to),
         UiMessage::BarClick => bar_click(),
+        UiMessage::PromptKey { key } => prompt_key(&key),
     }
+}
+
+/// A prompt's button: press its key, but only if the prompt on screen
+/// offers it, so the overlay can't type anything else.
+fn prompt_key(key: &str) {
+    let offered = crate::shell::with(|s| {
+        s.engine
+            .prompt_view()
+            .is_some_and(|p| p.options.iter().any(|o| o.key == key))
+    })
+    .unwrap_or(false);
+    let Ok(keys) = rt_core::key::Key::parse_sequence(key) else {
+        return;
+    };
+    let [key] = keys.as_slice() else {
+        return;
+    };
+    let key = *key;
+    if !offered {
+        return;
+    }
+    if let Some(outcome) = crate::shell::with(|s| s.engine.handle_key(key)) {
+        crate::shell::apply(outcome.effects);
+    }
+    crate::shell::refresh_ui();
 }
 
 /// `tabs.close_mouse_button_on_bar`: what the close button does on the

@@ -568,6 +568,7 @@ impl Engine {
             input,
             cursor: self.prompt_editor.cursor(),
             hint: prompt.hint(),
+            options: prompt.options(),
             queued: self.prompts.len() - 1,
         })
     }

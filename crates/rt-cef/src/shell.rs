@@ -119,8 +119,9 @@ pub struct WindowState {
     /// What the overlay shows (a prompt or completions), to skip redraws.
     last_overlay: String,
     last_overlay_rows: usize,
-    /// Whether the overlay shows a prompt, which may float.
+    /// Whether the overlay shows a prompt, which may float, and how tall a floating one is.
     last_overlay_prompt: bool,
+    last_prompt_height: Option<i32>,
 }
 
 impl WindowState {
@@ -156,6 +157,7 @@ impl WindowState {
             last_overlay: String::new(),
             last_overlay_rows: 0,
             last_overlay_prompt: false,
+            last_prompt_height: None,
         }
     }
 }
@@ -1117,10 +1119,12 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
     } else {
         None
     };
+    let mut prompt_height = None;
     let (payload, rows) = match prompt {
         Some(prompt) => {
             let rows = prompt_rows(s, &prompt);
             let floating = floating_prompt_box(s).is_some();
+            prompt_height = floating.then(|| floating_prompt_height(rows, &prompt));
             (
                 json!({ "kind": "prompt", "prompt": prompt, "floating": floating }),
                 rows,
@@ -1186,7 +1190,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             let bounds = (rows > 0)
                 .then(|| {
                     if is_prompt {
-                        prompt_bounds(s, rows)
+                        prompt_bounds(s, rows, prompt_height)
                     } else {
                         completion_bounds(s, rows)
                     }
@@ -1199,6 +1203,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         s.last_overlay = payload;
         s.last_overlay_rows = rows;
         s.last_overlay_prompt = is_prompt;
+        s.last_prompt_height = prompt_height;
     }
     // Come back when the key hint delay runs out, or the tab bar's switching delay.
     let refresh_after = match (refresh_after, keyhint_wait) {
@@ -1458,13 +1463,27 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     };
     let message_rows = lines(&prompt.message);
     let input_row = usize::from(prompt.kind == "text");
-    // A floating box wraps the key hints too; the docked strip cuts them off.
-    let hint_rows = if floating_prompt_box(s).is_some() {
-        lines(&prompt.hint).max(1)
-    } else {
-        1
-    };
-    1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + hint_rows
+    let text_rows = 1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row;
+    match floating_prompt_box(s) {
+        // One button per option instead of the one-line hint.
+        Some(_) => text_rows + prompt.options.len(),
+        None => text_rows + 1,
+    }
+}
+
+/// Height of one option's button in a floating prompt.
+const PROMPT_OPTION_HEIGHT: i32 = 22;
+/// Space above the buttons.
+const PROMPT_OPTIONS_GAP: i32 = 8;
+
+/// A floating prompt's height in pixels: its text rows, then a button per option.
+fn floating_prompt_height(rows: usize, prompt: &rt_core::prompt::PromptView) -> i32 {
+    let options = prompt.options.len();
+    let text_rows = rows.saturating_sub(options) as i32;
+    text_rows * COMPLETION_ROW_HEIGHT
+        + options as i32 * PROMPT_OPTION_HEIGHT
+        + PROMPT_OPTIONS_GAP
+        + 2 * PROMPT_PADDING
 }
 
 /// Padding (and border) around a floating prompt's text, in pixels.
@@ -1489,23 +1508,23 @@ fn floating_prompt_box(s: &Shell) -> Option<Rect> {
     })
 }
 
-/// Where the overlay goes for a prompt `rows` rows tall: floating, or docked
-/// like completion.
-fn prompt_bounds(s: &Shell, rows: usize) -> Option<Rect> {
-    match floating_prompt_box(s) {
-        Some(mut bounds) => {
-            bounds.height = rows as i32 * COMPLETION_ROW_HEIGHT + 2 * PROMPT_PADDING;
+/// Where the overlay goes for a prompt `rows` rows tall: floating (and
+/// `height` pixels tall), or docked like completion.
+fn prompt_bounds(s: &Shell, rows: usize, height: Option<i32>) -> Option<Rect> {
+    match (floating_prompt_box(s), height) {
+        (Some(mut bounds), Some(height)) => {
+            bounds.height = height;
             bounds.y -= bounds.height;
             Some(bounds)
         }
-        None => completion_bounds(s, rows),
+        _ => completion_bounds(s, rows),
     }
 }
 
 /// The overlay's bounds for what it shows now.
 fn overlay_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     if s.last_overlay_prompt {
-        prompt_bounds(s, rows)
+        prompt_bounds(s, rows, s.last_prompt_height)
     } else {
         completion_bounds(s, rows)
     }
