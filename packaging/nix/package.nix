@@ -31,6 +31,14 @@
   systemd,
   vulkan-loader,
   xorg,
+  # Newer nixpkgs names these at the top level; older ones only under xorg.
+  libx11 ? xorg.libX11,
+  libxcb ? xorg.libxcb,
+  libxcomposite ? xorg.libXcomposite,
+  libxdamage ? xorg.libXdamage,
+  libxext ? xorg.libXext,
+  libxfixes ? xorg.libXfixes,
+  libxrandr ? xorg.libXrandr,
   version ? "0.1.0",
   # A local tarball instead of the release's. (Not `src`: callPackage would
   # fill that in from nixpkgs.)
@@ -73,13 +81,13 @@ stdenv.mkDerivation {
     nss
     pango
     systemd
-    xorg.libX11
-    xorg.libXcomposite
-    xorg.libXdamage
-    xorg.libXext
-    xorg.libXfixes
-    xorg.libXrandr
-    xorg.libxcb
+    libx11
+    libxcb
+    libxcomposite
+    libxdamage
+    libxext
+    libxfixes
+    libxrandr
   ];
 
   # Chromium opens these at run time rather than linking them.
