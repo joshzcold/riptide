@@ -17,6 +17,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `colors.completion.fg` | string | `` | Completion list text; empty uses ui.theme's |
 | `colors.completion.item.selected.bg` | string | `` | Background of the selected completion; empty uses ui.theme's |
 | `colors.completion.item.selected.fg` | string | `` | Text of the selected completion; empty uses ui.theme's |
+| `colors.completion.match.fg` | string | `` | The typed text where it appears in completion items; empty uses ui.theme's |
 | `colors.completion.odd.bg` | string | `` | Completion list background; empty uses ui.theme's |
 | `colors.hints.bg` | string | `` | Background of hint labels; empty uses ui.theme's |
 | `colors.hints.border` | string | `` | Border of hint labels; empty uses ui.theme's |

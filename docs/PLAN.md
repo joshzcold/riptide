@@ -232,7 +232,7 @@ M1 is essentially complete as a by-product (modes, key parser, scrolling, naviga
 
 ### M2 — Command line & completion
 - `:` command line, parser, chaining, history.
-- Fuzzy completion framework. Not done yet; see "Fuzzy matching" under M19's completion work.
+- Fuzzy completion: see "Fuzzy matching" under M19's completion work (done 2026-10-06).
 
 ### M3 — Tabs ✅ done 2026-10-02
 - Multiple tabs in one window, tab bar, close/undo, tab commands.
@@ -671,13 +671,13 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
   - ✅ (2026-10-05) `completion.height` (rows or a percentage), `show` (always, auto, never), `open_categories` (searchengines, quickmarks, bookmarks, history, filesystem, in order), `web_history.exclude`, `min_chars` and `cmd_history_max_items`, with e2e tests in `crates/rt-e2e/tests/completion.rs`.
   - ✅ (2026-10-05) `completion.shrink`, `timestamp_format` (history's last visit, formatted in the overlay), `delay` (held back in the shell until typing pauses), `use_best_match` and `quick` (only for items that start a new part, so URLs stay selected for `Ctrl-d`).
   - Command-line commands: ✅ `cmd-edit` (2026-10-05); ✅ (2026-10-06) `cmd-repeat N command`, `cmd-repeat-last` (the same as `.`/`repeat-command`, and never recorded as the command to repeat) and `cmd-run-with-count N command`.
-  - **Fuzzy matching** (asked for 2026-10-06):
-    - **Today:** command names, setting names and setting values match only from the start (`starts_with` in `rt_core::completion`). `:set hints` offers `hints.*` but never `colors.hints.*` or `fonts.hints`. History, quickmarks and bookmarks already match every typed word anywhere in the title or URL.
-    - **Plan:** match commands, settings, values, sessions and tabs as qutebrowser does: each space-separated word must appear somewhere in the item, in any order. `:set hints` then offers `colors.hints.bg`, `fonts.hints` and `hints.chars`. `:set col hint bg` narrows to `colors.hints.bg`.
-    - **Ranking:** an exact name first, then names that start with the text, then names with a dotted part that starts with it (`hints` in `colors.hints.bg`), then matches anywhere. Shorter names come first within each group, so `Tab` and `completion.use_best_match` stay predictable.
-    - **Typos:** a scored fuzzy matcher (`nucleo`, already listed under supporting crates) could also allow skipped letters (`clrhnt` → `colors.hints`). Decide after word matching is in, based on how noisy the results feel. Either way, keep the matching in `rt_core::completion`, so it's unit tested without CEF.
-    - **Highlight:** show the matched parts in the popup (no completion does this yet, history included).
-    - **Tests:** unit tests for matching and ranking; an e2e test that `:set hints` lists `colors.hints.bg`.
+  - ✅ **Fuzzy matching** (2026-10-06):
+    - Command names (built-in and from config.lua), setting names, setting values and themes match anywhere in the name, ignoring case (`rt_core::completion::rank`). `:set hints` offers `hints.*` first, then `colors.hints.*` and `fonts.hints`.
+    - **Ranking:** the exact name, then names starting with the text, then names with a part starting with it (after `.`, `-`, `_`, space or `/`), then anywhere. Within a group, items keep their registry order, so `Tab` and `completion.use_best_match` stay predictable.
+    - Sessions, quickmarks, bookmarks, tabs and history already matched every typed word anywhere. A command or setting name is a single word on the command line, so multi-word matching doesn't apply to it.
+    - **Highlight:** the popup marks the typed words in every item's name and description, in all categories (`colors.completion.match.fg`; the selected row underlines instead).
+    - **Not done:** skipped letters (`clrhnt` → `colors.hints`) with a scored matcher such as `nucleo`. Revisit if substring matching isn't enough. Short text now matches more: `:sc` also offers `fullscreen`, last.
+    - **Tests:** unit tests for `rank`, `:set`, commands, values, themes and the highlighted words; the e2e test `set_completes_settings_that_contain_the_text_and_marks_it`.
 - **Hints:**
   - ✅ Tier 1 (2026-10-05):
     - `hints.auto_follow` (always, unique-match, full-match, never), with `hint-follow` on `Return`, and `hints.auto_follow_timeout`.

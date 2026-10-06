@@ -12,6 +12,7 @@
     --selected-bg: var(--rt-completion-selected-bg, #2ec4b6);
     --selected-fg: var(--rt-completion-selected-fg, #061826);
     --keyhint-fg: var(--rt-keyhint-fg, #2ec4b6);
+    --match-fg: var(--rt-completion-match-fg, #d9b44a);
     --error-bg: var(--rt-messages-error-bg, #b8323f);
     --error-fg: var(--rt-messages-error-fg, #e9f7f6);
     --warning-bg: var(--rt-messages-warning-bg, #a8651a);
@@ -52,6 +53,8 @@
   .message.warning { background: var(--warning-bg); color: var(--warning-fg); }
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
+  .match { color: var(--match-fg); font-weight: bold; }
+  .row.selected .match { color: inherit; text-decoration: underline; }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
   .desc { flex: 1 1 auto; min-width: 0; color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
   .time, .detail { flex-shrink: 0; padding-left: 2ch; color: var(--desc-fg); }
@@ -193,7 +196,7 @@
     })[c]);
   }
 
-  // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format},
+  // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format, words},
   // where rows are {header}, {name, description, detail, time, selected}, or {message, level}
   // for messages older than the one in the status bar.
 
@@ -223,6 +226,37 @@
     }
   }
 
+  // Fill `el` with `text`, the typed words (any case) marked as matches.
+  function setMatched(el, text, words) {
+    const lower = text.toLowerCase();
+    const marked = new Array(text.length).fill(false);
+    for (const word of words || []) {
+      const w = word.toLowerCase();
+      if (!w) continue;
+      for (let i = lower.indexOf(w); i !== -1; i = lower.indexOf(w, i + w.length)) {
+        marked.fill(true, i, i + w.length);
+      }
+    }
+    // toLowerCase can change the length (e.g. İ); then don't mark anything.
+    if (lower.length !== text.length) return void (el.textContent = text);
+    const parts = [];
+    for (let i = 0; i < text.length; ) {
+      let j = i;
+      while (j < text.length && marked[j] === marked[i]) j++;
+      const chunk = text.slice(i, j);
+      if (marked[i]) {
+        const span = document.createElement("span");
+        span.className = "match";
+        span.textContent = chunk;
+        parts.push(span);
+      } else {
+        parts.push(chunk);
+      }
+      i = j;
+    }
+    el.replaceChildren(...parts);
+  }
+
   window.rtRender = (payload) => {
     applyTheme(payload.theme);
     applyCss(payload.css);
@@ -246,10 +280,10 @@
       el.className = row.selected ? "row selected" : "row";
       const name = document.createElement("span");
       name.className = "name";
-      name.textContent = row.name;
+      setMatched(name, row.name, payload.words);
       const desc = document.createElement("span");
       desc.className = "desc";
-      desc.textContent = row.description;
+      setMatched(desc, row.description, payload.words);
       el.append(name, desc);
       if (row.detail != null) {
         const detail = document.createElement("span");

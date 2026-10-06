@@ -42,6 +42,59 @@ pub type Source = Box<dyn Fn(CompletionKind, &str) -> Vec<Completion>>;
 pub struct CompletionView {
     pub items: Vec<Completion>,
     pub selected: Option<usize>,
+    /// The typed words, for highlighting where items match.
+    pub words: Vec<String>,
+}
+
+/// How well `name` matches `typed`, best first: the whole name, its start,
+/// the start of one of its parts (`hints` in `colors.hints.bg`), or anywhere.
+/// `None` if it doesn't contain `typed`. Case doesn't matter.
+pub fn rank(name: &str, typed: &str) -> Option<u8> {
+    let name = name.to_lowercase();
+    let typed = typed.to_lowercase();
+    if name == typed {
+        return Some(0);
+    }
+    if name.starts_with(&typed) {
+        return Some(1);
+    }
+    let part_starts = name
+        .match_indices(&typed)
+        .any(|(i, _)| name[..i].ends_with(['.', '-', '_', ' ', '/']));
+    if part_starts {
+        return Some(2);
+    }
+    name.contains(&typed).then_some(3)
+}
+
+/// The items whose name contains `typed`, best matches first and otherwise
+/// in their original order.
+fn ranked<T>(items: impl IntoIterator<Item = T>, typed: &str, name: impl Fn(&T) -> &str) -> Vec<T> {
+    let mut ranked: Vec<(u8, T)> = items
+        .into_iter()
+        .filter_map(|item| Some((rank(name(&item), typed)?, item)))
+        .collect();
+    ranked.sort_by_key(|(rank, _)| *rank);
+    ranked.into_iter().map(|(_, item)| item).collect()
+}
+
+/// Put command completions in [`rank`] order, e.g. after adding commands
+/// from config.lua to the built-in ones.
+pub fn sort_commands(items: &mut [Completion], typed: &str) {
+    items.sort_by_key(|item| rank(&item.name, typed).unwrap_or(u8::MAX));
+}
+
+/// The words of `text` that items are matched against: the command name
+/// while it's being typed, then what follows the command and its flags.
+pub fn match_words(text: &str) -> Vec<String> {
+    let Some(typed) = text.strip_prefix(':') else {
+        return Vec::new();
+    };
+    let pattern = match parse(text) {
+        Some(parsed) => parsed.pattern,
+        None => typed,
+    };
+    pattern.split_whitespace().map(str::to_string).collect()
 }
 
 /// The parts of a command line that completion cares about.
@@ -107,9 +160,8 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
         settings.get(def.name).map(set_text).unwrap_or_default()
     };
     let Some(name) = name else {
-        return SETTINGS
-            .iter()
-            .filter(|d| d.name.starts_with(partial))
+        return ranked(SETTINGS.iter(), partial, |d| d.name)
+            .into_iter()
             .map(|d| Completion {
                 category: "Settings",
                 name: d.name.to_string(),
@@ -130,9 +182,8 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
         _ if now == default => vec![now.clone()],
         _ => vec![now.clone(), default.clone()],
     };
-    candidates
+    ranked(candidates, partial, |v| v.as_str())
         .into_iter()
-        .filter(|v| v.starts_with(partial))
         .map(|v| {
             let note = match (v == now, v == default) {
                 (true, true) => "current, default",
@@ -157,9 +208,8 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         return Vec::new();
     };
     if !typed.contains(char::is_whitespace) {
-        return COMMANDS
-            .iter()
-            .filter(|c| !c.hidden && c.name.starts_with(typed))
+        return ranked(COMMANDS.iter().filter(|c| !c.hidden), typed, |c| c.name)
+            .into_iter()
             .map(|c| Completion {
                 time: None,
                 detail: None,
@@ -176,9 +226,8 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "set" => return complete_set(&parsed, settings),
         "theme" => {
             let current = settings.str("ui.theme");
-            return crate::theme::THEMES
-                .iter()
-                .filter(|t| t.starts_with(parsed.pattern))
+            return ranked(crate::theme::THEMES.iter(), parsed.pattern, |t| t)
+                .into_iter()
                 .map(|t| Completion {
                     category: "Themes",
                     name: t.to_string(),
@@ -276,6 +325,55 @@ mod tests {
             compute(":set hints.c", None, &Settings::default())[0].name,
             "hints.chars"
         );
+    }
+
+    fn names(items: &[Completion]) -> Vec<&str> {
+        items.iter().map(|c| c.name.as_str()).collect()
+    }
+
+    #[test]
+    fn ranks_whole_names_then_starts_then_parts_then_anywhere() {
+        assert_eq!(rank("hints", "hints"), Some(0));
+        assert_eq!(rank("hints.chars", "HINTS"), Some(1));
+        assert_eq!(rank("colors.hints.bg", "hints"), Some(2));
+        assert_eq!(rank("tab-close", "close"), Some(2));
+        assert_eq!(rank("fullscreen", "scr"), Some(3));
+        assert_eq!(rank("colors.hints.bg", "hnt"), None);
+    }
+
+    #[test]
+    fn settings_match_anywhere_in_their_name() {
+        let items = compute(":set hints", None, &Settings::default());
+        let found = names(&items);
+        assert!(found.contains(&"colors.hints.bg"), "{found:?}");
+        let first_other = found.iter().position(|n| !n.starts_with("hints")).unwrap();
+        assert!(
+            found[..first_other].iter().all(|n| n.starts_with("hints.")),
+            "names starting with hints come first: {found:?}"
+        );
+        assert!(
+            found[first_other..].iter().all(|n| !n.starts_with("hints")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn commands_values_and_themes_match_anywhere() {
+        let s = Settings::default();
+        assert!(names(&compute(":close", None, &s)).contains(&"tab-close"));
+        assert_eq!(
+            names(&compute(":set tabs.position ott", None, &s)),
+            ["bottom"]
+        );
+        assert_eq!(names(&compute(":theme box-l", None, &s)), ["gruvbox-light"]);
+    }
+
+    #[test]
+    fn the_words_to_highlight_are_what_follows_the_command() {
+        assert_eq!(match_words(":tab-c"), ["tab-c"]);
+        assert_eq!(match_words(":open -t rust docs"), ["rust", "docs"]);
+        assert_eq!(match_words(":set "), Vec::<String>::new());
+        assert_eq!(match_words("/search"), Vec::<String>::new());
     }
 
     #[test]

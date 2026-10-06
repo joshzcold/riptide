@@ -1196,7 +1196,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                 let count = max_rows.max(rows.len());
                 let format = s.engine.settings().str("completion.timestamp_format");
                 break 'rows (
-                    json!({ "kind": "rows", "rows": rows, "timestamp_format": format }),
+                    json!({ "kind": "rows", "rows": rows, "timestamp_format": format, "words": view.words }),
                     count,
                 );
             }
@@ -1219,7 +1219,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             let count = rows.len();
             let format = s.engine.settings().str("completion.timestamp_format");
             (
-                json!({ "kind": "rows", "rows": rows, "timestamp_format": format }),
+                json!({ "kind": "rows", "rows": rows, "timestamp_format": format, "words": view.words }),
                 count,
             )
         }

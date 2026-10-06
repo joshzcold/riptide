@@ -381,7 +381,7 @@ impl Engine {
                 items.extend(
                     self.user_commands
                         .iter()
-                        .filter(|(n, _)| n.starts_with(typed))
+                        .filter(|(n, _)| completion::rank(n, typed).is_some())
                         .map(|(n, d)| completion::Completion {
                             category: "Commands",
                             name: n.clone(),
@@ -390,6 +390,7 @@ impl Engine {
                             detail: None,
                         }),
                 );
+                completion::sort_commands(&mut items, typed);
             }
             self.completion = Some(CompletionState {
                 base: text.to_string(),
@@ -397,6 +398,7 @@ impl Engine {
                 view: CompletionView {
                     items,
                     selected: None,
+                    words: completion::match_words(text),
                 },
             });
         }
@@ -2335,7 +2337,7 @@ mod tests {
         let out = press(&mut e, "<Ctrl-d>");
         assert!(all_effects(&out).is_empty());
         assert!(e.status().message.unwrap().text.starts_with("Can't delete"));
-        assert_eq!(e.completions().items.len(), 6);
+        assert_eq!(e.completions().items.len(), 7);
     }
 
     fn set(e: &mut Engine, name: &str, value: Value) {
@@ -2614,7 +2616,7 @@ mod tests {
     }
 
     #[test]
-    fn completion_filters_by_prefix() {
+    fn completion_puts_names_starting_with_the_text_first() {
         let mut e = engine();
         press(&mut e, ":scr");
         let names: Vec<_> = e
@@ -2631,7 +2633,8 @@ mod tests {
                 "scroll-to-perc",
                 "screenshot",
                 "scroll-px",
-                "scroll-to-anchor"
+                "scroll-to-anchor",
+                "fullscreen",
             ]
         );
         press(&mut e, "oll ");

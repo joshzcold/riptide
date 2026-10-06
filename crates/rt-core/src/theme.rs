@@ -59,6 +59,7 @@ pub const TOKENS: &[(&str, &str)] = &[
         "completion-selected-fg",
         "colors.completion.item.selected.fg",
     ),
+    ("completion-match-fg", "colors.completion.match.fg"),
     ("keyhint-fg", "colors.keyhint.suffix.fg"),
     ("prompts-bg", "colors.prompts.bg"),
     ("prompts-fg", "colors.prompts.fg"),
@@ -92,6 +93,7 @@ pub const TEXT_PAIRS: &[(&str, &str)] = &[
     ("statusbar-url-error-fg", "statusbar-bg"),
     ("completion-description-fg", "completion-bg"),
     ("keyhint-fg", "completion-bg"),
+    ("completion-match-fg", "completion-bg"),
     ("prompts-border", "prompts-bg"),
     ("prompts-border", "prompts-key-bg"),
     ("hints-match-fg", "hints-bg"),
@@ -270,6 +272,7 @@ pub fn theme(name: &str) -> Option<BTreeMap<&'static str, String>> {
     set("completion-selected-bg", p.accent);
     set("completion-selected-fg", &readable(p.accent));
     set("keyhint-fg", &legible(p.accent, p.surface));
+    set("completion-match-fg", &legible(p.yellow, p.surface));
     set("prompts-bg", p.surface);
     set("prompts-fg", p.fg);
     let key_bg = mix(p.surface, p.yellow, 0.18);

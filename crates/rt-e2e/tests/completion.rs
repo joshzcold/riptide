@@ -21,6 +21,23 @@ fn items(s: &State) -> Vec<(String, String)> {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn set_completes_settings_that_contain_the_text_and_marks_it() {
+    let b = Browser::start("page.html");
+    b.keys(":set hints");
+    let s = b.wait_until("settings are offered", |s| !items(s).is_empty());
+    let names: Vec<String> = items(&s).into_iter().map(|(_, name)| name).collect();
+    assert!(names[0].starts_with("hints."), "{names:?}");
+    assert!(names.contains(&"colors.hints.bg".to_string()), "{names:?}");
+    b.wait_until("the popup marks the typed text", |_| {
+        b.eval_bar(
+            "completion",
+            "String([...document.querySelectorAll('.name .match')].some(m => m.textContent === 'hints'))",
+        ) == "true"
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn completion_open_categories_set_the_sources_and_their_order() {
     let b = Browser::launch()
         .toml(

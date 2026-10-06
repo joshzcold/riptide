@@ -555,6 +555,13 @@ pub static SETTINGS: &[SettingDef] = &[
         color
     ),
     def!(
+        "colors.completion.match.fg",
+        Kind::Str,
+        s(""),
+        "The typed text where it appears in completion items; empty uses ui.theme's",
+        color
+    ),
+    def!(
         "colors.completion.odd.bg",
         Kind::Str,
         s(""),
