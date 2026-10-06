@@ -555,6 +555,7 @@ wrap_load_handler! {
                         }
                     }
                     crate::lua::emit("load_finished", &[("url", &url)]);
+                    crate::crash::mention_last_report();
                     return;
                 }
                 Role::Tabbar => shell::with(|s| s.tabbar_ready = true),

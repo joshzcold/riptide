@@ -380,6 +380,7 @@ wrap_window_delegate! {
                 }
                 if first {
                     storage::start_autosave();
+                    crate::crash::find_last_report();
                 }
             }
             crate::remote::run_commands(&self.commands);

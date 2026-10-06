@@ -39,11 +39,16 @@ pub fn recovery(crashed: bool, urls_given: bool, was_recovering: bool) -> Recove
 
 /// `_crashed-YYYY-MM-DD-HHMMSS` for a Unix time, in UTC.
 pub fn crashed_name(unix_secs: u64) -> String {
+    format!("{CRASHED_PREFIX}{}", utc_stamp(unix_secs))
+}
+
+/// `YYYY-MM-DD-HHMMSS` for a Unix time, in UTC; sorts by time.
+pub fn utc_stamp(unix_secs: u64) -> String {
     let days = (unix_secs / 86_400) as i64;
     let secs = unix_secs % 86_400;
     let (y, m, d) = civil_from_days(days);
     format!(
-        "{CRASHED_PREFIX}{y:04}-{m:02}-{d:02}-{:02}{:02}{:02}",
+        "{y:04}-{m:02}-{d:02}-{:02}{:02}{:02}",
         secs / 3600,
         secs % 3600 / 60,
         secs % 60

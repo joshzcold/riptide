@@ -1,6 +1,7 @@
 //! Persistent browsing state: history (SQLite), quickmarks and bookmarks
 //! (qutebrowser-compatible text files) and sessions (TOML).
 
+pub mod crash_reports;
 pub mod history;
 pub mod marks;
 pub mod recovery;

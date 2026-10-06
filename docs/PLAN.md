@@ -876,15 +876,19 @@ Whatever path wins:
     - Tests: `renderer_crash.rs`, plus unit tests for the reason text and the notice URL. The test channel's `CrashTab` makes the renderer abort. `chrome://crash` can't be used, because with the sandbox on it leaves the tab loading instead of crashing.
 - **Crash reports** (complements `:report` in M19):
   - **Capture:**
-    - A Rust panic hook writes the message, backtrace and version (M18's `--version` string) to `<data>/crashes/<timestamp>.txt`.
+    - ✅ **Panics** (2026-10-06):
+      - A panic hook in the browser process (`rt-cef/src/crash.rs`) writes the version, thread, location, message and backtrace to `<data>/crashes/crash-<UTC date-time>.txt`. The newest ten are kept (`rt_storage::crash_reports`).
+      - A panic that reaches CEF's C callers panics a second time ("cannot unwind"). Only the first panic on a thread is reported.
+      - The next start says "riptide crashed last time. The report is in …", once. The message waits until the first page has loaded, because starting a load clears messages.
+      - Tests: unit tests in `crash_reports.rs`, and the e2e test `a_panic_writes_a_report_that_the_next_start_mentions_once`. The test channel's `Panic` request triggers it.
+      - **Found:** a page starting to load clears every message, so startup messages such as "Restored the tabs open before the crash" vanish as soon as the restored tabs load. They should get the same delay.
     - For native crashes in CEF, enable Crashpad to write minidumps locally with uploads off, and record the dump's path.
-  - **Offer after the crash:** at the next startup, the status bar says "riptide crashed last time: :crash-report". That command opens `riptide://crash/`, which shows the report and lets the user edit it, then send it one of two ways:
+  - **Offer after the crash:** at the next startup, the status bar names the report (done). Next: a `:crash-report` command that opens `riptide://crash/`, which shows the report and lets the user edit it, then send it one of two ways:
     - **Email:** a `mailto:` link with the subject and body filled in. The address comes from a `crash_report.email` setting; with no address, the email button is hidden.
     - **GitHub issue:** `https://github.com/joshzcold/riptide/issues/new?title=…&body=…`, filled in. Truncate the log so the URL stays under GitHub's ~8 KB limit, and tell the user to attach the full log or minidump by hand.
   - **Privacy:** nothing is ever sent automatically. Reports leave out tab URLs and titles by default, and include them only if a checkbox is ticked. Log lines are shown before sending, because they can contain URLs.
   - **Tests:**
-    - A test-build-only `:debug-crash` command (`panic`, `abort`, `renderer`) triggers each kind of crash.
-    - A smoke step checks that the next start offers the report and restores the tabs.
+    - The test channel's `Panic` and `CrashTab` requests trigger a panic and a renderer crash. A native abort in the browser process isn't covered yet.
 
 ### M24 — Documentation website ✅ mostly done 2026-10-05
 

@@ -8,6 +8,7 @@ mod client;
 mod clipboard;
 mod configcmd;
 mod content;
+mod crash;
 mod dialogs;
 mod downloads;
 mod eval;
@@ -297,6 +298,7 @@ pub fn run() -> i32 {
     if let Some(code) = remote::hand_off(&paths, &cli) {
         return code;
     }
+    crash::install_panic_hook(&paths.data_dir);
     let cwd = std::env::current_dir().unwrap_or_default();
     let (mut urls, mut commands) = (Vec::new(), Vec::new());
     for arg in &cli.urls {

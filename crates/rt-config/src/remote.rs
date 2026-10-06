@@ -48,6 +48,8 @@ pub enum TestRequest {
     EvalBar { code: String, bar: String },
     /// Crash the current tab's renderer process.
     CrashTab,
+    /// Panic on the browser's UI thread, as a bug in riptide would.
+    Panic,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

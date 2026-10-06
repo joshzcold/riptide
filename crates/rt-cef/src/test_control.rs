@@ -53,6 +53,7 @@ mod enabled {
             TestRequest::Eval { code, tab } => return eval(&code, tab, tx),
             TestRequest::EvalBar { code, bar } => return eval_bar(&code, &bar, tx),
             TestRequest::CrashTab => crash_tab(),
+            TestRequest::Panic => panic!("a panic the test channel asked for"),
         };
         let _ = tx.send(reply);
     }

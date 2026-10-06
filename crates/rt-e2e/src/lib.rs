@@ -345,6 +345,11 @@ impl Browser {
             .unwrap_or_default())
     }
 
+    /// Make the browser panic, as a bug in riptide would. It exits without answering.
+    pub fn panic(&self) {
+        let _ = self.request(TestRequest::Panic);
+    }
+
     /// Crash the current tab's renderer process.
     pub fn crash_tab(&self) {
         self.request(TestRequest::CrashTab)
