@@ -67,6 +67,12 @@ Inside an AppImage, `chrome-sandbox` can't be setuid, so the sandbox needs user 
 
 macOS and Windows builds run without the sandbox for now; it needs the app bundle and installer work that's still planned.
 
+## Window managers
+
+riptide's windows have the class `riptide` (`WM_CLASS` `riptide`, `Riptide`), for window manager rules and docks.
+
+If another browser's screen-share picker doesn't list riptide's window, check its state with `xprop WM_STATE` and click the window. Programs that list windows skip any that aren't in the `Normal` state. dwm's swallow patch leaves a program started from a terminal in the `Withdrawn` state, because it marks the program's window instead of the terminal's. Either fix the patch (in `swallow()`, mark `p` instead of `c` as withdrawn), or exclude riptide from swallowing with a rule for the class `Riptide`.
+
 ## Where things live
 
 Run `riptide --paths` to see the config and data directories.

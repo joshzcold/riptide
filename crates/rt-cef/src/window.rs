@@ -494,6 +494,14 @@ wrap_window_delegate! {
         fn window_runtime_style(&self) -> RuntimeStyle {
             RuntimeStyle::ALLOY
         }
+
+        fn linux_window_properties(
+            &self,
+            _window: Option<&mut Window>,
+            properties: Option<&mut LinuxWindowProperties>,
+        ) -> ::std::os::raw::c_int {
+            properties.is_some_and(set_window_class).into()
+        }
     }
 }
 
@@ -612,6 +620,14 @@ wrap_window_delegate! {
         fn window_runtime_style(&self) -> RuntimeStyle {
             RuntimeStyle::CHROME
         }
+
+        fn linux_window_properties(
+            &self,
+            _window: Option<&mut Window>,
+            properties: Option<&mut LinuxWindowProperties>,
+        ) -> ::std::os::raw::c_int {
+            properties.is_some_and(set_window_class).into()
+        }
     }
 }
 
@@ -668,6 +684,26 @@ fn bar_size(role: Role) -> Size {
             height: 1,
         },
     }
+}
+
+/// `WM_CLASS` `riptide`, `Riptide` (and the Wayland app ID), so window
+/// managers, docks and screen-share pickers can tell riptide's windows apart.
+/// Without it CEF leaves the main window unnamed.
+fn set_window_class(properties: &mut LinuxWindowProperties) -> bool {
+    properties.wm_class_name = string_for_cef("riptide");
+    properties.wm_class_class = string_for_cef("Riptide");
+    properties.wayland_app_id = string_for_cef("riptide");
+    true
+}
+
+/// A string to write into a struct CEF passed in. The `cef` crate turns
+/// `CefString::from(&str)` into an empty string on the way back to C, so
+/// this allocates CEF's own, which CEF frees with the struct.
+fn string_for_cef(text: &str) -> CefString {
+    // SAFETY: a zeroed cef_string_t is empty; the conversion fills it in.
+    let mut raw: sys::cef_string_utf16_t = unsafe { std::mem::zeroed() };
+    unsafe { sys::cef_string_utf8_to_utf16(text.as_ptr().cast(), text.len(), &mut raw) };
+    CefString::from(raw)
 }
 
 #[cfg(test)]

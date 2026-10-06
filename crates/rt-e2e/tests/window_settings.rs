@@ -6,9 +6,8 @@ use std::process::Command;
 
 use rt_e2e::Browser;
 
-/// The decorations field of `_MOTIF_WM_HINTS` on the browser window:
-/// 1 with a title bar and borders, 0 without.
-fn decorations(b: &Browser) -> String {
+/// An X property of the browser window, as xprop prints it.
+fn window_property(b: &Browser, property: &str) -> String {
     let display = format!(":{}", b.display());
     let tree = Command::new("xwininfo")
         .args(["-display", &display, "-root", "-tree"])
@@ -21,11 +20,17 @@ fn decorations(b: &Browser) -> String {
         .and_then(|l| l.split_whitespace().next())
         .unwrap_or_else(|| panic!("no Riptide window in\n{tree}"))
         .to_string();
-    let hints = Command::new("xprop")
-        .args(["-display", &display, "-id", &id, "_MOTIF_WM_HINTS"])
+    let output = Command::new("xprop")
+        .args(["-display", &display, "-id", &id, property])
         .output()
         .expect("xprop is needed for window tests");
-    let hints = String::from_utf8_lossy(&hints.stdout).to_string();
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+/// The decorations field of `_MOTIF_WM_HINTS` on the browser window:
+/// 1 with a title bar and borders, 0 without.
+fn decorations(b: &Browser) -> String {
+    let hints = window_property(b, "_MOTIF_WM_HINTS");
     // "_MOTIF_WM_HINTS(_MOTIF_WM_HINTS) = flags, functions, decorations, …"
     hints
         .split_once('=')
@@ -33,6 +38,16 @@ fn decorations(b: &Browser) -> String {
         .unwrap_or_else(|| panic!("unexpected hints: {hints}"))
         .trim()
         .to_string()
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_window_has_a_class_for_window_managers_and_pickers() {
+    let b = Browser::start("page.html");
+    assert_eq!(
+        window_property(&b, "WM_CLASS").trim(),
+        r#"WM_CLASS(STRING) = "riptide", "Riptide""#
+    );
 }
 
 #[test]
