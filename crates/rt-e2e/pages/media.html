@@ -1,0 +1,21 @@
+<!doctype html>
+<title>media</title>
+<script>
+  // A stand-in for a call: window.__ticks counts a 100 ms timer, to see
+  // whether a hidden tab with a live camera and microphone is slowed down.
+  window.__ticks = 0;
+  setInterval(() => window.__ticks++, 100);
+  window.__stream = null;
+  async function startCall() {
+    window.__stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    // A call plays the others' voices; the test microphone's beep stands in.
+    window.__audio = new Audio();
+    window.__audio.srcObject = window.__stream;
+    await window.__audio.play();
+    return "on";
+  }
+  function endCall() {
+    window.__stream.getTracks().forEach((t) => t.stop());
+    return "off";
+  }
+</script>

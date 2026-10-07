@@ -459,6 +459,22 @@ wrap_display_handler! {
             0
         }
 
+        /// The page started or stopped using a camera, the screen or a microphone.
+        fn on_media_access_change(
+            &self,
+            browser: Option<&mut Browser>,
+            has_video_access: ::std::os::raw::c_int,
+            has_audio_access: ::std::os::raw::c_int,
+        ) {
+            let media = (has_video_access != 0, has_audio_access != 0);
+            shell::with_tab(browser, |s, index, _| {
+                if let Some(tab) = s.tabs.get_mut(index) {
+                    tab.media = media;
+                }
+            });
+            shell::refresh_ui();
+        }
+
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
             let title = title.map(CefString::to_string).unwrap_or_default();
             let url = shell::with_tab(browser, |s, index, _| {

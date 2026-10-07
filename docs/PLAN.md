@@ -872,6 +872,8 @@ So with Alloy, sharing one tab or one window isn't possible from the page side. 
     - Zoom, search, DevTools and `:close` work in a call tab.
     - Popups and extra tabs in a call window work.
   - ✅ (2026-10-06) `:tab-call` reopens the current tab in a call window. `content.call_sites` (URL patterns) sends matching pages to a call window from `:open` and from links in ordinary tabs; `on_before_browse` cancels the navigation and closes the tab if the call was all it held. Tests: `tab_call_reopens_the_tab_in_a_call_window`, `call_sites_open_in_a_call_window_from_open_and_from_links`.
+  - ✅ (2026-10-07) **Indicators:** `on_media_access_change` sets each tab's video and audio capture. `{media}` in `tabs.title.format` (on by default) and the `media` status bar widget show `[V] `, `[A] ` or `[A/V] `. CEF doesn't say whether video is a camera or the screen. There's no `:share-stop`, because CEF can't stop a page's tracks from outside; call windows have Chrome's "Stop sharing" bar.
+  - ✅ (2026-10-07) **Background calls:** measured with Chromium's fake devices (`media.rs`). A hidden tab capturing silently has its timers slowed to 1 Hz, as in Chrome. Once it plays audio, as a call does, it runs at full speed: 27 of 30 ticks of 100 ms. Nothing to exempt.
   - **Not done yet:**
     - Fullscreen, Chrome's accelerators and context menu, and keys while the picker is open, checked by hand on a real desktop.
 - **Fallbacks if call windows don't hold up:**

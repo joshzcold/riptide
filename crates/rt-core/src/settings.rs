@@ -220,6 +220,7 @@ pub const STATUSBAR_WIDGETS: &[&str] = &[
     "keypress",
     "downloads",
     "muted",
+    "media",
     "zoom",
     "search_match",
     "url",
@@ -1746,6 +1747,7 @@ pub static SETTINGS: &[SettingDef] = &[
                 "keypress",
                 "downloads",
                 "muted",
+                "media",
                 "zoom",
                 "search_match",
                 "url",
@@ -1757,7 +1759,7 @@ pub static SETTINGS: &[SettingDef] = &[
             .map(String::from)
             .to_vec()
         ),
-        "What the right side of the status bar shows, in order: keypress, downloads, muted, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
+        "What the right side of the status bar shows, in order: keypress, downloads, muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
         statusbar_widgets
     ),
     def!(
@@ -1899,8 +1901,8 @@ pub static SETTINGS: &[SettingDef] = &[
     def!(
         "tabs.title.format",
         Kind::Str,
-        s("{audio}{index}: {current_title}"),
-        "Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {private}"
+        s("{audio}{media}{index}: {current_title}"),
+        "Tab titles; fields: {index}, {aligned_index}, {current_title}, {current_url}, {host}, {perc}, {audio}, {media} ([A/V] while the page uses a camera or the screen, and a microphone), {private}"
     ),
     def!(
         "tabs.title.format_pinned",

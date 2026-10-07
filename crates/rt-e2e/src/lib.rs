@@ -376,6 +376,17 @@ impl Browser {
             .unwrap_or_default())
     }
 
+    /// [`Browser::eval`] in tab `index` (0-based) of the current window, which may be hidden.
+    pub fn eval_tab(&self, index: usize, code: &str) -> String {
+        self.request(TestRequest::Eval {
+            code: code.into(),
+            tab: Some(index),
+        })
+        .unwrap_or_else(|e| panic!("eval in tab {index} {code:?}: {e}"))
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default()
+    }
+
     /// Make the browser panic, as a bug in riptide would. It exits without answering.
     pub fn panic(&self) {
         let _ = self.request(TestRequest::Panic);

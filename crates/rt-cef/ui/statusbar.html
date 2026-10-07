@@ -114,6 +114,7 @@
       case "keypress": return text(state.keystring);
       case "downloads": return text(state.downloads);
       case "muted": return text(state.muted ? "[muted]" : "");
+      case "media": return text(state.media || "");
       case "zoom": return text(state.zoom === 100 ? "" : `[${state.zoom}%]`);
       case "search_match":
         return text(state.search_match ? `Match [${state.search_match[0]}/${state.search_match[1]}]` : "");

@@ -17,8 +17,9 @@ pub fn format(template: &str, title: &str, url: &str, mode: &str) -> String {
 
 /// A tab's label for `tabs.title.format` and `tabs.title.format_pinned`:
 /// `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`,
-/// `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` when muted) and
-/// `{private}` (`[Private] ` in private windows).
+/// `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` when muted),
+/// `{media}` (see [`media_label`]) and `{private}` (`[Private] ` in private
+/// windows).
 pub struct TabFields<'a> {
     pub index: usize,
     pub count: usize,
@@ -26,7 +27,20 @@ pub struct TabFields<'a> {
     pub url: &'a str,
     pub progress: Option<f64>,
     pub muted: bool,
+    /// The page has access to video (a camera or the screen) and to audio (a microphone).
+    pub media: (bool, bool),
     pub private: bool,
+}
+
+/// `[A/V] `, `[V] ` (a camera or the screen) or `[A] ` (a microphone)
+/// while a page captures them; empty otherwise.
+pub fn media_label((video, audio): (bool, bool)) -> &'static str {
+    match (video, audio) {
+        (true, true) => "[A/V] ",
+        (true, false) => "[V] ",
+        (false, true) => "[A] ",
+        (false, false) => "",
+    }
 }
 
 pub fn tab_label(template: &str, f: &TabFields) -> String {
@@ -45,12 +59,21 @@ pub fn tab_label(template: &str, f: &TabFields) -> String {
                 .unwrap_or_default(),
         )
         .replace("{audio}", if f.muted { "[M] " } else { "" })
+        .replace("{media}", media_label(f.media))
         .replace("{private}", if f.private { "[Private] " } else { "" })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn media_marks_what_a_page_captures() {
+        assert_eq!(media_label((true, true)), "[A/V] ");
+        assert_eq!(media_label((true, false)), "[V] ");
+        assert_eq!(media_label((false, true)), "[A] ");
+        assert_eq!(media_label((false, false)), "");
+    }
 
     const DEFAULT: &str = "{current_title}{title_sep}Riptide";
 
@@ -90,6 +113,7 @@ mod tests {
             url: "https://rust-lang.org/learn",
             progress: Some(0.42),
             muted: true,
+            media: (false, false),
             private: false,
         };
         assert_eq!(

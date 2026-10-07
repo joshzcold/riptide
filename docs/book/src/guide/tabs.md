@@ -12,7 +12,9 @@ The tab bar shows site icons (`tabs.favicons.show`: `always`, `never` or `pinned
 
 The current tab is the darkest in the bar. To also underline it (or, in a vertical bar, mark its right edge), set `colors.tabs.selected.accent` to a CSS color, e.g. `:set colors.tabs.selected.accent #2ec4b6`; `:config-unset colors.tabs.selected.accent` removes the line again.
 
-Tab titles follow `tabs.title.format` (default `{audio}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab) and `{private}`. `tabs.tooltips = false` turns off the title-and-URL tooltip.
+Tab titles follow `tabs.title.format` (default `{audio}{media}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab), `{media}` and `{private}`.
+
+`{media}`, and the status bar's `media` widget, show what a page is capturing: `[V] ` while it uses a camera or shares the screen, `[A] ` for a microphone, and `[A/V] ` for both. Chromium doesn't say whether video comes from a camera or the screen. `tabs.tooltips = false` turns off the title-and-URL tooltip.
 
 In a top or bottom bar, tabs share the width evenly. `tabs.max_width` caps each tab and `tabs.min_width` keeps them from getting narrower; once they don't fit, the bar scrolls to keep the current tab in view. `tabs.title.alignment` (`left`, `center`, `right`) places the title, and `tabs.indicator.width` sets the loading indicator's width (`0` hides it):
 
@@ -59,6 +61,8 @@ c.content.call_sites = { "meet.google.com", "*.zoom.us", "teams.microsoft.com" }
 - **The picker's Tab list** only offers call tabs, not riptide's ordinary tabs.
 - **Sessions:** call windows are saved as ordinary windows, so a restored call shares the whole screen until you reopen it with `--call`.
 - **Turning it off:** `content.desktop_capture = false` still refuses screen sharing everywhere, call windows included.
+- **In the background:** a call keeps running at full speed in a tab you've switched away from, as in Chrome, since it plays sound. A silent page in a background tab has its timers slowed to once a second.
+- **Stopping a share:** in a call window, use the "Stop sharing" bar Chrome shows. riptide can't stop a page's capture from outside; close or reload the tab instead.
 
 `tabs.tabs_are_windows = true` opens every tab, and every popup, in its own window and hides the tab bar, which suits tiling window managers that arrange windows themselves.
 

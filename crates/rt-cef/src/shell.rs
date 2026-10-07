@@ -54,6 +54,8 @@ pub struct Tab {
     /// Page zoom in percent.
     pub zoom: u32,
     pub muted: bool,
+    /// The page captures video (a camera or the screen) and audio, as CEF reports it.
+    pub media: (bool, bool),
     pub can_go_back: bool,
     pub can_go_forward: bool,
     /// The last search's match number and count.
@@ -86,6 +88,7 @@ impl Tab {
             mode: rt_core::Mode::Normal,
             zoom: 100,
             muted: false,
+            media: (false, false),
             can_go_back: false,
             can_go_forward: false,
             search_match: None,
@@ -1114,6 +1117,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "private": s.private,
         "zoom": current.map_or(100, |t| t.zoom),
         "muted": current.is_some_and(|t| t.muted),
+        "media": current.map_or("", |t| rt_core::title::media_label(t.media).trim_end()),
         "widgets": s.engine.settings().list("statusbar.widgets"),
         "back": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_back, |h| h.can_go_back())),
         "forward": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_forward, |h| h.can_go_forward())),
@@ -1158,6 +1162,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                     url: &t.url,
                     progress: t.progress,
                     muted: t.muted,
+                    media: t.media,
                     private: s.private,
                 },
             );
