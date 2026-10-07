@@ -265,18 +265,27 @@ fn derive(p: &Palette, name: &str) -> BTreeMap<&'static str, String> {
         hint_bg = mix(&hint_bg, "#ffffff", 0.2);
     }
     let pinned_bg = mix(p.surface2, p.blue, 0.35);
-    // The current tab is always the darkest tab, pinned ones included, with
-    // a hint of the accent; the accent alone can match the pinned tint.
-    let darkest_other = [p.surface, p.surface2, p.surface3, pinned_bg.as_str()]
-        .iter()
-        .map(|c| luminance(c))
-        .fold(f64::MAX, f64::min);
-    let mut selected_tab = mix(p.base, p.accent, 0.12);
-    while luminance(&selected_tab) > darkest_other * 0.7 && luminance(&selected_tab) > 0.002 {
-        selected_tab = mix(&selected_tab, "#000000", 0.15);
-    }
-    // In dark themes, very bright colors would glare across a whole bar.
     let dark = luminance(p.base) < 0.2;
+    // The current tab stands out from every other tab, pinned ones included,
+    // with a hint of the accent: the darkest tab in dark themes, the
+    // brightest in light ones (a dark tab looks muddy on a light bar).
+    let others = [p.surface, p.surface2, p.surface3, pinned_bg.as_str()].map(luminance);
+    let selected_tab = if dark {
+        let darkest_other = others.iter().copied().fold(f64::MAX, f64::min);
+        let mut tab = mix(p.base, p.accent, 0.12);
+        while luminance(&tab) > darkest_other * 0.7 && luminance(&tab) > 0.002 {
+            tab = mix(&tab, "#000000", 0.15);
+        }
+        tab
+    } else {
+        let brightest_other = others.iter().copied().fold(0.0, f64::max);
+        let mut tab = mix("#ffffff", p.accent, 0.1);
+        while luminance(&tab) < (brightest_other + 0.05).min(0.97) {
+            tab = mix(&tab, "#ffffff", 0.3);
+        }
+        tab
+    };
+    // In dark themes, very bright colors would glare across a whole bar.
     let bar = |c: &str| -> String {
         if dark && luminance(c) > 0.3 {
             mix(c, p.base, 0.35)
@@ -857,9 +866,12 @@ mod tests {
     }
 
     #[test]
-    fn the_current_tab_is_the_darkest_tab() {
+    fn the_current_tab_is_the_darkest_tab_or_in_light_themes_the_brightest() {
         for name in THEMES {
             let t = theme(name).unwrap();
+            let dark = luminance(&t["statusbar-bg"]) < 0.2;
+            // Light themes: compare negatives, so "darker" means "brighter".
+            let luminance = |c: &str| if dark { luminance(c) } else { -luminance(c) };
             let selected = luminance(&t["tabs-selected-bg"]);
             for other in [
                 "tabs-odd-bg",
