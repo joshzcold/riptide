@@ -71,6 +71,13 @@ The settings page (`:settings`) and `:help content.call_sites` show the default 
 - **In the background:** a call keeps running at full speed in a tab you've switched away from, as in Chrome, since it plays sound. A silent page in a background tab has its timers slowed to once a second.
 - **Stopping a share:** in a call window, use the "Stop sharing" bar Chrome shows. riptide can't stop a page's capture from outside; close or reload the tab instead.
 
+### Muting a call from another tab
+
+`cm` (`:call-mute`) mutes or unmutes your microphone in the call while you're in another tab. It presses the call site's own mute key in the tab that's using the microphone, so the site's mute button stays right. `content.call_mute_keys` has each site's key (Meet `<Ctrl-d>`, Teams `<Ctrl-Shift-m>`, Zoom `<Alt-a>`, Webex `<Ctrl-m>`, Jitsi `m`); add others the same way.
+
+- **A flash of the call:** Chromium only takes keys in the tab that's showing, so the call tab shows for a moment and then the tab you were on comes back. The first time, it shows for under a second, while the page gets ready for keys.
+- **Another window:** a call in another window isn't reached; riptide names the key to press there.
+
 `tabs.tabs_are_windows = true` opens every tab, and every popup, in its own window and hides the tab bar, which suits tiling window managers that arrange windows themselves.
 
 `window.hide_decoration = true` asks the window manager for windows without a title bar or borders, which suits tiling window managers. It applies to windows opened after the change.

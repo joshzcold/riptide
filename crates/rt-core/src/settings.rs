@@ -230,6 +230,18 @@ pub const CALL_SITES: &[&str] = &[
     "whereby.com",
 ];
 
+/// `content.call_mute_keys`' default: each call service's own shortcut to
+/// mute or unmute the microphone.
+pub const CALL_MUTE_KEYS: &[(&str, &str)] = &[
+    ("meet.google.com", "<Ctrl-d>"),
+    ("teams.microsoft.com", "<Ctrl-Shift-m>"),
+    ("teams.live.com", "<Ctrl-Shift-m>"),
+    ("teams.cloud.microsoft", "<Ctrl-Shift-m>"),
+    ("*.zoom.us", "<Alt-a>"),
+    ("*.webex.com", "<Ctrl-m>"),
+    ("meet.jit.si", "m"),
+];
+
 /// What `statusbar.widgets` can show, besides `clock[:format]` and `text:…`.
 pub const STATUSBAR_WIDGETS: &[&str] = &[
     "keypress",
@@ -1019,6 +1031,12 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         Value::Int(0),
         "Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart)"
+    ),
+    def!(
+        "content.call_mute_keys",
+        Kind::Map,
+        map(CALL_MUTE_KEYS),
+        "The key each call site mutes the microphone with, by URL pattern, for :call-mute (cm); keys as in :bind, e.g. <Ctrl-d>"
     ),
     def!(
         "content.call_sites",

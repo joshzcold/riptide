@@ -1,0 +1,18 @@
+<!doctype html>
+<title>call</title>
+<script>
+  // A stand-in for a call site: a microphone in use, and Ctrl-d toggling
+  // mute as Google Meet's does. window.__mutes counts the presses; only real
+  // key events count, as sites ignore ones made up by scripts.
+  window.__mutes = 0;
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key === "d" && e.isTrusted) {
+      window.__mutes++;
+      e.preventDefault();
+    }
+  });
+  async function startCall() {
+    window.__stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return "on";
+  }
+</script>

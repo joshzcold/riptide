@@ -90,6 +90,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:jseval` |  | Evaluate a JavaScript expression in the page: :jseval &lt;code&gt; |
 | `:home` |  | Open the start page |
 | `:tab-mute` | `<Alt-m>` | Mute or unmute this tab (Alt-m) |
+| `:call-mute` | `cm` | Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys) |
 | `:messages` |  | Show this session's messages |
 | `:repeat-command` | `.` | Run the last command again (.) |
 | `:theme` |  | Switch the color theme (ui.theme), or list the themes: :theme [name] |

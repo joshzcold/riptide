@@ -904,7 +904,14 @@ Whatever path wins:
 - **Performance:** VA-API video decode and encode (this machine logs `vaInitialize failed` from mixed Nix and system Mesa libraries; check on a stock distro), and GPU use for background blur (WebGL; Xvfb blocklists it, real GPUs don't).
 - **While browsing other tabs:**
   - Picture-in-picture (`:pip`, plus the Document Picture-in-Picture API if CEF supports it).
-  - A mute toggle that reaches the call tab from any tab, using the site's own shortcut sent through `fake-key` to that tab.
+  - ✅ (2026-10-07) A mute toggle from any tab: `cm` / `:call-mute` finds the tab using a microphone and presses its site's key from `content.call_mute_keys` (Meet, Teams, Zoom, Webex and Jitsi by default).
+    - **What didn't work:**
+      - `send_key_event` to a hidden tab is dropped, since keys go to the window's focused view.
+      - DevTools' `Input.dispatchKeyEvent` through `execute_dev_tools_method` returns success, but no event reaches the page (windowed browsers).
+    - **What did:** the call tab is shown, the key sent, and the previous tab shown again.
+      - The first key a page ever gets starts something in Chromium that drops keys for roughly 400 ms; waiting for an animation frame doesn't help. So a page that hasn't had a key (`client::had_keys`) gets a bare Shift and the mute key 700 ms later.
+      - Later presses go at once. Test: `call_mute.rs`, two presses on a call in a background tab.
+    - **Not covered:** a call in another window; riptide says which key to press there.
   - Desktop notifications through `content.notifications.presenter` (libnotify).
 - **Indicators:** camera, microphone and screen in use, per tab, from our permission grants and the tracks' lifetimes, since Chrome's capture indicator isn't in Alloy.
 - **Tests:**

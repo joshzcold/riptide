@@ -416,6 +416,8 @@ pub enum Command {
     Home,
     /// Mute or unmute the current tab.
     TabMute,
+    /// Press the call site's mute key in the tab using the microphone, from any tab.
+    CallMute,
     /// Show the messages of this session.
     Messages,
     /// Run the last command again (`.`).
@@ -910,6 +912,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("home", "Open the start page"),
     spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
+    spec(
+        "call-mute",
+        "Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys)",
+    ),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
     spec(
@@ -1578,6 +1584,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "home" => Command::Home,
         "tab-mute" => Command::TabMute,
+        "call-mute" => Command::CallMute,
         "messages" => Command::Messages,
         "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,
         "theme" => Command::Theme {

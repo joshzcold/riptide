@@ -226,6 +226,7 @@ wrap_keyboard_handler! {
         ) -> ::std::os::raw::c_int {
             // Keys go to the window they were typed in.
             if let Some(browser) = browser {
+                HAD_KEYS.with(|h| h.borrow_mut().insert(browser.identifier()));
                 shell::activate_browser(browser.identifier());
             }
             event.is_some_and(|e| route_key_event(self.role, e)).into()
@@ -285,6 +286,44 @@ pub fn send_to_page(key: rt_core::Key) {
     else {
         return;
     };
+    send_key_to(&host, key);
+}
+
+thread_local! {
+    /// Browsers that have had a key event, typed or sent.
+    static HAD_KEYS: std::cell::RefCell<std::collections::HashSet<i32>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Whether `browser` has had a key event yet (see [`prime_page`]).
+pub fn had_keys(browser: i32) -> bool {
+    HAD_KEYS.with(|h| h.borrow().contains(&browser))
+}
+
+/// A lone Shift press and release in the current tab. Chromium drops the
+/// first key event a page gets after it loads, so this goes before keys a
+/// page must see, such as a call's mute key; pages ignore a bare Shift.
+pub fn prime_page() {
+    let Some(host) = shell::with(|s| s.current_browser())
+        .flatten()
+        .and_then(|b| b.host())
+    else {
+        return;
+    };
+    let shift = |type_, modifiers| KeyEvent {
+        type_,
+        modifiers,
+        windows_key_code: 0x10,
+        ..Default::default()
+    };
+    SENDING_TO_PAGE.with(|s| s.set(true));
+    host.send_key_event(Some(&shift(KeyEventType::RAWKEYDOWN, EVENTFLAG_SHIFT_DOWN)));
+    host.send_key_event(Some(&shift(KeyEventType::KEYUP, 0)));
+    SENDING_TO_PAGE.with(|s| s.set(false));
+}
+
+/// Press and release `key` in a browser that has keyboard focus.
+pub fn send_key_to(host: &BrowserHost, key: rt_core::Key) {
     let raw = vk::to_raw(key);
     let event = |type_: KeyEventType| key_event(key, type_);
     SENDING_TO_PAGE.with(|s| s.set(true));

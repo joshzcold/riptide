@@ -31,6 +31,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         | Command::JsEval { .. }
         | Command::Home
         | Command::TabMute
+        | Command::CallMute
         | Command::DevToolsFocus
         | Command::DebugDumpPage { .. }
         | Command::DebugClearSslErrors
@@ -186,6 +187,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                 }
             });
         }
+        Command::CallMute => call_mute(),
         Command::TabMute => {
             let muted = host.is_audio_muted() == 0;
             host.set_audio_muted(muted.into());
@@ -289,6 +291,103 @@ wrap_pdf_print_callback! {
                 shell::show_message(Level::Error, format!("Could not save {path}"));
             }
             shell::refresh_ui();
+        }
+    }
+}
+
+/// `:call-mute`: the call is the tab using a microphone. Its site's own
+/// mute key keeps the site's mute button in step. Chromium only takes keys
+/// in the tab that's showing, so a call in another tab of this window is
+/// shown just long enough for the key, then the tab you were on comes back.
+fn call_mute() {
+    let call = shell::with(|s| {
+        let (window, index) = s
+            .windows
+            .iter()
+            .enumerate()
+            .find_map(|(w, state)| Some((w, state.tabs.iter().position(|t| t.media.1)?)))?;
+        let tab = s.windows[window].tabs.get(index)?;
+        let keys = s
+            .engine
+            .settings()
+            .map("content.call_mute_keys")
+            .cloned()
+            .unwrap_or_default();
+        let key = keys
+            .iter()
+            .find(|(pattern, _)| rt_core::url::pattern_matches(pattern, &tab.url))
+            .map(|(_, key)| key.clone());
+        let here = window == s.active;
+        let current = s.windows[window].tabs.current_index();
+        Some((tab.url.clone(), key, here, index, current))
+    })
+    .flatten();
+    let Some((url, key, here, index, current)) = call else {
+        return shell::show_message(Level::Error, "No tab is using a microphone");
+    };
+    let site = rt_core::url::host(&url).to_string();
+    let Some(key) = key else {
+        return shell::show_message(
+            Level::Error,
+            format!("No mute key known for {site}; add one to content.call_mute_keys"),
+        );
+    };
+    let keys = match rt_core::Key::parse_sequence(&key) {
+        Ok(keys) => keys,
+        Err(e) => {
+            return shell::show_message(
+                Level::Error,
+                format!("content.call_mute_keys for {site}: {e}"),
+            );
+        }
+    };
+    if !here {
+        return shell::show_message(
+            Level::Error,
+            format!("The call ({site}) is in another window; press {key} there"),
+        );
+    }
+    shell::show_message(
+        Level::Info,
+        format!("Pressed {key} in {site} to mute or unmute"),
+    );
+    if index != current {
+        crate::tabs::select(index);
+    }
+    // The first key a page gets starts something in Chromium that loses
+    // keys for a few hundred milliseconds, so a page that hasn't had one
+    // gets a bare Shift first and the mute key a moment later.
+    let warm = shell::with(|s| s.current_browser())
+        .flatten()
+        .is_some_and(|b| crate::client::had_keys(b.identifier()));
+    if warm {
+        return press_in_call(keys, current);
+    }
+    crate::client::prime_page();
+    let mut task = PressInCall::new(std::cell::RefCell::new(keys), current);
+    post_delayed_task(ThreadId::UI, Some(&mut task), FIRST_KEY_DELAY_MS);
+}
+
+/// How long after a page's first key the next one gets through, with room
+/// to spare on a busy machine (about 400 ms was needed under Xvfb).
+const FIRST_KEY_DELAY_MS: i64 = 700;
+
+fn press_in_call(keys: Vec<rt_core::Key>, back_to: usize) {
+    for key in keys {
+        crate::client::send_to_page(key);
+    }
+    crate::tabs::select(back_to);
+}
+
+wrap_task! {
+    struct PressInCall {
+        keys: std::cell::RefCell<Vec<rt_core::Key>>,
+        back_to: usize,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            press_in_call(self.keys.take(), self.back_to);
         }
     }
 }

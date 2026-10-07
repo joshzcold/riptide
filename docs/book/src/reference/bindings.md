@@ -86,6 +86,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `]]` | `navigate next` |
 | `` ` `` | `mode-enter set_mark` |
 | `b` | `cmd-set-text -s :quickmark-load` |
+| `cm` | `call-mute` |
 | `co` | `tab-only` |
 | `d` | `tab-close` |
 | `f` | `hint` |

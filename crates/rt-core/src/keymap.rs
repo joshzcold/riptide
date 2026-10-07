@@ -256,6 +256,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("gK", "tab-move -"),
     ("gm", "tab-move"),
     ("co", "tab-only"),
+    ("cm", "call-mute"),
     ("<Ctrl-p>", "tab-pin"),
     ("f", "hint"),
     ("F", "hint all tab"),
