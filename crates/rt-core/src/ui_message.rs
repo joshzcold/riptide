@@ -31,6 +31,13 @@ pub enum UiMessage {
     },
     /// The settings page's reset button.
     SettingsReset { name: String },
+    /// The recover page: reopen these `(window, tab)`s of a crash's session.
+    RecoverReopen {
+        session: String,
+        tabs: Vec<(usize, usize)>,
+    },
+    /// The recover page: delete a crash's session.
+    RecoverForget { session: String },
 }
 
 /// Which bar a size is for.
@@ -122,18 +129,48 @@ pub fn split_url(url: &str) -> Option<(&str, &str)> {
 }
 
 /// The page at `url` that may send messages: a `riptide://ui/` page's file
-/// name, or `settings` for `riptide://settings/`.
+/// name, or `settings` and `recover` for `riptide://settings/` and
+/// `riptide://recover/`.
 pub fn sender(url: &str) -> Option<&str> {
     if let Some(page) = url.strip_prefix(UI_PREFIX) {
         return page.split(['?', '#']).next();
     }
-    (split_url(url) == Some(("settings", "/"))).then_some("settings")
+    match split_url(url) {
+        Some(("settings", "/")) => Some("settings"),
+        Some(("recover", "/")) => Some("recover"),
+        _ => None,
+    }
 }
 
 /// Whether a page in a tab (not one of riptide's bars) may send messages.
-/// Only the settings page may; web pages can't load or frame it.
+/// Only the settings and recover pages may; web pages can't load or frame them.
 pub fn tab_may_send(url: &str) -> bool {
-    sender(url) == Some("settings")
+    matches!(sender(url), Some("settings" | "recover"))
+}
+
+/// A crash's session name, `_crashed-` and a date: the only sessions the
+/// recover page may reopen or delete.
+fn crashed_session(session: String) -> Result<String, String> {
+    let date = session.strip_prefix("_crashed-").unwrap_or_default();
+    if !date.is_empty() && date.len() <= 32 && date.chars().all(|c| c.is_ascii_digit() || c == '-')
+    {
+        Ok(session)
+    } else {
+        Err(format!("not a crash's session: {session:?}"))
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Reopen {
+    session: String,
+    tabs: Vec<(usize, usize)>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Session {
+    session: String,
 }
 
 #[derive(Deserialize)]
@@ -175,6 +212,22 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let SettingName { name: setting } = payload(name, json)?;
             Ok(UiMessage::SettingsReset {
                 name: setting_name(setting)?,
+            })
+        }
+        ("recover", "reopen") => {
+            let Reopen { session, tabs } = payload(name, json)?;
+            if tabs.is_empty() || tabs.len() > 1000 {
+                return Err(format!("{name}: {} tabs", tabs.len()));
+            }
+            Ok(UiMessage::RecoverReopen {
+                session: crashed_session(session)?,
+                tabs,
+            })
+        }
+        ("recover", "forget") => {
+            let Session { session } = payload(name, json)?;
+            Ok(UiMessage::RecoverForget {
+                session: crashed_session(session)?,
             })
         }
         ("tabbar.html", "select-tab") => {
@@ -234,6 +287,50 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_recover_page_reopens_and_forgets_only_crash_sessions() {
+        let page = "riptide://recover/";
+        assert!(tab_may_send(page));
+        assert_eq!(
+            parse(
+                page,
+                "reopen",
+                r#"{"session":"_crashed-2026-10-07-101500","tabs":[[0,1],[1,0]]}"#
+            ),
+            Ok(UiMessage::RecoverReopen {
+                session: "_crashed-2026-10-07-101500".into(),
+                tabs: vec![(0, 1), (1, 0)],
+            })
+        );
+        assert_eq!(
+            parse(
+                page,
+                "forget",
+                r#"{"session":"_crashed-2026-10-07-101500"}"#
+            ),
+            Ok(UiMessage::RecoverForget {
+                session: "_crashed-2026-10-07-101500".into()
+            })
+        );
+        for bad in [
+            r#"{"session":"default"}"#,
+            r#"{"session":"_crashed-../x"}"#,
+            r#"{"session":"_crashed-"}"#,
+        ] {
+            assert!(parse(page, "forget", bad).is_err(), "{bad}");
+        }
+        assert!(parse(page, "reopen", r#"{"session":"_crashed-1","tabs":[]}"#).is_err());
+        assert!(parse(page, "set", r#"{"name":"zoom.default","value":"100%"}"#).is_err());
+        assert!(
+            parse(
+                "riptide://settings/",
+                "forget",
+                r#"{"session":"_crashed-1"}"#
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn accepts_listed_messages() {

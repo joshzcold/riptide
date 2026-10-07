@@ -37,6 +37,14 @@ pub fn recovery(crashed: bool, urls_given: bool, was_recovering: bool) -> Recove
     }
 }
 
+/// `2026-10-06 11:58:03 UTC` for `_crashed-2026-10-06-115803`.
+pub fn crashed_when(name: &str) -> Option<String> {
+    let stamp = name.strip_prefix(CRASHED_PREFIX)?;
+    let (date, time) = stamp.rsplit_once('-')?;
+    (date.len() == 10 && time.len() == 6 && time.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| format!("{date} {}:{}:{} UTC", &time[..2], &time[2..4], &time[4..]))
+}
+
 /// `_crashed-YYYY-MM-DD-HHMMSS` for a Unix time, in UTC.
 pub fn crashed_name(unix_secs: u64) -> String {
     format!("{CRASHED_PREFIX}{}", utc_stamp(unix_secs))
@@ -137,6 +145,11 @@ mod tests {
         assert_eq!(crashed_name(1_709_208_000), "_crashed-2024-02-29-120000");
         assert!(crashed_name(1_791_287_883) < crashed_name(1_791_287_884));
         crate::sessions::validate_name(&crashed_name(1_791_287_883)).unwrap();
+        assert_eq!(
+            crashed_when("_crashed-2026-10-06-115803").as_deref(),
+            Some("2026-10-06 11:58:03 UTC")
+        );
+        assert_eq!(crashed_when("default"), None);
     }
 
     #[test]

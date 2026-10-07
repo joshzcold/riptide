@@ -54,6 +54,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("changelog", "/") => Some((crate::help::changelog_page(), html)),
         ("history", "/") => Some((themed(crate::help::history_page()), html)),
         ("crash", "/") => Some((themed(crate::crash::page()), html)),
+        ("recover", "/") => Some((themed(crate::recover::page()), html)),
         ("messages", "/") => Some((crate::view::messages_page(), html)),
         ("config-diff", "/") => Some((crate::configcmd::diff_page(), html)),
         ("bookmarks", "/") => Some((crate::storage::bookmarks_page(), html)),

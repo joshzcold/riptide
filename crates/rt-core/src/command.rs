@@ -545,6 +545,8 @@ pub enum Command {
     },
     /// Show the newest crash report, to send as a GitHub issue or by email.
     CrashReport,
+    /// Show the tabs kept from each crash, to reopen some or all of them.
+    Recover,
     /// Open the settings page in a new tab.
     Settings,
     /// Show the browsing history page, in a new tab with `tab`.
@@ -838,6 +840,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "settings",
         "Open the settings page, to browse and change every setting",
+    ),
+    spec(
+        "recover",
+        "Show the tabs open at each recent crash, to reopen some or all of them",
     ),
     spec(
         "crash-report",
@@ -1723,6 +1729,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
         "crash-report" => Command::CrashReport,
+        "recover" => Command::Recover,
         "history" => Command::History {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },

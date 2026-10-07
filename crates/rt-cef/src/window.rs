@@ -243,7 +243,7 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
         (Recovery::Offer, Some((name, _))) => {
             shell::show_message_after_load(
                 Level::Info,
-                format!("The tabs open before the crash are in :session-load {name}"),
+                format!("The tabs open before the crash are in :recover (or :session-load {name})"),
             );
             false
         }
@@ -253,7 +253,7 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
                 Level::Error,
                 format!(
                     "riptide crashed again soon after reopening the last crash's tabs, \
-                     so they weren't reopened: :session-load {name}"
+                     so they weren't reopened: pick some in :recover ({name})"
                 ),
             );
             false

@@ -26,6 +26,7 @@ mod navigate;
 mod permissions;
 mod privacy;
 mod prompts;
+mod recover;
 mod remote;
 mod renderer;
 mod scheme;
@@ -301,6 +302,7 @@ pub fn run() -> i32 {
         return code;
     }
     crash::install_panic_hook(&paths.data_dir);
+    recover::set_dir(&paths.data_dir);
     let cwd = std::env::current_dir().unwrap_or_default();
     let (mut urls, mut commands) = (Vec::new(), Vec::new());
     for arg in &cli.urls {

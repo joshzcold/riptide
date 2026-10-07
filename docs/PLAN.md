@@ -915,7 +915,7 @@ Whatever path wins:
     - Reopening a crash's tabs sets a `sessions/.recovering` mark, which 60 seconds of uptime or a clean exit clears.
     - If the next start finds a crash and the mark, the tabs aren't reopened. The start page opens, with an error message naming the session.
     - The decision is `rt_storage::recovery::recovery()`, with unit tests and four e2e tests in `sessions.rs`.
-    - Not done: a `riptide://recover/` page to pick tabs from.
+    - ✅ (2026-10-07) `:recover` opens `riptide://recover/` (`recover.rs`, `ui/recover.html`), which lists each kept crash's tabs by window. Reopen selected or all of them into the current window, with their history (`tabs::open_saved`), or forget the crash. Its buttons are `reopen` and `forget` UI messages, which only accept `_crashed-` sessions. The crash messages point to it. Test: `recover_reopens_chosen_crashed_tabs_and_forgets_a_crash`.
   - ✅ **More state per tab** (2026-10-06):
     - Sessions save each tab's back/forward pages (`back`, `forward`, up to 50 each way) and `scroll` in CSS pixels. Older files still load.
     - CEF can read a tab's history (`get_navigation_entries`) but can't restore it. So a restored tab with saved pages gets an `rt_core::tab_history::TabHistory`: `H`/`L` load the saved URLs, and new pages drop the ones ahead, as a browser does. Pages come from the network again, and their form state is lost.

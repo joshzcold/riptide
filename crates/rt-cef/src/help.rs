@@ -171,6 +171,10 @@ pub fn run_command(command: &Command) -> bool {
             shell::open(target, true, Some("riptide://history/".to_string()));
             return true;
         }
+        Command::Recover => {
+            shell::open(OpenTarget::Tab, true, Some(crate::recover::URL.to_string()));
+            return true;
+        }
         Command::CrashReport => {
             let email = shell::with(|s| s.engine.settings().str("crash_report.email").to_string())
                 .unwrap_or_default();

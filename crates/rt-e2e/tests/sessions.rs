@@ -199,6 +199,51 @@ fn crashed_sessions(b: &Browser) -> Vec<String> {
     names
 }
 
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn recover_reopens_chosen_crashed_tabs_and_forgets_a_crash() {
+    let b = Browser::launch().toml(CONFIG).start("page.html");
+    let second = crash_with_two_tabs(&b);
+    // With a URL to open, the crashed tabs are only kept.
+    let nav1 = b.url("nav1.html");
+    b.restart_with(&[&nav1]);
+    b.wait_until("only the given URL opens", |s| s.tab().is_loaded(&nav1));
+    let kept = crashed_sessions(&b);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+
+    b.run("recover");
+    b.wait_until("the recover page opens", |s| {
+        s.tab().url == "riptide://recover/" && !s.tab().loading
+    });
+    b.wait_eval(
+        "String(document.querySelectorAll('input[type=checkbox]').length)",
+        "2",
+    );
+    // Tick the second tab only, then reopen.
+    b.eval(
+        "document.querySelectorAll('input[type=checkbox]')[1].checked = true; \
+         [...document.querySelectorAll('button')].find(b => b.textContent === 'Reopen selected').click(); ''",
+    );
+    b.wait_until("the chosen tab is back", |s| {
+        s.tabs().len() == 3 && s.tabs()[2].url == second
+    });
+
+    b.run("tab-select 1/2");
+    b.wait_until("back on the recover page", |s| {
+        s.tab().url == "riptide://recover/"
+    });
+    b.eval("[...document.querySelectorAll('button')].find(b => b.textContent === 'Forget').click(); ''");
+    let start = std::time::Instant::now();
+    while !crashed_sessions(&b).is_empty() {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the crash wasn't forgotten"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.wait_eval("String(!!document.getElementById('empty'))", "true");
+}
+
 /// Open a second tab and crash once the autosave has it.
 fn crash_with_two_tabs(b: &Browser) -> String {
     let second = b.url("second.html");
@@ -237,7 +282,7 @@ fn a_url_after_a_crash_opens_alone_and_the_crashed_tabs_survive_autosaves() {
     assert_eq!(s.tabs().len(), 1, "{:?}", s.tabs());
     wait_message(
         &b,
-        "The tabs open before the crash are in :session-load _crashed-",
+        "The tabs open before the crash are in :recover (or :session-load _crashed-",
     );
     // The new run autosaves its own tabs; the crashed ones must survive that.
     wait_for_autosave(&b, "nav1.html");

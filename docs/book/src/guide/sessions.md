@@ -39,7 +39,9 @@ After a crash, the next start keeps the saved tabs as a session named after the 
 |---|---|
 | Plain `riptide` | The crashed tabs reopen. |
 | With URLs on the command line | Only those URLs open. A message names the session holding the crashed tabs, and the new run's autosaves don't touch it. |
-| The browser crashed again within a minute of reopening a crash's tabs | They aren't reopened a second time, in case they caused the crash. The start page opens, and a message names the session to load them from when you choose. |
+| The browser crashed again within a minute of reopening a crash's tabs | They aren't reopened a second time, in case they caused the crash. The start page opens, and a message points to `:recover`. |
+
+`:recover` lists the tabs of each kept crash, by window. Tick the ones you want and press **Reopen selected**, or **Reopen all**; they open in the current window with their back/forward history. **Forget** deletes that crash's tabs.
 
 ### Crash reports
 

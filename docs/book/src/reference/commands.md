@@ -67,6 +67,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-select` | `T` `gt` | Go to a tab in any window: :tab-select &lt;window/tab \| text&gt; (T) |
 | `:history` |  | Show the browsing history: :history [-t] |
 | `:settings` |  | Open the settings page, to browse and change every setting |
+| `:recover` |  | Show the tabs open at each recent crash, to reopen some or all of them |
 | `:crash-report` |  | Show the newest crash report, to check and send as a GitHub issue or by email |
 | `:selection-follow` | `<Ctrl-Return>` `<Return>` | Follow the link around the selection, e.g. after a search (Return; -t: new tab) |
 | `:zoom` | `=` | Set the zoom: :zoom [percent] (=; no value: zoom.default) |

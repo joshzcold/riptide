@@ -29,6 +29,8 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::RowHeight { height } => crate::shell::set_row_height(height as i32),
         UiMessage::SettingsSet { name, value } => crate::settings_page::set(&name, &value),
         UiMessage::SettingsReset { name } => crate::settings_page::reset(&name),
+        UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),
+        UiMessage::RecoverForget { session } => crate::recover::forget(&session),
         UiMessage::ColorScheme { dark } => {
             if rt_core::theme::set_prefers_dark(dark) {
                 crate::shell::refresh_ui();

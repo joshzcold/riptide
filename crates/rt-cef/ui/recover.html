@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recover tabs</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4fafb; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #071a28; --fg: #e3f2f4; --muted: #8aa9b8; --line: #173246; --accent: #3ccfc1; --panel: #0c2536; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+  main { max-width: 60rem; padding: 1.5rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  h2 { font-size: 1rem; margin: 0; }
+  section { border: 1px solid var(--line); border-radius: 6px; padding: .8rem 1rem; margin: 1rem 0; background: var(--panel); }
+  .head { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .4rem; }
+  .head h2 { flex: 1; }
+  .window { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; margin: .6rem 0 .2rem; }
+  label { display: grid; grid-template-columns: auto 1fr; gap: .5rem; align-items: baseline; padding: .1rem 0; }
+  .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .url { color: var(--muted); font-size: .85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  button { font: inherit; padding: .25rem .7rem; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Recover tabs</h1>
+  <p class="muted">The tabs open when riptide crashed, newest crash first. Tick the ones you want back, or reopen them all. A crash's tabs stay here until you forget them; the newest five crashes are kept.</p>
+  <div id="list"></div>
+</main>
+<script>
+  // [{name, when, windows: [{tabs: [{title, url}]}]}], newest first.
+  const DATA = /*RT_DATA*/null;
+  const list = document.getElementById("list");
+
+  function el(tag, props, ...children) {
+    const node = Object.assign(document.createElement(tag), props);
+    node.append(...children);
+    return node;
+  }
+
+  function render(sessions) {
+    if (!sessions || sessions.length === 0) {
+      list.replaceChildren(el("p", { className: "muted", id: "empty" }, "There are no crashed sessions to recover."));
+      return;
+    }
+    list.replaceChildren(...sessions.map((session) => {
+      const boxes = [];
+      const windows = session.windows.flatMap((w, wi) => [
+        el("div", { className: "window" }, session.windows.length > 1 ? `Window ${wi + 1}` : ""),
+        ...w.tabs.map((tab, ti) => {
+          const box = el("input", { type: "checkbox" });
+          box.dataset.tab = JSON.stringify([wi, ti]);
+          boxes.push(box);
+          return el("label", {}, box,
+            el("span", {}, el("span", { className: "title" }, tab.title || tab.url), el("span", { className: "url" }, tab.url)));
+        }),
+      ]);
+      const reopen = (picked) => {
+        if (picked.length > 0) rt.send("reopen", JSON.stringify({ session: session.name, tabs: picked }));
+      };
+      const selected = el("button", { className: "primary", textContent: "Reopen selected" });
+      selected.addEventListener("click", () => reopen(boxes.filter((b) => b.checked).map((b) => JSON.parse(b.dataset.tab))));
+      const all = el("button", { textContent: "Reopen all" });
+      all.addEventListener("click", () => reopen(boxes.map((b) => JSON.parse(b.dataset.tab))));
+      const forget = el("button", { textContent: "Forget" });
+      forget.addEventListener("click", () => {
+        rt.send("forget", JSON.stringify({ session: session.name }));
+        render(sessions.filter((s) => s !== session));
+      });
+      const count = session.windows.reduce((n, w) => n + w.tabs.length, 0);
+      const section = el("section", {},
+        el("div", { className: "head" }, el("h2", {}, `${session.when} · ${count} tab${count === 1 ? "" : "s"}`), selected, all, forget),
+        ...windows);
+      section.dataset.session = session.name;
+      return section;
+    }));
+  }
+
+  render(DATA);
+</script>
+</body>
+</html>

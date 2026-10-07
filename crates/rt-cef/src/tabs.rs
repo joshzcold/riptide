@@ -188,6 +188,17 @@ pub fn open(url: &str, position: Position, focus: bool) {
     }
 }
 
+/// Open a tab from a saved session as the last tab, with its back/forward
+/// history and scroll position.
+pub fn open_saved(saved: &rt_storage::TabState, focus: bool) {
+    open(&saved.url, Position::Last, focus);
+    shell::with(|s| {
+        let last = s.tabs.len().checked_sub(1)?;
+        crate::history::restore(s.tabs.get_mut(last)?, saved);
+        Some(())
+    });
+}
+
 /// A call window's first tab (see `window::create_call`).
 pub fn open_call(url: &str) {
     match window::create_call_tab_view(url) {
