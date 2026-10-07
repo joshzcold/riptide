@@ -13,6 +13,31 @@ use rt_core::prompt::{PromptAnswer, PromptKind, Remember, Topic};
 use crate::prompts::{self, Scope};
 use crate::shell;
 
+/// Where each plugin is at, for the plugins page.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+struct Status {
+    /// installing, waiting (for approval), refused, loaded or failed.
+    state: &'static str,
+    error: Option<String>,
+    /// From "check for updates": the newest commit and the commits after the pinned one.
+    update: Option<(String, Vec<String>)>,
+}
+
+thread_local! {
+    static STATUS: std::cell::RefCell<std::collections::BTreeMap<String, Status>> =
+        std::cell::RefCell::new(Default::default());
+}
+
+fn set_state(name: &str, state: &'static str, error: Option<String>) {
+    STATUS.with(|s| {
+        let mut all = s.borrow_mut();
+        let status = all.entry(name.to_string()).or_default();
+        status.state = state;
+        status.error = error;
+    });
+    crate::settings_page::refresh();
+}
+
 fn paths() -> Option<(PathBuf, PathBuf)> {
     shell::with(|s| (s.paths.config_dir.clone(), s.paths.data_dir.clone()))
 }
@@ -44,6 +69,7 @@ pub fn start() {
             .filter(|c| !c.is_empty());
         if !dir.is_dir() {
             shell::show_message(Level::Info, format!("Installing plugin {}…", spec.name));
+            set_state(&spec.name, "installing", None);
             let rev = locked.or_else(|| Some(spec.version.clone()).filter(|v| !v.is_empty()));
             let (name, src) = (spec.name.clone(), spec.src.clone());
             std::thread::spawn(move || {
@@ -66,7 +92,10 @@ pub fn start() {
                 prepare(&spec.name);
             }
             (_, Ok(_)) => prepare(&spec.name),
-            (_, Err(e)) => shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name)),
+            (_, Err(e)) => {
+                set_state(&spec.name, "failed", Some(e.clone()));
+                shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name));
+            }
         }
     }
 }
@@ -93,6 +122,7 @@ wrap_task! {
     impl Task {
         fn execute(&self) {
             if !self.ok {
+                set_state(&self.name, "failed", Some(self.text.clone()));
                 return shell::show_message(Level::Error, format!("Plugin {}: {}", self.name, self.text));
             }
             let src = rt_config::lua::plugin_specs()
@@ -157,6 +187,7 @@ fn prepare(name: &str) {
     if spec.trusted || needed.is_empty() {
         load(&spec.name, &dir, &wanted, spec.trusted);
     } else {
+        set_state(&spec.name, "waiting", None);
         ask(spec.name, dir, wanted, needed, config_dir);
     }
 }
@@ -186,6 +217,7 @@ fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, con
                     Level::Warning,
                     format!("Didn't load {name}: its permissions weren't approved"),
                 );
+                set_state(&name, "refused", None);
                 return;
             }
             let saved = Lockfile::load(&config_dir).and_then(|mut lock| {
@@ -203,9 +235,208 @@ fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, con
 fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
     let context = crate::lua::current_context();
     let result = rt_config::lua::load_plugin(name, dir, permissions, trusted, &context);
+    match &result {
+        Ok(_) => set_state(name, "loaded", None),
+        Err(e) => set_state(name, "failed", Some(e.clone())),
+    }
     crate::lua::carry_out_for(name, result);
     // Commands it defined complete and run like the others.
     let commands = rt_config::lua::user_commands();
     shell::with(|s| s.engine.set_user_commands(commands));
     shell::refresh_ui();
+}
+
+/// Every plugin for the plugins page: its spec, lockfile entry and status.
+pub fn page_data() -> serde_json::Value {
+    let Some((config_dir, data_dir)) = paths() else {
+        return serde_json::json!([]);
+    };
+    let lock = Lockfile::load(&config_dir).unwrap_or_default();
+    let status = STATUS.with(|s| s.borrow().clone());
+    rt_config::lua::plugin_specs()
+        .into_iter()
+        .map(|spec| {
+            let locked = lock.plugins.get(&spec.name).cloned().unwrap_or_default();
+            let state = status.get(&spec.name).cloned().unwrap_or_default();
+            let description = Manifest::read(&folder(&spec, &data_dir))
+                .ok()
+                .and_then(|m| m.description)
+                .unwrap_or_default();
+            serde_json::json!({
+                "name": spec.name,
+                "description": description,
+                "src": if spec.src.is_empty() {
+                    spec.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_default()
+                } else {
+                    spec.src.clone()
+                },
+                "git": spec.dir.is_none() && !spec.src.is_empty(),
+                "commit": locked.commit,
+                "trusted": spec.trusted,
+                "approved": locked.approved.describe(),
+                "state": if state.state.is_empty() { "pending" } else { state.state },
+                "error": state.error,
+                "update": state.update.map(|(commit, log)| serde_json::json!({ "commit": commit, "log": log })),
+            })
+        })
+        .collect()
+}
+
+/// Fetch `name` (or every plugin from git) and note what's new; changes nothing.
+pub fn check_updates(name: Option<&str>) {
+    let Some((_, data_dir)) = paths() else { return };
+    let specs: Vec<PluginSpec> = rt_config::lua::plugin_specs()
+        .into_iter()
+        .filter(|s| s.dir.is_none() && !s.src.is_empty())
+        .filter(|s| name.is_none_or(|n| n == s.name))
+        .collect();
+    if specs.is_empty() {
+        return shell::show_message(Level::Info, "No plugins from git to update");
+    }
+    shell::show_message(
+        Level::Info,
+        format!("Checking {} plugin(s) for updates…", specs.len()),
+    );
+    for spec in specs {
+        let dir = folder(&spec, &data_dir);
+        std::thread::spawn(move || {
+            let result = git::head(&dir).and_then(|head| {
+                let latest = git::fetch_latest(&dir)?;
+                let log = git::log(&dir, &head, &latest)?;
+                Ok((latest, log))
+            });
+            let (latest, log) = match result {
+                Ok((latest, log)) => (latest, log.join("\n")),
+                Err(e) => (String::new(), format!("error: {e}")),
+            };
+            let mut task = UpdateChecked::new(spec.name, latest, log);
+            post_task(ThreadId::UI, Some(&mut task));
+        });
+    }
+}
+
+wrap_task! {
+    struct UpdateChecked {
+        name: String,
+        // The newest commit; empty if checking failed.
+        latest: String,
+        // The new commits, one per line, or "error: …".
+        log: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if self.latest.is_empty() {
+                shell::show_message(Level::Error, format!("Plugin {}: {}", self.name, self.log.trim_start_matches("error: ")));
+                return;
+            }
+            let log: Vec<String> = self.log.lines().map(str::to_string).filter(|l| !l.is_empty()).collect();
+            let text = if log.is_empty() {
+                format!("Plugin {} is up to date", self.name)
+            } else {
+                format!("Plugin {} has {} new commit(s); review them on :plugins", self.name, log.len())
+            };
+            STATUS.with(|s| {
+                let mut all = s.borrow_mut();
+                let status = all.entry(self.name.clone()).or_default();
+                status.update = (!log.is_empty()).then(|| (self.latest.clone(), log));
+            });
+            shell::show_message(Level::Info, text);
+            crate::settings_page::refresh();
+        }
+    }
+}
+
+/// Move `name` to the update found by [`check_updates`], then reload, which
+/// asks about any new permissions.
+pub fn apply_update(name: &str) {
+    let Some((_, data_dir)) = paths() else { return };
+    let Some(update) = STATUS.with(|s| s.borrow().get(name).and_then(|st| st.update.clone()))
+    else {
+        return shell::show_message(Level::Error, format!("Check {name} for updates first"));
+    };
+    let Some(spec) = rt_config::lua::plugin_specs()
+        .into_iter()
+        .find(|s| s.name == name)
+    else {
+        return;
+    };
+    match git::checkout(&folder(&spec, &data_dir), &update.0) {
+        Ok(commit) => {
+            record(&spec.name, &spec.src, &commit);
+            STATUS.with(|s| {
+                if let Some(status) = s.borrow_mut().get_mut(name) {
+                    status.update = None;
+                }
+            });
+            shell::show_message(Level::Info, format!("Updated {name}; reloading the config"));
+            reload();
+        }
+        Err(e) => shell::show_message(Level::Error, format!("Plugin {name}: {e}")),
+    }
+}
+
+/// Forget `name`'s approvals, so it asks again when the config reloads.
+pub fn revoke(name: &str) {
+    let Some((config_dir, _)) = paths() else {
+        return;
+    };
+    let saved = Lockfile::load(&config_dir).and_then(|mut lock| {
+        if let Some(entry) = lock.plugins.get_mut(name) {
+            entry.approved = Permissions::default();
+        }
+        lock.save(&config_dir)
+    });
+    match saved {
+        Ok(()) => {
+            shell::show_message(
+                Level::Info,
+                format!("Revoked {name}'s permissions; reloading the config"),
+            );
+            reload();
+        }
+        Err(e) => shell::show_message(Level::Error, format!("Plugin {name}: {e}")),
+    }
+}
+
+/// Delete `name`'s installed copy and its lockfile entry. Only a copy riptide
+/// installed (under `<data>/pack`) is deleted; it comes back at the next
+/// start unless it's also taken out of config.lua.
+pub fn remove(name: &str) {
+    let Some((config_dir, data_dir)) = paths() else {
+        return;
+    };
+    let Some(spec) = rt_config::lua::plugin_specs()
+        .into_iter()
+        .find(|s| s.name == name)
+    else {
+        return;
+    };
+    if spec.dir.is_none() {
+        let dir = folder(&spec, &data_dir);
+        if dir.starts_with(data_dir.join("pack"))
+            && dir.is_dir()
+            && let Err(e) = std::fs::remove_dir_all(&dir)
+        {
+            return shell::show_message(Level::Error, format!("Plugin {name}: {e}"));
+        }
+    }
+    let _ = Lockfile::load(&config_dir).and_then(|mut lock| {
+        lock.plugins.remove(name);
+        lock.save(&config_dir)
+    });
+    STATUS.with(|s| s.borrow_mut().remove(name));
+    shell::show_message(
+        Level::Info,
+        format!(
+            "Removed {name}; take it out of config.lua too, or it's installed again at the next start"
+        ),
+    );
+    crate::settings_page::refresh();
+}
+
+fn reload() {
+    if let Some(effects) = shell::with(|s| s.engine.execute_str("config-source", None)) {
+        shell::apply(effects);
+    }
 }

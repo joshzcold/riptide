@@ -556,6 +556,13 @@ pub enum Command {
     Recover,
     /// Open the settings page in a new tab.
     Settings,
+    /// Open the settings page's Plugins tab.
+    Plugins,
+    /// Fetch plugins from git and list their new commits, without updating:
+    /// one plugin, or all of them.
+    PackUpdate {
+        name: Option<String>,
+    },
     /// Show the browsing history page, in a new tab with `tab`.
     History {
         tab: bool,
@@ -857,6 +864,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "settings",
         "Open the settings page, to browse and change every setting",
+    ),
+    spec(
+        "plugins",
+        "Show your plugins, their permissions and updates",
+    ),
+    spec(
+        "pack-update",
+        "Check plugins from git for new commits to review on :plugins: :pack-update [name]",
     ),
     spec(
         "recover",
@@ -1773,6 +1788,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
         "settings" => Command::Settings,
+        "plugins" => Command::Plugins,
+        "pack-update" => Command::PackUpdate {
+            name: args.optional().map(String::from),
+        },
         "tab-select" => Command::TabSelect {
             target: args.rest().to_string(),
         },

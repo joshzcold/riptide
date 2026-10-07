@@ -2,7 +2,7 @@
 
 Plugins add commands, key bindings, hooks and more, written in Lua like `config.lua`. They work like Neovim's: a plugin is a folder with `lua/<name>/init.lua`, and you set it up from `config.lua`.
 
-A plugins page and loading on demand are coming.
+Loading on demand is coming.
 
 ## Adding a plugin
 
@@ -33,6 +33,17 @@ Plugins load after `config.lua` has run, so set them up with `opts` or `config` 
 
 `rt-pack-lock.json` in the config folder pins each plugin from git to the commit installed, so a plugin never changes on its own and the same config gives the same plugins on every computer. Keep it with your dotfiles: on another computer, riptide installs exactly the pinned commits, and if the lockfile moves a plugin to another commit, riptide checks that one out at the next start. Git runs without asking for passwords, so a private repository fails with a message instead of waiting.
 
+## The plugins page
+
+`:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't) and the permissions you approved.
+
+Updating is a review, never automatic:
+
+1. `:pack-update` (or `:pack-update <name>`, or **Check for updates** on the page) fetches plugins from git and lists their new commits. Nothing changes yet.
+2. Read the commits on the page, then press **Update** to move to them. riptide records the new commit in `rt-pack-lock.json` and reloads your config; if the new version asks for more permissions, you're asked about those first.
+
+**Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's installed copy and its lockfile entry; take it out of `config.lua` too, or it's installed again at the next start.
+
 ## Permissions
 
 Plugins run in a sandbox. Without asking, a plugin can react to events, bind keys to its functions, add commands, use timers, show messages, open URLs and keep its own data (`rt.store`, which other plugins can't read). Anything more is a permission it lists in its `riptide-plugin.toml`, and the first time it loads, riptide shows them and asks you:
@@ -49,7 +60,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 | `pages = ["*.example.com", …]` | read and change pages on these sites |
 | `frames = ["host", …]` | show these sites inside its own pages |
 
-Your answer is kept in `rt-pack-lock.json` in the config folder, so it's asked once; a new version that asks for more asks again, for the new permissions only. Saying no leaves the plugin unloaded. Delete its entry in `rt-pack-lock.json` to be asked again.
+Your answer is kept in `rt-pack-lock.json` in the config folder, so it's asked once; a new version that asks for more asks again, for the new permissions only. Saying no leaves the plugin unloaded. To be asked again, press **Revoke** on `:plugins`, or delete its entry in `rt-pack-lock.json`.
 
 In the sandbox, `load` only runs text in the plugin's own globals, `require` only finds plugins' modules (not your config's), and a plugin's changes to its `rt` table don't affect anyone else. Every callback, a plugin's included, is stopped after 2 seconds.
 

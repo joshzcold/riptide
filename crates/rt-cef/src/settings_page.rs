@@ -26,6 +26,7 @@ pub fn page() -> Arc<[u8]> {
 
 /// The settings as JSON, safe inside an inline `<script>`.
 fn data() -> Option<String> {
+    let plugins = crate::plugins::page_data();
     shell::with(|s| {
         let entries = rt_core::settings_page::build(
             s.engine.settings(),
@@ -33,8 +34,10 @@ fn data() -> Option<String> {
             &s.setting_sources,
             &s.overridden,
         );
+        let mut json = serde_json::to_value(&entries).unwrap_or_default();
+        json["plugins"] = plugins;
         // `</` would end the inline <script> early.
-        serde_json::to_string(&entries)
+        serde_json::to_string(&json)
             .unwrap_or_else(|_| "[]".into())
             .replace("</", "<\\/")
     })
@@ -76,11 +79,17 @@ fn refused(name: &str, error: &str) {
 }
 
 pub fn run_command(command: &Command) -> bool {
-    if !matches!(command, Command::Settings) {
-        return false;
-    }
+    let url = match command {
+        Command::Settings => URL.to_string(),
+        Command::Plugins => format!("{URL}#plugins"),
+        Command::PackUpdate { name } => {
+            crate::plugins::check_updates(name.as_deref());
+            return true;
+        }
+        _ => return false,
+    };
     refresh();
-    shell::open(OpenTarget::Tab, true, Some(URL.to_string()));
+    shell::open(OpenTarget::Tab, true, Some(url));
     true
 }
 

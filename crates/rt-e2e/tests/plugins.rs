@@ -163,5 +163,54 @@ fn plugins_install_from_git_and_follow_the_lockfile() {
     });
     b.run("which-version");
     b.wait_until("the pinned version runs", |s| s.message() == Some("v1"));
+
+    // Checking lists the new commit on the Plugins tab; nothing moves until Update.
+    b.run("pack-update");
+    b.wait_until("the check found v2", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("versioned has 1 new commit"))
+    });
+    b.run("plugins");
+    let button = r#"document.querySelector('[data-key="plugin:versioned:update#update"]')"#;
+    b.wait_eval(&format!("String(!!{button})"), "true");
+    assert!(
+        b.eval("document.querySelector('.log').innerText")
+            .contains("v2")
+    );
+    b.eval(&format!("{button}.click(), ''"));
+    let lock = b.config_dir().join("rt-pack-lock.json");
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(&lock).unwrap().contains(&second) {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the lockfile didn't move"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let start = std::time::Instant::now();
+    loop {
+        b.run("which-version");
+        if b.wait_until("a version", |s| s.message().is_some())
+            .message()
+            == Some("v2")
+        {
+            break;
+        }
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the update didn't load");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    // Remove deletes the installed copy and its lockfile entry.
+    b.eval(r#"document.querySelector('[data-key="plugin:versioned:remove#remove"]').click(), ''"#);
+    b.wait_until("removed", |s| {
+        s.message()
+            .is_some_and(|m| m.starts_with("Removed versioned"))
+    });
+    assert!(!b.data_dir().join("pack/versioned").exists());
+    assert!(
+        !std::fs::read_to_string(&lock)
+            .unwrap()
+            .contains("versioned")
+    );
     std::fs::remove_dir_all(&repo).unwrap();
 }

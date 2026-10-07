@@ -43,6 +43,15 @@ pub fn handle_message(message: UiMessage) {
             crate::settings_page::unset_site(&pattern, &name)
         }
         UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
+        UiMessage::Plugin { name, action } => {
+            use rt_core::ui_message::PluginAction;
+            match action {
+                PluginAction::Check => crate::plugins::check_updates(Some(&name)),
+                PluginAction::Update => crate::plugins::apply_update(&name),
+                PluginAction::Revoke => crate::plugins::revoke(&name),
+                PluginAction::Remove => crate::plugins::remove(&name),
+            }
+        }
         UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),
         UiMessage::RecoverForget { session } => crate::recover::forget(&session),
         UiMessage::ColorScheme { dark } => {

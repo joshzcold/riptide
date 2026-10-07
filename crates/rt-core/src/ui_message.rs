@@ -48,6 +48,8 @@ pub enum UiMessage {
     SettingsUnsetSite { pattern: String, name: String },
     /// The Sites tab's "clear cookies and site data" for a host or origin.
     ClearSite { site: String },
+    /// The Plugins tab's buttons for one plugin.
+    Plugin { name: String, action: PluginAction },
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -55,6 +57,20 @@ pub enum UiMessage {
     },
     /// The recover page: delete a crash's session.
     RecoverForget { session: String },
+}
+
+/// What the Plugins tab asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginAction {
+    /// Fetch and list new commits, changing nothing.
+    Check,
+    /// Move to the commits a check found.
+    Update,
+    /// Forget its approved permissions.
+    Revoke,
+    /// Delete its installed copy and lockfile entry.
+    Remove,
 }
 
 /// Which bar a size is for.
@@ -236,6 +252,13 @@ struct UnsetSite {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Plugin {
+    name: String,
+    action: PluginAction,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ClearSite {
     site: String,
 }
@@ -319,6 +342,25 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let site =
                 site(&text).ok_or_else(|| format!("{text:?} isn't a site, e.g. example.com"))?;
             Ok(UiMessage::ClearSite { site })
+        }
+        ("settings", "plugin") => {
+            let Plugin {
+                name: plugin,
+                action,
+            } = payload(name, json)?;
+            let ok = !plugin.is_empty()
+                && plugin.len() <= 100
+                && plugin
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+                && !plugin.starts_with('.');
+            if !ok {
+                return Err(format!("{name}: bad plugin name"));
+            }
+            Ok(UiMessage::Plugin {
+                name: plugin,
+                action,
+            })
         }
         ("settings", "reset") => {
             let SettingName { name: setting } = payload(name, json)?;
@@ -576,6 +618,15 @@ mod tests {
             })
         );
         assert!(parse(page, "clear-site", r#"{"site": "*.example.org"}"#).is_ok());
+        assert_eq!(
+            parse(page, "plugin", r#"{"name": "hello", "action": "check"}"#),
+            Ok(UiMessage::Plugin {
+                name: "hello".into(),
+                action: PluginAction::Check,
+            })
+        );
+        assert!(parse(page, "plugin", r#"{"name": "../x", "action": "remove"}"#).is_err());
+        assert!(parse(page, "plugin", r#"{"name": "hello", "action": "run"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
         assert!(
