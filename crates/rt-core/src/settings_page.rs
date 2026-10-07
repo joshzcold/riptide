@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
+use crate::keymap::Keymap;
+use crate::mode::Mode;
 use crate::settings::{Kind, RESTART_REQUIRED, SETTINGS, Settings};
 
 /// What the page draws: every setting, and the theme's colors for the
@@ -15,6 +17,54 @@ pub struct Page {
     pub entries: Vec<Entry>,
     /// `--rt-<token>` values, as the bars get them.
     pub theme: BTreeMap<&'static str, String>,
+    /// The Keys tab: each mode's bindings.
+    pub keys: Vec<ModeKeys>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct ModeKeys {
+    pub mode: &'static str,
+    pub bindings: Vec<Binding>,
+    /// Default bindings that were unbound, as `[keys, command]`, to restore.
+    pub removed: Vec<(String, String)>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Binding {
+    /// In riptide's notation, e.g. `<Ctrl-d>` or `gg`.
+    pub keys: String,
+    pub command: String,
+    /// The default command for these keys, if there is one.
+    pub default: Option<String>,
+}
+
+/// Every mode's bindings, compared with the defaults.
+fn keys(keymap: &Keymap) -> Vec<ModeKeys> {
+    let defaults = Keymap::defaults();
+    Mode::ALL
+        .iter()
+        .map(|&mode| {
+            let default: BTreeMap<String, String> = defaults.bindings(mode).into_iter().collect();
+            let now = keymap.bindings(mode);
+            let removed = default
+                .iter()
+                .filter(|(k, _)| !now.iter().any(|(n, _)| n == *k))
+                .map(|(k, c)| (k.clone(), c.clone()))
+                .collect();
+            ModeKeys {
+                mode: mode.name(),
+                bindings: now
+                    .into_iter()
+                    .map(|(keys, command)| Binding {
+                        default: default.get(&keys).cloned(),
+                        keys,
+                        command,
+                    })
+                    .collect(),
+                removed,
+            }
+        })
+        .collect()
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -41,12 +91,14 @@ pub struct Entry {
 /// was last set, and `overridden` lists those a config file sets.
 pub fn build(
     settings: &Settings,
+    keymap: &Keymap,
     sources: &BTreeMap<String, String>,
     overridden: &BTreeSet<String>,
 ) -> Page {
     Page {
         entries: entries(settings, sources, overridden),
         theme: crate::theme::resolve(settings),
+        keys: keys(keymap),
     }
 }
 
@@ -137,7 +189,7 @@ mod tests {
             .unwrap();
         let sources = BTreeMap::from([("hints.chars".to_string(), "config.toml".to_string())]);
         let overridden = BTreeSet::from(["hints.chars".to_string()]);
-        let page = build(&settings, &sources, &overridden);
+        let page = build(&settings, &Keymap::defaults(), &sources, &overridden);
         assert_eq!(page.theme["statusbar-bg"], "#061826");
         let entries = page.entries;
         assert_eq!(entries.len(), SETTINGS.len());
@@ -170,5 +222,24 @@ mod tests {
 
         let js = entry(&entries, "content.javascript.enabled");
         assert_eq!(js.sites, vec![("*.example.com".to_string(), json!(false))]);
+    }
+
+    #[test]
+    fn keys_show_changed_added_and_removed_bindings() {
+        let mut keymap = Keymap::defaults();
+        keymap
+            .bind(Mode::Normal, "gg", "scroll-to-perc 50")
+            .unwrap();
+        keymap.bind(Mode::Normal, "<Ctrl-y>", "reload").unwrap();
+        keymap.unbind(Mode::Normal, "d").unwrap();
+        let modes = keys(&keymap);
+        assert_eq!(modes.len(), Mode::ALL.len());
+        let normal = modes.iter().find(|m| m.mode == "normal").unwrap();
+        let find = |k: &str| normal.bindings.iter().find(|b| b.keys == k).unwrap();
+        assert_eq!(find("gg").command, "scroll-to-perc 50");
+        assert_eq!(find("gg").default.as_deref(), Some("scroll-to-perc 0"));
+        assert_eq!(find("<Ctrl-y>").default, None);
+        assert!(normal.bindings.iter().all(|b| b.keys != "d"));
+        assert!(normal.removed.iter().any(|(k, _)| k == "d"));
     }
 }

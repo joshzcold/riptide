@@ -31,6 +31,17 @@ pub enum UiMessage {
     },
     /// The settings page's reset button.
     SettingsReset { name: String },
+    /// The Keys tab bound `keys` to `command`; checked like `:bind`.
+    SettingsBind {
+        mode: crate::mode::Mode,
+        keys: String,
+        command: String,
+    },
+    /// The Keys tab's remove button.
+    SettingsUnbind {
+        mode: crate::mode::Mode,
+        keys: String,
+    },
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -186,6 +197,28 @@ struct SettingName {
     name: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BindMessage {
+    mode: String,
+    keys: String,
+    #[serde(default)]
+    command: String,
+}
+
+fn bind_message(name: &str, json: &str) -> Result<(crate::mode::Mode, String, String), String> {
+    let BindMessage {
+        mode,
+        keys,
+        command,
+    } = payload(name, json)?;
+    let mode = mode.parse().map_err(|e| format!("{name}: {e}"))?;
+    if keys.is_empty() || keys.len() > 100 || command.len() > 2000 {
+        return Err(format!("{name}: keys or command too long"));
+    }
+    Ok((mode, keys, command))
+}
+
 fn setting_name(name: String) -> Result<String, String> {
     if crate::settings::find(&name).is_some() {
         Ok(name)
@@ -207,6 +240,18 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 name: setting_name(setting)?,
                 value,
             })
+        }
+        ("settings", "bind") => {
+            let (mode, keys, command) = bind_message(name, json)?;
+            Ok(UiMessage::SettingsBind {
+                mode,
+                keys,
+                command,
+            })
+        }
+        ("settings", "unbind") => {
+            let (mode, keys, _) = bind_message(name, json)?;
+            Ok(UiMessage::SettingsUnbind { mode, keys })
         }
         ("settings", "reset") => {
             let SettingName { name: setting } = payload(name, json)?;
@@ -415,6 +460,27 @@ mod tests {
                 name: "hints.chars".into()
             })
         );
+        assert_eq!(
+            parse(
+                page,
+                "bind",
+                r#"{"mode": "normal", "keys": "gx", "command": "reload"}"#
+            ),
+            Ok(UiMessage::SettingsBind {
+                mode: crate::mode::Mode::Normal,
+                keys: "gx".into(),
+                command: "reload".into()
+            })
+        );
+        assert!(
+            parse(
+                page,
+                "bind",
+                r#"{"mode": "nope", "keys": "gx", "command": "reload"}"#
+            )
+            .is_err()
+        );
+        assert!(parse(page, "unbind", r#"{"mode": "insert", "keys": ""}"#).is_err());
         assert!(parse(page, "set", r#"{"name": "nope", "value": 1}"#).is_err());
         assert!(parse(page, "set", r#"{"name": "hints.chars"}"#).is_err());
         assert!(parse(page, "select-tab", r#"{"index": 0}"#).is_err());

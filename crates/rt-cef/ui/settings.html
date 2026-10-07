@@ -80,6 +80,23 @@
   .themes { font-size: .8em; color: var(--muted); }
   #empty { color: var(--muted); padding: 2rem; text-align: center; }
 
+  .views { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 2px; flex: none; }
+  .views a { padding: .3rem .8rem; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  .views a.current { background: var(--selected-bg); color: var(--selected-fg); }
+  kbd { font: .85em var(--mono); padding: .05rem .4rem; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--base); white-space: nowrap; }
+  .keyrow { display: grid; grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) auto; gap: .6rem; align-items: center; padding: .45rem 1rem; border-top: 1px solid var(--line); }
+  .card > .keyrow:first-child { border-top: none; }
+  .keyrow.changed { box-shadow: inset 3px 0 0 var(--accent); }
+  .keyrow .seq { display: flex; gap: .2rem; flex-wrap: wrap; }
+  .keyrow input { width: 100%; font-family: var(--mono); font-size: .9em; }
+  .keyrow .actions { display: flex; gap: .3rem; align-items: center; }
+  .addform { padding: .8rem 1rem; display: grid; grid-template-columns: minmax(8rem, 13rem) auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; }
+  .addform input { font-family: var(--mono); }
+  .record.on { background: var(--error); color: #fff; border-color: var(--error); }
+  .warn { padding: 0 1rem .7rem; font-size: .85em; color: var(--error); }
+  .spacer { height: .9rem; }
+  .banner { background: var(--error); color: #fff; border-radius: 8px; padding: .5rem .8rem; margin-bottom: .8rem; font-weight: 600; }
+
   /* The colors preview: riptide's bars drawn with the --rt-* colors. */
   .preview { position: sticky; top: var(--header); z-index: 2; margin-bottom: .8rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font: 12px/18px var(--mono); box-shadow: 0 6px 18px rgb(0 0 0 / 25%); }
   .p-tabs { display: flex; background: var(--rt-tabs-bar-bg); }
@@ -120,7 +137,8 @@
 <header>
   <div class="bar">
     <h1><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</h1>
-    <input id="search" type="search" placeholder="Search settings" autocomplete="off" aria-label="Search settings">
+    <div class="views" role="tablist"><a href="#settings" data-view="settings" role="tab">Settings</a><a href="#keys" data-view="keys" role="tab">Keys</a></div>
+    <input id="search" type="search" placeholder="Search settings" autocomplete="off" aria-label="Search">
     <label class="toggle"><input id="changed" type="checkbox"> Changed only</label>
   </div>
 </header>
@@ -409,7 +427,14 @@ function preview() {
 }
 
 let observer = null;
+// Which tab of the page shows: settings, or keys (with the mode picked).
+const view = { name: "settings", mode: "normal" };
 function render() {
+  for (const a of document.querySelectorAll(".views a")) a.classList.toggle("current", a.dataset.view === view.name);
+  search.placeholder = view.name === "keys" ? "Search keys and commands" : "Search settings";
+  return view.name === "keys" ? renderKeys() : renderSettings();
+}
+function renderSettings() {
   const focused = document.activeElement?.dataset?.key;
   const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = page.entries.filter((e) => {
@@ -489,6 +514,193 @@ function watchSections() {
 }
 
 // The browser calls these after a change, and when one is refused.
+// The Keys tab.
+const tokens = (keys) => keys.match(/<[^>]+>|./gsu) || [];
+const startsWith = (a, b) => b.length <= a.length && b.every((t, i) => t === a[i]);
+// Bindings `keys` would clash with: one is the start of the other.
+function conflicts(mode, keys) {
+  const t = tokens(keys);
+  if (!t.length) return [];
+  return mode.bindings.filter((b) => {
+    const o = tokens(b.keys);
+    return o.join("") !== t.join("") && (startsWith(t, o) || startsWith(o, t));
+  });
+}
+function keyChips(keys) {
+  const seq = el("span", "seq");
+  for (const t of tokens(keys)) seq.append(el("kbd", null, t));
+  return seq;
+}
+const bind = (mode, keys, command) => rt.send("bind", JSON.stringify({ mode, keys, command }));
+const unbind = (mode, keys) => rt.send("unbind", JSON.stringify({ mode, keys }));
+
+// Pressed keys as riptide writes them, e.g. <Ctrl-d>; null for a lone modifier.
+const NAMES = { " ": "Space", Enter: "Return", Escape: "Escape", Tab: "Tab", Backspace: "Backspace", Delete: "Delete",
+  Insert: "Insert", Home: "Home", End: "End", PageUp: "PgUp", PageDown: "PgDown", ArrowUp: "Up", ArrowDown: "Down",
+  ArrowLeft: "Left", ArrowRight: "Right", "<": "Less", ">": "Greater" };
+function keyToken(e) {
+  if (["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph"].includes(e.key)) return null;
+  const name = NAMES[e.key] || (/^F\d{1,2}$/.test(e.key) || e.key.length === 1 ? e.key : null);
+  if (!name) return null;
+  const named = name.length > 1;
+  const mods = `${e.ctrlKey ? "Ctrl-" : ""}${e.altKey ? "Alt-" : ""}${e.metaKey ? "Meta-" : ""}${e.shiftKey && named ? "Shift-" : ""}`;
+  return mods || named ? `<${mods}${name}>` : name;
+}
+let recording = null;
+addEventListener("keydown", (e) => {
+  if (!recording) return;
+  const token = keyToken(e);
+  if (!token) return;
+  e.preventDefault();
+  e.stopPropagation();
+  recording.input.value += token;
+  recording.input.dispatchEvent(new Event("input"));
+  clearTimeout(recording.timer);
+  recording.timer = setTimeout(stopRecording, 1500);
+}, true);
+function stopRecording() {
+  if (!recording) return;
+  clearTimeout(recording.timer);
+  recording.button.classList.remove("on");
+  recording.button.textContent = "● Record";
+  recording = null;
+}
+
+function renderKeys() {
+  observer?.disconnect();
+  const focused = document.activeElement?.dataset?.key;
+  const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const modes = page.keys || [];
+  const mode = modes.find((m) => m.mode === view.mode) || modes[0];
+  if (!mode) return;
+  const changedRow = (b) => b.default !== b.command;
+  nav.replaceChildren(...modes.map((m) => {
+    const a = el("a");
+    a.href = `#keys/${m.mode}`;
+    a.classList.toggle("current", m === mode);
+    a.append(icon("keys"), m.mode, el("span", "count", String(m.bindings.length)));
+    return a;
+  }));
+
+  const section = el("section");
+  const h2 = el("h2");
+  h2.append(icon("keys"), `${mode.mode} mode`);
+  section.append(h2, el("p", "blurb", "Type keys in riptide's notation (gx, <Ctrl-y>, <Space>) or press Record and the keys. Changes are saved in autoconfig.toml, like :bind."));
+  if (errors.has("keys")) section.append(el("div", "banner", errors.get("keys")));
+
+  // Adding a binding, with what it would clash with.
+  const add = el("div", "card");
+  const form = el("div", "addform");
+  const keysInput = control({ name: "keys" }, el("input"), "newkeys");
+  keysInput.placeholder = "Keys, e.g. gx";
+  keysInput.setAttribute("aria-label", "Keys");
+  const record = control({ name: "keys" }, el("button", "record", "● Record"), "record");
+  const commandInput = control({ name: "keys" }, el("input"), "newcommand");
+  commandInput.placeholder = "Command, e.g. tab-close";
+  commandInput.setAttribute("aria-label", "Command");
+  const addButton = control({ name: "keys" }, el("button", null, "Bind"), "bind");
+  const warn = el("div", "warn");
+  const check = () => {
+    const clash = conflicts(mode, keysInput.value);
+    const same = mode.bindings.find((b) => b.keys === keysInput.value);
+    warn.textContent = [
+      same ? `Replaces ${same.keys} → ${same.command}.` : "",
+      clash.length ? `Clashes with ${clash.slice(0, 4).map((b) => `${b.keys} → ${b.command}`).join(", ")}: riptide waits to see which you mean.` : "",
+    ].join(" ").trim();
+  };
+  keysInput.addEventListener("input", check);
+  record.addEventListener("click", () => {
+    if (recording) return stopRecording();
+    keysInput.value = "";
+    check();
+    recording = { input: keysInput, button: record, timer: 0 };
+    record.classList.add("on");
+    record.textContent = "■ Stop";
+    keysInput.focus();
+  });
+  const submit = () => {
+    stopRecording();
+    if (!keysInput.value.trim() || !commandInput.value.trim()) return fail("keys", "Enter both the keys and a command");
+    bind(mode.mode, keysInput.value.trim(), commandInput.value.trim());
+  };
+  addButton.addEventListener("click", submit);
+  commandInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  form.append(keysInput, record, commandInput, addButton);
+  add.append(form, warn);
+  section.append(add, el("div", "spacer"));
+
+  // The bindings, filtered.
+  const visible = mode.bindings.filter((b) => {
+    if (changedOnly.checked && !changedRow(b)) return false;
+    const hay = `${b.keys} ${b.command}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+  const card = el("div", "card");
+  for (const b of visible) {
+    const row = el("div", changedRow(b) ? "keyrow changed" : "keyrow");
+    const command = control({ name: `keys:${mode.mode}:${b.keys}` }, el("input"), "command");
+    command.value = b.command;
+    command.setAttribute("aria-label", `Command for ${b.keys}`);
+    command.addEventListener("change", () => command.value.trim() && bind(mode.mode, b.keys, command.value.trim()));
+    const actions = el("div", "actions");
+    if (b.default === null) actions.append(el("span", "note", "added"));
+    else if (b.default !== b.command) {
+      const restore = control({ name: `keys:${mode.mode}:${b.keys}` }, el("button", "reset"), "restore");
+      restore.title = `Restore the default: ${b.default}`;
+      restore.setAttribute("aria-label", `Restore ${b.keys}`);
+      restore.append(icon("reset"));
+      restore.addEventListener("click", () => bind(mode.mode, b.keys, b.default));
+      actions.append(restore);
+    }
+    const remove = control({ name: `keys:${mode.mode}:${b.keys}` }, el("button", "remove", "✕"), "unbind");
+    remove.title = `Unbind ${b.keys}`;
+    remove.setAttribute("aria-label", `Unbind ${b.keys}`);
+    remove.addEventListener("click", () => unbind(mode.mode, b.keys));
+    actions.append(remove);
+    row.append(keyChips(b.keys), command, actions);
+    card.append(row);
+  }
+  if (!visible.length) {
+    const empty = el("p", null, "No bindings match.");
+    empty.id = "empty";
+    card.append(empty);
+  }
+  section.append(card);
+
+  // Defaults that were unbound, to bring back.
+  const removed = mode.removed.filter(([k, c]) => words.every((w) => `${k} ${c}`.toLowerCase().includes(w)));
+  if (removed.length) {
+    const h3 = el("h2");
+    h3.append("Unbound defaults");
+    const gone = el("div", "card");
+    for (const [keys, command] of removed) {
+      const row = el("div", "keyrow");
+      const restore = control({ name: `keys:${mode.mode}:${keys}` }, el("button", null, "Restore"), "restore");
+      restore.addEventListener("click", () => bind(mode.mode, keys, command));
+      row.append(keyChips(keys), el("span", "desc", command), restore);
+      gone.append(row);
+    }
+    section.append(el("div", "spacer"), h3, gone);
+  }
+  list.replaceChildren(section);
+  if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
+}
+
+// #settings, #keys or #keys/<mode>.
+function route() {
+  const [name, mode] = location.hash.slice(1).split("/");
+  if (name === "keys") {
+    view.name = "keys";
+    if (mode) view.mode = mode;
+  } else if (name === "settings" || !name) {
+    view.name = "settings";
+  } else {
+    return;
+  }
+  render();
+}
+addEventListener("hashchange", route);
+
 window.rtSettings = (data) => {
   page = data;
   errors.clear();
@@ -505,7 +717,7 @@ measure();
 
 search.addEventListener("input", render);
 changedOnly.addEventListener("change", render);
-render();
+route();
 </script>
 </body>
 </html>

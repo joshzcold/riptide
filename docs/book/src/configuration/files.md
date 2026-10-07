@@ -12,6 +12,8 @@ The directories for each platform are listed in [Installing](../guide/installing
 
 `:settings` opens a page with every setting, grouped by section and searchable. Each one has a control for its kind (a checkbox, a list of choices, a number, a color picker, or rows for lists and maps), and a change applies at once and is saved in `autoconfig.toml`, like `:set`. The page shows where a changed value came from, marks settings your `config.toml` or `config.lua` also sets (those win at the next start), and has a reset button for anything not at its default. Per-site values are listed there; change them with `:set -u`.
 
+The page's **Keys** tab lists each mode's bindings, marking the ones you added or changed. Edit a binding's command in place, remove it with ✕, or put a default back with ↺ (removed defaults are listed at the bottom with a Restore button). To add one, type the keys in riptide's notation (`gx`, `<Ctrl-y>`) or press Record and then the keys, enter a command and press Bind. The page warns first when the new keys are the start of another binding, or another binding is the start of them, since riptide then waits to see which you mean. Like `:bind`, it's saved in `autoconfig.toml`. Keys riptide itself uses in insert mode, such as `Escape`, can't be recorded; type them instead.
+
 Every setting is listed in the [settings reference](../reference/settings.md), and the completion popup lists them as you type `:set `, with each one's current value. After a name it offers the values: `true`/`false`, a setting's choices, or its current and default values. In the browser:
 
 - `:set hints.chars asdf` changes a setting; `:set hints.uppercase!` toggles one; `:set hints.chars` shows the value.

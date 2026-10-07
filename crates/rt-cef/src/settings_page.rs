@@ -27,8 +27,12 @@ pub fn page() -> Arc<[u8]> {
 /// The settings as JSON, safe inside an inline `<script>`.
 fn data() -> Option<String> {
     shell::with(|s| {
-        let entries =
-            rt_core::settings_page::build(s.engine.settings(), &s.setting_sources, &s.overridden);
+        let entries = rt_core::settings_page::build(
+            s.engine.settings(),
+            s.engine.keymap(),
+            &s.setting_sources,
+            &s.overridden,
+        );
         // `</` would end the inline <script> early.
         serde_json::to_string(&entries)
             .unwrap_or_else(|_| "[]".into())
@@ -84,6 +88,18 @@ pub fn run_command(command: &Command) -> bool {
 pub fn set(name: &str, value: &serde_json::Value) {
     let result = shell::with(|s| s.engine.set_from_page(name, value));
     apply(name, result);
+}
+
+/// A `bind` message from the Keys tab. Its refusals are shown under the name `keys`.
+pub fn bind(mode: rt_core::Mode, keys: &str, command: &str) {
+    let result = shell::with(|s| s.engine.bind_from_page(mode, keys, command));
+    apply("keys", result);
+}
+
+/// An `unbind` message from the Keys tab.
+pub fn unbind(mode: rt_core::Mode, keys: &str) {
+    let result = shell::with(|s| s.engine.unbind_from_page(mode, keys));
+    apply("keys", result);
 }
 
 /// A `reset` message from the page.

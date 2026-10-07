@@ -29,6 +29,12 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::RowHeight { height } => crate::shell::set_row_height(height as i32),
         UiMessage::SettingsSet { name, value } => crate::settings_page::set(&name, &value),
         UiMessage::SettingsReset { name } => crate::settings_page::reset(&name),
+        UiMessage::SettingsBind {
+            mode,
+            keys,
+            command,
+        } => crate::settings_page::bind(mode, &keys, &command),
+        UiMessage::SettingsUnbind { mode, keys } => crate::settings_page::unbind(mode, &keys),
         UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),
         UiMessage::RecoverForget { session } => crate::recover::forget(&session),
         UiMessage::ColorScheme { dark } => {

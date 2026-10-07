@@ -87,3 +87,75 @@ fn the_settings_page_changes_saves_and_resets_settings() {
             .is_some_and(|m| m.contains("hints.uppercase = false"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_keys_tab_binds_unbinds_and_restores_and_warns_about_clashes() {
+    let b = Browser::start("page.html");
+    // Opened directly (as a restored tab is), not through :settings.
+    b.run("open riptide://settings/#keys/normal");
+    b.wait_until("the keys tab opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    let field = |key: &str| format!("document.querySelector('[data-key=\"{key}\"]')");
+    wait_eval(&b, &format!("String(!!{})", field("keys#newkeys")), "true");
+
+    // A prefix of existing bindings is flagged before binding.
+    b.eval(&format!(
+        "(i => {{ i.value = 'g'; i.dispatchEvent(new Event('input')); return ''; }})({})",
+        field("keys#newkeys")
+    ));
+    wait_eval(
+        &b,
+        "document.querySelector('.warn').textContent.includes('Clashes with') ? 'warned' : ''",
+        "warned",
+    );
+
+    b.eval(&format!(
+        "{k}.value = 'gx'; {c}.value = 'tab-close'; {bind}.click(), ''",
+        k = field("keys#newkeys"),
+        c = field("keys#newcommand"),
+        bind = field("keys#bind"),
+    ));
+    b.run("bind gx");
+    b.wait_until("gx is bound", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("gx is bound to 'tab-close'"))
+    });
+    let autoconfig = b.config_dir().join("autoconfig.toml");
+    assert!(
+        std::fs::read_to_string(&autoconfig).is_ok_and(|t| t.contains("tab-close")),
+        "not saved"
+    );
+
+    // An unknown command is refused with the reason.
+    b.eval(&format!(
+        "{k}.value = 'gy'; {c}.value = 'no-such-command'; {bind}.click(), ''",
+        k = field("keys#newkeys"),
+        c = field("keys#newcommand"),
+        bind = field("keys#bind"),
+    ));
+    wait_eval(
+        &b,
+        "document.querySelector('.banner')?.textContent ? 'shown' : ''",
+        "shown",
+    );
+
+    // Unbinding a default moves it to "Unbound defaults", where it can be restored.
+    b.eval(&format!("{}.click(), ''", field("keys:normal:d#unbind")));
+    b.run("bind d");
+    b.wait_until("d is unbound", |s| {
+        s.message().is_some_and(|m| m.contains("d is unbound"))
+    });
+    wait_eval(
+        &b,
+        &format!("String(!!{})", field("keys:normal:d#restore")),
+        "true",
+    );
+    b.eval(&format!("{}.click(), ''", field("keys:normal:d#restore")));
+    b.run("bind d");
+    b.wait_until("d is back", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("d is bound to 'tab-close'"))
+    });
+}

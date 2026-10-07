@@ -1643,6 +1643,42 @@ impl Engine {
         })])
     }
 
+    /// A binding from the settings page's Keys tab, checked like `:bind`.
+    pub fn bind_from_page(
+        &mut self,
+        mode: Mode,
+        keys: &str,
+        command: &str,
+    ) -> Result<Vec<Effect>, String> {
+        let seq = crate::key::Key::parse_sequence(keys).map_err(|e| e.to_string())?;
+        let command = command.trim();
+        if command.is_empty() {
+            return Err("Enter a command".into());
+        }
+        self.check_command(command)?;
+        let keys = format_sequence(&seq);
+        self.keymap
+            .bind(mode, &keys, command)
+            .map_err(|e| e.to_string())?;
+        self.show_message(Level::Info, format!("{keys} → {command} in {mode} mode"));
+        Ok(vec![Effect::ConfigChanged(ConfigOp::Bind {
+            mode,
+            keys,
+            command: command.to_string(),
+        })])
+    }
+
+    /// The Keys tab's remove button, like `:unbind`.
+    pub fn unbind_from_page(&mut self, mode: Mode, keys: &str) -> Result<Vec<Effect>, String> {
+        let seq = crate::key::Key::parse_sequence(keys).map_err(|e| e.to_string())?;
+        let keys = format_sequence(&seq);
+        if !self.keymap.unbind(mode, &keys).map_err(|e| e.to_string())? {
+            return Err(format!("{keys} is not bound in {mode} mode"));
+        }
+        self.show_message(Level::Info, format!("Unbound {keys} in {mode} mode"));
+        Ok(vec![Effect::ConfigChanged(ConfigOp::Unbind { mode, keys })])
+    }
+
     /// The settings page's reset button: back to the default, like `:config-unset`.
     pub fn reset_from_page(&mut self, name: &str) -> Result<Vec<Effect>, String> {
         self.settings.unset(name)?;

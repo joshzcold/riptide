@@ -478,6 +478,8 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
     })
     .unwrap_or_default();
     crate::help::refresh();
+    // The settings page can open before :settings, e.g. restored with the session.
+    crate::settings_page::refresh();
     apply_chromium_settings();
     errors
 }
