@@ -309,6 +309,7 @@ wrap_window_delegate! {
 
         fn on_window_created(&self, window: Option<&mut Window>) {
             let Some(window) = window else { return };
+            set_icons(window);
             let (Some(tabbar), Some(row), Some(content), Some(statusbar), Some(completion)) = (
                 create_browser_view(Role::Tabbar, ui::TABBAR_URL),
                 panel_create(None),
@@ -602,6 +603,7 @@ wrap_window_delegate! {
             // Chrome-style windows ignore the preferred size.
             window.center_window(Some(&Size { width: 1100, height: 750 }));
             window.set_title(Some(&CefString::from("DevTools - Riptide")));
+            set_icons(window);
             window.show();
         }
 
@@ -683,6 +685,30 @@ fn bar_size(role: Role) -> Size {
             width: 1,
             height: 1,
         },
+    }
+}
+
+/// riptide's logo as the window icon (`_NET_WM_ICON`), which task bars,
+/// window switchers and screen-share pickers show. CEF's default is Chromium's.
+fn set_icons(window: &Window) {
+    let icon = |sizes: [&[u8]; 2]| {
+        let image = image_create()?;
+        for (scale, png) in [1.0, 2.0].into_iter().zip(sizes) {
+            image.add_png(scale, Some(png));
+        }
+        Some(image)
+    };
+    if let Some(mut small) = icon([
+        include_bytes!("../icons/riptide-32.png"),
+        include_bytes!("../icons/riptide-64.png"),
+    ]) {
+        window.set_window_icon(Some(&mut small));
+    }
+    if let Some(mut large) = icon([
+        include_bytes!("../icons/riptide-128.png"),
+        include_bytes!("../icons/riptide-256.png"),
+    ]) {
+        window.set_window_app_icon(Some(&mut large));
     }
 }
 

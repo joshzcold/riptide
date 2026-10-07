@@ -6,8 +6,9 @@ use std::process::Command;
 
 use rt_e2e::Browser;
 
-/// An X property of the browser window, as xprop prints it.
-fn window_property(b: &Browser, property: &str) -> String {
+/// An X property of the browser window, as xprop prints it; `args` may
+/// start with xprop options such as a format.
+fn window_property(b: &Browser, args: &[&str]) -> String {
     let display = format!(":{}", b.display());
     let tree = Command::new("xwininfo")
         .args(["-display", &display, "-root", "-tree"])
@@ -21,7 +22,8 @@ fn window_property(b: &Browser, property: &str) -> String {
         .unwrap_or_else(|| panic!("no Riptide window in\n{tree}"))
         .to_string();
     let output = Command::new("xprop")
-        .args(["-display", &display, "-id", &id, property])
+        .args(["-display", &display, "-id", &id])
+        .args(args)
         .output()
         .expect("xprop is needed for window tests");
     String::from_utf8_lossy(&output.stdout).to_string()
@@ -30,7 +32,7 @@ fn window_property(b: &Browser, property: &str) -> String {
 /// The decorations field of `_MOTIF_WM_HINTS` on the browser window:
 /// 1 with a title bar and borders, 0 without.
 fn decorations(b: &Browser) -> String {
-    let hints = window_property(b, "_MOTIF_WM_HINTS");
+    let hints = window_property(b, &["_MOTIF_WM_HINTS"]);
     // "_MOTIF_WM_HINTS(_MOTIF_WM_HINTS) = flags, functions, decorations, …"
     hints
         .split_once('=')
@@ -45,8 +47,45 @@ fn decorations(b: &Browser) -> String {
 fn the_window_has_a_class_for_window_managers_and_pickers() {
     let b = Browser::start("page.html");
     assert_eq!(
-        window_property(&b, "WM_CLASS").trim(),
+        window_property(&b, &["WM_CLASS"]).trim(),
         r#"WM_CLASS(STRING) = "riptide", "Riptide""#
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_window_icon_is_riptides_logo() {
+    let b = Browser::start("page.html");
+    // `_NET_WM_ICON` is a list of icons: width, height, then ARGB pixels.
+    let text = window_property(
+        &b,
+        &["-notype", "-f", "_NET_WM_ICON", "32c", "_NET_WM_ICON"],
+    );
+    let values: Vec<u64> = text
+        .split_once('=')
+        .map(|(_, v)| v.split(',').filter_map(|n| n.trim().parse().ok()).collect())
+        .unwrap_or_default();
+    let mut icons = Vec::new();
+    let mut rest = values.as_slice();
+    while let [w, h, pixels @ ..] = rest {
+        let (w, h) = (*w as usize, *h as usize);
+        let Some((icon, after)) = (w * h <= pixels.len()).then(|| pixels.split_at(w * h)) else {
+            break;
+        };
+        icons.push((w, h, icon));
+        rest = after;
+    }
+    let sizes: Vec<_> = icons.iter().map(|(w, h, _)| (*w, *h)).collect();
+    let (w, _, pixels) = icons
+        .iter()
+        .find(|(w, h, _)| (*w, *h) == (128, 128))
+        .unwrap_or_else(|| panic!("no 128x128 icon among {sizes:?}"));
+    // The logo's dark navy near its top left corner, which Chromium's icon doesn't have.
+    let argb = pixels[20 * w + 20];
+    let (r, g, bl) = ((argb >> 16) & 0xff, (argb >> 8) & 0xff, argb & 0xff);
+    assert!(
+        r < 40 && (30..80).contains(&g) && (50..110).contains(&bl),
+        "pixel {argb:#x}; icons {sizes:?}"
     );
 }
 
