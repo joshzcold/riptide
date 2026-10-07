@@ -44,6 +44,18 @@ fn decorations(b: &Browser) -> String {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn windows_can_be_resized_so_tiling_window_managers_tile_them() {
+    let b = Browser::start("page.html");
+    b.run(&format!("open --call {}", b.url("second.html")));
+    b.wait_until("a call window too", |s| s.windows.len() == 2);
+    // A maximum size equal to the minimum makes dwm and others float a window.
+    let hints = window_property(&b, &["WM_NORMAL_HINTS"]);
+    assert!(!hints.contains("maximum size"), "{hints}");
+    assert!(hints.contains("minimum size: 320 by 240"), "{hints}");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn the_window_has_a_class_for_window_managers_and_pickers() {
     let b = Browser::start("page.html");
     assert_eq!(

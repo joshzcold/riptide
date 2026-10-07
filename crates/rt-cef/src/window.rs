@@ -320,6 +320,12 @@ wrap_window_delegate! {
         fn preferred_size(&self, _view: Option<&mut View>) -> Size {
             Size { width: 1280, height: 800 }
         }
+
+        /// Without it, views use the preferred size as the minimum, and the
+        /// window says it can't be smaller than 1280×800.
+        fn minimum_size(&self, _view: Option<&mut View>) -> Size {
+            Size { width: 320, height: 240 }
+        }
     }
 
     impl PanelDelegate {}
@@ -543,6 +549,21 @@ wrap_window_delegate! {
             }
         }
 
+        // The cef crate answers "no" for these unless they're implemented,
+        // where CEF's own default is "yes". A window that can't be resized
+        // asks for a fixed size, which tiling window managers float.
+        fn can_resize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_maximize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_minimize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
         fn linux_window_properties(
             &self,
             _window: Option<&mut Window>,
@@ -681,6 +702,21 @@ wrap_window_delegate! {
 
         fn window_runtime_style(&self) -> RuntimeStyle {
             RuntimeStyle::CHROME
+        }
+
+        // The cef crate answers "no" for these unless they're implemented,
+        // where CEF's own default is "yes". A window that can't be resized
+        // asks for a fixed size, which tiling window managers float.
+        fn can_resize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_maximize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
+        }
+
+        fn can_minimize(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
+            1
         }
 
         fn linux_window_properties(

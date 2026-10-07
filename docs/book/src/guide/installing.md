@@ -69,7 +69,7 @@ macOS and Windows builds run without the sandbox for now; it needs the app bundl
 
 ## Window managers
 
-riptide's windows have the class `riptide` (`WM_CLASS` `riptide`, `Riptide`) for window manager rules and docks, and riptide's logo as their icon.
+riptide's windows have the class `riptide` (`WM_CLASS` `riptide`, `Riptide`) for window manager rules and docks, and riptide's logo as their icon. They can be resized, so tiling window managers tile them, call windows included. Before 2026-10-07 they asked for a fixed 1280×800, which made dwm and similar window managers float them.
 
 If another browser's screen-share picker doesn't list riptide's window, check its state with `xprop WM_STATE` and click the window. Programs that list windows skip any that aren't in the `Normal` state. dwm's swallow patch leaves a program started from a terminal in the `Withdrawn` state, because it marks the program's window instead of the terminal's. Either fix the patch (in `swallow()`, mark `p` instead of `c` as withdrawn), or exclude riptide from swallowing with a rule for the class `Riptide`.
 
