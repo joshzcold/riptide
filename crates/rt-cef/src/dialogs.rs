@@ -123,6 +123,28 @@ wrap_request_handler! {
             blocked.into()
         }
 
+        /// A middle click or Ctrl+click on a link, or a form posted to a new
+        /// tab: Chromium asks here, not through popups. Unhandled, it would
+        /// load in the same tab.
+        fn on_open_urlfrom_tab(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            target_url: Option<&CefString>,
+            target_disposition: WindowOpenDisposition,
+            _user_gesture: ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int {
+            let target = match target_disposition {
+                WindowOpenDisposition::NEW_BACKGROUND_TAB => 0,
+                WindowOpenDisposition::NEW_FOREGROUND_TAB => 1,
+                WindowOpenDisposition::NEW_WINDOW => 2,
+                _ => return 0,
+            };
+            let mut task = OpenFromPage::new(target, string(target_url));
+            post_task(ThreadId::UI, Some(&mut task));
+            1
+        }
+
         fn resource_request_handler(
             &self,
             _browser: Option<&mut Browser>,
@@ -354,4 +376,23 @@ fn ask_credentials(browser: Option<i32>, message: String, callback: AuthCallback
             );
         },
     );
+}
+
+wrap_task! {
+    struct OpenFromPage {
+        // 0 a background tab, 1 a tab in front, 2 a window.
+        target: u8,
+        url: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let target = match self.target {
+                0 => rt_core::command::OpenTarget::Background,
+                1 => rt_core::command::OpenTarget::Tab,
+                _ => rt_core::command::OpenTarget::Window,
+            };
+            shell::open(target, true, Some(self.url.clone()));
+        }
+    }
 }

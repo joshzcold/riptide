@@ -67,6 +67,42 @@ fn mouse_back_and_forward_buttons_navigate() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn middle_and_ctrl_clicks_open_links_in_background_tabs() {
+    let b = Browser::start("biglink.html");
+    let page = b.url("biglink.html");
+    let second = b.url("second.html");
+    let xdotool = |args: &[&str]| {
+        let status = std::process::Command::new("xdotool")
+            .args(args)
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    // The link fills the page.
+    xdotool(&["mousemove", "400", "300", "click", "2"]);
+    let s = b.wait_until("a background tab", |s| s.tabs().len() == 2);
+    assert!(s.tab().is_loaded(&page), "the page itself navigated");
+    b.wait_until("the new tab loads the link", |s| {
+        s.tabs().iter().any(|t| t.url == second)
+    });
+    xdotool(&[
+        "mousemove",
+        "400",
+        "300",
+        "keydown",
+        "ctrl",
+        "click",
+        "1",
+        "keyup",
+        "ctrl",
+    ]);
+    let s = b.wait_until("another background tab", |s| s.tabs().len() == 3);
+    assert!(s.tab().is_loaded(&page), "the page itself navigated");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn input_spatial_navigation_moves_focus_with_arrows() {
     let b = Browser::launch()
         .toml("\"input.spatial_navigation\" = true\n")
