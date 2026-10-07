@@ -533,8 +533,14 @@ pub static SETTINGS: &[SettingDef] = &[
     def!(
         "aliases",
         Kind::Map,
-        map(&[("q", "quit"), ("qa", "quit"), ("wq", "quit --save")]),
-        "Command aliases: name → command"
+        map(&[
+            ("q", "close"),
+            ("qa", "quit"),
+            ("w", "session-save"),
+            ("wq", "quit --save"),
+            ("wqa", "quit --save"),
+        ]),
+        "Command aliases: name → command. As in qutebrowser, :q closes the window, :qa quits, :w saves the session and :wq saves and quits"
     ),
     def!(
         "auto_save.interval",

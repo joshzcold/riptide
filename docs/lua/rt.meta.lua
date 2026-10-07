@@ -114,7 +114,7 @@ function rt.message(text, level) end
 function rt.spawn(argv, opts, callback) end
 
 ---@class rt.c
----@field aliases table<string, string> Command aliases: name → command
+---@field aliases table<string, string> Command aliases: name → command. As in qutebrowser, :q closes the window, :qa quits, :w saves the session and :wq saves and quits
 ---@field auto_save rt.c.auto_save
 ---@field bindings rt.c.bindings
 ---@field changelog_after_upgrade "major"|"minor"|"patch"|"never" Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never

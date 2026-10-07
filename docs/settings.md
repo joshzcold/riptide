@@ -6,7 +6,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `aliases` | table<string, string> | `{"q":"quit","qa":"quit","wq":"quit --save"}` | Command aliases: name → command |
+| `aliases` | table<string, string> | `{"q":"close","qa":"quit","w":"session-save","wq":"quit --save","wqa":"quit --save"}` | Command aliases: name → command. As in qutebrowser, :q closes the window, :qa quits, :w saves the session and :wq saves and quits |
 | `auto_save.interval` | integer | `15000` | Milliseconds between crash-recovery saves of the open tabs (0 turns them off) |
 | `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
 | `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |

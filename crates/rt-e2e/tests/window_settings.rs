@@ -119,7 +119,7 @@ fn changelog_after_upgrade_opens_the_changelog_once() {
     let b = Browser::start("page.html");
     assert!(!changelog(&b.state()), "the first start isn't an upgrade");
     let restart = |b: &Browser| {
-        b.run("q");
+        b.run("quit");
         assert!(b.wait_exit().success());
         b.restart();
         b.wait_until("the start page", |s| !s.tabs().is_empty());

@@ -3273,6 +3273,10 @@ mod tests {
         let mut e = engine();
         assert_eq!(
             runs(&press(&mut e, ":q<Return>")),
+            vec![(Command::Close, None)]
+        );
+        assert_eq!(
+            runs(&press(&mut e, ":qa<Return>")),
             vec![(Command::Quit { save: false }, None)]
         );
         let aliases = Value::Map(

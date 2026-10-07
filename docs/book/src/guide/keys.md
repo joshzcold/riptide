@@ -64,6 +64,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
 | `:history [-t]` | Browsing history by day, with a search box |
 | `:history-import [path]` | Import qutebrowser's `history.sqlite` (default: qutebrowser's data directory); importing twice adds nothing new |
+| `:q`, `:qa` | Close this window (closing the last one quits) / quit, closing every window. As in qutebrowser, these are aliases for `:close` and `:quit` (`aliases`). |
 | `ZZ`, `:wq` | Save the tabs as the `default` session and quit (`ZQ` quits without saving) |
 | `:` | Command line |
 | `i` | Insert mode (also entered automatically when a text field gets focus) |
