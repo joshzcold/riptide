@@ -71,6 +71,16 @@ The settings page (`:settings`) and `:help content.call_sites` show the default 
 - **In the background:** a call keeps running at full speed in a tab you've switched away from, as in Chrome, since it plays sound. A silent page in a background tab has its timers slowed to once a second.
 - **Stopping a share:** in a call window, use the "Stop sharing" bar Chrome shows. riptide can't stop a page's capture from outside; close or reload the tab instead.
 
+### Picture-in-picture
+
+`gp` (`:pip`) floats the page's main video in a small window that stays on top while you work in other tabs, such as a call or a talk; `gp` again brings it back. Sites' own picture-in-picture buttons work too, including Meet's floating call window.
+
+Some tiling window managers don't float it by themselves; it's titled "Picture in picture". In dwm, a rule floats it:
+
+```c
+{ NULL, NULL, "Picture in picture", 0, 1, 0, 0, -1 },
+```
+
 ### Muting a call from another tab
 
 `cm` (`:call-mute`) mutes or unmutes your microphone in the call while you're in another tab. It presses the call site's own mute key in the tab that's using the microphone, so the site's mute button stays right. `content.call_mute_keys` has each site's key (Meet `<Ctrl-d>`, Teams `<Ctrl-Shift-m>`, Zoom `<Alt-a>`, Webex `<Ctrl-m>`, Jitsi `m`); add others the same way.

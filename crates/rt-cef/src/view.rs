@@ -32,6 +32,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         | Command::Home
         | Command::TabMute
         | Command::CallMute
+        | Command::Pip
         | Command::DevToolsFocus
         | Command::DebugDumpPage { .. }
         | Command::DebugClearSslErrors
@@ -188,6 +189,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             });
         }
         Command::CallMute => call_mute(),
+        Command::Pip => pip(),
         Command::TabMute => {
             let muted = host.is_audio_muted() == 0;
             host.set_audio_muted(muted.into());
@@ -354,40 +356,85 @@ fn call_mute() {
     if index != current {
         crate::tabs::select(index);
     }
-    // The first key a page gets starts something in Chromium that loses
-    // keys for a few hundred milliseconds, so a page that hasn't had one
-    // gets a bare Shift first and the mute key a moment later.
-    let warm = shell::with(|s| s.current_browser())
-        .flatten()
-        .is_some_and(|b| crate::client::had_keys(b.identifier()));
-    if warm {
-        return press_in_call(keys, current);
-    }
-    crate::client::prime_page();
-    let mut task = PressInCall::new(std::cell::RefCell::new(keys), current);
-    post_delayed_task(ThreadId::UI, Some(&mut task), FIRST_KEY_DELAY_MS);
+    crate::client::send_when_ready(keys, move || crate::tabs::select(current));
 }
 
-/// How long after a page's first key the next one gets through, with room
-/// to spare on a busy machine (about 400 ms was needed under Xvfb).
-const FIRST_KEY_DELAY_MS: i64 = 700;
-
-fn press_in_call(keys: Vec<rt_core::Key>, back_to: usize) {
-    for key in keys {
-        crate::client::send_to_page(key);
-    }
-    crate::tabs::select(back_to);
-}
-
-wrap_task! {
-    struct PressInCall {
-        keys: std::cell::RefCell<Vec<rt_core::Key>>,
-        back_to: usize,
-    }
-
-    impl Task {
-        fn execute(&self) {
-            press_in_call(self.keys.take(), self.back_to);
+/// `:pip`: float the page's main video in a picture-in-picture window, or
+/// bring it back. Pages may only do this right after a real key or click,
+/// and riptide's own keys never reach the page, so the page gets a script
+/// waiting for F24 (which no site uses) and then a real F24.
+fn pip() {
+    let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
+        return;
+    };
+    let check = browser.clone();
+    crate::eval::eval(&browser, PIP_JS, move |armed| {
+        if armed.is_err() {
+            return shell::show_message(Level::Error, "This page can't show picture-in-picture");
         }
+        let f24 = rt_core::Key::plain(rt_core::KeyCode::F(24));
+        crate::client::send_when_ready(vec![f24], move || report_pip(check, 0));
+    });
+}
+
+/// Waits for an F24 keydown, then floats the largest playing video (or
+/// closes picture-in-picture) and leaves the outcome in `window.__rtPip`.
+const PIP_JS: &str = r#"(() => {
+  window.__rtPip = "waiting";
+  window.addEventListener("keydown", async function pip(e) {
+    if (e.key !== "F24") return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.removeEventListener("keydown", pip, true);
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        window.__rtPip = "closed";
+        return;
+      }
+      const score = (v) => v.videoWidth * v.videoHeight + (v.paused ? 0 : 1e9);
+      const videos = [...document.querySelectorAll("video")]
+        .filter((v) => v.readyState >= 2 && !v.disablePictureInPicture)
+        .sort((a, b) => score(b) - score(a));
+      if (videos.length === 0) {
+        window.__rtPip = "none";
+        return;
+      }
+      await videos[0].requestPictureInPicture();
+      window.__rtPip = "open";
+    } catch (err) {
+      window.__rtPip = "error " + err.message;
     }
+  }, true);
+  return "armed";
+})()"#;
+
+/// Say how `:pip` went, once the page's script has run.
+fn report_pip(browser: Browser, polls: u32) {
+    let again = browser.clone();
+    crate::eval::eval(&browser, "String(window.__rtPip)", move |result| {
+        let message = match result.as_deref() {
+            Ok("waiting") if polls < 30 => {
+                return crate::client::later(100, move || report_pip(again, polls + 1));
+            }
+            Ok("open") => (
+                Level::Info,
+                "Playing in picture-in-picture; :pip again brings it back".to_string(),
+            ),
+            Ok("closed") => (Level::Info, "Picture-in-picture closed".to_string()),
+            Ok("none") => (
+                Level::Error,
+                "There's no video playing on this page".to_string(),
+            ),
+            Ok(other) if other.starts_with("error ") => (
+                Level::Error,
+                format!("Picture-in-picture failed: {}", &other[6..]),
+            ),
+            _ => (
+                Level::Error,
+                "The page didn't answer the picture-in-picture request".to_string(),
+            ),
+        };
+        shell::show_message(message.0, message.1);
+    });
 }

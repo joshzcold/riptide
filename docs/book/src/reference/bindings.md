@@ -105,6 +105,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `gg` | `scroll-to-perc 0` |
 | `gm` | `tab-move` |
 | `go` | `cmd-set-text :open {url}` |
+| `gp` | `pip` |
 | `gt` | `cmd-set-text -s :tab-select` |
 | `gu` | `navigate up` |
 | `h` | `scroll left` |

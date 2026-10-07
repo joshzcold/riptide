@@ -300,6 +300,54 @@ pub fn had_keys(browser: i32) -> bool {
     HAD_KEYS.with(|h| h.borrow().contains(&browser))
 }
 
+/// A closure for [`later`], taken out when it runs.
+type Pending = std::rc::Rc<std::cell::RefCell<Option<Box<dyn FnOnce()>>>>;
+
+/// Run `f` on the UI thread after `ms` milliseconds.
+pub fn later(ms: i64, f: impl FnOnce() + 'static) {
+    let mut task = Later::new(std::rc::Rc::new(std::cell::RefCell::new(Some(Box::new(f)))));
+    post_delayed_task(ThreadId::UI, Some(&mut task), ms);
+}
+
+wrap_task! {
+    struct Later {
+        f: Pending,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            if let Some(f) = self.f.take() {
+                f();
+            }
+        }
+    }
+}
+
+/// How long after a page's first key the next one gets through, with room
+/// to spare on a busy machine (about 400 ms was needed under Xvfb).
+const FIRST_KEY_DELAY_MS: i64 = 700;
+
+/// Send `keys` to the current tab, then run `then`. The first key a page
+/// gets starts something in Chromium that loses keys for a few hundred
+/// milliseconds, so a page that hasn't had one gets a bare Shift first and
+/// the keys a moment later.
+pub fn send_when_ready(keys: Vec<rt_core::Key>, then: impl FnOnce() + 'static) {
+    let send = move || {
+        for key in keys {
+            send_to_page(key);
+        }
+        then();
+    };
+    let ready = shell::with(|s| s.current_browser())
+        .flatten()
+        .is_some_and(|b| had_keys(b.identifier()));
+    if ready {
+        return send();
+    }
+    prime_page();
+    later(FIRST_KEY_DELAY_MS, send);
+}
+
 /// A lone Shift press and release in the current tab. Chromium drops the
 /// first key event a page gets after it loads, so this goes before keys a
 /// page must see, such as a call's mute key; pages ignore a bare Shift.

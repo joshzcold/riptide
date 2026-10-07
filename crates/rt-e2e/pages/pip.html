@@ -1,0 +1,40 @@
+<!doctype html>
+<title>pip</title>
+<button id="pip" onclick="pip()">picture in picture</button>
+<button id="docpip" onclick="docPip()">document picture in picture</button>
+<video id="v" muted playsinline width="320" height="180"></video>
+<canvas id="c" width="320" height="180" hidden></canvas>
+<script>
+  // A video to float: a canvas that changes colour, played through <video>.
+  // window.__pip: "" until asked, then "open", "closed" or the error's name.
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  let hue = 0;
+  setInterval(() => { ctx.fillStyle = `hsl(${hue = (hue + 5) % 360} 60% 50%)`; ctx.fillRect(0, 0, 320, 180); }, 50);
+  const video = document.getElementById("v");
+  video.srcObject = canvas.captureStream(20);
+  video.play();
+  window.__pip = "";
+  window.__support = JSON.stringify({
+    video: document.pictureInPictureEnabled === true,
+    document: "documentPictureInPicture" in window,
+  });
+  video.addEventListener("leavepictureinpicture", () => { window.__pip = "closed"; });
+  async function pip() {
+    try {
+      await video.requestPictureInPicture();
+      window.__pip = "open";
+    } catch (e) {
+      window.__pip = e.name + ": " + e.message;
+    }
+  }
+  async function docPip() {
+    try {
+      const w = await documentPictureInPicture.requestWindow({ width: 320, height: 200 });
+      w.document.body.append("floating");
+      window.__pip = "doc open";
+    } catch (e) {
+      window.__pip = "doc " + e.name + ": " + e.message;
+    }
+  }
+</script>

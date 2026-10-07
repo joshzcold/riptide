@@ -418,6 +418,8 @@ pub enum Command {
     TabMute,
     /// Press the call site's mute key in the tab using the microphone, from any tab.
     CallMute,
+    /// Float the page's main video in picture-in-picture, or bring it back.
+    Pip,
     /// Show the messages of this session.
     Messages,
     /// Run the last command again (`.`).
@@ -913,6 +915,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("home", "Open the start page"),
     spec("tab-mute", "Mute or unmute this tab (Alt-m)"),
+    spec(
+        "pip",
+        "Float the page's main video in a picture-in-picture window, or bring it back (gp)",
+    ),
     spec(
         "call-mute",
         "Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys)",
@@ -1586,6 +1592,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "home" => Command::Home,
         "tab-mute" => Command::TabMute,
         "call-mute" => Command::CallMute,
+        "pip" => Command::Pip,
         "messages" => Command::Messages,
         "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,
         "theme" => Command::Theme {

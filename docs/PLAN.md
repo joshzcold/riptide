@@ -903,7 +903,10 @@ Whatever path wins:
   - Check echo cancellation and noise suppression with PipeWire and PulseAudio.
 - **Performance:** VA-API video decode and encode (this machine logs `vaInitialize failed` from mixed Nix and system Mesa libraries; check on a stock distro), and GPU use for background blur (WebGL; Xvfb blocklists it, real GPUs don't).
 - **While browsing other tabs:**
-  - Picture-in-picture (`:pip`, plus the Document Picture-in-Picture API if CEF supports it).
+  - ✅ (2026-10-07) Picture-in-picture. Video picture-in-picture works in Alloy and Chrome-style tabs alike, and the Document Picture-in-Picture API (Meet's floating window) works in a call window; both measured with `pages/pip.html`.
+    - `gp` / `:pip` floats the largest playing video, or brings it back. A page may only do that right after real input, and riptide's own keys never reach it, so the page gets a one-shot F24 listener and then a real F24 through `client::send_when_ready` (shared with `cm`, for the first-key delay).
+    - Chromium's window is titled "Picture in picture", with no `WM_CLASS`, type normal, and `_NET_WM_STATE_ABOVE`. dwm tiles it unless a rule matches the title; the guide gives one.
+    - Test: `pip.rs`, which checks the visible window opens and closes.
   - ✅ (2026-10-07) A mute toggle from any tab: `cm` / `:call-mute` finds the tab using a microphone and presses its site's key from `content.call_mute_keys` (Meet, Teams, Zoom, Webex and Jitsi by default).
     - **What didn't work:**
       - `send_key_event` to a hidden tab is dropped, since keys go to the window's focused view.
