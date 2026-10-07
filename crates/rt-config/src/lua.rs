@@ -31,7 +31,7 @@ use rt_core::settings::{self, Settings};
 use crate::paths::{Paths, Platform};
 
 /// `c.a.b = v` → `rt.set("a.b", v)`; reading a full name returns its value.
-const PRELUDE: &str = r#"
+const PRELUDE: &str = r##"
 local function proxy(prefix)
   return setmetatable({}, {
     __index = function(_, key)
@@ -121,6 +121,99 @@ rt._entry[1] = rt._fire
 -- Neovim's name for it.
 rt.notify = rt.message
 
+-- rt.pack.add(spec or list of specs): plugins, loaded once config.lua has
+-- run (after installing or approving them). A spec is a git URL, or a table:
+-- { "url" or src = "url" or dir = "~/folder", name, version, trusted, opts, config }.
+rt.pack = {}
+local pack_specs = {}
+local function add_spec(spec)
+  if type(spec) == "string" then spec = { spec } end
+  local src = spec.src or spec[1]
+  if src == nil and spec.dir == nil then error("a plugin needs a git URL or dir", 3) end
+  local name = spec.name or rt._plugin_name(src or spec.dir)
+  rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true)
+  pack_specs[name] = spec
+end
+function rt.pack.add(specs)
+  if type(specs) == "string" or specs.src or specs.dir or type(specs[1]) == "string" then
+    add_spec(specs)
+  else
+    for _, spec in ipairs(specs) do add_spec(spec) end
+  end
+end
+
+-- After a plugin loads: its spec's config function, or require(name).setup(opts).
+function rt._pack_ready(name)
+  local spec = pack_specs[name]
+  if not spec then return end
+  if spec.config then
+    spec.config()
+  elseif spec.opts then
+    local module = require(name)
+    if type(module) == "table" and type(module.setup) == "function" then module.setup(spec.opts) end
+  end
+end
+
+-- A plugin's globals: the safe parts of Lua, its own copy of rt with only the
+-- functions its permissions allow, and require limited to plugin modules.
+local SAFE = {
+  "assert", "error", "ipairs", "next", "pairs", "pcall", "rawequal", "rawget", "rawlen",
+  "rawset", "select", "setmetatable", "getmetatable", "tonumber", "tostring", "type", "xpcall",
+}
+local GATED = { spawn = "spawn", run = "commands", set = "settings", get = "settings" }
+local function copy(t)
+  local out = {}
+  for k, v in pairs(t) do out[k] = v end
+  return out
+end
+function rt._sandbox(name, permissions, require_fn)
+  local env = {}
+  for _, key in ipairs(SAFE) do env[key] = _G[key] end
+  for _, lib in ipairs({ "string", "table", "math", "utf8", "coroutine" }) do env[lib] = copy(_G[lib]) end
+  if permissions.files then
+    env.io, env.os = io, os
+  else
+    env.os = { time = os.time, date = os.date, clock = os.clock, difftime = os.difftime }
+  end
+  -- Text only, and in the plugin's globals unless it gives others.
+  env.load = function(chunk, chunkname, _, globals) return load(chunk, chunkname, "t", globals or env) end
+  env.print = function(...)
+    local parts = {}
+    for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+    rt.notify(name .. ": " .. table.concat(parts, " "))
+  end
+  env.require = require_fn
+  local api = {}
+  for key, value in pairs(rt) do
+    if type(key) == "string" and key:sub(1, 1) ~= "_" and key ~= "pack" then
+      local needs = GATED[key]
+      if needs == nil or permissions[needs] then
+        api[key] = type(value) == "table" and copy(value) or value
+      end
+    end
+  end
+  -- A key bound to a command line could run anything, :spawn included.
+  if not permissions.commands then
+    local function only_functions(rhs)
+      if type(rhs) ~= "function" then
+        error("binding keys to a command line needs the commands permission; bind a function", 3)
+      end
+    end
+    local bind, set = api.bind, api.keymap.set
+    api.bind = function(keys, rhs, mode) only_functions(rhs) return bind(keys, rhs, mode) end
+    api.keymap.set = function(mode, keys, rhs, opts) only_functions(rhs) return set(mode, keys, rhs, opts) end
+  end
+  -- Each plugin's stores are its own.
+  api.store = function(store) return rt.store(name .. "--" .. (store or "data")) end
+  if permissions.settings then env.c = c end
+  env.rt = api
+  env._G = env
+  return env
+end
+
+-- Nobody changes the string methods for everyone else.
+getmetatable("").__metatable = false
+
 -- rt.store(name): data kept between runs, saved on every change.
 local stores = {}
 function rt.store(name)
@@ -158,7 +251,7 @@ end
 function rt.keymap.del(mode, keys)
   for _, m in ipairs(modes_of(mode)) do rt.unbind(keys, m) end
 end
-"#;
+"##;
 
 /// The events `rt.on` takes, with what each one's table carries.
 pub const EVENTS: &[(&str, &str)] = &[
@@ -199,6 +292,32 @@ struct State {
     commands: Vec<(String, String)>,
     /// `rt.keymap.set`'s `desc`, by the command a key runs (`lua-call 3`).
     descriptions: std::collections::BTreeMap<String, String>,
+    /// Plugins from `rt.pack.add`, in order.
+    specs: Vec<PluginSpec>,
+    /// Plugins loaded so far, whose modules `require` finds.
+    plugins: Vec<LoadedPlugin>,
+}
+
+/// A plugin `rt.pack.add` asked for.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PluginSpec {
+    pub name: String,
+    /// A git URL; empty for a local folder.
+    pub src: String,
+    /// A local folder, already expanded.
+    pub dir: Option<std::path::PathBuf>,
+    /// A tag, branch or commit to use.
+    pub version: String,
+    /// Run without the sandbox, with all permissions.
+    pub trusted: bool,
+}
+
+#[derive(Clone)]
+struct LoadedPlugin {
+    name: String,
+    dir: std::path::PathBuf,
+    /// Its globals: a sandbox, or the shared ones when trusted.
+    env: mlua::Table,
 }
 
 /// What callbacks see of the browser.
@@ -229,10 +348,23 @@ pub enum Action {
         level: rt_core::engine::Level,
         text: String,
     },
+    /// `rt.open`: open a URL, never through a command line (a URL could
+    /// otherwise carry `;;` and a second command).
+    Open { url: String, target: OpenTarget },
     /// `rt.defer`/`rt.every`: call timer `id` back after `ms` milliseconds.
     Timer { id: u32, ms: u32 },
     /// `rt.spawn`: run a program; [`spawned`] hands the result to `callback`.
     Spawn(SpawnRequest),
+}
+
+/// Where `rt.open` opens a URL.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpenTarget {
+    Current,
+    Tab,
+    Background,
+    Window,
+    Private,
 }
 
 /// A program for the browser to run for `rt.spawn`.
@@ -294,6 +426,29 @@ fn invoke(
     args: mlua::MultiValue,
     context: &Context,
 ) -> Result<Vec<Action>, String> {
+    let table = table.to_string();
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        let table: mlua::Table = api.get(table)?;
+        match table.get::<mlua::Value>(key)? {
+            mlua::Value::Function(f) => f.call::<()>(args),
+            mlua::Value::Table(hooks) => {
+                for hook in hooks.sequence_values::<mlua::Function>() {
+                    hook?.call::<()>(args.clone())?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    })
+}
+
+/// Run `f` in the runtime with `context`, stopping it after
+/// [`CALLBACK_LIMIT`], and return the actions it asked for.
+fn run_guarded(
+    context: &Context,
+    f: impl FnOnce(&Lua, &Rc<RefCell<State>>) -> mlua::Result<()>,
+) -> Result<Vec<Action>, String> {
     RUNTIME.with(|r| {
         let runtime = r.borrow();
         let Some(rt) = runtime.as_ref() else {
@@ -316,26 +471,119 @@ fn invoke(
                 }
             },
         );
-        let result = (|| -> mlua::Result<()> {
-            let api: mlua::Table = rt.lua.globals().get("rt")?;
-            let table: mlua::Table = api.get(table)?;
-            match table.get::<mlua::Value>(key)? {
-                mlua::Value::Function(f) => f.call::<()>(args),
-                mlua::Value::Table(hooks) => {
-                    for hook in hooks.sequence_values::<mlua::Function>() {
-                        hook?.call::<()>(args.clone())?;
-                    }
-                    Ok(())
-                }
-                _ => Ok(()),
-            }
-        })();
+        let result = f(&rt.lua, &rt.state);
         rt.lua.remove_hook();
         let actions = std::mem::take(&mut rt.state.borrow_mut().actions);
         result
             .map(|()| actions)
             .map_err(|e| tidy_error(&e.to_string(), &rt.config_dir))
     })
+}
+
+/// The plugins `rt.pack.add` asked for, in order.
+pub fn plugin_specs() -> Vec<PluginSpec> {
+    RUNTIME.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map(|rt| rt.state.borrow().specs.clone())
+            .unwrap_or_default()
+    })
+}
+
+/// Load plugin `name` from `dir`: give it its globals (a sandbox allowing
+/// `permissions`, or the shared ones when `trusted`), run its `plugin/*.lua`,
+/// then its spec's `opts` or `config`.
+pub fn load_plugin(
+    name: &str,
+    dir: &Path,
+    permissions: &crate::plugins::Permissions,
+    trusted: bool,
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    let (name, dir, permissions) = (name.to_string(), dir.to_path_buf(), permissions.clone());
+    run_guarded(context, move |lua, state| {
+        if state.borrow().plugins.iter().any(|p| p.name == name) {
+            return Ok(());
+        }
+        let env = if trusted {
+            lua.globals()
+        } else {
+            let s = state.clone();
+            let require = lua.create_function(move |lua, module: String| {
+                plugin_module(lua, &s, &module)?.ok_or_else(|| {
+                    mlua::Error::runtime(format!(
+                        "module {module:?} not found; plugins can require their own modules and other plugins'"
+                    ))
+                })
+            })?;
+            let api: mlua::Table = lua.globals().get("rt")?;
+            let sandbox: mlua::Function = api.get("_sandbox")?;
+            sandbox.call::<mlua::Table>((name.as_str(), lua.to_value(&permissions)?, require))?
+        };
+        state.borrow_mut().plugins.push(LoadedPlugin {
+            name: name.clone(),
+            dir: dir.clone(),
+            env: env.clone(),
+        });
+        let mut scripts: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("plugin"))
+            .map(|entries| entries.filter_map(|e| e.ok().map(|e| e.path())).collect())
+            .unwrap_or_default();
+        scripts.retain(|p| p.extension().is_some_and(|e| e == "lua"));
+        scripts.sort();
+        for script in scripts {
+            let source = std::fs::read_to_string(&script).map_err(mlua::Error::external)?;
+            let file = script
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            lua.load(source)
+                .set_name(format!("@{name}/plugin/{file}"))
+                .set_environment(env.clone())
+                .exec()?;
+        }
+        let api: mlua::Table = lua.globals().get("rt")?;
+        let ready: mlua::Function = api.get("_pack_ready")?;
+        ready.call::<()>(name.as_str())
+    })
+}
+
+/// A loaded plugin's module (`lua/<path>.lua` or `lua/<path>/init.lua`),
+/// run once in its plugin's globals and kept.
+fn plugin_module(
+    lua: &Lua,
+    state: &Rc<RefCell<State>>,
+    module: &str,
+) -> mlua::Result<Option<Value>> {
+    let cache: mlua::Table = lua.named_registry_value("rt_plugin_modules")?;
+    let cached: Value = cache.get(module)?;
+    if !cached.is_nil() {
+        return Ok(Some(cached));
+    }
+    let path = module.replace('.', "/");
+    if path.split('/').any(|part| part.is_empty() || part == "..") {
+        return Ok(None);
+    }
+    let plugins = state.borrow().plugins.clone();
+    for plugin in plugins {
+        for relative in [format!("lua/{path}.lua"), format!("lua/{path}/init.lua")] {
+            let Ok(source) = std::fs::read_to_string(plugin.dir.join(&relative)) else {
+                continue;
+            };
+            let value: Value = lua
+                .load(source)
+                .set_name(format!("@{}/{relative}", plugin.name))
+                .set_environment(plugin.env.clone())
+                .call(module)?;
+            let value = if value.is_nil() {
+                Value::Boolean(true)
+            } else {
+                value
+            };
+            cache.set(module, value.clone())?;
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
 }
 
 /// Call an `rt.spawn` callback with the program's result, once.
@@ -511,6 +759,8 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
         next_callback: 1,
         commands: Vec::new(),
         descriptions: Default::default(),
+        specs: Vec::new(),
+        plugins: Vec::new(),
     }));
     let lua = Lua::new();
     let result = setup(&lua, paths, state.clone())
@@ -546,7 +796,11 @@ fn chunk_name(path: &Path, config_dir: &Path) -> String {
 
 /// `require("a.b")` finds `a/b.lua` or `lua/a/b.lua` under the config dir,
 /// like Neovim, and names the chunk relative to it.
-fn searcher(lua: &Lua, config_dir: &Path) -> mlua::Result<mlua::Function> {
+fn searcher(
+    lua: &Lua,
+    config_dir: &Path,
+    state: Rc<RefCell<State>>,
+) -> mlua::Result<mlua::Function> {
     let dir = config_dir.to_path_buf();
     lua.create_function(move |lua, module: String| {
         let file = format!("{}.lua", module.replace('.', "/"));
@@ -557,9 +811,30 @@ fn searcher(lua: &Lua, config_dir: &Path) -> mlua::Result<mlua::Function> {
                 return Ok(mlua::Value::Function(loader));
             }
         }
-        let tried = format!("\n\tno file '{file}' or 'lua/{file}' in the config dir");
+        // Then the loaded plugins' modules, run in their own globals.
+        if let Some(value) = plugin_module(lua, &state, &module)? {
+            let loader = lua.create_function(move |_, ()| Ok(value.clone()))?;
+            return Ok(mlua::Value::Function(loader));
+        }
+        let first = module.split('.').next().unwrap_or_default();
+        let pending = state.borrow().specs.iter().any(|s| s.name == first);
+        let tried = if pending {
+            format!(
+                "\n\tplugin {first:?} loads after config.lua; set it up in rt.pack.add with opts or config"
+            )
+        } else {
+            format!("\n\tno file '{file}' or 'lua/{file}' in the config dir or a loaded plugin")
+        };
         Ok(mlua::Value::String(lua.create_string(tried)?))
     })
+}
+
+/// `~/x` as a path in the home folder.
+fn expand_home(path: &str, _data_dir: &Path) -> std::path::PathBuf {
+    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
+        (Some(rest), Some(home)) => std::path::PathBuf::from(home).join(rest),
+        _ => std::path::PathBuf::from(path),
+    }
 }
 
 /// One line, `file:line: message`, with paths relative to the config dir.
@@ -840,6 +1115,48 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         })?,
     )?;
 
+    api.set(
+        "_plugin_name",
+        lua.create_function(|_, src: String| Ok(crate::plugins::name_from(&src)))?,
+    )?;
+
+    let s = state.clone();
+    let data_dir = paths.data_dir.clone();
+    api.set(
+        "_pack_spec",
+        lua.create_function(
+            move |_,
+                  (name, src, dir, version, trusted): (
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                bool,
+            )| {
+                if !crate::plugins::valid_name(&name) {
+                    return Err(mlua::Error::runtime(format!(
+                        "plugin name {name:?}: use letters, digits, - and _ (set name = \"…\")"
+                    )));
+                }
+                let mut state = s.borrow_mut();
+                if state.specs.iter().any(|spec| spec.name == name) {
+                    return Err(mlua::Error::runtime(format!(
+                        "plugin {name:?} is added twice"
+                    )));
+                }
+                let dir = dir.map(|d| expand_home(&d, &data_dir));
+                state.specs.push(PluginSpec {
+                    name,
+                    src,
+                    dir,
+                    version: version.unwrap_or_default(),
+                    trusted,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+
     let s = state.clone();
     api.set(
         "_timer",
@@ -908,19 +1225,27 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "open",
         lua.create_function(move |_, (url, target): (String, Option<String>)| {
-            let flag = match target.as_deref() {
-                None | Some("current") => "",
-                Some("tab") => "-t ",
-                Some("tab-bg") => "-b ",
-                Some("window") => "-w ",
-                Some("private") => "-p ",
+            let target = match target.as_deref() {
+                None | Some("current") => OpenTarget::Current,
+                Some("tab") => OpenTarget::Tab,
+                Some("tab-bg") => OpenTarget::Background,
+                Some("window") => OpenTarget::Window,
+                Some("private") => OpenTarget::Private,
                 Some(other) => {
                     return Err(mlua::Error::runtime(format!("unknown target {other:?}")));
                 }
             };
-            s.borrow_mut()
-                .actions
-                .push(Action::Run(format!("open {flag}{url}")));
+            // A javascript: URL would run script in the page.
+            if url
+                .trim_start()
+                .to_ascii_lowercase()
+                .starts_with("javascript:")
+            {
+                return Err(mlua::Error::runtime(
+                    "rt.open doesn't open javascript: URLs",
+                ));
+            }
+            s.borrow_mut().actions.push(Action::Open { url, target });
             Ok(())
         })?,
     )?;
@@ -999,7 +1324,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         })?,
     )?;
 
-    let s = state;
+    let s = state.clone();
     api.set(
         "unbind",
         lua.create_function(move |_, (keys, mode): (String, Option<String>)| {
@@ -1023,7 +1348,8 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     // Our searcher runs right after the preload table, before package.path.
     let package: mlua::Table = lua.globals().get("package")?;
     let searchers: mlua::Table = package.get("searchers")?;
-    searchers.raw_insert(2, searcher(lua, &paths.config_dir)?)?;
+    searchers.raw_insert(2, searcher(lua, &paths.config_dir, state.clone())?)?;
+    lua.set_named_registry_value("rt_plugin_modules", lua.create_table()?)?;
 
     lua.load(PRELUDE).set_name("=rt-prelude").exec()
 }
@@ -1082,6 +1408,133 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 argv: vec!["notify-send".into(), "hi there".into()],
                 ..SpawnRequest::default()
             })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn plugins_run_sandboxed_with_their_permissions() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-plugins-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let write = |path: &str, text: &str| {
+            let path = dir.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        write("lua/secret.lua", "return { token = 'x' }");
+        write(
+            "plugins/demo/lua/demo/init.lua",
+            r#"
+local M = {}
+function M.setup(opts)
+  rt.command("demo-hello", function() rt.notify((opts.greeting or "?") .. " from demo") end)
+  rt.command("demo-probe", function()
+    local found = {}
+    for _, k in ipairs({ "spawn", "run", "set", "get" }) do if rt[k] then table.insert(found, k) end end
+    if io then table.insert(found, "io") end
+    if os.execute then table.insert(found, "os.execute") end
+    if c then table.insert(found, "c") end
+    if load("return rt and rt.run")() then table.insert(found, "load-escape") end
+    if getmetatable("") then table.insert(found, "string-metatable") end
+    if pcall(require, "secret") then table.insert(found, "user-module") end
+    if pcall(rt.keymap.set, "normal", "zz", "spawn evil") then table.insert(found, "bind-command") end
+    if pcall(rt.bind, "zz", "spawn evil") then table.insert(found, "bind-command") end
+    if pcall(rt.open, "javascript:alert(1)") then table.insert(found, "javascript") end
+    rt.open("x;;spawn evil", "tab")
+    rt.keymap.set = nil
+    rt.store().set("k", "v")
+    rt.notify("allowed: " .. table.concat(found, ","))
+  end)
+end
+return M
+"#,
+        );
+        write("plugins/demo/plugin/demo.lua", "rt.notify('demo loaded')");
+        write("plugins/boom/plugin/boom.lua", "error('bad plugin')");
+        write(
+            "plugins/free/plugin/free.lua",
+            "rt.notify(io and rt.run and 'trusted' or 'sandboxed')",
+        );
+        let dir_text = dir.display().to_string();
+        write(
+            "config.lua",
+            &format!(
+                r#"
+rt.pack.add({{
+  {{ dir = "{dir_text}/plugins/demo", opts = {{ greeting = "hi" }} }},
+  {{ dir = "{dir_text}/plugins/boom" }},
+  {{ dir = "{dir_text}/plugins/free", trusted = true }},
+}})
+assert(not pcall(require, "demo"))
+rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
+"#
+            ),
+        );
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let specs = plugin_specs();
+        assert_eq!(
+            specs.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(),
+            ["demo", "boom", "free"]
+        );
+        let ctx = Context::default();
+        let none = crate::plugins::Permissions::default();
+        let texts = |actions: Vec<Action>| -> Vec<String> {
+            actions
+                .into_iter()
+                .filter_map(|a| match a {
+                    Action::Message { text, .. } => Some(text),
+                    _ => None,
+                })
+                .collect()
+        };
+        let demo = specs[0].dir.clone().unwrap();
+        assert_eq!(
+            texts(load_plugin("demo", &demo, &none, false, &ctx).unwrap()),
+            ["demo loaded"]
+        );
+        assert_eq!(
+            texts(run_command("demo-hello", "", &ctx).unwrap()),
+            ["hi from demo"]
+        );
+        let probe = run_command("demo-probe", "", &ctx).unwrap();
+        assert_eq!(texts(probe.clone()), ["allowed: "]);
+        // The URL stays a URL.
+        assert!(probe.contains(&Action::Open {
+            url: "x;;spawn evil".into(),
+            target: OpenTarget::Tab
+        }));
+        assert!(paths.data_dir.join("plugin-data/demo--data.json").exists());
+        // The plugin's own rt was changed, not everyone's.
+        assert_eq!(
+            run_command("still", "", &ctx).unwrap(),
+            [Action::Run("bind --mode normal zq reload".into())]
+        );
+        // The user's require finds a loaded plugin's module, the same one.
+        let error =
+            load_plugin("boom", specs[1].dir.as_ref().unwrap(), &none, false, &ctx).unwrap_err();
+        assert!(error.starts_with("boom/plugin/boom.lua:1:"), "{error}");
+        let free = specs[2].dir.clone().unwrap();
+        assert_eq!(
+            texts(load_plugin("free", &free, &none, true, &ctx).unwrap()),
+            ["trusted"]
+        );
+        // Permissions open what they name.
+        let files = crate::plugins::Permissions {
+            files: true,
+            spawn: true,
+            ..Default::default()
+        };
+        write(
+            "plugins/granted/plugin/g.lua",
+            "rt.notify(tostring(io ~= nil) .. ' ' .. tostring(rt.spawn ~= nil) .. ' ' .. tostring(rt.run ~= nil))",
+        );
+        assert_eq!(
+            texts(
+                load_plugin("granted", &dir.join("plugins/granted"), &files, false, &ctx).unwrap()
+            ),
+            ["true true false"]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -1402,9 +1855,10 @@ end)
         );
         assert_eq!(
             run_command("wiki", "Rust", &ctx).unwrap(),
-            [Action::Run(
-                "open -t https://en.wikipedia.org/wiki/Rust".into()
-            )]
+            [Action::Open {
+                url: "https://en.wikipedia.org/wiki/Rust".into(),
+                target: OpenTarget::Tab
+            }]
         );
         assert_eq!(
             emit("load_finished", &[("url", "https://example.com/")], &ctx).unwrap(),

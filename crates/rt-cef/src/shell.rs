@@ -481,6 +481,7 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
     // The settings page can open before :settings, e.g. restored with the session.
     crate::settings_page::refresh();
     apply_chromium_settings();
+    crate::plugins::start();
     errors
 }
 

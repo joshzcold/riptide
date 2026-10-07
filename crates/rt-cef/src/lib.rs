@@ -25,6 +25,7 @@ mod marks;
 mod navigate;
 mod notifications;
 mod permissions;
+mod plugins;
 mod privacy;
 mod prompts;
 mod recover;

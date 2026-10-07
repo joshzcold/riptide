@@ -45,9 +45,18 @@ fn context(count: Option<u32>) -> Context {
 }
 
 fn carry_out(result: Result<Vec<Action>, String>) {
+    carry_out_for("config.lua", result);
+}
+
+/// Carry out what Lua asked for; `source` names it in errors (a plugin's
+/// errors already say which file).
+pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
     let actions = match result {
         Ok(actions) => actions,
-        Err(e) => return shell::show_message(Level::Error, format!("config.lua: {e}")),
+        Err(e) if source == "config.lua" => {
+            return shell::show_message(Level::Error, format!("config.lua: {e}"));
+        }
+        Err(e) => return shell::show_message(Level::Error, format!("Plugin {source}: {e}")),
     };
     if DEPTH.with(Cell::get) >= MAX_DEPTH {
         return shell::show_message(Level::Error, "config.lua: hooks call each other too deeply");
@@ -66,6 +75,16 @@ fn carry_out(result: Result<Vec<Action>, String>) {
                 post_delayed_task(ThreadId::UI, Some(&mut task), i64::from(ms));
             }
             Action::Spawn(request) => crate::spawn::run_for_lua(request),
+            Action::Open { url, target } => {
+                let target = match target {
+                    lua::OpenTarget::Current => rt_core::command::OpenTarget::Current,
+                    lua::OpenTarget::Tab => rt_core::command::OpenTarget::Tab,
+                    lua::OpenTarget::Background => rt_core::command::OpenTarget::Background,
+                    lua::OpenTarget::Window => rt_core::command::OpenTarget::Window,
+                    lua::OpenTarget::Private => rt_core::command::OpenTarget::Private,
+                };
+                shell::open(target, true, Some(url));
+            }
         }
     }
     DEPTH.with(|d| d.set(d.get() - 1));
@@ -79,6 +98,11 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         _ => return false,
     }
     true
+}
+
+/// What Lua callbacks see of the browser now.
+pub fn current_context() -> Context {
+    context(None)
 }
 
 /// Run the `rt.on(event, fn)` hooks.
