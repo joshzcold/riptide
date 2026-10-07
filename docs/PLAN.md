@@ -931,9 +931,11 @@ Whatever path wins:
       - Tests: unit tests in `crash_reports.rs`, and the e2e test `a_panic_writes_a_report_that_the_next_start_mentions_once`. The test channel's `Panic` request triggers it.
       - ✅ **Fixed:** a page starting to load clears every message, so the recovery messages ("Restored the tabs open before the crash" and the others) vanished as soon as the restored tabs loaded. `shell::show_message_after_load` now holds startup messages until a page has finished loading; `sessions.rs` checks all three.
     - For native crashes in CEF, enable Crashpad to write minidumps locally with uploads off, and record the dump's path.
-  - **Offer after the crash:** at the next startup, the status bar names the report (done). Next: a `:crash-report` command that opens `riptide://crash/`, which shows the report and lets the user edit it, then send it one of two ways:
-    - **Email:** a `mailto:` link with the subject and body filled in. The address comes from a `crash_report.email` setting; with no address, the email button is hidden.
-    - **GitHub issue:** `https://github.com/joshzcold/riptide/issues/new?title=…&body=…`, filled in. Truncate the log so the URL stays under GitHub's ~8 KB limit, and tell the user to attach the full log or minidump by hand.
+  - ✅ **Offer after the crash** (2026-10-06): the next start says "riptide crashed last time. :crash-report shows the report (…)". `:crash-report` opens `riptide://crash/` (`ui/crash.html`, filled in by `crash::page`), which shows the newest reports for the user to edit before sending:
+    - **GitHub issue:** a filled-in `issues/new` link, rebuilt as the text changes. A report too long for a link (over about 7,500 characters) is shortened, and the page asks the user to attach the file.
+    - **Email:** a `mailto:` link to `crash_report.email`, hidden when that's empty (the default).
+    - **Copy.**
+    - Tests: `crash_reports.rs` covers the page, editing, the email link, and the page with no reports.
   - **Privacy:** nothing is ever sent automatically. Reports leave out tab URLs and titles by default, and include them only if a checkbox is ticked. Log lines are shown before sending, because they can contain URLs.
   - **Tests:**
     - The test channel's `Panic` and `CrashTab` requests trigger a panic and a renderer crash. A native abort in the browser process isn't covered yet.

@@ -43,7 +43,15 @@ After a crash, the next start keeps the saved tabs as a session named after the 
 
 ### Crash reports
 
-When riptide itself crashes because of a bug (a Rust panic), it writes a report to `crashes/` in its data directory (`riptide --paths` shows where). The report has the version, the error and a backtrace, and no URLs or page content. The next start shows a message with the report's path. The newest ten reports are kept, and nothing is sent anywhere. To report the bug, attach the file to a [GitHub issue](https://github.com/joshzcold/riptide/issues).
+When riptide itself crashes because of a bug (a Rust panic), it writes a report to `crashes/` in its data directory (`riptide --paths` shows where). The report has the version, the error and a backtrace, and no URLs or page content. The next start shows a message with the report's path. The newest ten reports are kept, and nothing is sent anywhere unless you send it.
+
+`:crash-report` shows the newest report in a tab, where you can edit it before sending:
+
+- **Open a GitHub issue:** fills in a new issue with the report. A report too long for a link is shortened, and the page asks you to attach the file.
+- **Email it:** opens your mail program with the report. It only appears when `crash_report.email` is set.
+- **Copy:** copies the report.
+
+Backtraces name the source files of the build, which for a build of your own include its directory.
 
 ### A crashed tab
 

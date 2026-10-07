@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crash report</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4fafb; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+    --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #071a28; --fg: #e3f2f4; --muted: #8aa9b8; --line: #173246; --accent: #3ccfc1; --panel: #0c2536; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+  main { max-width: 60rem; padding: 1.5rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  p { margin: .4rem 0; }
+  .muted { color: var(--muted); }
+  select, textarea, a.button, button {
+    font: inherit; background: var(--panel); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px;
+  }
+  textarea { width: 100%; box-sizing: border-box; height: 24rem; padding: .6rem; font: 12px/1.4 var(--mono); margin: .8rem 0; }
+  .actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  a.button, button { padding: .35rem .8rem; text-decoration: none; cursor: pointer; }
+  a.button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Crash report</h1>
+  <div id="none" hidden>
+    <p>There are no crash reports. When riptide crashes because of a bug, it writes one to <code id="dir-none"></code>.</p>
+  </div>
+  <div id="report" hidden>
+    <p>Nothing has been sent. Check the report below and remove anything you don't want to share, then send it one of these ways. It has the version, the error and a backtrace, and no URLs or page content.</p>
+    <p class="muted">From <code id="path"></code><span id="pick-wrap" hidden> · <label>Report <select id="pick"></select></label></span></p>
+    <textarea id="text" spellcheck="false" aria-label="The crash report"></textarea>
+    <div class="actions">
+      <a id="issue" class="button primary" target="_blank" rel="noreferrer">Open a GitHub issue</a>
+      <a id="email" class="button" hidden>Email it</a>
+      <button id="copy" type="button">Copy</button>
+      <span id="note" class="muted"></span>
+    </div>
+  </div>
+</main>
+<script>
+  // {dir, reports: [{name, text}] newest first, email, issues}
+  const DATA = /*RT_DATA*/null;
+  // GitHub refuses issue links much longer than this.
+  const MAX_URL = 7500;
+  const $ = (id) => document.getElementById(id);
+
+  function issueUrl(text) {
+    const title = (text.match(/^Message:\n(.*)$/m) || [, "riptide crashed"])[1].slice(0, 120);
+    const link = (body) => `${DATA.issues}?title=${encodeURIComponent("Crash: " + title)}&body=${encodeURIComponent(body)}`;
+    const fence = (body) => "```\n" + body + "\n```\n";
+    let url = link(fence(text));
+    if (url.length <= MAX_URL) return { url, cut: false };
+    // Keep the top (version, message) and as much of the backtrace as fits.
+    let keep = text.length;
+    while (keep > 0 && url.length > MAX_URL) {
+      keep = Math.floor(keep * 0.9);
+      url = link(fence(text.slice(0, keep) + "\n…") + "\n(Cut to fit a link. Please attach the full report file.)\n");
+    }
+    return { url, cut: true };
+  }
+
+  function update() {
+    const text = $("text").value;
+    const issue = issueUrl(text);
+    $("issue").href = issue.url;
+    $("note").textContent = issue.cut ? "The issue gets a shortened report; please attach the file too." : "";
+    if (DATA.email) {
+      $("email").hidden = false;
+      $("email").href = `mailto:${DATA.email}?subject=${encodeURIComponent("riptide crash report")}&body=${encodeURIComponent(text)}`;
+    }
+  }
+
+  function show(index) {
+    const report = DATA.reports[index];
+    $("path").textContent = `${DATA.dir}/${report.name}`;
+    $("text").value = report.text;
+    update();
+  }
+
+  if (!DATA || DATA.reports.length === 0) {
+    $("none").hidden = false;
+    $("dir-none").textContent = DATA ? DATA.dir : "";
+  } else {
+    $("report").hidden = false;
+    if (DATA.reports.length > 1) {
+      $("pick-wrap").hidden = false;
+      DATA.reports.forEach((r, i) => $("pick").add(new Option(r.name, i)));
+      $("pick").addEventListener("change", () => show(Number($("pick").value)));
+    }
+    $("text").addEventListener("input", update);
+    $("copy").addEventListener("click", async () => {
+      await navigator.clipboard.writeText($("text").value);
+      $("note").textContent = "Copied.";
+    });
+    show(0);
+  }
+</script>
+</body>
+</html>

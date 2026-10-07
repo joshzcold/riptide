@@ -1221,6 +1221,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart)"
     ),
     def!(
+        "crash_report.email",
+        Kind::Str,
+        s(""),
+        "Where :crash-report's Email button sends a report; empty hides the button"
+    ),
+    def!(
         "downloads.location.directory",
         Kind::Str,
         s(""),

@@ -1,12 +1,52 @@
 //! Crash reports: a panic in the browser process writes one to
 //! `<data>/crashes/`, and the next start says where it is.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use rt_core::engine::Level;
 use rt_storage::crash_reports::{CrashReports, Report};
 
 use crate::shell;
+
+const TEMPLATE: &str = include_str!("../ui/crash.html");
+const ISSUES: &str = "https://github.com/joshzcold/riptide/issues/new";
+
+/// The reports' directory, for the page, which is served on CEF's IO thread.
+static DIR: OnceLock<PathBuf> = OnceLock::new();
+/// `crash_report.email`, read on the UI thread when `:crash-report` runs.
+static EMAIL: Mutex<String> = Mutex::new(String::new());
+
+pub fn set_email(email: String) {
+    if let Ok(mut current) = EMAIL.lock() {
+        *current = email;
+    }
+}
+
+/// `riptide://crash/`: the newest reports, read from disk each time.
+pub fn page() -> Arc<[u8]> {
+    let dir = DIR.get().cloned().unwrap_or_default();
+    let store = CrashReports::new(&dir);
+    let reports: Vec<serde_json::Value> = store
+        .list()
+        .into_iter()
+        .rev()
+        .filter_map(|name| {
+            let text = std::fs::read_to_string(dir.join(&name)).ok()?;
+            Some(serde_json::json!({ "name": name, "text": text }))
+        })
+        .collect();
+    let email = EMAIL.lock().map(|e| e.clone()).unwrap_or_default();
+    let data = serde_json::json!({
+        "dir": dir.display().to_string(),
+        "reports": reports,
+        "email": email,
+        "issues": ISSUES,
+    });
+    // `</` would end the inline <script> early.
+    let json = data.to_string().replace("</", "<\\/");
+    Arc::from(TEMPLATE.replace("/*RT_DATA*/null", &json).into_bytes())
+}
 
 fn reports(data_dir: &Path) -> CrashReports {
     CrashReports::new(&data_dir.join("crashes"))
@@ -15,6 +55,7 @@ fn reports(data_dir: &Path) -> CrashReports {
 /// Write a report for any panic, then carry on as before (the default hook
 /// prints the panic). Called once, in the browser process.
 pub fn install_panic_hook(data_dir: &Path) {
+    let _ = DIR.set(data_dir.join("crashes"));
     let reports = reports(data_dir);
     let previous = std::panic::take_hook();
     thread_local! {
@@ -64,7 +105,7 @@ pub fn mention_last_report() {
         shell::show_message_after_load(
             Level::Error,
             format!(
-                "riptide crashed last time. The report is in {}",
+                "riptide crashed last time. :crash-report shows the report ({})",
                 path.display()
             ),
         );

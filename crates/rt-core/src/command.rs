@@ -543,6 +543,8 @@ pub enum Command {
     TabTake {
         target: String,
     },
+    /// Show the newest crash report, to send as a GitHub issue or by email.
+    CrashReport,
     /// Show the browsing history page, in a new tab with `tab`.
     History {
         tab: bool,
@@ -831,6 +833,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Go to a tab in any window: :tab-select <window/tab | text> (T)",
     ),
     spec("history", "Show the browsing history: :history [-t]"),
+    spec(
+        "crash-report",
+        "Show the newest crash report, to check and send as a GitHub issue or by email",
+    ),
     hidden("prompt-complete", "Complete the file path in the prompt"),
     spec(
         "selection-follow",
@@ -1710,6 +1716,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "selection-follow" => Command::SelectionFollow {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
+        "crash-report" => Command::CrashReport,
         "history" => Command::History {
             tab: args.flag(&["-t", "--tab"]).is_some(),
         },
