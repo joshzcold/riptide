@@ -869,9 +869,8 @@ So with Alloy, sharing one tab or one window isn't possible from the page side. 
     - An ordinary tab still gets riptide's prompt.
     - Zoom, search, DevTools and `:close` work in a call tab.
     - Popups and extra tabs in a call window work.
+  - ✅ (2026-10-06) `:tab-call` reopens the current tab in a call window. `content.call_sites` (URL patterns) sends matching pages to a call window from `:open` and from links in ordinary tabs; `on_before_browse` cancels the navigation and closes the tab if the call was all it held. Tests: `tab_call_reopens_the_tab_in_a_call_window`, `call_sites_open_in_a_call_window_from_open_and_from_links`.
   - **Not done yet:**
-    - A `content.desktop_capture.call_sites` setting that opens matching URLs as calls.
-    - `:tab-call`, which reopens the current tab in a call window.
     - Fullscreen, Chrome's accelerators and context menu, and keys while the picker is open, checked by hand on a real desktop.
 - **Fallbacks if call windows don't hold up:**
   - The desktop portal on Wayland: its dialog picks a window or screen, not a tab. Wayland can't be tested here yet.

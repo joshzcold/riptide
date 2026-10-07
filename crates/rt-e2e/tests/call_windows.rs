@@ -80,3 +80,59 @@ fn a_call_window_takes_more_tabs_and_popups() {
         s.window().call && s.tabs().len() == 2 && s.tab().is_loaded(&second)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_call_reopens_the_tab_in_a_call_window() {
+    let b = Browser::start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| {
+        s.tabs().len() == 2 && s.tab().is_loaded(&second)
+    });
+    b.run("tab-call");
+    let s = b.wait_until("the tab moved to a call window", |s| {
+        s.windows.len() == 2
+            && s.windows
+                .iter()
+                .any(|w| w.call && w.tabs.len() == 1 && w.tabs[0].url == second)
+    });
+    let first = s
+        .windows
+        .iter()
+        .find(|w| !w.call)
+        .expect("the first window");
+    assert_eq!(first.tabs.len(), 1, "{:?}", first.tabs);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn call_sites_open_in_a_call_window_from_open_and_from_links() {
+    let b = Browser::launch()
+        .toml("\"content.call_sites\" = [\"127.0.0.1/nav2.html\"]\n")
+        .start("nav1.html");
+    let nav1 = b.url("nav1.html");
+    let nav2 = b.url("nav2.html");
+    // A link in an ordinary tab: the call opens beside it, and the tab stays.
+    b.follow_hint("hint", |h| h.text.contains("next"));
+    let s = b.wait_until("nav2 opens in a call window", |s| {
+        s.windows.len() == 2 && s.windows.iter().any(|w| w.call && w.tabs[0].url == nav2)
+    });
+    let first = s
+        .windows
+        .iter()
+        .find(|w| !w.call)
+        .expect("the first window");
+    assert_eq!(first.tabs.len(), 1);
+    assert_eq!(first.tabs[0].url, nav1);
+    // :open -t too, without leaving an empty tab behind.
+    b.run("tab-select 1/1");
+    b.run(&format!("open -t {nav2}"));
+    b.wait_until("another call window", |s| {
+        s.windows.iter().filter(|w| w.call).count() == 2
+            && s.windows
+                .iter()
+                .filter(|w| !w.call)
+                .all(|w| w.tabs.len() == 1)
+    });
+}

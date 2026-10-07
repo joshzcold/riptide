@@ -781,6 +781,10 @@ pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
     } else {
         target
     };
+    // content.call_sites: calls get a call window whichever way they're opened.
+    if !matches!(target, OpenTarget::Private | OpenTarget::Call) && tabs::is_call_site(&url) {
+        return crate::window::create_call(url);
+    }
     match target {
         OpenTarget::Current => {
             if let Some(frame) = browser.and_then(|b| b.main_frame()) {

@@ -112,6 +112,12 @@ wrap_request_handler! {
             } else if let Some(browser) = browser
                 && frame.is_some_and(|f| f.is_main() != 0)
             {
+                // content.call_sites: a link to a call opens in a call window.
+                let chrome_style = browser.host().is_some_and(|h| h.runtime_style() == RuntimeStyle::CHROME);
+                if !chrome_style && crate::tabs::is_call_site(&url) {
+                    crate::tabs::open_as_call(browser.identifier(), url);
+                    return 1;
+                }
                 crate::content::before_navigation(browser, &url);
             }
             blocked.into()

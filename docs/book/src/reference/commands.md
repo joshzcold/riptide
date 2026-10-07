@@ -26,6 +26,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-only` | `co` | Close all tabs except the current one |
 | `:tab-clone` |  | Duplicate the current tab: :tab-clone [-b] [-w] |
 | `:tab-give` | `gD` | Move the current tab to window N, or to a new window: :tab-give [N] |
+| `:tab-call` |  | Reopen the current tab in a call window, where screen sharing picks a tab, window or screen |
 | `:tab-take` |  | Move a tab from another window here: :tab-take &lt;window/tab&gt; |
 | `:undo` | `<Ctrl-T>` `u` | Re-open the last closed tab |
 | `:hint` | `;I` `;O` `;b` `;d` `;f` `;h` `;i` `;o` `;r` `;t` `;y` `F` `f` | Label elements to follow: [--rapid] [group] [target] [fill text] |

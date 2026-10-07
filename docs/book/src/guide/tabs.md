@@ -48,6 +48,12 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 :open --call https://meet.google.com/abc-defg-hij
 ```
 
+`:tab-call` reopens the current tab in a call window. To have calls always open that way, list their sites in `content.call_sites`. Then `:open`, and links in ordinary tabs, send them to a call window:
+
+```lua
+c.content.call_sites = { "meet.google.com", "*.zoom.us", "teams.microsoft.com" }
+```
+
 - **Only the first tab:** only the tab a call window opened with shares this way. Further tabs you open in that window are ordinary ones.
 - **Popups:** popups from the call tab open in call windows of their own.
 - **The picker's Tab list** only offers call tabs, not riptide's ordinary tabs.

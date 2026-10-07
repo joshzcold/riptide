@@ -537,6 +537,8 @@ pub enum Command {
     TabGive {
         window: Option<usize>,
     },
+    /// Reopen the current tab in a call window.
+    TabCall,
     /// Move tab `window/tab` from another window into this one.
     TabTake {
         target: String,
@@ -695,6 +697,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "tab-give",
         "Move the current tab to window N, or to a new window: :tab-give [N]",
+    ),
+    spec(
+        "tab-call",
+        "Reopen the current tab in a call window, where screen sharing picks a tab, window or screen",
     ),
     spec(
         "tab-take",
@@ -1237,6 +1243,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
             Command::TabClone { background, window }
         }
+        "tab-call" => Command::TabCall,
         "tab-give" => Command::TabGive {
             window: match args.optional() {
                 None => None,

@@ -75,6 +75,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.blocking.enabled` | boolean | `true` | Block ads and trackers with the filter lists from content.blocking.adblock.lists |
 | `content.blocking.whitelist` | string[] | `[]` | Sites where nothing is blocked, as host names; a host also covers its subdomains |
 | `content.cache.size` | integer | `0` | Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart) |
+| `content.call_sites` | string[] | `[]` | URL patterns (e.g. meet.google.com) whose pages open in a call window, where screen sharing picks a tab, window or screen |
 | `content.canvas_reading` | boolean | `true` | Let pages read back what they drew on a canvas; false blocks a common fingerprinting trick but breaks some sites (after a restart) |
 | `content.cookies.accept` | all \| no-3rdparty \| no-unknown-3rdparty \| never | `all` | Which cookies sites may set: all, none from other sites (no-3rdparty; no-unknown-3rdparty is the same here), or never |
 | `content.cookies.store` | boolean | `true` | Keep cookies after the browser closes; false makes every cookie last only for the session |

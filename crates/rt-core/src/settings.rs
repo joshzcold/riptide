@@ -998,6 +998,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart)"
     ),
     def!(
+        "content.call_sites",
+        Kind::List,
+        Value::List(Vec::new()),
+        "URL patterns (e.g. meet.google.com) whose pages open in a call window, where screen sharing picks a tab, window or screen"
+    ),
+    def!(
         "content.canvas_reading",
         Kind::Bool,
         Value::Bool(true),

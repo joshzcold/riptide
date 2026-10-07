@@ -18,6 +18,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         Command::TabSelect { target } => select_tab(target),
         Command::TabClone { background, window } => clone_tab(*background, *window),
         Command::TabGive { window } => give_tab(*window),
+        Command::TabCall => call_tab(),
         Command::TabTake { target } => take_tab(target),
         Command::TabNext => focus_offset(n),
         Command::TabPrev => focus_offset(-n),
@@ -790,6 +791,78 @@ fn close_moved(index: usize) {
         }
     } else {
         close(index);
+    }
+}
+
+/// `:tab-call`: CEF fixes a tab's style when it's created, so the page is
+/// reopened in a call window and the tab closed.
+fn call_tab() {
+    let Some((url, private)) = current_url() else {
+        return;
+    };
+    let already = shell::with(|s| s.call && s.tabs.current_index() == 0).unwrap_or(false);
+    if already {
+        return shell::show_message(Level::Info, "This tab is already a call window's tab");
+    }
+    if private {
+        return shell::show_message(Level::Error, "Call windows can't be private");
+    }
+    let Some(index) = shell::with(|s| s.tabs.current_index()) else {
+        return;
+    };
+    let source = shell::with(|s| s.active).unwrap_or(0);
+    crate::window::create_call(url);
+    shell::with(|s| s.active = source);
+    close_moved(index);
+    shell::refresh_ui();
+}
+
+/// `content.call_sites`: whether `url` should open in a call window.
+pub fn is_call_site(url: &str) -> bool {
+    shell::with(|s| {
+        s.engine
+            .settings()
+            .list("content.call_sites")
+            .iter()
+            .any(|pattern| rt_core::url::pattern_matches(pattern, url))
+    })
+    .unwrap_or(false)
+}
+
+/// A page in an ordinary tab is navigating to a call site: open it in a
+/// call window instead, and close the tab if that page was all it was for.
+pub fn open_as_call(browser: i32, url: String) {
+    let mut task = OpenAsCall::new(browser, url);
+    post_task(ThreadId::UI, Some(&mut task));
+}
+
+wrap_task! {
+    struct OpenAsCall {
+        browser: i32,
+        url: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let empty = shell::with(|s| {
+                let (window, index) = s.windows.iter().enumerate().find_map(|(w, state)| {
+                    let index = state.tabs.iter().position(|t| t.browser().is_some_and(|b| b.identifier() == self.browser))?;
+                    Some((w, index))
+                })?;
+                let url = &s.windows[window].tabs.get(index)?.url;
+                Some((window, index, url.is_empty() || url == "about:blank" || *url == self.url))
+            })
+            .flatten();
+            crate::window::create_call(self.url.clone());
+            if let Some((window, index, true)) = empty {
+                let source = shell::with(|s| std::mem::replace(&mut s.active, window));
+                close_moved(index);
+                if let Some(source) = source {
+                    shell::with(|s| s.active = source.min(s.windows.len().saturating_sub(1)));
+                }
+            }
+            shell::refresh_ui();
+        }
     }
 }
 
