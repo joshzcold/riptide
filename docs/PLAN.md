@@ -679,7 +679,7 @@ On 2026-10-05 I compared qutebrowser's own lists with ours: its 172 commands (`d
     - **Ranking:** the exact name, then names starting with the text, then names with a part starting with it (after `.`, `-`, `_`, space or `/`), then anywhere. Within a group, items keep their registry order, so `Tab` and `completion.use_best_match` stay predictable.
     - Sessions, quickmarks, bookmarks, tabs and history already matched every typed word anywhere. A command or setting name is a single word on the command line, so multi-word matching doesn't apply to it.
     - **Highlight:** the popup marks the typed words in every item's name and description, in all categories (`colors.completion.match.fg`; the selected row underlines instead).
-    - **Not done:** skipped letters (`clrhnt` → `colors.hints`) with a scored matcher such as `nucleo`. Revisit if substring matching isn't enough. Short text now matches more: `:sc` also offers `fullscreen`, last.
+    - ✅ (2026-10-07) Skipped letters (`clrhnt` → `colors.hints`): `completion::rank`'s last tier scores in-order letters by gaps and part starts, from three letters, and only when no name contains the text (`ranked`, `sort_commands`), so short text lists the same names as before. No `nucleo` dependency needed. Revisit if substring matching isn't enough. Short text now matches more: `:sc` also offers `fullscreen`, last.
     - **Tests:** unit tests for `rank`, `:set`, commands, values, themes and the highlighted words; the e2e test `set_completes_settings_that_contain_the_text_and_marks_it`.
 - **Hints:**
   - ✅ Tier 1 (2026-10-05):

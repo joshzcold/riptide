@@ -258,3 +258,19 @@ fn open_completion_shows_each_sites_icon_and_history_keeps_it() {
     );
     b.keys("<Escape>");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn set_completes_from_letters_with_gaps_when_nothing_contains_them() {
+    let b = Browser::start("page.html");
+    b.keys(":set clrhnt");
+    let s = b.wait_until("colors.hints settings are offered", |s| {
+        items(s).iter().any(|(_, n)| n.starts_with("colors.hints."))
+    });
+    assert!(
+        items(&s).iter().all(|(_, n)| n.starts_with("colors.")),
+        "{:?}",
+        items(&s)
+    );
+    b.keys("<Escape>");
+}

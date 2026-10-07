@@ -50,8 +50,9 @@ pub struct CompletionView {
 }
 
 /// How well `name` matches `typed`, best first: the whole name, its start,
-/// the start of one of its parts (`hints` in `colors.hints.bg`), or anywhere.
-/// `None` if it doesn't contain `typed`. Case doesn't matter.
+/// the start of one of its parts (`hints` in `colors.hints.bg`), anywhere,
+/// and last its letters in order with gaps (`clrhnt` in `colors.hints`).
+/// `None` if none of these. Case doesn't matter.
 pub fn rank(name: &str, typed: &str) -> Option<u8> {
     let name = name.to_lowercase();
     let typed = typed.to_lowercase();
@@ -67,7 +68,38 @@ pub fn rank(name: &str, typed: &str) -> Option<u8> {
     if part_starts {
         return Some(2);
     }
-    name.contains(&typed).then_some(3)
+    if name.contains(&typed) {
+        return Some(CONTAINS);
+    }
+    skipped_letters(&name, &typed).map(|score| 4 + score.min(200) as u8)
+}
+
+/// [`rank`] for a name that contains the text; worse ranks only match letters.
+const CONTAINS: u8 = 3;
+
+/// `typed`'s letters in `name` in order, with gaps: a score, lower is
+/// better, from the gaps and how many letters start a part of the name.
+/// Only from three letters, so short text doesn't match nearly everything.
+fn skipped_letters(name: &str, typed: &str) -> Option<usize> {
+    if typed.chars().count() < 3 {
+        return None;
+    }
+    let name: Vec<char> = name.chars().collect();
+    let starts_part = |i: usize| i == 0 || matches!(name[i - 1], '.' | '-' | '_' | ' ' | '/');
+    let (mut at, mut gaps, mut part_starts): (usize, usize, usize) = (0, 0, 0);
+    let mut last: Option<usize> = None;
+    for wanted in typed.chars() {
+        let found = name[at..].iter().position(|&c| c == wanted)? + at;
+        if last.is_some_and(|l| found != l + 1) {
+            gaps += 1;
+        }
+        if starts_part(found) {
+            part_starts += 1;
+        }
+        last = Some(found);
+        at = found + 1;
+    }
+    Some((2 * gaps).saturating_sub(part_starts))
 }
 
 /// The items whose name contains `typed`, best matches first and otherwise
@@ -77,14 +109,22 @@ fn ranked<T>(items: impl IntoIterator<Item = T>, typed: &str, name: impl Fn(&T) 
         .into_iter()
         .filter_map(|item| Some((rank(name(&item), typed)?, item)))
         .collect();
+    // Skipped-letter matches only when nothing contains the text.
+    if ranked.iter().any(|(rank, _)| *rank <= CONTAINS) {
+        ranked.retain(|(rank, _)| *rank <= CONTAINS);
+    }
     ranked.sort_by_key(|(rank, _)| *rank);
     ranked.into_iter().map(|(_, item)| item).collect()
 }
 
 /// Put command completions in [`rank`] order, e.g. after adding commands
 /// from config.lua to the built-in ones.
-pub fn sort_commands(items: &mut [Completion], typed: &str) {
-    items.sort_by_key(|item| rank(&item.name, typed).unwrap_or(u8::MAX));
+pub fn sort_commands(items: &mut Vec<Completion>, typed: &str) {
+    let ranks = |item: &Completion| rank(&item.name, typed).unwrap_or(u8::MAX);
+    if items.iter().any(|item| ranks(item) <= CONTAINS) {
+        items.retain(|item| ranks(item) <= CONTAINS);
+    }
+    items.sort_by_key(ranks);
 }
 
 /// The words of `text` that items are matched against: the command name
@@ -294,6 +334,22 @@ pub fn insert(base: &str, item: &Completion) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn skipped_letters_match_last_and_closer_first() {
+        assert_eq!(rank("colors.hints.bg", "hints"), Some(2));
+        assert!(rank("colors.hints.bg", "clrhnt").is_some_and(|r| r >= 4));
+        assert!(rank("colors.hints.bg", "xyz").is_none());
+        // Two letters don't match out of order or with gaps.
+        assert!(rank("colors.hints.bg", "cb").is_none());
+        // Letters at part starts and fewer gaps rank higher.
+        let tight = rank("ab_cd", "abcd").unwrap();
+        let loose = rank("axbxcxd", "abcd").unwrap();
+        assert!(tight < loose, "{tight} {loose}");
+        let names = ["zoom.levels", "colors.hints.bg", "hints.chars"];
+        let found = ranked(names, "hntch", |n| n);
+        assert_eq!(found, ["hints.chars"]);
+    }
+
     fn item(category: &'static str, name: &str) -> Completion {
         Completion {
             icon: None,
@@ -351,7 +407,8 @@ mod tests {
         assert_eq!(rank("colors.hints.bg", "hints"), Some(2));
         assert_eq!(rank("tab-close", "close"), Some(2));
         assert_eq!(rank("fullscreen", "scr"), Some(3));
-        assert_eq!(rank("colors.hints.bg", "hnt"), None);
+        assert!(rank("colors.hints.bg", "hnt").is_some_and(|r| r > CONTAINS));
+        assert_eq!(rank("colors.hints.bg", "hn"), None);
     }
 
     #[test]
