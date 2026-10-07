@@ -565,11 +565,14 @@ wrap_load_handler! {
             shell::apply(effects.unwrap_or_default());
         }
 
-        fn on_load_start(&self, _browser: Option<&mut Browser>, frame: Option<&mut Frame>, _transition_type: TransitionType) {
+        fn on_load_start(&self, browser: Option<&mut Browser>, frame: Option<&mut Frame>, _transition_type: TransitionType) {
             if self.role == Role::Tab
                 && let Some(frame) = frame.filter(|f| f.is_main() != 0)
             {
                 crate::userstyle::inject(frame);
+                if let Some(browser) = browser {
+                    crate::adblock::reset_blocked(browser.identifier());
+                }
             }
         }
 

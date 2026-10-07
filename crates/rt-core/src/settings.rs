@@ -234,6 +234,7 @@ pub const CALL_SITES: &[&str] = &[
 pub const STATUSBAR_WIDGETS: &[&str] = &[
     "keypress",
     "downloads",
+    "blocked",
     "muted",
     "media",
     "zoom",
@@ -1794,6 +1795,7 @@ pub static SETTINGS: &[SettingDef] = &[
             [
                 "keypress",
                 "downloads",
+                "blocked",
                 "muted",
                 "media",
                 "zoom",
@@ -1807,7 +1809,7 @@ pub static SETTINGS: &[SettingDef] = &[
             .map(String::from)
             .to_vec()
         ),
-        "What the right side of the status bar shows, in order: keypress, downloads, muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
+        "What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
         statusbar_widgets
     ),
     def!(

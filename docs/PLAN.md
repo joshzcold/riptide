@@ -300,6 +300,8 @@ Gaps:
 - TLS errors have no override.
 
 ### M8 — Content blocking & privacy
+
+- ✅ (2026-10-07) A blocked count in the status bar: `adblock::count_blocked` on the IO thread, per browser id, reset at each main-frame load start, shown by the `blocked` widget (`⊘12`, on by default); one redraw per burst. e2e test `the_status_bar_counts_blocked_requests_per_page`.
 - ✅ **adblock-rust via `OnBeforeResourceLoad`** (2026-10-02). The new `rt-adblock` crate (CEF-free, unit tested) uses `adblock` 0.13 without its `single-thread` feature, so the engine is `Send + Sync` for CEF's IO thread.
   - EasyList and EasyPrivacy (135k rules) compile in ~56 ms (release) into a ~6 MB cache that loads in ~18 ms. A check takes ~1.5 µs.
   - `:adblock-update` downloads through `CefURLRequest`, so there's no HTTP client dependency, and `file://` lists work. It compiles on a worker thread.
@@ -307,7 +309,7 @@ Gaps:
   - Top-level navigations are never blocked. The smoke test serves a page on 127.0.0.1 and checks that a listed script is cancelled while another loads.
   - ✅ Cosmetic filtering (2026-10-02): after `on_load_end` the main frame gets a `<style>` with `url_cosmetic_resources` hide selectors (one rule per selector, so an invalid one can't void the rest). Unless the site has `generichide`, it also gets `hidden_class_id_selectors` for the page's classes and ids. Covered by unit tests and a smoke step.
   - Content added later is re-checked 2 s and 6 s after the load; the style skips rules it already has.
-  - Not done: continuous re-checking (a MutationObserver would need a page-to-browser channel for web pages), subframes, procedural filters, scriptlets and `$redirect` resources, a blocked count in the status bar, automatic list updates, and qutebrowser's hosts-file method.
+  - Not done: continuous re-checking (a MutationObserver would need a page-to-browser channel for web pages), subframes, procedural filters, scriptlets and `$redirect` resources, automatic list updates, and qutebrowser's hosts-file method.
 - ✅ **Per-domain settings** (2026-10-02):
   - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
   - `rt_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.

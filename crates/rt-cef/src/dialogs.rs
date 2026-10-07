@@ -227,6 +227,7 @@ wrap_resource_request_handler! {
                 .map(|f| CefString::from(&f.url()).to_string())
                 .unwrap_or_default();
             if crate::adblock::should_block(&url, &page, request.resource_type()) {
+                crate::adblock::count_blocked(browser.identifier());
                 ReturnValue::CANCEL
             } else {
                 crate::content::before_request(request);

@@ -1131,6 +1131,9 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         "zoom": current.map_or(100, |t| t.zoom),
         "muted": current.is_some_and(|t| t.muted),
         "media": current.map_or("", |t| rt_core::title::media_label(t.media).trim_end()),
+        "blocked": current
+            .and_then(|t| t.browser())
+            .map_or(0, |b| crate::adblock::blocked(b.identifier())),
         "widgets": s.engine.settings().list("statusbar.widgets"),
         "back": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_back, |h| h.can_go_back())),
         "forward": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_forward, |h| h.can_go_forward())),

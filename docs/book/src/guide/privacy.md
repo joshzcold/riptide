@@ -2,7 +2,7 @@
 
 ## Content blocking
 
-Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (EasyList and EasyPrivacy by default; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup.
+Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (EasyList and EasyPrivacy by default; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup. The status bar shows how many requests were blocked on the current page, e.g. `⊘12` (the `blocked` widget in `statusbar.widgets`).
 
 - `content.blocking.enabled` turns blocking on or off.
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).

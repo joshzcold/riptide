@@ -190,7 +190,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `statusbar.padding` | string | `0 4px` | Space around the status bar's text, as CSS padding (top right bottom left), e.g. 2px 8px; the bar grows to fit |
 | `statusbar.position` | top \| bottom | `bottom` | Where the status bar is |
 | `statusbar.show` | always \| never \| in-mode | `always` | When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode) |
-| `statusbar.widgets` | string[] | `["keypress","downloads","muted","media","zoom","search_match","url","scroll","history","tabs","progress"]` | What the right side of the status bar shows, in order: keypress, downloads, muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:… |
+| `statusbar.widgets` | string[] | `["keypress","downloads","blocked","muted","media","zoom","search_match","url","scroll","history","tabs","progress"]` | What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:… |
 | `tabs.close_mouse_button` | middle \| right \| none | `middle` | Which mouse button closes a tab clicked in the tab bar |
 | `tabs.close_mouse_button_on_bar` | new-tab \| close-current \| close-last \| ignore | `new-tab` | What tabs.close_mouse_button does on the empty part of the tab bar |
 | `tabs.favicons.show` | always \| never \| pinned | `always` | Show site icons in the tab bar: always, never, or only on pinned tabs |

@@ -45,3 +45,32 @@ fn nothing_is_blocked_without_filter_lists() {
     let b = Browser::start("adblock.html");
     b.wait_eval("document.title", "ads b=yes a=yes");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_status_bar_counts_blocked_requests_per_page() {
+    let b = with_filters();
+    b.open("adblock.html");
+    b.wait_eval("document.title", "ads b=no a=yes");
+    let bar = |b: &Browser| b.eval_bar("statusbar", "document.body.innerText");
+    let start = std::time::Instant::now();
+    while !bar(&b).contains("⊘1") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "no count in {:?}",
+            bar(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // A new page starts from nothing.
+    b.open("page.html");
+    let start = std::time::Instant::now();
+    while bar(&b).contains('⊘') {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the count stayed: {:?}",
+            bar(&b)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

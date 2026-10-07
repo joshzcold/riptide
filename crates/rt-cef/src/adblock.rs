@@ -92,6 +92,50 @@ fn blocker_for(page: &str) -> Option<Arc<Blocker>> {
     state.blocker.clone()
 }
 
+/// Requests blocked on each tab's current page, by browser id. Counted on the
+/// IO thread, shown by the `blocked` status bar widget.
+static BLOCKED: std::sync::Mutex<std::collections::BTreeMap<i32, u32>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+/// A status bar redraw is already on its way, so a burst of blocks makes one.
+static REDRAW_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// One more request blocked on `browser`'s page (any thread).
+pub fn count_blocked(browser: i32) {
+    if let Ok(mut blocked) = BLOCKED.lock() {
+        *blocked.entry(browser).or_default() += 1;
+    }
+    if !REDRAW_PENDING.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        let mut task = RedrawBlocked::new();
+        post_delayed_task(ThreadId::UI, Some(&mut task), 250);
+    }
+}
+
+/// A new page started loading in `browser`, or the tab closed.
+pub fn reset_blocked(browser: i32) {
+    if let Ok(mut blocked) = BLOCKED.lock() {
+        blocked.remove(&browser);
+    }
+}
+
+/// How many requests were blocked on `browser`'s page.
+pub fn blocked(browser: i32) -> u32 {
+    BLOCKED
+        .lock()
+        .map(|b| b.get(&browser).copied().unwrap_or(0))
+        .unwrap_or(0)
+}
+
+wrap_task! {
+    struct RedrawBlocked {}
+
+    impl Task {
+        fn execute(&self) {
+            REDRAW_PENDING.store(false, std::sync::atomic::Ordering::Relaxed);
+            shell::refresh_ui();
+        }
+    }
+}
+
 pub fn should_block(url: &str, page: &str, resource: ResourceType) -> bool {
     let Some(kind) = kind(resource) else {
         return false;
