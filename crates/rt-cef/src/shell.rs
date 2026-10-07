@@ -981,6 +981,14 @@ struct BarsChange {
 /// Push engine and tab state to the tab bar, status bar and completion overlay.
 /// Unchanged state is skipped, so this is cheap to call after every event.
 pub fn refresh_ui() {
+    // Questions belong to their tab: the current tab's show, others wait.
+    if let Some(effects) = with(|s| {
+        let tab = s.current_browser().map(|b| b.identifier());
+        s.engine.set_current_tab(tab)
+    }) && !effects.is_empty()
+    {
+        apply(effects);
+    }
     let Some(updates) = with(|s| {
         crate::tabs::remember_open_tabs(s);
         let focused = s.active;
@@ -1146,6 +1154,8 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
         settings.str("tabs.title.format"),
         settings.str("tabs.title.format_pinned"),
     );
+    // Tabs with a question waiting, marked so it isn't forgotten.
+    let asking = s.engine.tabs_asking();
     let tabs: Vec<_> = s
         .tabs
         .iter()
@@ -1179,6 +1189,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
                 "error": t.load_error,
                 "pinned": pinned,
                 "favicon": if show_icon { t.favicon.as_deref() } else { None },
+                "asking": t.browser().is_some_and(|b| asking.contains(&b.identifier())),
             })
         })
         .collect();
@@ -1591,6 +1602,13 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     let message_rows = lines(&prompt.message);
     let input_row = usize::from(prompt.kind == "text");
     let text_rows = 1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row;
+    // A permission request draws the site large and what it wants as chips
+    // (two rows each when floating), then what "always" keeps.
+    let text_rows = match (&prompt.site, floating_prompt_box(s)) {
+        (Some(_), Some(_)) => 1 + 2 + 2 + prompt.always.as_deref().map_or(0, lines),
+        (Some(_), None) => 2,
+        (None, _) => text_rows,
+    };
     match floating_prompt_box(s) {
         // One button per option instead of the one-line hint.
         Some(_) => text_rows + prompt.options.len(),

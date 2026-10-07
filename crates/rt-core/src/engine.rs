@@ -133,6 +133,8 @@ pub struct Engine {
     prompt_editor: LineEditor,
     /// The mode to return to once the prompt queue is empty.
     mode_before_prompt: Mode,
+    /// The current tab, whose questions (and riptide's own) are the ones shown.
+    current_tab: Option<i32>,
     dirty: bool,
     macros: Macros,
     /// Commands defined in `config.lua`, as `(name, description)`.
@@ -221,6 +223,7 @@ impl Engine {
             prompts: VecDeque::new(),
             prompt_editor: LineEditor::default(),
             mode_before_prompt: Mode::Normal,
+            current_tab: None,
             dirty: true,
             macros: Macros::default(),
             message_log: VecDeque::new(),
@@ -413,7 +416,7 @@ impl Engine {
 
     fn path_prompt(&self) -> bool {
         matches!(
-            self.prompts.front().map(|p| &p.kind),
+            self.active_prompt().map(|p| &p.kind),
             Some(PromptKind::Text { path: true, .. })
         )
     }
@@ -532,12 +535,30 @@ impl Engine {
         Some(format!("{found} {rest}").trim_end().to_string())
     }
 
-    /// Queue a question; it shows once the ones before it are answered.
+    /// Where the question shown now is in the queue: the first one asked by
+    /// the current tab or by riptide itself.
+    fn active_index(&self) -> Option<usize> {
+        self.prompts
+            .iter()
+            .position(|p| p.tab.is_none() || p.tab == self.current_tab)
+    }
+
+    fn active_prompt(&self) -> Option<&Prompt> {
+        self.prompts.get(self.active_index()?)
+    }
+
+    /// Tabs (browser ids) with a question waiting, for the tab bar.
+    pub fn tabs_asking(&self) -> Vec<i32> {
+        self.prompts.iter().filter_map(|p| p.tab).collect()
+    }
+
+    /// Queue a question; it shows once the ones before it are answered, and
+    /// only while its tab is current.
     pub fn push_prompt(&mut self, prompt: Prompt) -> Vec<Effect> {
         let mut effects = Vec::new();
         self.prompts.push_back(prompt);
         self.dirty = true;
-        if self.prompts.len() == 1 {
+        if !matches!(self.mode, Mode::Prompt | Mode::YesNo) && self.active_index().is_some() {
             self.activate_prompt(&mut effects);
         }
         effects
@@ -546,7 +567,7 @@ impl Engine {
     /// Withdraw a prompt that no longer applies (its tab closed or navigated).
     pub fn cancel_prompt(&mut self, id: u64) -> Vec<Effect> {
         let mut effects = Vec::new();
-        let was_active = self.prompts.front().is_some_and(|p| p.id == id);
+        let was_active = self.active_prompt().is_some_and(|p| p.id == id);
         self.prompts.retain(|p| p.id != id);
         self.dirty = true;
         if was_active {
@@ -555,8 +576,23 @@ impl Engine {
         effects
     }
 
+    /// The current tab changed: its waiting question shows, and another
+    /// tab's goes back to waiting.
+    pub fn set_current_tab(&mut self, tab: Option<i32>) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        if tab == self.current_tab {
+            return effects;
+        }
+        let before = self.active_prompt().map(|p| p.id);
+        self.current_tab = tab;
+        if self.active_prompt().map(|p| p.id) != before {
+            self.activate_prompt(&mut effects);
+        }
+        effects
+    }
+
     pub fn prompt_view(&self) -> Option<PromptView> {
-        let prompt = self.prompts.front()?;
+        let prompt = self.active_prompt()?;
         let (kind, input) = match &prompt.kind {
             PromptKind::Text { masked: true, .. } => (
                 "text",
@@ -575,15 +611,37 @@ impl Engine {
             cursor: self.prompt_editor.cursor(),
             hint: prompt.hint(),
             options: prompt.options(),
-            queued: self.prompts.len() - 1,
+            queued: self
+                .prompts
+                .iter()
+                .filter(|p| p.id != prompt.id && (p.tab.is_none() || p.tab == self.current_tab))
+                .count(),
+            site: prompt.site.clone(),
+            asks: prompt.asks.clone(),
+            always: match (&prompt.kind, &prompt.site) {
+                (PromptKind::YesNo { remember, .. }, Some(site))
+                    if *remember != crate::prompt::Remember::Never =>
+                {
+                    let host = site
+                        .split_once("://")
+                        .map_or(site.as_str(), |(_, h)| h)
+                        .trim_end_matches('/');
+                    Some(format!(
+                        "A and N keep the answer for {host} (autoconfig.toml); :settings → Sites forgets it."
+                    ))
+                }
+                _ => None,
+            },
         })
     }
 
     /// Show the front of the queue, or go back to the earlier mode if empty.
     fn activate_prompt(&mut self, effects: &mut Vec<Effect>) {
-        let Some(prompt) = self.prompts.front() else {
-            let mode = self.mode_before_prompt;
-            self.set_mode(mode, effects);
+        let Some(prompt) = self.active_prompt() else {
+            if matches!(self.mode, Mode::Prompt | Mode::YesNo) {
+                let mode = self.mode_before_prompt;
+                self.set_mode(mode, effects);
+            }
             return;
         };
         let (mode, text) = match &prompt.kind {
@@ -602,7 +660,7 @@ impl Engine {
     }
 
     fn answer_prompt(&mut self, answer: PromptAnswer, effects: &mut Vec<Effect>) {
-        let Some(prompt) = self.prompts.pop_front() else {
+        let Some(prompt) = self.active_index().and_then(|i| self.prompts.remove(i)) else {
             return;
         };
         effects.push(Effect::PromptAnswered {
@@ -613,7 +671,7 @@ impl Engine {
     }
 
     fn accept_prompt(&mut self, value: Option<bool>, save: bool, effects: &mut Vec<Effect>) {
-        let Some(prompt) = self.prompts.front() else {
+        let Some(prompt) = self.active_prompt() else {
             return;
         };
         let answer = match prompt.kind {
@@ -1307,7 +1365,7 @@ impl Engine {
                 self.show_message(Level::Error, "This prompt doesn't ask for a file");
             }
             Command::PromptYank { primary } => {
-                let text = match self.prompts.front() {
+                let text = match self.active_prompt() {
                     Some(prompt) => prompt.url.clone().or_else(|| {
                         matches!(prompt.kind, PromptKind::Text { masked: false, .. })
                             .then(|| self.prompt_editor.text().to_string())
@@ -1322,7 +1380,7 @@ impl Engine {
                 }
             }
             Command::PromptOpenDownload { command } => {
-                if self.prompts.front().is_some_and(|p| p.download) {
+                if self.active_prompt().is_some_and(|p| p.download) {
                     self.answer_prompt(PromptAnswer::OpenDownload { command }, effects);
                 } else {
                     self.show_message(Level::Error, "This prompt isn't about a download");
@@ -1330,7 +1388,7 @@ impl Engine {
             }
             Command::PromptComplete => {
                 let path = matches!(
-                    self.prompts.front().map(|p| &p.kind),
+                    self.active_prompt().map(|p| &p.kind),
                     Some(PromptKind::Text { path: true, .. })
                 );
                 let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
@@ -3286,6 +3344,9 @@ mod tests {
             topic: crate::prompt::Topic::Dialog,
             url: None,
             download: false,
+            tab: None,
+            site: None,
+            asks: Vec::new(),
         }
     }
 
@@ -3297,6 +3358,42 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn questions_show_only_while_their_tab_is_current() {
+        let mut e = engine();
+        e.set_current_tab(Some(2));
+        let yes_no = PromptKind::YesNo {
+            default: false,
+            remember: crate::prompt::Remember::Never,
+        };
+        // Tab 1 asks while tab 2 is in front: it waits, marked.
+        let mut asked = prompt(7, yes_no.clone());
+        asked.tab = Some(1);
+        e.push_prompt(asked);
+        assert_eq!(e.mode(), Mode::Normal);
+        assert!(e.prompt_view().is_none());
+        assert_eq!(e.tabs_asking(), vec![1]);
+        // Going to tab 1 shows it; leaving puts it back.
+        e.set_current_tab(Some(1));
+        assert_eq!(e.mode(), Mode::YesNo);
+        assert!(e.prompt_view().is_some());
+        e.set_current_tab(Some(2));
+        assert_eq!(e.mode(), Mode::Normal);
+        assert_eq!(e.tabs_asking(), vec![1]);
+        // riptide's own questions show anywhere.
+        e.push_prompt(prompt(8, yes_no));
+        assert_eq!(e.mode(), Mode::YesNo);
+        assert_eq!(e.prompt_view().map(|p| p.queued), Some(0));
+        let answered = answers(&press(&mut e, "y"));
+        assert_eq!(answered.first().map(|(id, _)| *id), Some(8));
+        assert_eq!(e.mode(), Mode::Normal);
+        e.set_current_tab(Some(1));
+        assert_eq!(e.mode(), Mode::YesNo);
+        let answered = answers(&press(&mut e, "n"));
+        assert_eq!(answered.first().map(|(id, _)| *id), Some(7));
+        assert!(e.tabs_asking().is_empty());
     }
 
     #[test]

@@ -68,6 +68,14 @@ pub struct Prompt {
     pub url: Option<String>,
     /// A download's save prompt, which `prompt-open-download` can answer.
     pub download: bool,
+    /// The tab that asked (its browser id): the question shows only while
+    /// that tab is current. `None` for riptide's own, which show anywhere.
+    pub tab: Option<i32>,
+    /// For a permission question: the asking site's origin, shown large so a
+    /// look-alike stands out.
+    pub site: Option<String>,
+    /// For a permission question: what the site wants.
+    pub asks: Vec<crate::permissions::Ask>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,6 +114,11 @@ pub struct PromptView {
     pub options: Vec<PromptOption>,
     /// How many more prompts are waiting.
     pub queued: usize,
+    /// [`Prompt::site`] and [`Prompt::asks`].
+    pub site: Option<String>,
+    pub asks: Vec<crate::permissions::Ask>,
+    /// What answering "always" does, for questions whose answer can be kept.
+    pub always: Option<String>,
 }
 
 /// One way to answer a prompt: a key, and what it does.

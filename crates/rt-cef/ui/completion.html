@@ -93,6 +93,16 @@
     border: 1px solid var(--selected-bg);
   }
   .command-input { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); white-space: pre; background: var(--header-bg); font: var(--font-prompt); }
+  .prompt-site { font: var(--font-prompt); font-size: 1.45em; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; }
+  .prompt-site .scheme { opacity: .6; font-weight: normal; }
+  .prompt-asks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 4px; min-height: calc(var(--row-height) * 1.6); font: var(--font-prompt); }
+  .prompt-asks .wants { opacity: .75; }
+  .ask { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px 1px 6px; border-radius: 999px; background: var(--prompt-key-bg); color: var(--prompt-accent); font-weight: bold; }
+  .ask svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .prompt-always { margin-top: 4px; padding: 0 4px; font: var(--font-prompt); font-size: .85em; opacity: .7; line-height: var(--row-height); }
+  /* Docked: the site and its asks on one line. */
+  body:not(.floating) .prompt-site { display: inline; font-size: 1em; }
+  body:not(.floating) .prompt-asks { display: inline-flex; min-height: 0; padding: 0 0 0 6px; }
   .prompt-options { margin-top: 8px; display: flex; flex-direction: column; }
   .prompt-option {
     all: unset;
@@ -127,9 +137,46 @@
     return el;
   }
 
+  // Icons for what a site asks for, drawn with the text color.
+  const ASK_ICONS = {
+    camera: '<rect x="2" y="7" width="14" height="10" rx="2"/><path d="M16 11l6-3v8l-6-3z"/>',
+    microphone: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+    location: '<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    notifications: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    screen: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    clipboard: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/>',
+    pointer: '<path d="M5 3l14 7-6 2-2 6z"/>',
+    keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M7 14h10"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    download: '<path d="M12 4v11M7 10l5 5 5-5M5 19h14"/>',
+    files: '<path d="M4 4h6l2 2h8v14H4z"/>',
+    other: '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h0"/>',
+  };
+  function askChip(ask) {
+    const chip = div("ask");
+    chip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ASK_ICONS[ask.icon] || ASK_ICONS.other}</svg>`;
+    chip.append(ask.name);
+    return chip;
+  }
+  // The asking site, with its host in bold: a look-alike name stands out.
+  function siteLine(site) {
+    const line = div("prompt-site");
+    const [scheme, rest] = site.includes("://") ? site.split("://") : ["", site];
+    if (scheme) line.append(Object.assign(document.createElement("span"), { className: "scheme", textContent: `${scheme}://` }));
+    line.append(Object.assign(document.createElement("b"), { textContent: rest }));
+    return line;
+  }
+
   function renderPrompt(list, p, floating) {
     const title = p.queued ? `${p.title}  (${p.queued} more waiting)` : p.title;
-    const parts = [div("header", title), div("prompt-message", p.message)];
+    const parts = [div("header", title)];
+    if (p.site) {
+      const wants = div("prompt-asks");
+      wants.append(div("wants", "wants to use"), ...p.asks.map(askChip));
+      parts.push(siteLine(p.site), wants);
+    } else {
+      parts.push(div("prompt-message", p.message));
+    }
     if (p.kind === "text") {
       const input = div("prompt-input");
       const chars = Array.from(p.input);
@@ -153,6 +200,7 @@
         options.append(button);
       }
       parts.push(options);
+      if (p.always) parts.push(div("prompt-always", p.always));
     } else {
       parts.push(div("prompt-hint", p.hint));
     }

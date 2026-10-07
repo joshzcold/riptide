@@ -259,3 +259,42 @@ fn prompts_say_what_they_are_about_and_can_be_centered() {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_tabs_question_waits_for_that_tab_and_names_the_site() {
+    let b = Browser::start("page.html");
+    // Asked once another tab is in front. (Chromium holds other permission
+    // prompts until their tab shows; camera requests come at once.)
+    b.eval("setTimeout(() => navigator.mediaDevices.getUserMedia({ video: true }).catch(() => {}), 1500), ''");
+    b.run("open -t about:blank");
+    b.wait_until("the second tab is current", |s| s.window().current_tab == 1);
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    let s = b.state();
+    assert_eq!(s.mode, "normal", "the question showed on the wrong tab");
+    assert!(s.prompt.is_none(), "{:?}", s.prompt);
+    let marked = b.eval_bar(
+        "tabbar",
+        "String(document.querySelectorAll('.tab.asking').length)",
+    );
+    assert_eq!(marked, "1", "the asking tab isn't marked");
+
+    b.run("tab-prev");
+    let s = b.wait_until("the question shows on its tab", |s| s.mode == "yesno");
+    let prompt = s.prompt.unwrap();
+    assert!(
+        prompt["site"]
+            .as_str()
+            .is_some_and(|site| site.starts_with("http://127.0.0.1")),
+        "{prompt}"
+    );
+    assert_eq!(prompt["asks"][0]["name"], "Camera", "{prompt}");
+    assert!(
+        prompt["always"]
+            .as_str()
+            .is_some_and(|a| a.contains("autoconfig.toml")),
+        "{prompt}"
+    );
+    b.keys("n");
+    b.wait_mode("normal");
+}

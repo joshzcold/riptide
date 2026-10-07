@@ -190,6 +190,48 @@ pub fn decide(
     Decision::Ask(format!("{origin} wants to {}", join(&labels)))
 }
 
+/// One thing a site asks for, as a permission question shows it.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Ask {
+    /// Which icon to draw, e.g. `camera`; `other` for the rest.
+    pub icon: &'static str,
+    /// A short name, e.g. `Camera`.
+    pub name: &'static str,
+}
+
+/// Short names and icons for what the features in `bits` ask for.
+pub fn asks(bits: u32, features: &[Feature]) -> Vec<Ask> {
+    let ask = |icon, name| Ask { icon, name };
+    let mut out: Vec<Ask> = features
+        .iter()
+        .filter(|f| bits & f.bit != 0)
+        .map(|f| match f.label {
+            "use your camera" => ask("camera", "Camera"),
+            "use your microphone" => ask("microphone", "Microphone"),
+            "know your location" => ask("location", "Location"),
+            "show notifications" => ask("notifications", "Notifications"),
+            "capture your screen" => ask("screen", "Screen"),
+            "capture your desktop audio" => ask("screen", "Desktop audio"),
+            "read your clipboard" => ask("clipboard", "Clipboard"),
+            "pan, tilt and zoom your camera" => ask("camera", "Camera movement"),
+            "lock your mouse pointer" => ask("pointer", "Mouse pointer"),
+            "capture your keyboard" => ask("keyboard", "Keyboard"),
+            "handle a link protocol" => ask("link", "Opening links"),
+            "download multiple files" => ask("download", "Several downloads"),
+            "access your files" => ask("files", "Files"),
+            "use your local fonts" => ask("other", "Fonts"),
+            "know when you're idle" => ask("other", "Idle detection"),
+            "control MIDI devices" => ask("other", "MIDI devices"),
+            "use storage in other sites" => ask("other", "Storage in other sites"),
+            "manage your windows" => ask("other", "Window placement"),
+            "access your local network" => ask("other", "Local network"),
+            _ => ask("other", "Something else"),
+        })
+        .collect();
+    out.dedup();
+    out
+}
+
 fn join(items: &[&str]) -> String {
     match items {
         [] => String::new(),
@@ -225,6 +267,27 @@ mod tests {
             Decision::Ask(
                 "https://meet.example wants to use your camera and use your microphone".into()
             )
+        );
+    }
+
+    #[test]
+    fn asks_name_and_draw_each_feature() {
+        let names: Vec<_> = asks(1 | 2, MEDIA_FEATURES)
+            .into_iter()
+            .map(|a| (a.icon, a.name))
+            .collect();
+        assert_eq!(names, [("microphone", "Microphone"), ("camera", "Camera")]);
+        let every = PROMPT_FEATURES.iter().fold(0, |b, f| b | f.bit);
+        assert!(
+            asks(every, PROMPT_FEATURES)
+                .iter()
+                .all(|a| a.name != "Something else")
+        );
+        let media = MEDIA_FEATURES.iter().fold(0, |b, f| b | f.bit);
+        assert!(
+            asks(media, MEDIA_FEATURES)
+                .iter()
+                .all(|a| a.name != "Something else")
         );
     }
 

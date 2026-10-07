@@ -45,6 +45,8 @@
   .tab:nth-child(odd) { background: var(--odd-bg); }
   .tab:nth-child(even) { background: var(--even-bg); }
   .tab.pinned { background: var(--pinned-bg); color: var(--pinned-fg); }
+  .asking-badge { flex: none; margin-right: 4px; padding: 0 4px; border-radius: 3px; font-weight: bold; line-height: 1.2;
+    background: var(--rt-prompts-border, #d9b44a); color: var(--rt-prompts-bg, #0b2a3f); }
   .tab.shrunk { flex: 0 0 auto; }
   /* A dragged tab follows the pointer; the others slide aside to show where it lands. */
   .tab.dragging { position: relative; z-index: 1; opacity: 0.9; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }
@@ -185,6 +187,7 @@
     if (tab.pinned && shrink) el.classList.add("shrunk");
     if (tab.loading) el.classList.add("loading");
     if (tab.error) el.classList.add("error");
+    if (tab.asking) el.classList.add("asking");
     if (tooltips) el.title = tab.title ? `${tab.title}\n${tab.url}` : tab.url;
 
     const indicator = document.createElement("span");
@@ -197,6 +200,14 @@
       icon.alt = "";
       icon.draggable = false;
       el.append(icon);
+    }
+    if (tab.asking) {
+      // A question from this tab is waiting.
+      const badge = document.createElement("span");
+      badge.className = "asking-badge";
+      badge.textContent = "?";
+      badge.title = "This tab is asking a question";
+      el.append(badge);
     }
     const title = document.createElement("span");
     title.className = "title";

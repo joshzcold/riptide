@@ -55,30 +55,70 @@ pub fn ask_about(
     download: bool,
     on_answer: impl FnOnce(PromptAnswer) + 'static,
 ) -> u64 {
+    queue(
+        scope,
+        Prompt {
+            id: 0,
+            title: title.into(),
+            message: message.into(),
+            kind,
+            topic,
+            url,
+            download,
+            tab: browser,
+            site: None,
+            asks: Vec::new(),
+        },
+        on_answer,
+    )
+}
+
+/// A site's permission request: the site and what it wants are shown on
+/// their own, so they can't be missed.
+pub fn ask_permission(
+    browser: Option<i32>,
+    origin: String,
+    asks: Vec<rt_core::permissions::Ask>,
+    message: String,
+    kind: PromptKind,
+    on_answer: impl FnOnce(PromptAnswer) + 'static,
+) -> u64 {
+    queue(
+        Scope::Other,
+        Prompt {
+            id: 0,
+            title: "Permission request".into(),
+            message,
+            kind,
+            topic: Topic::Permission,
+            url: Some(origin.clone()),
+            download: false,
+            tab: browser,
+            site: Some(origin),
+            asks,
+        },
+        on_answer,
+    )
+}
+
+/// Give `prompt` an id and queue it.
+fn queue(scope: Scope, mut prompt: Prompt, on_answer: impl FnOnce(PromptAnswer) + 'static) -> u64 {
     let id = NEXT_ID.with(|n| {
         let id = n.get();
         n.set(id + 1);
         id
     });
+    prompt.id = id;
     PENDING.with(|p| {
         p.borrow_mut().insert(
             id,
             Pending {
-                browser,
+                browser: prompt.tab,
                 scope,
                 on_answer: Box::new(on_answer),
             },
         )
     });
-    let prompt = Prompt {
-        id,
-        title: title.into(),
-        message: message.into(),
-        kind,
-        topic,
-        url,
-        download,
-    };
     if let Some(effects) = shell::with(|s| s.engine.push_prompt(prompt)) {
         shell::apply(effects);
     }

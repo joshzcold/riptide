@@ -16,6 +16,8 @@ Everything that needs an answer appears in a box floating near the bottom of the
 
 ## Permissions
 
+A permission request shows the asking site in large type, with its host in bold so a look-alike name stands out, and an icon for each thing it wants (camera, microphone, location, notifications, screen…). A question belongs to the tab that asked: if a tab in the background asks, you stay where you are, the tab gets a `?` badge in the tab bar, and the question shows when you go to that tab.
+
 For permission prompts:
 - `y` allows once and `n` (or `Escape`) means "not now".
 - `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, as in qutebrowser, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.

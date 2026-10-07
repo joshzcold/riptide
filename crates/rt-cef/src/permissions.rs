@@ -8,7 +8,7 @@ use cef::*;
 use rt_core::permissions::{self, Decision, Feature, MEDIA_FEATURES, PROMPT_FEATURES, Remembered};
 use rt_core::prompt::{PromptAnswer, PromptKind, Remember};
 
-use crate::prompts::{self, Scope};
+use crate::prompts;
 use crate::shell;
 
 thread_local! {
@@ -82,15 +82,13 @@ fn resolve(
         default: false,
         remember,
     };
-    let id = prompts::ask_about(
+    let asks = permissions::asks(bits, features);
+    let id = prompts::ask_permission(
         browser,
-        Scope::Other,
-        rt_core::prompt::Topic::Permission,
-        "Permission request",
+        origin.clone(),
+        asks,
         message,
         kind,
-        Some(origin.clone()),
-        false,
         move |answer| {
             let (outcome, saved) = answer_outcome(&answer);
             if let Some(allow) = saved {

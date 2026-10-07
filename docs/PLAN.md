@@ -1020,6 +1020,8 @@ Original plan:
 
 ### M25 — Permission requests as a floating card
 
+✅ (2026-10-07) Done in substance, by M20's prompt work plus this: the floating box (`prompt.position`), buttons, topics and the Sites tab (revoking) came earlier. Now questions belong to their tab (`Prompt::tab`, `Engine::set_current_tab` from `refresh_ui`; the shown question is the first from the current tab or riptide itself), tabs with a waiting question get a `?` badge (`Engine::tabs_asking`), and permission requests carry `site` and `asks` (`permissions::asks`: an icon and a short name per feature) so the box shows the site large and what it wants as icon chips, plus what `A`/`N` keep. Chromium holds non-media permission prompts from hidden tabs until they show, so those badge only once seen. Not done: a separate overlay view and favicon in the box; while a question shows, keys answer it, so a keyboard tab switch isn't possible (Escape dismisses, a click on another tab leaves it waiting). e2e test in `crates/rt-e2e/tests/window_settings.rs`, unit tests in `engine.rs` and `permissions.rs`.
+
 **Today:** a site's request for the camera, microphone, location, notifications or screen capture, and certificate warnings, take the same docked one-line prompt above the status bar as `confirm()` and download paths (M7). It's easy to miss, especially when the status bar is hidden (`statusbar.show`), it doesn't say clearly what is being asked for, and it can only be answered from the keyboard.
 
 - **A floating card** over the top of the page, below the tab bar, the way Chrome and Firefox place theirs:
