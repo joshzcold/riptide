@@ -997,7 +997,7 @@ pub static SETTINGS: &[SettingDef] = &[
             "https://easylist.to/easylist/easylist.txt".to_string(),
             "https://easylist.to/easylist/easyprivacy.txt".to_string(),
         ]),
-        "Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists)"
+        "Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists)"
     ),
     def!(
         "content.blocking.enabled",

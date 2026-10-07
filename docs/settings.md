@@ -71,7 +71,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
 | `confirm_quit` | string[] | `["never"]` | Ask before quitting: always, multiple-tabs (more than one tab open), downloads (downloads still running), or never |
 | `content.autoplay` | boolean | `true` | Let videos play by themselves; false waits until you interact with the page (after a restart) |
-| `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists that :adblock-update downloads (https://, or file:// for local lists) |
+| `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt"]` | Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists) |
 | `content.blocking.enabled` | boolean | `true` | Block ads and trackers with the filter lists from content.blocking.adblock.lists |
 | `content.blocking.whitelist` | string[] | `[]` | Sites where nothing is blocked, as host names; a host also covers its subdomains |
 | `content.cache.size` | integer | `0` | Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart) |

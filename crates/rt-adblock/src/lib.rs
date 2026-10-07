@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use adblock::Engine;
-use adblock::lists::{FilterSet, ParseOptions};
+use adblock::lists::{FilterFormat, FilterSet, ParseOptions};
 use adblock::request::Request;
 
 pub struct Blocker {
@@ -35,6 +35,27 @@ fn hide_css<'a>(selectors: impl IntoIterator<Item = &'a String>) -> String {
         .collect()
 }
 
+/// Whether `text` is a hosts file (`0.0.0.0 ads.example.com` lines, as
+/// StevenBlack's lists are) rather than an Adblock Plus list: most of its
+/// first rule lines start with an IP address.
+pub fn is_hosts_file(text: &str) -> bool {
+    let lines: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with('!'))
+        .take(200)
+        .collect();
+    let hosts = lines
+        .iter()
+        .filter(|l| {
+            let mut words = l.split_whitespace();
+            matches!(words.next(), Some("0.0.0.0" | "127.0.0.1" | "::" | "::1"))
+                && words.next().is_some()
+        })
+        .count();
+    !lines.is_empty() && hosts * 10 >= lines.len() * 8
+}
+
 impl Blocker {
     /// Compile filter list texts. Returns the blocker and the number of rules
     /// (lines that aren't comments or headers).
@@ -42,12 +63,23 @@ impl Blocker {
         let mut set = FilterSet::new(false);
         let mut rules = 0;
         for text in lists {
+            let hosts = is_hosts_file(text);
             rules += text
                 .lines()
                 .map(str::trim)
                 .filter(|l| !l.is_empty() && !l.starts_with('!') && !l.starts_with('['))
+                .filter(|l| !(hosts && l.starts_with('#')))
                 .count();
-            set.add_filter_list(text.to_string(), ParseOptions::default());
+            let format = if hosts {
+                FilterFormat::Hosts
+            } else {
+                FilterFormat::Standard
+            };
+            let options = ParseOptions {
+                format,
+                ..ParseOptions::default()
+            };
+            set.add_filter_list(text.to_string(), options);
         }
         let engine = Engine::new_with_filter_set(set);
         (Blocker { engine }, rules)
@@ -198,6 +230,19 @@ mod tests {
             "xmlhttprequest"
         ));
         assert!(!b.should_block("https://example.org/app.js", page, "script"));
+    }
+
+    #[test]
+    fn hosts_files_block_their_hosts() {
+        let hosts = "# A hosts file\n127.0.0.1 localhost\n0.0.0.0 ads.example.com\n0.0.0.0 track.example.net # tracker\n";
+        assert!(is_hosts_file(hosts));
+        assert!(!is_hosts_file(LIST));
+        let (b, rules) = Blocker::from_lists([hosts]);
+        assert_eq!(rules, 3);
+        let page = "https://news.example.org/";
+        assert!(b.should_block("https://ads.example.com/x.js", page, "script"));
+        assert!(b.should_block("https://track.example.net/p", page, "image"));
+        assert!(!b.should_block("https://cdn.example.org/x.js", page, "script"));
     }
 
     #[test]

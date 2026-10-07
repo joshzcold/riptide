@@ -158,7 +158,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Primary selection (`yY`, `pP`; X11 via arboard, the clipboard elsewhere) (2026-10-02)
 
 ### Content
-- [x] Ad blocking (EasyList / uBlock lists) (M8; host-file blocking not yet)
+- [x] Ad blocking (EasyList / uBlock lists, and hosts files since 2026-10-07) (M8)
 - [x] Per-domain settings for permissions and content blocking (M8; JS, cookies and images still to come)
 - [x] Downloads with status-bar progress and prompts
 - [x] Permission prompts (geolocation, camera, notifications)
@@ -301,6 +301,7 @@ Gaps:
 
 ### M8 — Content blocking & privacy
 
+- ✅ (2026-10-07) Hosts files in `content.blocking.adblock.lists`: `rt_adblock::is_hosts_file` (most of the first 200 rule lines start with `0.0.0.0`, `127.0.0.1` or `::`) picks adblock-rust's `FilterFormat::Hosts` for that list. Unit tested.
 - ✅ (2026-10-07) A blocked count in the status bar: `adblock::count_blocked` on the IO thread, per browser id, reset at each main-frame load start, shown by the `blocked` widget (`⊘12`, on by default); one redraw per burst. e2e test `the_status_bar_counts_blocked_requests_per_page`.
 - ✅ **adblock-rust via `OnBeforeResourceLoad`** (2026-10-02). The new `rt-adblock` crate (CEF-free, unit tested) uses `adblock` 0.13 without its `single-thread` feature, so the engine is `Send + Sync` for CEF's IO thread.
   - EasyList and EasyPrivacy (135k rules) compile in ~56 ms (release) into a ~6 MB cache that loads in ~18 ms. A check takes ~1.5 µs.
