@@ -274,3 +274,23 @@ fn set_completes_from_letters_with_gaps_when_nothing_contains_them() {
     );
     b.keys("<Escape>");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn spell_install_without_a_language_lists_them_to_pick_from() {
+    let b = Browser::start("page.html");
+    b.run("spell-install");
+    let s = b.wait_until("the languages are listed", |s| {
+        items(s)
+            .iter()
+            .any(|(c, n)| c == "Dictionaries" && n == "en-US")
+    });
+    assert_eq!(s.mode, "command");
+    // Typing a name narrows the list.
+    b.keys("german");
+    b.wait_until("German is found by name", |s| {
+        let items = items(s);
+        items.len() == 1 && items[0].1 == "de-DE"
+    });
+    b.keys("<Escape>");
+}

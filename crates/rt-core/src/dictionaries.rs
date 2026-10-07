@@ -326,6 +326,60 @@ pub fn find(language: &str) -> Option<&'static Dictionary> {
 }
 
 impl Dictionary {
+    /// The language's English name, e.g. `German` for `de-DE`.
+    pub fn name(&self) -> &'static str {
+        match self.language {
+            "af-ZA" => "Afrikaans",
+            "bg-BG" => "Bulgarian",
+            "ca-ES" => "Catalan",
+            "cs-CZ" => "Czech",
+            "cy-GB" => "Welsh",
+            "da-DK" => "Danish",
+            "de-DE" => "German",
+            "el-GR" => "Greek",
+            "en-AU" => "English (Australia)",
+            "en-CA" => "English (Canada)",
+            "en-GB" => "English (UK)",
+            "en-GB-oxendict" => "English (UK, Oxford spelling)",
+            "en-US" => "English (US)",
+            "es-ES" => "Spanish",
+            "et-EE" => "Estonian",
+            "fa-IR" => "Persian",
+            "fo-FO" => "Faroese",
+            "fr-FR" => "French",
+            "gl" => "Galician",
+            "he-IL" => "Hebrew",
+            "hi-IN" => "Hindi",
+            "hr-HR" => "Croatian",
+            "hu-HU" => "Hungarian",
+            "hy" => "Armenian",
+            "id-ID" => "Indonesian",
+            "it-IT" => "Italian",
+            "ko" => "Korean",
+            "lt-LT" => "Lithuanian",
+            "lv-LV" => "Latvian",
+            "nb-NO" => "Norwegian (Bokmål)",
+            "nl-NL" => "Dutch",
+            "pl-PL" => "Polish",
+            "pt-BR" => "Portuguese (Brazil)",
+            "pt-PT" => "Portuguese (Portugal)",
+            "ro-RO" => "Romanian",
+            "ru-RU" => "Russian",
+            "sh" => "Serbo-Croatian",
+            "sk-SK" => "Slovak",
+            "sl-SI" => "Slovenian",
+            "sq" => "Albanian",
+            "sr" => "Serbian",
+            "sv-SE" => "Swedish",
+            "ta-IN" => "Tamil",
+            "tg-TG" => "Tajik",
+            "tr-TR" => "Turkish",
+            "uk-UA" => "Ukrainian",
+            "vi-VN" => "Vietnamese",
+            _ => "",
+        }
+    }
+
     /// Where to download it: base64 text, as gitiles serves files.
     pub fn url(&self) -> String {
         format!(
@@ -370,6 +424,7 @@ mod tests {
     fn every_entry_is_one_language_with_a_full_hash() {
         let mut seen = std::collections::BTreeSet::new();
         for d in DICTIONARIES {
+            assert!(!d.name().is_empty(), "{} has no name", d.language);
             assert!(seen.insert(d.language), "{} twice", d.language);
             assert!(d.file.starts_with(d.language) && d.file.ends_with(".bdic"));
             assert_eq!(d.sha256.len(), 64);

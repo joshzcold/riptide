@@ -616,7 +616,8 @@ pub enum Command {
     /// Add the word from the last `:spell-suggest` to the dictionary.
     SpellAdd,
     /// Download dictionaries from Chromium's repository, checked against
-    /// pinned checksums, and turn their languages on.
+    /// pinned checksums, and turn their languages on. Without languages, a
+    /// list to pick from.
     SpellInstall {
         languages: Vec<String>,
     },
@@ -814,7 +815,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "spell-install",
-        "Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE",
+        "Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE, or pick from a list without a language",
     ),
     spec(
         "spawn",
@@ -1840,9 +1841,6 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "spell-add" => Command::SpellAdd,
         "spell-install" => {
             let languages: Vec<String> = args.rest().split_whitespace().map(String::from).collect();
-            if languages.is_empty() {
-                return Err(args.error("missing argument: language, e.g. en-US"));
-            }
             Command::SpellInstall { languages }
         }
         "history-import" => Command::HistoryImport {
@@ -2452,7 +2450,6 @@ mod tests {
     #[test]
     fn every_spec_parses() {
         let needs_args = [
-            "spell-install",
             "scroll",
             "scroll-page",
             "mode-enter",

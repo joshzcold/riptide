@@ -21,7 +21,7 @@
 
 Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.languages = { "en-US", "de-DE" }` in `config.lua` or `:set spellcheck.languages '["en-US"]'`. Chromium then downloads each dictionary once from Google (`redirector.gvt1.com`) and underlines mistakes as you type.
 
-To keep that request away from Google, install dictionaries yourself first: `:spell-install en-US de-DE` (`Tab` lists the 47 languages) downloads them from Chromium's own dictionary repository at a fixed version, checks each file against a checksum built into riptide, saves it where Chromium looks, and turns the language on. Chromium then uses that file and fetches nothing.
+To keep that request away from Google, install dictionaries yourself first: `:spell-install en-US de-DE`, or `:spell-install` alone to pick from the 47 languages (type a code or a name such as `german`) downloads them from Chromium's own dictionary repository at a fixed version, checks each file against a checksum built into riptide, saves it where Chromium looks, and turns the language on. Chromium then uses that file and fetches nothing.
 
 From the keyboard, in a text field:
 - `:spell-suggest` lists fixes for the word at the text cursor as completions. `Tab` picks one, `Return` replaces the word, and you're back in insert mode.

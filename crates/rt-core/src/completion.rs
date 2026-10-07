@@ -300,23 +300,25 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
                 None => (String::new(), parsed.pattern),
             };
             let enabled = settings.list("spellcheck.languages");
-            return ranked(crate::dictionaries::DICTIONARIES.iter(), word, |d| {
-                d.language
-            })
-            .into_iter()
-            .map(|d| Completion {
-                icon: None,
-                category: "Dictionaries",
-                name: format!("{before}{}", d.language),
-                description: if enabled.iter().any(|l| l.eq_ignore_ascii_case(d.language)) {
-                    "on".into()
-                } else {
-                    String::new()
-                },
-                time: None,
-                detail: Some(format!("{:.1} MB", d.size as f64 / 1_000_000.0)),
-            })
-            .collect();
+            // Found by code or name: `de` and `german` both find de-DE.
+            let labeled = crate::dictionaries::DICTIONARIES
+                .iter()
+                .map(|d| (format!("{} {}", d.language, d.name()), d));
+            return ranked(labeled, word, |(label, _)| label.as_str())
+                .into_iter()
+                .map(|(_, d)| Completion {
+                    icon: None,
+                    category: "Dictionaries",
+                    name: format!("{before}{}", d.language),
+                    description: if enabled.iter().any(|l| l.eq_ignore_ascii_case(d.language)) {
+                        format!("{} (on)", d.name())
+                    } else {
+                        d.name().to_string()
+                    },
+                    time: None,
+                    detail: Some(format!("{:.1} MB", d.size as f64 / 1_000_000.0)),
+                })
+                .collect();
         }
         "open" => CompletionKind::Url,
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,

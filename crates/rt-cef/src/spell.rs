@@ -82,6 +82,12 @@ pub fn run_command(command: &Command) -> bool {
                 shell::show_message(Level::Info, format!("Added “{word}” to your dictionary"));
             }
         }
+        Command::SpellInstall { languages } if languages.is_empty() => {
+            // The command line, with the languages to pick from listed.
+            let effects =
+                shell::with(|s| s.engine.execute_str("cmd-set-text -s :spell-install", None));
+            shell::apply(effects.unwrap_or_default());
+        }
         Command::SpellInstall { languages } => {
             for language in languages {
                 install(language);
