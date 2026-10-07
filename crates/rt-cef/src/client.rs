@@ -672,6 +672,14 @@ wrap_load_handler! {
             let Some(frame) = frame.filter(|f| f.is_main() != 0) else {
                 return;
             };
+            // riptide's own bars are sized for 100%: undo a zoom saved for
+            // them (Chromium keeps one per site, and they share riptide://ui).
+            if self.role != Role::Tab
+                && let Some(host) = browser.as_deref().and_then(|b| b.host())
+                && host.zoom_level() != 0.0
+            {
+                host.set_zoom_level(0.0);
+            }
             match self.role {
                 Role::Tab => {
                     let browser_ref = browser.as_deref().cloned();

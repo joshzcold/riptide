@@ -131,6 +131,8 @@
 <body>
 <div id="list"></div>
 <script>
+  // Ctrl+scroll would zoom this page, and riptide sizes it for 100%.
+  addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false, capture: true });
   function div(className, text) {
     const el = document.createElement("div");
     el.className = className;

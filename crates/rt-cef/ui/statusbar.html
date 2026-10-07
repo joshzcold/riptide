@@ -65,6 +65,8 @@
 <body>
 <div id="bar"><span id="left"></span><span id="right"></span></div>
 <script>
+  // Ctrl+scroll would zoom this page, and riptide sizes it for 100%.
+  addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false, capture: true });
   const $ = (id) => document.getElementById(id);
 
   function renderCommandLine(el, { text, cursor }) {

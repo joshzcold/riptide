@@ -103,6 +103,38 @@ fn middle_and_ctrl_clicks_open_links_in_background_tabs() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn ctrl_scroll_over_the_bars_does_not_zoom_them() {
+    let b = Browser::start("page.html");
+    let zoom = |b: &Browser| b.eval_bar("statusbar", "String(devicePixelRatio)");
+    assert_eq!(zoom(&b), "1");
+    // Ctrl+scroll up over the status bar, at the bottom of the window.
+    let height: i32 = b.eval("String(outerHeight)").parse().unwrap_or(800);
+    let y = (height - 8).to_string();
+    let status = std::process::Command::new("xdotool")
+        .args([
+            "mousemove",
+            "300",
+            &y,
+            "keydown",
+            "ctrl",
+            "click",
+            "4",
+            "click",
+            "4",
+            "keyup",
+            "ctrl",
+        ])
+        .env("DISPLAY", format!(":{}", b.display()))
+        .status()
+        .expect("xdotool");
+    assert!(status.success());
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(zoom(&b), "1", "the status bar zoomed");
+    assert_eq!(b.eval_bar("tabbar", "String(devicePixelRatio)"), "1");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn input_spatial_navigation_moves_focus_with_arrows() {
     let b = Browser::launch()
         .toml("\"input.spatial_navigation\" = true\n")
