@@ -2,29 +2,36 @@
 
 Plugins add commands, key bindings, hooks and more, written in Lua like `config.lua`. They work like Neovim's: a plugin is a folder with `lua/<name>/init.lua`, and you set it up from `config.lua`.
 
-Installing from git, a plugins page and loading on demand are coming; for now plugins load from a folder on your computer.
+A plugins page and loading on demand are coming.
 
 ## Adding a plugin
 
 ```lua
 -- config.lua
 rt.pack.add({
-  { dir = "~/code/reading-list", opts = { folder = "~/Reading" } },
-  { dir = "~/code/tab-tools", config = function() require("tab-tools").setup() end },
+  "https://github.com/someone/riptide-tab-tools",
+  { "https://github.com/someone/reading-list", version = "v1.2", opts = { folder = "~/Reading" } },
+  { dir = "~/code/my-plugin", config = function() require("my-plugin").setup() end },
 })
 ```
 
-A spec takes:
+A spec is a git URL, or a table:
 
 | Key | |
 |---|---|
-| `dir` | The plugin's folder (`~/` works). |
-| `name` | Its name, which `require` uses; by default the folder's name, without a `riptide-` prefix. |
+| `"url"` or `src` | Where to clone it from. riptide installs it into `<data>/pack/<name>` the first time, in the background. |
+| `version` | A tag, branch or commit to install; by default the newest commit. |
+| `dir` | A folder on your computer instead (`~/` works), for writing your own. |
+| `name` | Its name, which `require` uses; by default the URL's or folder's last part, without a `riptide-` prefix or a `.nvim`-style suffix. |
 | `opts` | Passed to `require(name).setup(opts)` once it loads. |
 | `config` | A function run once it loads, instead of `opts`. |
 | `trusted = true` | Skip the sandbox and give it everything, as Neovim does. Only for code you vouch for. |
 
 Plugins load after `config.lua` has run, so set them up with `opts` or `config` rather than calling `require` straight away.
+
+## Versions and the lockfile
+
+`rt-pack-lock.json` in the config folder pins each plugin from git to the commit installed, so a plugin never changes on its own and the same config gives the same plugins on every computer. Keep it with your dotfiles: on another computer, riptide installs exactly the pinned commits, and if the lockfile moves a plugin to another commit, riptide checks that one out at the next start. Git runs without asking for passwords, so a private repository fails with a message instead of waiting.
 
 ## Permissions
 

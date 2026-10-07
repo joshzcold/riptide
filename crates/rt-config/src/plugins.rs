@@ -187,6 +187,128 @@ pub fn name_from(src: &str) -> String {
         .to_string()
 }
 
+/// Installing and pinning plugins with git, run as a program. These block,
+/// so the browser calls them off its UI thread.
+pub mod git {
+    use std::path::Path;
+    use std::process::Command;
+
+    fn git(dir: Option<&Path>, args: &[&str]) -> Result<String, String> {
+        let mut command = Command::new("git");
+        command
+            .args(args)
+            // Never wait for a password: a private repository fails instead.
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_ASKPASS", "");
+        if let Some(dir) = dir {
+            command.current_dir(dir);
+        }
+        let output = command.output().map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => "git isn't installed".to_string(),
+            _ => format!("git: {e}"),
+        })?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            let error = String::from_utf8_lossy(&output.stderr);
+            Err(error
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("git failed")
+                .trim()
+                .to_string())
+        }
+    }
+
+    fn check_rev(rev: &str) -> Result<(), String> {
+        if rev.is_empty() || rev.starts_with('-') || rev.contains(char::is_whitespace) {
+            return Err(format!("{rev:?} isn't a version (a tag, branch or commit)"));
+        }
+        Ok(())
+    }
+
+    /// The commit checked out in `dir`.
+    pub fn head(dir: &Path) -> Result<String, String> {
+        git(Some(dir), &["rev-parse", "HEAD"])
+    }
+
+    /// Check out `rev` (a tag, branch or commit) in `dir`, fetching if it
+    /// isn't there yet; returns the commit.
+    pub fn checkout(dir: &Path, rev: &str) -> Result<String, String> {
+        check_rev(rev)?;
+        let resolve = |rev: &str| {
+            git(
+                Some(dir),
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("{rev}^{{commit}}"),
+                ],
+            )
+        };
+        let commit = match resolve(rev).or_else(|_| resolve(&format!("origin/{rev}"))) {
+            Ok(commit) => commit,
+            Err(_) => {
+                git(Some(dir), &["fetch", "--quiet", "--tags", "origin"])?;
+                resolve(rev)
+                    .or_else(|_| resolve(&format!("origin/{rev}")))
+                    .map_err(|_| format!("no version {rev:?} in the repository"))?
+            }
+        };
+        git(Some(dir), &["checkout", "--quiet", "--detach", &commit])?;
+        Ok(commit)
+    }
+
+    /// Clone `src` into `dir` and check out `rev`, or the default branch;
+    /// returns the commit. A failed clone leaves nothing behind.
+    pub fn install(src: &str, dir: &Path, rev: Option<&str>) -> Result<String, String> {
+        if src.starts_with('-') {
+            return Err(format!("{src:?} isn't a git URL"));
+        }
+        let parent = dir.parent().ok_or("no folder to install into")?;
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let partial = dir.with_extension("part");
+        let _ = std::fs::remove_dir_all(&partial);
+        let partial_text = partial.to_string_lossy().into_owned();
+        let cloned =
+            git(None, &["clone", "--quiet", "--", src, &partial_text]).and_then(|_| match rev {
+                Some(rev) => checkout(&partial, rev),
+                None => head(&partial),
+            });
+        match cloned {
+            Ok(commit) => {
+                std::fs::rename(&partial, dir).map_err(|e| e.to_string())?;
+                Ok(commit)
+            }
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&partial);
+                Err(e)
+            }
+        }
+    }
+
+    /// The commits after `from` up to `to`, newest first, as one-line logs.
+    pub fn log(dir: &Path, from: &str, to: &str) -> Result<Vec<String>, String> {
+        check_rev(from)?;
+        check_rev(to)?;
+        let range = format!("{from}..{to}");
+        Ok(
+            git(Some(dir), &["log", "--oneline", "--no-decorate", &range])?
+                .lines()
+                .map(str::to_string)
+                .collect(),
+        )
+    }
+
+    /// Fetch, and return the default branch's newest commit.
+    pub fn fetch_latest(dir: &Path) -> Result<String, String> {
+        git(Some(dir), &["fetch", "--quiet", "--tags", "origin"])?;
+        git(Some(dir), &["rev-parse", "--verify", "origin/HEAD"])
+            .or_else(|_| git(Some(dir), &["rev-parse", "--verify", "FETCH_HEAD"]))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,6 +363,71 @@ mod tests {
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("root"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A repository with two commits, the first tagged v1.
+    fn repo(path: &Path) -> (String, String) {
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(path)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@example.com")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@example.com")
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        std::fs::create_dir_all(path.join("lua/demo")).unwrap();
+        run(&["init", "--quiet", "--initial-branch=main"]);
+        std::fs::write(path.join("lua/demo/init.lua"), "return 1").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "--quiet", "-m", "one"]);
+        run(&["tag", "v1"]);
+        let first = run(&["rev-parse", "HEAD"]);
+        std::fs::write(path.join("lua/demo/init.lua"), "return 2").unwrap();
+        run(&["commit", "--quiet", "-am", "two"]);
+        (first, run(&["rev-parse", "HEAD"]))
+    }
+
+    #[test]
+    fn git_installs_pins_and_moves_plugins() {
+        let base = std::env::temp_dir().join(format!("rt-plugin-git-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let source = base.join("source");
+        let (first, second) = repo(&source);
+        let src = source.to_string_lossy().into_owned();
+
+        let pinned = base.join("pack/pinned");
+        assert_eq!(git::install(&src, &pinned, Some("v1")).unwrap(), first);
+        assert_eq!(
+            std::fs::read_to_string(pinned.join("lua/demo/init.lua")).unwrap(),
+            "return 1"
+        );
+        assert_eq!(git::checkout(&pinned, "main").unwrap(), second);
+        assert_eq!(git::head(&pinned).unwrap(), second);
+        assert_eq!(git::log(&pinned, &first, &second).unwrap().len(), 1);
+        assert_eq!(git::fetch_latest(&pinned).unwrap(), second);
+
+        let latest = base.join("pack/latest");
+        assert_eq!(git::install(&src, &latest, None).unwrap(), second);
+        // Bad input fails cleanly and leaves nothing behind.
+        let missing = base.join("pack/missing");
+        assert!(
+            git::install(&src, &missing, Some("v9"))
+                .unwrap_err()
+                .contains("v9")
+        );
+        assert!(!missing.exists() && !missing.with_extension("part").exists());
+        assert!(git::install("--upload-pack=x", &missing, None).is_err());
+        assert!(git::checkout(&pinned, "--orphan").is_err());
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]
