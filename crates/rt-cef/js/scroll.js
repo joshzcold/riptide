@@ -3,7 +3,8 @@
 // smooth is scrolling.smooth.
 (function (op, x, y, smooth) {
   const behavior = smooth ? "smooth" : "instant";
-  const rt = (window.__rt = window.__rt || {});
+  window.__rt = window.__rt || {};
+  const rt = window.__rt;
   const root = document.scrollingElement || document.documentElement;
 
   const overflows = (el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;

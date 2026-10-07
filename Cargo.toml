@@ -11,6 +11,13 @@ rust-version = "1.88"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/joshzcold/riptide"
 
+# Every crate opts in with `[lints] workspace = true`; clippy runs with -D warnings.
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
+
 [workspace.dependencies]
 rt-adblock = { path = "crates/rt-adblock" }
 rt-core = { path = "crates/rt-core" }

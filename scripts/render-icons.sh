@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Render packaging/riptide.svg to the PNGs riptide sets as its window icon
+# Render packaging/riptide.svg to the PNG files riptide sets as its window icon
 # (crates/rt-cef/icons/). Run after changing the logo; needs Inkscape.
 set -euo pipefail
 cd "$(dirname "$0")/.."

@@ -102,13 +102,15 @@ tasks:
       - cargo fmt
 
   lint:
-    desc: Formatting, clippy, ShellCheck, actionlint and cargo-deny (licenses, bans, sources; advisories run in audit.yml)
+    desc: Formatting, clippy, ShellCheck, actionlint, typos, Biome (js/) and cargo-deny (licenses, bans, sources; advisories run in audit.yml)
     deps: [setup]
     cmds:
       - cargo fmt --check
       - cargo clippy --all-targets -- -D warnings
       - scripts/tool.sh shellcheck scripts/*.sh task
       - scripts/tool.sh actionlint
+      - scripts/tool.sh typos
+      - scripts/tool.sh biome lint --error-on-warnings
       - scripts/tool.sh cargo-deny check --hide-inclusion-graph bans licenses sources
 
   check:

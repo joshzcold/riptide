@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs a pinned lint tool, downloading and checksum-verifying it into .bin/
 # the first time. Arguments pass straight through:
-#   scripts/tool.sh actionlint|shellcheck|cargo-deny [args...]
+#   scripts/tool.sh actionlint|shellcheck|cargo-deny|typos|biome [args...]
 # Pinned rather than taken from PATH, so new upstream checks never break CI
 # unannounced; bump a version and its checksums here on purpose.
 set -euo pipefail
@@ -9,7 +9,7 @@ set -euo pipefail
 # actionlint runs this ShellCheck on workflow run: blocks too.
 shellcheck_version=0.11.0
 
-tool=${1:?usage: scripts/tool.sh actionlint|shellcheck|cargo-deny [args...]}
+tool=${1:?usage: scripts/tool.sh actionlint|shellcheck|cargo-deny|typos|biome [args...]}
 shift
 
 case $(uname -s)-$(uname -m) in
@@ -20,8 +20,9 @@ case $(uname -s)-$(uname -m) in
     *) echo "tool.sh: unsupported platform $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 
-# Sets version, url, sha256 and member (the binary's path inside the archive).
-# Checksums are the published ones where a project publishes them.
+# Sets version, url, sha256 and member (the binary's path inside the archive;
+# empty when the download is the binary itself). Checksums are the published
+# ones where a project publishes them, otherwise taken from the download.
 case $tool in
     actionlint)
         version=1.7.12
@@ -56,6 +57,28 @@ case $tool in
         url=https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/cargo-deny-$version-$a.tar.gz
         member=cargo-deny-$version-$a/cargo-deny
         ;;
+    typos)
+        version=1.51.1
+        case $platform in
+            linux-x86_64) a=x86_64-unknown-linux-musl sha256=93c301fd4120ff076e2cc2a6d6a61cab4a4bdb81899287c0938b452e56d1f454 ;;
+            linux-aarch64) a=aarch64-unknown-linux-musl sha256=2ac5e37b3236b3c07dec5cdf1527acf143aec4674a6089b0bf424d021b35e099 ;;
+            macos-x86_64) a=x86_64-apple-darwin sha256=f3451079971633a7f769fb958fe06b0d64b5f1dc46df0854aa1ddb9a6f4031d6 ;;
+            macos-aarch64) a=aarch64-apple-darwin sha256=316d50a32c3726a80ab39c6d12141b70080498973c5e8a9b068b12cde78b10c1 ;;
+        esac
+        url=https://github.com/crate-ci/typos/releases/download/v$version/typos-v$version-$a.tar.gz
+        member=./typos
+        ;;
+    biome)
+        version=2.5.15
+        case $platform in
+            linux-x86_64) a=linux-x64-musl sha256=42b6fd3662fc1fc3075a370414478aa3ed82fd43d28430bbfb81ebd02cbde656 ;;
+            linux-aarch64) a=linux-arm64-musl sha256=195d4525282d2b877357ba8377545061e342808da37997051153708c7b5326fa ;;
+            macos-x86_64) a=darwin-x64 sha256=86fc618563d19f373ac24eb5b8f1e41bd753a506d5df1f198c152ec365141490 ;;
+            macos-aarch64) a=darwin-arm64 sha256=3636796d8c78bfcfe0d45946dc93e21e12d27a49eba7401e18af1ea854d25503 ;;
+        esac
+        url=https://github.com/biomejs/biome/releases/download/%40biomejs%2Fbiome%40$version/biome-$a
+        member=
+        ;;
     *) echo "tool.sh: unknown tool $tool" >&2; exit 1 ;;
 esac
 
@@ -76,7 +99,11 @@ if [[ ! -x $bin ]]; then
         echo "tool.sh: checksum mismatch for $url (got $actual)" >&2
         exit 1
     fi
-    tar -xzf "$tmp/archive.tar.gz" -C "$tmp" "$member"
+    if [[ -n $member ]]; then
+        tar -xzf "$tmp/archive.tar.gz" -C "$tmp" "$member"
+    else
+        member=archive.tar.gz
+    fi
     mkdir -p "$root/.bin"
     mv "$tmp/$member" "$bin"
     chmod +x "$bin"

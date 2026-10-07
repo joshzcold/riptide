@@ -69,9 +69,11 @@ When the logic isn't specific to CEF and other crates could use it, it goes in `
 
 | Tool | Checks | Config |
 |---|---|---|
-| rustfmt, clippy | Rust formatting and lints, with warnings as errors | — |
+| rustfmt, clippy | Rust formatting and lints, with warnings as errors. Every crate also takes the shared lints in `[workspace.lints]`: no `dbg!`, `todo!` or `unimplemented!`, and a `// SAFETY:` comment on each `unsafe` block | [`Cargo.toml`](https://github.com/joshzcold/riptide/blob/main/Cargo.toml) |
 | [ShellCheck](https://www.shellcheck.net) | `scripts/*.sh` and `task` | `# shellcheck disable=…` comments, each with its reason |
 | [actionlint](https://github.com/rhysd/actionlint) | `.github/workflows/*.yml`, including ShellCheck on their `run:` blocks | — |
+| [typos](https://github.com/crate-ci/typos) | Spelling in code, docs, scripts and pages | [`_typos.toml`](https://github.com/joshzcold/riptide/blob/main/_typos.toml), for words that are right where they are |
+| [Biome](https://biomejs.dev) | `crates/rt-cef/js/*.js`, the scripts riptide runs in pages, with warnings as errors; lint only, no formatting | [`biome.json`](https://github.com/joshzcold/riptide/blob/main/biome.json) |
 | [cargo-deny](https://embarkstudios.github.io/cargo-deny/) | Dependency licenses (each must be GPL-3.0-compatible), RustSec security advisories, yanked crates, and where crates come from | [`deny.toml`](https://github.com/joshzcold/riptide/blob/main/deny.toml) |
 
 A dependency with a license that isn't in `deny.toml` fails the check. Add the license only after checking that it's compatible with GPL-3.0.

@@ -1,0 +1,12 @@
+# typos (scripts/tool.sh typos): spelling in code, docs and commit messages.
+# These words are right where they are: partial command names and URLs typed
+# in tests, hint labels, and the misspelling the spell checker is tested with.
+[default.extend-words]
+ba = "ba"
+oll = "oll"
+onl = "onl"
+secon = "secon"
+teh = "teh"
+
+[files]
+extend-exclude = ["CHANGELOG.md", "*.png", "*.svg", "crates/rt-e2e/pages/blank.pdf"]

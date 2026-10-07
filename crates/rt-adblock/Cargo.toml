@@ -10,3 +10,6 @@ license.workspace = true
 [dependencies]
 adblock.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

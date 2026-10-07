@@ -1,0 +1,21 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "files": {
+    "includes": ["crates/rt-cef/js/**/*.js"]
+  },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "useArrowFunction": "off",
+        "useOptionalChain": "off"
+      },
+      "style": {
+        "useTemplate": "off"
+      }
+    }
+  }
+}

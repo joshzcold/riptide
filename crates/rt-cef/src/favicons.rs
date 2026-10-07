@@ -19,6 +19,7 @@ pub fn read_list(list: &mut CefStringList) -> Vec<String> {
     // SAFETY: `raw` is the live list CEF passed to the callback.
     let count = unsafe { sys::cef_string_list_size(raw) };
     (0..count)
+        // SAFETY: `i` is below the list's size, and each value is cleared after it's copied.
         .filter_map(|i| unsafe {
             let mut value = std::mem::zeroed();
             (sys::cef_string_list_value(raw, i, &mut value) > 0).then(|| {

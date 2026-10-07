@@ -1132,6 +1132,9 @@ Each move adds tests, and the rule from `rt-core` applies: anything that can be 
 
 #### Linting
 
+- ✅ (2026-10-07) `[workspace.lints.clippy]`: `dbg_macro`, `todo`, `unimplemented` and `undocumented_unsafe_blocks`, in every crate. `unwrap_used` would flag about 470 places, mostly in tests; it's left for later, with `allow-unwrap-in-tests`.
+- ✅ (2026-10-07) typos 1.51.1 and Biome 2.5.15 in `./task lint`, pinned in `scripts/tool.sh`. Biome only lints `crates/rt-cef/js/`, with the style-only rules (`useArrowFunction`, `useOptionalChain`, `useTemplate`) off. The scripts in `ui/*.html` have 12 findings, mostly `lang` attributes and accessibility, left until the theming work there settles.
+
 | Tool | Checks | Notes |
 |---|---|---|
 | `cargo fmt`, `clippy -D warnings` | Rust | Already in CI. Add `[workspace.lints]` in `Cargo.toml` so every crate shares one set, e.g. `unsafe_op_in_unsafe_fn`, `clippy::dbg_macro`, `clippy::todo`, `clippy::unwrap_used` in non-test code of `rt-core`. |

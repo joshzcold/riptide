@@ -788,6 +788,7 @@ fn set_window_class(properties: &mut LinuxWindowProperties) -> bool {
 fn string_for_cef(text: &str) -> CefString {
     // SAFETY: a zeroed cef_string_t is empty; the conversion fills it in.
     let mut raw: sys::cef_string_utf16_t = unsafe { std::mem::zeroed() };
+    // SAFETY: `text` is valid UTF-8 for its length, and `raw` is a cef_string_t to fill.
     unsafe { sys::cef_string_utf8_to_utf16(text.as_ptr().cast(), text.len(), &mut raw) };
     CefString::from(raw)
 }
