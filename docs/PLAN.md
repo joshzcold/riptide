@@ -181,6 +181,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Greasemonkey-style injected JS (M9)
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
+- [ ] Lua plugins as capable as Neovim's: installed and pinned from git, lazy-loaded, hooking events, keys and commands, drawing floats, pickers and panels, with a plugins page and a plugin authoring guide (M27)
 
 ### Session / state
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
@@ -1187,6 +1188,66 @@ Each move adds tests, and the rule from `rt-core` applies: anything that can be 
 Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprietary_codecs=true` and `ffmpeg_branding="Chrome"`. That means hours and a lot of disk space per release, and it works against goal 1 (tracking Chromium quickly). Distributing such builds also raises patent-licensing questions. Revisit only if VP9/AV1 Widevine proves insufficient; if so, prefer a documented "build your own CEF" path over shipping these binaries.
 
 ---
+
+### M27 — Lua plugins
+
+**Goal:** plugins as capable as Neovim's: other people's code, installed from git, that hooks events, binds keys, adds commands and draws its own windows, with documentation good enough that writing one is easy. Builds on M12 (`rt.on` with four events, `rt.bind` with functions, `rt.command`, `rt.spawn`). The user's `config.lua` stays the entry point, as `init.lua` is in Neovim.
+
+**What a plugin is** (the Neovim layout, so people know it already):
+- A git repository with `lua/<name>/init.lua` (loaded by `require("<name>")`), optional `plugin/*.lua` (run at startup), `doc/<name>.md` (shown by `:help <name>`) and an optional `riptide-plugin.toml` (name, description, minimum riptide version, the events and commands it can be lazy-loaded on).
+- Configured with the `setup()` convention: `require("foo").setup({ … })`.
+- Local plugins work too: `rt.pack.add({ dir = "~/code/my-plugin" })`, for writing your own.
+
+**Installing and caching** (like Neovim 0.12's built-in `vim.pack`, with lazy.nvim's spec):
+- `rt.pack.add({ "https://github.com/user/riptide-foo", version = "v1.2", event = "load_finished", cmd = "foo" })` in `config.lua`. A missing plugin is cloned (git, as a subprocess) into `<data>/pack/<name>`, then loaded.
+- **A lockfile** (`<config>/rt-pack-lock.json`) pins each plugin to a commit, so the same config gives the same code on every machine and nothing changes without you asking. It can be kept in dotfiles.
+- `:pack-update` fetches, then shows each plugin's new commits (log and diff stat) on `riptide://plugins` before you apply them; `:pack-restore` goes back to the lockfile. Nothing updates on its own.
+- **Lazy loading:** a plugin with `event`, `cmd` or `keys` loads the first time one fires, so startup stays fast.
+- **`riptide://plugins` (`:plugins`):** every plugin with its source, pinned commit, load time, status (loaded, lazy, failed with the error), update, remove and open-docs buttons. It's a tab of the M21 settings page style, keyboard first.
+- **`:checkhealth`-style report:** each plugin may define `health()`; `:plugins check` runs them (git missing, a dependency not installed, a setting it needs).
+
+**The API** (`rt.*`, Neovim's names where they map, all typed in `rt.meta.lua` for lua-language-server):
+- **Events** (`rt.on`, like `nvim_create_autocmd`): `rt.on(event, { pattern = "*.example.com", group = "foo", once = true }, fn)`, groups cleared with `rt.group("foo", { clear = true })` so a plugin can reload cleanly.
+  - Pages: `load_started`, `load_finished`, `url_changed`, `title_changed`, `page_error`.
+  - Tabs and windows: `tab_opened`, `tab_closed`, `tab_selected`, `tab_moved`, `window_opened`, `window_closed`.
+  - Input: `mode_changed`, `key` (a key riptide didn't handle, with a way to swallow it), `command` (before and after one runs), `insert_entered` (a text field took focus).
+  - Browser: `startup`, `quit`, `setting_changed` (the M12 settings watchers), `download_started`, `download_finished`, `prompt_shown`, `permission_answered`, `theme_changed`, `focus_gained`, `focus_lost`.
+  - Each event gets a table with what it's about (`e.url`, `e.tab`, `e.from`, `e.to`, …).
+- **Keys** (like `vim.keymap.set`): `rt.keymap.set(mode, keys, fn_or_command, { desc = "…", site = "*.github.com" })` and `rt.keymap.del`. `desc` shows in the key hints popup and the Keys tab; `site` binds only on matching pages.
+- **Commands** (like `nvim_create_user_command`): `rt.command(name, fn, { desc, nargs, complete = fn(arglead) -> items, count = true })`, with completion items that can carry a description, an icon and a category.
+- **Windows** (like `nvim_open_win` and `vim.ui`):
+  - `rt.ui.float({ title, lines | items, width, position = "center" | "bottom" | "cursor", keys = { … } })` returns a handle to update or close. Lines are text with highlight groups mapped to the theme's colors, not raw HTML, so plugins get riptide's look and can't run scripts in riptide's pages.
+  - `rt.ui.select(items, { prompt, format }, fn)` and `rt.ui.input({ prompt, default }, fn)`: pickers and questions on the existing completion and prompt UI, as `vim.ui.select` and `vim.ui.input` do.
+  - `rt.ui.panel({ side = "left" | "right" | "bottom", … })`: a docked view beside the page (a sidebar for tab trees, bookmarks, notes).
+  - `rt.statusbar.widget(name, fn)`: a status bar widget a plugin draws (usable in `statusbar.widgets`); `rt.notify(text, level)` for messages (and libnotify when asked).
+  - For full control, a plugin may ship an HTML page served as `riptide://plugin/<name>/…` with the UI pages' CSP and its own narrow message channel (M13), never the settings or bar channels.
+- **Pages:** `rt.page.eval(tab, js, fn)` (the result back to Lua, in an isolated world so the page can't see or tamper with it), `rt.page.css(tab, css)`, `rt.hint({ selector, action = fn })` for custom hint targets, `rt.page.selection()`.
+- **Runtime:** timers (`rt.defer(ms, fn)`, `rt.every`), `rt.spawn` (exists), `rt.fetch(url, opts, fn)` through Chromium's network stack, `rt.store` (per-plugin data saved under `<data>/plugin-data/<name>.json`), `rt.clipboard`, and `rt.version` for compatibility checks. Long work is asynchronous (callbacks, and coroutine helpers like `rt.async`), since Lua runs on the UI thread.
+
+**Trust and safety** (plugins are other people's code in a browser that holds your sessions):
+- As in Neovim, a plugin runs with your user's rights. Installing one is trusting it; the plugins page says so, shows the source and the pinned commit, and updates show the diff first.
+- Plugin Lua never runs inside web pages, and page JavaScript can't call plugin code. Pages only see what a plugin injects with `rt.page.*`.
+- Errors are contained: a failing plugin is reported on the plugins page and in `:messages`, and the others keep working. A runaway callback is stopped by an instruction-count limit.
+- Open question: an opt-in sandbox (`sandbox = true` in the spec: no `io`, `os` or `rt.spawn`, `rt.fetch` limited to declared hosts) for plugins that don't need more. Worth it if it stays simple.
+
+**Documentation:**
+- A "Writing plugins" part of the book: the layout, a tutorial that builds a small plugin step by step, the event list with what each event carries, UI recipes (a picker, a float, a sidebar, a status bar widget), lazy loading, testing, and publishing.
+- **Generated API reference** from the same registry as `rt.meta.lua`, so the docs, the editor completion and the code can't disagree (as with the settings reference today).
+- `:help rt.on`, `:help rt.ui.float` and `:help <plugin>` open the right page.
+- A template repository (`riptide-plugin-template`) with the layout, type stubs, a test and CI.
+- Example plugins in the repo, also used as tests: a tab tree sidebar, a reading-list picker, a per-site key binding set, and a port of one qutebrowser userscript.
+
+**Testing:**
+- Unit tests for the spec, the lockfile and lazy loading, with a local git fixture (no network).
+- e2e tests that install a plugin from a local repository, check each kind of hook (an event, a key, a command with completion, a float, a status bar widget), update it after a new commit, and see a failing plugin contained.
+- A plugin test runner (`riptide --plugin-test <dir>`) that loads one plugin in a headless browser with a small assertion library, so authors can test theirs in CI.
+
+**Phases:**
+1. API foundation: the event list with options and groups, `rt.keymap`, commands with completion, `rt.notify`, timers, `rt.store`, settings watchers, error containment.
+2. Packages: `rt.pack`, the lockfile, git caching, lazy loading, `riptide://plugins`, `:pack-update` with review.
+3. UI: `rt.ui.select`/`input`, floats, status bar widgets, panels.
+4. Pages: `rt.page.*`, custom hints, plugin pages.
+5. Docs and ecosystem: the guide, generated reference, `:help` integration, template, example plugins, the test runner.
 
 ## Chromium update cadence
 
