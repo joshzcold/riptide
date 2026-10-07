@@ -215,6 +215,21 @@ fn search_engines(value: &Value) -> Result<(), String> {
     }
 }
 
+/// `content.call_sites`' default: the web clients of well-known video call
+/// services. Slack and Discord hold calls inside their whole app, so they
+/// aren't listed.
+pub const CALL_SITES: &[&str] = &[
+    "meet.google.com",
+    "teams.microsoft.com",
+    "teams.live.com",
+    "teams.cloud.microsoft",
+    "*.zoom.us/wc/*",
+    "*.zoom.us/j/*",
+    "*.webex.com",
+    "meet.jit.si",
+    "whereby.com",
+];
+
 /// What `statusbar.widgets` can show, besides `clock[:format]` and `text:…`.
 pub const STATUSBAR_WIDGETS: &[&str] = &[
     "keypress",
@@ -1001,8 +1016,8 @@ pub static SETTINGS: &[SettingDef] = &[
     def!(
         "content.call_sites",
         Kind::List,
-        Value::List(Vec::new()),
-        "URL patterns (e.g. meet.google.com) whose pages open in a call window, where screen sharing picks a tab, window or screen"
+        Value::List(CALL_SITES.iter().map(|s| s.to_string()).collect()),
+        "Video call sites, as URL patterns, that open in a call window. There, sharing your screen lets you pick a tab, a window or the whole screen; in an ordinary tab it always shares the whole screen. Clear the list to open these sites as ordinary tabs; you then lose that choice unless you use :open --call or :tab-call"
     ),
     def!(
         "content.canvas_reading",
@@ -2303,6 +2318,33 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn call_sites_cover_meeting_links_but_not_the_rest_of_the_site() {
+        let matches = |url: &str| {
+            CALL_SITES
+                .iter()
+                .any(|p| crate::url::pattern_matches(p, url))
+        };
+        for url in [
+            "https://meet.google.com/abc-defg-hij",
+            "https://teams.microsoft.com/l/meetup-join/19%3ameeting",
+            "https://us05web.zoom.us/wc/123456789/join",
+            "https://zoom.us/j/123456789?pwd=x",
+            "https://company.webex.com/meet/someone",
+            "https://meet.jit.si/SomeRoom",
+            "https://whereby.com/some-room",
+        ] {
+            assert!(matches(url), "{url}");
+        }
+        for url in [
+            "https://zoom.us/pricing",
+            "https://www.google.com/",
+            "https://app.slack.com/client/T1",
+        ] {
+            assert!(!matches(url), "{url}");
+        }
+    }
 
     #[test]
     fn per_site_values_override_the_global_one() {

@@ -50,11 +50,18 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 :open --call https://meet.google.com/abc-defg-hij
 ```
 
-`:tab-call` reopens the current tab in a call window. To have calls always open that way, list their sites in `content.call_sites`. Then `:open`, and links in ordinary tabs, send them to a call window:
+Well-known call services open in a call window by themselves: Google Meet, Microsoft Teams, Zoom's web client and join links, Webex, Jitsi Meet and Whereby. Their URL patterns are the default of `content.call_sites`; `:open` and links in ordinary tabs send matching pages to a call window. `:tab-call` reopens any other tab in one.
+
+To add a service, extend the list. To stop opening calls in their own window, clear it; screen sharing on those sites then shares the whole screen, unless you open the call with `:open --call` or `:tab-call`.
 
 ```lua
-c.content.call_sites = { "meet.google.com", "*.zoom.us", "teams.microsoft.com" }
+-- Setting the list replaces it, so list every site you want, e.g. your own Jitsi:
+c.content.call_sites = { "meet.google.com", "teams.microsoft.com", "meet.example.org" }
+-- Or opt out:
+c.content.call_sites = {}
 ```
+
+The settings page (`:settings`) and `:help content.call_sites` show the default list.
 
 - **Only the first tab:** only the tab a call window opened with shares this way. Further tabs you open in that window are ordinary ones.
 - **Popups:** popups from the call tab open in call windows of their own.

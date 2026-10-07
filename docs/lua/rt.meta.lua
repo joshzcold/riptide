@@ -332,7 +332,7 @@ function rt.spawn(argv, opts, callback) end
 ---@field autoplay boolean Let videos play by themselves; false waits until you interact with the page (after a restart)
 ---@field blocking rt.c.content.blocking
 ---@field cache rt.c.content.cache
----@field call_sites string[] URL patterns (e.g. meet.google.com) whose pages open in a call window, where screen sharing picks a tab, window or screen
+---@field call_sites string[] Video call sites, as URL patterns, that open in a call window. There, sharing your screen lets you pick a tab, a window or the whole screen; in an ordinary tab it always shares the whole screen. Clear the list to open these sites as ordinary tabs; you then lose that choice unless you use :open --call or :tab-call
 ---@field canvas_reading boolean Let pages read back what they drew on a canvas; false blocks a common fingerprinting trick but breaks some sites (after a restart)
 ---@field cookies rt.c.content.cookies
 ---@field desktop_capture "ask"|"true"|"false" Let sites capture your screen or desktop audio: ask, true or false
