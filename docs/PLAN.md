@@ -182,7 +182,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
 - [ ] Lua plugins as capable as Neovim's: installed and pinned from git, lazy-loaded, hooking events, keys and commands, drawing floats, pickers and panels, with a plugins page and a plugin authoring guide (M27)
-- [ ] Investigate running Chrome builds of extensions (uBlock Origin Lite, password managers) in CEF, or native alternatives (M28)
+- [ ] Chrome (MV3) extensions such as uBlock Origin Lite and password managers: investigated 2026-10-07, they run in riptide's tabs; loading, install and `:extensions` still to build (M28)
 
 ### Session / state
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
@@ -1263,7 +1263,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 4. Pages: `rt.page.*`, custom hints, plugin pages.
 5. Docs and ecosystem: the guide, generated reference, `:help` integration, template, example plugins, the test runner.
 
-### M28 — Browser extensions (investigation)
+### M28 — Browser extensions (investigated 2026-10-07; MV3 works in riptide's tabs, see Findings)
 
 **Question:** what would it take to run extensions such as uBlock Origin and password managers (Bitwarden, 1Password, KeePassXC-Browser, Proton Pass)? Nothing is built until the investigation answers the questions below.
 
@@ -1284,6 +1284,33 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 - **Passwords:** userscripts already work (M9), so riptide versions of qutebrowser's `qute-bitwarden`, `qute-keepassxc` and `qute-pass`, driven by `rbw`, `bw`, `keepassxc-cli` or `pass`, could ship and be documented, with a picker later through M27's plugin UI. M27's plugin pages can also show a password manager's web vault in a panel.
 
 **Deliverable:** a short report in this section on what works in CEF 154 in Alloy and Chrome-style tabs, tested with uBlock Origin Lite, Bitwarden and KeePassXC-Browser, and a recommendation: extension support, the native alternatives, or both.
+
+**Findings (spike, 2026-10-07):** a throwaway e2e test loaded the Web Store builds of uBlock Origin Lite 2026.1006, Bitwarden 2026.9.3 and KeePassXC-Browser 1.10.4.1, uBlock Origin 1.75.0 (MV2, from its GitHub release), and two probe extensions (MV3 and MV2). Each probe reported its content script, a background round trip, a blocking rule, native messaging and `chrome.tabs`. riptide's own blocker was off.
+
+| Question | Answer |
+|---|---|
+| Loading | `--load-extension=<dir>,<dir>` works on the command line (CEF is unbranded Chromium, so the switch wasn't removed). All three MV3 extensions load enabled, with no errors or warnings. |
+| Alloy tabs | **Yes.** Content scripts run, the background service worker answers, and `declarativeNetRequest` blocks, in ordinary tabs as well as call windows, and before any Chrome-style window exists. uBlock Origin Lite blocks DoubleClick and Google Analytics in both. |
+| MV2 | **Gone.** MV2 extensions (uBlock Origin, the MV2 probe) silently don't load, and `--disable-features=ExtensionManifestV2Unsupported,…` doesn't bring them back. The Web Store serves no uBlock Origin to Chrome 154. Only uBlock Origin Lite is possible. |
+| Native messaging | **Works** from both kinds of tab, with host manifests in `<data>/NativeMessagingHosts/` (so `--basedir` moves it). Apps that install hosts into `~/.config/chromium/NativeMessagingHosts/` (KeePassXC, 1Password) need theirs copied or linked there. |
+| `chrome.tabs` | **The catch.** Alloy tabs are invisible to `chrome.tabs.query`, which only lists Chrome-style tabs. Messages still work both ways: `sender.tab` is set and `chrome.tabs.sendMessage` reaches the tab. So features a content script starts work, but anything that acts on "the active tab" from a popup or keyboard command can't find riptide's tabs: uBlock Origin Lite's per-site switch, Bitwarden's "fill this page" button. |
+| Popups and options | `chrome-extension://<id>/<popup>` pages render in an ordinary tab, but a popup shown that way targets itself (uBlock Origin Lite says "not a website"). |
+| `chrome://extensions` | Works in a Chrome-style tab (a call window), with enable, disable, details and errors. Ordinary tabs refuse to navigate to it. |
+| Startup | **Bug:** with an MV3 extension that has `declarativeNetRequest` rules, a page opened during startup (a command-line URL; session restore is likely the same) never starts loading. `:reload` frees it, and pages opened later are fine. Chromium probably holds early navigations until rulesets load, and the release never reaches Alloy views. |
+
+Not checked: real autofill with a vault (needs an account), passkeys, `chrome.commands` shortcuts, private windows, and installing from the Web Store page.
+
+**Recommendation: build MV3 extension support, and keep the native alternatives for what `chrome.tabs` blocks.**
+- **Extensions:**
+  - An `extensions.load` list of unpacked directories, passed as `--load-extension`.
+  - `:extension-install <id>`, which fetches a CRX from the Web Store update URL and unpacks it into `<data>/extensions/<id>/` after showing its permissions.
+  - `:extensions`, which opens `chrome://extensions` in a call window.
+  - A fix for the startup stall: reload a startup tab that hasn't started loading.
+  - Linking known native messaging hosts into the data directory, with consent.
+- **Popups:** popups that need the active tab won't work in ordinary tabs until CEF registers Alloy tabs with the tabs API, which would be a CEF change. Document which features work; an extension's options page can open in a tab.
+- **Still worth building natively:**
+  - Per-site ad-block switches and the element picker (uBlock Origin Lite's popup can't drive them).
+  - The password userscripts, which work today with `rbw`, `bw`, `keepassxc-cli` or `pass`.
 
 ## Chromium update cadence
 
