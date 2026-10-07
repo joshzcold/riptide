@@ -40,6 +40,20 @@ rt.command("project", function(name) rt.open("https://github.com/me/" .. name, "
 })
 ```
 
+## Keeping data
+
+`rt.store(name)` keeps data between runs, saved as `<data>/plugin-data/<name>.json` on every change. It has `get(key)`, `set(key, value)`, `all()` and `clear()`; values are strings, numbers, booleans and tables of them:
+
+```lua
+local list = rt.store("reading-list")
+rt.keymap.set("normal", "<Space>r", function()
+  local urls = list.get("urls") or {}
+  table.insert(urls, rt.url())
+  list.set("urls", urls)
+  rt.notify("Saved for later (" .. #urls .. ")")
+end, { desc = "Read later" })
+```
+
 ## Events
 
 `rt.on(event, [opts], fn)` runs `fn` with a table describing the event:

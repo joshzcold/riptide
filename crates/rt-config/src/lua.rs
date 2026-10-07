@@ -121,6 +121,26 @@ rt._entry[1] = rt._fire
 -- Neovim's name for it.
 rt.notify = rt.message
 
+-- rt.store(name): data kept between runs, saved on every change.
+local stores = {}
+function rt.store(name)
+  if stores[name] then return stores[name] end
+  local data = rt._store_load(name)
+  local store = {}
+  function store.get(key) return data[key] end
+  function store.set(key, value)
+    data[key] = value
+    rt._store_save(name, data)
+  end
+  function store.all() return data end
+  function store.clear()
+    data = {}
+    rt._store_save(name, data)
+  end
+  stores[name] = store
+  return store
+end
+
 -- rt.keymap.set(mode, keys, fn_or_command, { desc = "…" }), as vim.keymap.set:
 -- one mode or a list; desc shows in the key hints.
 rt.keymap = {}
@@ -776,6 +796,50 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         )?,
     )?;
 
+    // rt.store: JSON files under <data>/plugin-data, one per name.
+    let store_dir = paths.data_dir.join("plugin-data");
+    let store_path = move |name: &str| -> mlua::Result<std::path::PathBuf> {
+        let valid = !name.is_empty()
+            && name.len() <= 64
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if !valid {
+            return Err(mlua::Error::runtime(format!(
+                "store name {name:?}: use letters, digits, - and _"
+            )));
+        }
+        Ok(store_dir.join(format!("{name}.json")))
+    };
+    let load_path = store_path.clone();
+    api.set(
+        "_store_load",
+        lua.create_function(move |lua, name: String| {
+            let path = load_path(&name)?;
+            let json: serde_json::Value = match std::fs::read_to_string(&path) {
+                Ok(text) => serde_json::from_str(&text)
+                    .map_err(|e| mlua::Error::runtime(format!("{}: {e}", path.display())))?,
+                Err(_) => serde_json::json!({}),
+            };
+            lua.to_value(&json)
+        })?,
+    )?;
+    api.set(
+        "_store_save",
+        lua.create_function(move |lua, (name, data): (String, Value)| {
+            let path = store_path(&name)?;
+            let json: serde_json::Value = lua.from_value(data)?;
+            let text = serde_json::to_string_pretty(&json).map_err(mlua::Error::external)?;
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir).map_err(mlua::Error::external)?;
+            }
+            // Write a temporary file and rename it, so a crash never leaves half a file.
+            let partial = path.with_extension("json.part");
+            std::fs::write(&partial, text).map_err(mlua::Error::external)?;
+            std::fs::rename(&partial, &path).map_err(mlua::Error::external)
+        })?,
+    )?;
+
     let s = state.clone();
     api.set(
         "_timer",
@@ -1018,6 +1082,55 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 argv: vec!["notify-send".into(), "hi there".into()],
                 ..SpawnRequest::default()
             })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn stores_keep_data_between_runs() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-store-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+local list = rt.store("reading-list")
+rt.command("list-add", function(url)
+  local urls = list.get("urls") or {}
+  table.insert(urls, url)
+  list.set("urls", urls)
+  list.set("count", #urls)
+end)
+rt.command("list-show", function()
+  rt.notify(table.concat(list.get("urls") or {}, " ") .. " (" .. tostring(list.get("count")) .. ")")
+end)
+rt.command("list-forget", function() list.clear() end)
+assert(not pcall(rt.store, "../escape"))
+"#,
+        )
+        .unwrap();
+        let ctx = Context::default();
+        let shown = |dir: &Path| {
+            let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+            assert_eq!(error, None);
+            match run_command("list-show", "", &ctx).unwrap().as_slice() {
+                [Action::Message { text, .. }] => text.clone(),
+                other => panic!("{other:?}"),
+            }
+        };
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        run_command("list-add", "https://a.example", &ctx).unwrap();
+        run_command("list-add", "https://b.example", &ctx).unwrap();
+        // A new VM, as after a restart, reads what was saved.
+        assert_eq!(shown(&dir), "https://a.example https://b.example (2)");
+        run_command("list-forget", "", &ctx).unwrap();
+        assert_eq!(shown(&dir), " (nil)");
+        assert!(
+            paths
+                .data_dir
+                .join("plugin-data/reading-list.json")
+                .exists()
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

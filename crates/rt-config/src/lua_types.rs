@@ -207,6 +207,13 @@ function rt.every(ms, fn) end
 ---@param level? "info"|"warning"|"error"
 function rt.notify(text, level) end
 
+---Data kept between runs under `name` (letters, digits, `-`, `_`), saved
+---as JSON in the data folder on every change. Values are strings, numbers,
+---booleans and tables of those.
+---@param name string
+---@return {{ get: fun(key: string): any, set: fun(key: string, value: any), all: fun(): table, clear: fun() }}
+function rt.store(name) end
+
 ---Remove a hook by the id `rt.on` returned, or every hook in a group.
 ---@param id integer|string
 function rt.off(id) end
