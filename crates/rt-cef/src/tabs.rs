@@ -191,7 +191,7 @@ pub fn open(url: &str, position: Position, focus: bool) {
 pub fn open_call(url: &str) {
     match window::create_call_tab_view(url) {
         Some(view) => {
-            if let Some(index) = add_view(view, Position::Last, true) {
+            if let Some(index) = add_call_view(view) {
                 shell::with(|s| s.tabs.get_mut(index).map(|tab| tab.url = url.to_string()));
             }
             crate::lua::emit("tab_opened", &[("url", url)]);
@@ -202,11 +202,30 @@ pub fn open_call(url: &str) {
 
 /// Adopt a browser view (new or a CEF popup) as a tab; returns its index.
 pub fn add_view(view: BrowserView, position: Position, focus_tab: bool) -> Option<usize> {
+    adopt(view, position, focus_tab, false)
+}
+
+/// [`add_view`] for a call window's Chrome-style tab, which only exists once
+/// it's in the window, so it's hidden after it's added rather than before.
+pub fn add_call_view(view: BrowserView) -> Option<usize> {
+    adopt(view, Position::Last, true, true)
+}
+
+fn adopt(
+    view: BrowserView,
+    position: Position,
+    focus_tab: bool,
+    chrome_style: bool,
+) -> Option<usize> {
     let content = shell::with(|s| s.content.clone()).flatten()?;
     let mut child = View::from(&view);
-    // Added before it's hidden: a Chrome-style view only exists in a window.
-    content.add_child_view(Some(&mut child));
-    child.set_visible(0);
+    if chrome_style {
+        content.add_child_view(Some(&mut child));
+        child.set_visible(0);
+    } else {
+        child.set_visible(0);
+        content.add_child_view(Some(&mut child));
+    }
     let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {

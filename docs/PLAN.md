@@ -860,7 +860,7 @@ So with Alloy, sharing one tab or one window isn't possible from the page side. 
   - **How it works:**
     - The window and its first tab are Chrome style.
     - `on_window_created` registers the window, opens that tab, and only then adds the overlay and bars.
-    - `tabs::add_view` now adds a view before hiding it, since a Chrome-style view doesn't exist until then.
+    - `tabs::add_call_view` adds the call tab before hiding it, since a Chrome-style view doesn't exist until then. Ordinary tabs and the bars keep the old order: making the bars unfocusable only after adding them broke focus (keys went into the page after switching tabs).
     - `permissions::leave_to_chrome` returns 0 for desktop capture from a Chrome-style tab, so Chrome's picker answers. `content.desktop_capture = false` still refuses.
   - **Other tabs:** further tabs in a call window are Alloy. CEF requires a popup to match its opener's style, so the call tab's popups open as call windows of their own.
   - **Sessions** save call windows as ordinary ones. To restore one as a call window, the first tab would have to be added before the bars when restoring too.

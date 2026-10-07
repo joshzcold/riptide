@@ -346,6 +346,11 @@ wrap_window_delegate! {
                 return;
             };
 
+            // The bars are Alloy style even in a call window, so they exist already.
+            View::from(&tabbar).set_focusable(0);
+            View::from(&statusbar).set_focusable(0);
+            View::from(&completion).set_focusable(0);
+
             let layout = window.set_to_box_layout(Some(&BoxLayoutSettings {
                 horizontal: 0,
                 cross_axis_alignment: AxisAlignment::STRETCH,
@@ -391,7 +396,7 @@ wrap_window_delegate! {
             if self.call {
                 match (&self.popup, self.urls.first()) {
                     (Some(popup), _) => {
-                        tabs::add_view(popup.clone(), Position::Last, true);
+                        tabs::add_call_view(popup.clone());
                     }
                     (None, Some(url)) => tabs::open_call(url),
                     (None, None) => {}
@@ -417,12 +422,6 @@ wrap_window_delegate! {
             if let Some(placement) = placement {
                 arrange_bars(window, &row, &tabbar, &statusbar, &placement);
             }
-            // Only once they're in the window: a Chrome-style window's views
-            // don't exist before that.
-            View::from(&tabbar).set_focusable(0);
-            View::from(&statusbar).set_focusable(0);
-            completion_view.set_focusable(0);
-
             window.show();
             if self.call {
                 // Its tab is already open.
