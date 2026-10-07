@@ -55,6 +55,15 @@ rt.on("download_finished", { group = g }, function(e)
 end)
 ```
 
+`rt.defer(ms, fn)` calls `fn` once after `ms` milliseconds, and `rt.every(ms, fn)` keeps calling it; both return a handle whose `:stop()` cancels it. `rt.notify(text, level)` (or `rt.message`) shows a message, with `level` `info` (the default), `warning` or `error`:
+
+```lua
+-- Remind me to stretch every 45 minutes.
+rt.every(45 * 60 * 1000, function() rt.notify("Time to stretch", "warning") end)
+```
+
+A callback that runs for more than 2 seconds is stopped with an error, so a mistake like an endless loop can't freeze the browser; long work belongs in `rt.spawn` or a timer.
+
 In callbacks, `rt.url()`, `rt.title()`, `rt.mode()`, `rt.count()` and `rt.tabs()` (the window's tabs, with `title`, `url`, `current` and `pinned`) describe the current state. `rt.run(line)`, `rt.open(url, target)`, `rt.message(text, level)` and `rt.set(...)` act on it. Errors show as `config.lua:line: message`. `:config-source` reloads everything.
 
 `rt.spawn(argv, [opts], [callback])` runs a program in the background, without a shell, and calls `callback` with `{code, stdout, stderr, error}` when it exits. `argv` is a list, or a command line split as `:spawn` splits it. `opts` can set `stdin`, `cwd` and `env`:

@@ -171,6 +171,23 @@ function rt.command(name, fn, description) end
 ---@return integer
 function rt.on(event, opts, fn) end
 
+---Call `fn` once, `ms` milliseconds from now. `:stop()` on the result cancels it.
+---@param ms integer
+---@param fn fun()
+---@return {{ stop: fun(self) }}
+function rt.defer(ms, fn) end
+
+---Call `fn` every `ms` milliseconds (10 or more) until `:stop()` is called on the result.
+---@param ms integer
+---@param fn fun()
+---@return {{ stop: fun(self) }}
+function rt.every(ms, fn) end
+
+---Show a message in the status bar; the same as `rt.message`.
+---@param text string
+---@param level? "info"|"warning"|"error"
+function rt.notify(text, level) end
+
 ---Remove a hook by the id `rt.on` returned, or every hook in a group.
 ---@param id integer|string
 function rt.off(id) end
@@ -213,7 +230,7 @@ function rt.open(url, target) end
 
 ---Show a message in the status bar (in callbacks).
 ---@param text string
----@param level? "info"|"error"
+---@param level? "info"|"warning"|"error"
 function rt.message(text, level) end
 
 ---@class rt.SpawnOpts

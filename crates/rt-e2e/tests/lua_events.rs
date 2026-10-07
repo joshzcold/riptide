@@ -20,6 +20,7 @@ rt.on("tab_selected", { group = g }, function(e) note("tab_selected " .. e.index
 rt.on("title_changed", { pattern = "*://127.0.0.1/*second.html" }, function(e) note("title " .. e.title) end)
 rt.on("load_started", { once = true }, function() note("first load_started") end)
 rt.on("setting_changed", function(e) note("setting " .. e.name .. "=" .. e.value) end)
+rt.on("startup", function() rt.defer(200, function() note("deferred") end) end)
 "#;
 
 fn events(b: &Browser) -> String {
@@ -45,6 +46,7 @@ fn config_lua_hears_events_with_patterns_groups_and_once() {
     wait_for_line(&b, "startup");
     wait_for_line(&b, "window_opened");
     wait_for_line(&b, "first load_started");
+    wait_for_line(&b, "deferred");
 
     b.run(&format!("open -t {}", b.url("second.html")));
     wait_for_line(&b, "tab_opened");

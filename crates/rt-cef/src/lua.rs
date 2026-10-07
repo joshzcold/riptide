@@ -4,6 +4,8 @@
 
 use std::cell::Cell;
 
+use cef::*;
+
 use rt_config::lua::{self, Action, Context};
 use rt_core::Command;
 use rt_core::engine::Level;
@@ -58,8 +60,10 @@ fn carry_out(result: Result<Vec<Action>, String>) {
                     shell::apply(effects);
                 }
             }
-            Action::Message { error, text } => {
-                shell::show_message(if error { Level::Error } else { Level::Info }, text)
+            Action::Message { level, text } => shell::show_message(level, text),
+            Action::Timer { id, ms } => {
+                let mut task = LuaTimer::new(id);
+                post_delayed_task(ThreadId::UI, Some(&mut task), i64::from(ms));
             }
             Action::Spawn(request) => crate::spawn::run_for_lua(request),
         }
@@ -85,4 +89,16 @@ pub fn emit(event: &str, fields: &[(&str, &str)]) {
 /// Hand an `rt.spawn` program's result to its callback.
 pub fn spawned(callback: u32, result: &lua::SpawnResult) {
     carry_out(lua::spawned(callback, result, &context(None)));
+}
+
+wrap_task! {
+    struct LuaTimer {
+        id: u32,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            carry_out(lua::timer(self.id, &context(None)));
+        }
+    }
 }

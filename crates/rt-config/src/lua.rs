@@ -93,6 +93,33 @@ function rt._dispatch(event, payload)
   end
 end
 rt._entry[0] = rt._dispatch
+
+-- rt.defer and rt.every: the browser calls rt._fire(id) after the delay.
+local timers, next_timer = {}, 0
+local function start(ms, fn, every)
+  if type(ms) ~= "number" or ms < 0 then error("the delay is in milliseconds, 0 or more", 3) end
+  if type(fn) ~= "function" then error("needs a function", 3) end
+  next_timer = next_timer + 1
+  local id = next_timer
+  timers[id] = { fn = fn, ms = math.floor(ms), every = every }
+  rt._timer(id, math.floor(ms))
+  return { id = id, stop = function() timers[id] = nil end }
+end
+function rt.defer(ms, fn) return start(ms, fn, false) end
+function rt.every(ms, fn)
+  if type(ms) == "number" and ms < 10 then error("rt.every needs 10 ms or more", 2) end
+  return start(ms, fn, true)
+end
+function rt._fire(id)
+  local timer = timers[id]
+  if not timer then return end
+  if timer.every then rt._timer(id, timer.ms) else timers[id] = nil end
+  timer.fn()
+end
+rt._entry[1] = rt._fire
+
+-- Neovim's name for it.
+rt.notify = rt.message
 "#;
 
 /// The events `rt.on` takes, with what each one's table carries.
@@ -159,9 +186,11 @@ pub enum Action {
     /// A command line, e.g. `open -t x`.
     Run(String),
     Message {
-        error: bool,
+        level: rt_core::engine::Level,
         text: String,
     },
+    /// `rt.defer`/`rt.every`: call timer `id` back after `ms` milliseconds.
+    Timer { id: u32, ms: u32 },
     /// `rt.spawn`: run a program; [`spawned`] hands the result to `callback`.
     Spawn(SpawnRequest),
 }
@@ -215,6 +244,9 @@ pub fn user_commands() -> Vec<(String, String)> {
     })
 }
 
+/// How long one callback may run before it's stopped.
+const CALLBACK_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Call a Lua function from the runtime's tables with `args`.
 fn invoke(
     table: &str,
@@ -228,6 +260,22 @@ fn invoke(
             return Err("config.lua isn't loaded".to_string());
         };
         rt.state.borrow_mut().context = context.clone();
+        // A callback runs on the browser's UI thread: one that doesn't
+        // finish (a loop) would freeze the browser, so stop it instead.
+        let deadline = std::time::Instant::now() + CALLBACK_LIMIT;
+        let _ = rt.lua.set_hook(
+            mlua::HookTriggers::new().every_nth_instruction(10_000),
+            move |_, _| {
+                if std::time::Instant::now() > deadline {
+                    Err(mlua::Error::runtime(format!(
+                        "stopped after {} seconds; long work belongs in rt.spawn or a timer",
+                        CALLBACK_LIMIT.as_secs()
+                    )))
+                } else {
+                    Ok(mlua::VmState::Continue)
+                }
+            },
+        );
         let result = (|| -> mlua::Result<()> {
             let api: mlua::Table = rt.lua.globals().get("rt")?;
             let table: mlua::Table = api.get(table)?;
@@ -242,6 +290,7 @@ fn invoke(
                 _ => Ok(()),
             }
         })();
+        rt.lua.remove_hook();
         let actions = std::mem::take(&mut rt.state.borrow_mut().actions);
         result
             .map(|()| actions)
@@ -283,6 +332,16 @@ pub fn spawned(
         }
     });
     actions
+}
+
+/// A timer from `rt.defer`/`rt.every` ran out: call its function.
+pub fn timer(id: u32, context: &Context) -> Result<Vec<Action>, String> {
+    invoke(
+        "_entry",
+        mlua::Value::Integer(1),
+        mlua::MultiValue::from_vec(vec![mlua::Value::Integer(id.into())]),
+        context,
+    )
 }
 
 /// Run the function bound with `rt.bind(keys, function)`.
@@ -617,6 +676,16 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         )?,
     )?;
 
+    let s = state.clone();
+    api.set(
+        "_timer",
+        lua.create_function(move |_, (id, ms): (u32, f64)| {
+            let ms = ms.clamp(0.0, f64::from(u32::MAX)) as u32;
+            s.borrow_mut().actions.push(Action::Timer { id, ms });
+            Ok(())
+        })?,
+    )?;
+
     api.set(
         "_matches",
         lua.create_function(|_, (pattern, url): (String, String)| {
@@ -751,8 +820,17 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "message",
         lua.create_function(move |_, (text, level): (String, Option<String>)| {
-            let error = level.as_deref() == Some("error");
-            s.borrow_mut().actions.push(Action::Message { error, text });
+            let level = match level.as_deref() {
+                None | Some("info") => rt_core::engine::Level::Info,
+                Some("warning" | "warn") => rt_core::engine::Level::Warning,
+                Some("error") => rt_core::engine::Level::Error,
+                Some(other) => {
+                    return Err(mlua::Error::runtime(format!(
+                        "unknown level {other:?}; use info, warning or error"
+                    )));
+                }
+            };
+            s.borrow_mut().actions.push(Action::Message { level, text });
             Ok(())
         })?,
     )?;
@@ -820,7 +898,7 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
         assert_eq!(
             spawned(callback, &result, &ctx).unwrap(),
             [Action::Message {
-                error: false,
+                level: rt_core::engine::Level::Info,
                 text: "3 words, code 0".into()
             }]
         );
@@ -834,6 +912,89 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 argv: vec!["notify-send".into(), "hi there".into()],
                 ..SpawnRequest::default()
             })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn timers_notify_and_runaway_callbacks() {
+        use rt_core::engine::Level;
+        let dir = std::env::temp_dir().join(format!("rt-lua-timers-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+local ticks = 0
+rt.command("later", function() rt.defer(500, function() rt.notify("later", "warning") end) end)
+rt.command("tick", function()
+  local t
+  t = rt.every(100, function()
+    ticks = ticks + 1
+    rt.notify("tick " .. ticks)
+    if ticks == 2 then t:stop() end
+  end)
+end)
+rt.command("spin", function() while true do end end)
+rt.command("hello", function() rt.notify("hello") end)
+assert(not pcall(rt.notify, "x", "loud"))
+assert(not pcall(rt.every, 1, function() end))
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let ctx = Context::default();
+        // rt.defer asks for a timer; firing it runs the function once.
+        assert_eq!(
+            run_command("later", "", &ctx).unwrap(),
+            [Action::Timer { id: 1, ms: 500 }]
+        );
+        assert_eq!(
+            timer(1, &ctx).unwrap(),
+            [Action::Message {
+                level: Level::Warning,
+                text: "later".into()
+            }]
+        );
+        assert!(timer(1, &ctx).unwrap().is_empty());
+        // rt.every asks again each time, until stopped.
+        assert_eq!(
+            run_command("tick", "", &ctx).unwrap(),
+            [Action::Timer { id: 2, ms: 100 }]
+        );
+        assert_eq!(
+            timer(2, &ctx).unwrap(),
+            [
+                Action::Timer { id: 2, ms: 100 },
+                Action::Message {
+                    level: Level::Info,
+                    text: "tick 1".into()
+                }
+            ]
+        );
+        assert_eq!(
+            timer(2, &ctx).unwrap(),
+            [
+                Action::Timer { id: 2, ms: 100 },
+                Action::Message {
+                    level: Level::Info,
+                    text: "tick 2".into()
+                }
+            ]
+        );
+        assert!(timer(2, &ctx).unwrap().is_empty());
+        // A loop is stopped, and the next callback still runs.
+        let start = std::time::Instant::now();
+        let error = run_command("spin", "", &ctx).unwrap_err();
+        assert!(error.contains("stopped after"), "{error}");
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+        assert_eq!(
+            run_command("hello", "", &ctx).unwrap(),
+            [Action::Message {
+                level: Level::Info,
+                text: "hello".into()
+            }]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -940,7 +1101,7 @@ end)
         assert_eq!(
             call(1, &ctx).unwrap(),
             [Action::Message {
-                error: false,
+                level: rt_core::engine::Level::Info,
                 text: "on https://example.com/ x3".into()
             }]
         );
@@ -984,7 +1145,7 @@ end)
         assert_eq!(
             run_command("count-tabs", "", &with_tabs).unwrap(),
             [Action::Message {
-                error: false,
+                level: rt_core::engine::Level::Info,
                 text: "2 tabs, 1 pinned, current b".into()
             }]
         );
