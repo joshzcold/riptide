@@ -1220,7 +1220,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
   - `rt.ui.select(items, { prompt, format }, fn)` and `rt.ui.input({ prompt, default }, fn)`: pickers and questions on the existing completion and prompt UI, as `vim.ui.select` and `vim.ui.input` do.
   - `rt.ui.panel({ side = "left" | "right" | "bottom", … })`: a docked view beside the page (a sidebar for tab trees, bookmarks, notes).
   - `rt.statusbar.widget(name, fn)`: a status bar widget a plugin draws (usable in `statusbar.widgets`); `rt.notify(text, level)` for messages (and libnotify when asked).
-  - For full control, a plugin may ship an HTML page served as `riptide://plugin/<name>/…` with the UI pages' CSP and its own narrow message channel (M13), never the settings or bar channels.
+  - **Plugin pages** (decided 2026-10-07: allowed): a plugin may ship HTML pages, served as `riptide://plugin/<name>/…`, shown in a tab, a float or a panel. They talk only to their own plugin over a narrow message channel (M13), never the settings or bar channels. They may embed web pages in iframes, e.g. a password manager's web vault in a sidebar, limited to the hosts the plugin's `frames` permission names (set in the page's CSP `frame-src`).
 - **Pages:** `rt.page.eval(tab, js, fn)` (the result back to Lua, in an isolated world so the page can't see or tamper with it), `rt.page.css(tab, css)`, `rt.hint({ selector, action = fn })` for custom hint targets, `rt.page.selection()`.
 - **Runtime:** timers (`rt.defer(ms, fn)`, `rt.every`), `rt.spawn` (exists), `rt.fetch(url, opts, fn)` through Chromium's network stack, `rt.store` (per-plugin data saved under `<data>/plugin-data/<name>.json`), `rt.clipboard`, and `rt.version` for compatibility checks. Long work is asynchronous (callbacks, and coroutine helpers like `rt.async`), since Lua runs on the UI thread.
 
@@ -1228,7 +1228,11 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 - As in Neovim, a plugin runs with your user's rights. Installing one is trusting it; the plugins page says so, shows the source and the pinned commit, and updates show the diff first.
 - Plugin Lua never runs inside web pages, and page JavaScript can't call plugin code. Pages only see what a plugin injects with `rt.page.*`.
 - Errors are contained: a failing plugin is reported on the plugins page and in `:messages`, and the others keep working. A runaway callback is stopped by an instruction-count limit.
-- Open question: an opt-in sandbox (`sandbox = true` in the spec: no `io`, `os` or `rt.spawn`, `rt.fetch` limited to declared hosts) for plugins that don't need more. Worth it if it stays simple.
+- **Sandbox and permissions** (decided 2026-10-07): plugins run sandboxed and ask for what they need, and you approve it, as with browser extensions. Your own `config.lua` stays fully trusted.
+  - `riptide-plugin.toml` lists permissions: `spawn` (run programs), `files` (Lua `io`/`os`), `network = ["api.example.com"]` (`rt.fetch` to those hosts), `pages = ["*.example.com"]` (`rt.page.*` and custom hints on those sites), `frames = ["vault.example.com"]` (iframes in plugin pages), `clipboard`, `settings` (change settings), `keys` (see every key).
+  - Without a permission the API isn't there: the sandbox removes `io`, `os`, `debug`, `package.loadlib` and the `rt.*` functions not granted, and checks hosts on every call.
+  - Installing shows the permissions for approval; an update that asks for more waits for approval again, with the new ones highlighted. Approvals are kept with the lockfile, and the plugins page shows and revokes them.
+  - `trusted = true` in the spec skips the sandbox for a plugin you vouch for (as Neovim runs everything), shown clearly on the plugins page.
 
 **Documentation:**
 - A "Writing plugins" part of the book: the layout, a tutorial that builds a small plugin step by step, the event list with what each event carries, UI recipes (a picker, a float, a sidebar, a status bar widget), lazy loading, testing, and publishing.
