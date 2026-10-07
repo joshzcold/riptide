@@ -48,6 +48,9 @@ pub struct Hint {
 #[derive(Debug, Clone, Deserialize)]
 pub struct WindowState {
     pub private: bool,
+    /// Opened with `:open --call`.
+    #[serde(default)]
+    pub call: bool,
     pub current_tab: usize,
     pub tabs: Vec<TabState>,
     /// The notice shown in place of a crashed tab is on screen.
@@ -106,6 +109,7 @@ pub struct Launch {
     config_lua: Option<String>,
     /// `(path under the profile, contents, executable)`.
     files: Vec<(String, String, bool)>,
+    args: Vec<String>,
 }
 
 impl Launch {
@@ -130,6 +134,12 @@ impl Launch {
     /// An executable file in the profile, e.g. `config/userscripts/name`.
     pub fn script(mut self, path: &str, contents: &str) -> Self {
         self.files.push((path.into(), contents.into(), true));
+        self
+    }
+
+    /// An extra command line argument, e.g. a Chromium switch.
+    pub fn arg(mut self, arg: &str) -> Self {
+        self.args.push(arg.into());
         self
     }
 
@@ -172,7 +182,9 @@ impl Launch {
         let (xvfb, display) = start_xvfb();
         let url = format!("http://127.0.0.1:{port}/{page}");
         let socket = remote::socket_path(&base.join("data"), Some(&run));
-        let browser = spawn_browser(&dir, &display, &[url.as_str()]);
+        let mut args: Vec<&str> = self.args.iter().map(String::as_str).collect();
+        args.push(&url);
+        let browser = spawn_browser(&dir, &display, &args);
         let b = Browser {
             dir,
             socket,

@@ -1,0 +1,17 @@
+<!doctype html>
+<title>share</title>
+<button id="share" onclick="share()">share screen</button>
+<script>
+  // window.__share: "waiting" while a picker or prompt is open, then the
+  // shared surface ("monitor", "window", "browser") or the error's name.
+  window.__share = "";
+  async function share() {
+    window.__share = "waiting";
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      window.__share = stream.getVideoTracks()[0].getSettings().displaySurface || "unknown";
+    } catch (e) {
+      window.__share = e.name;
+    }
+  }
+</script>

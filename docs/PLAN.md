@@ -856,14 +856,23 @@ So with Alloy, sharing one tab or one window isn't possible from the page side. 
     - With `on_request_media_access_permission` returning 0 for that tab, Chrome shows its picker: "Chromium Tab", "Window", "Entire Screen", and "Share with tab audio".
     - Choosing Entire Screen gives the page a track with `displaySurface` `monitor`, and Chrome's "… is sharing your screen" bar appears.
   - **Not working yet:** the picker's tab list only offers Chrome-style tabs, so riptide's other tabs aren't listed. Window and Entire Screen work as in Chrome; the window list needs a window manager, so it wasn't checked on Xvfb.
-- **Design this points to: call windows.**
-  - `:open --call URL` (or URL patterns in a `content.desktop_capture.call_sites` setting) opens a new window whose first tab is Chrome style. Its bars are added after that tab, and any further tabs in it are Alloy.
-  - Screen-share requests from that tab go to Chrome's picker. Every other tab keeps riptide's prompt and shares the whole screen, as today.
-  - Moving a call to another window, or making an existing tab a call tab, means reopening it, since a tab's style is fixed when it's created.
-- **To check before building it:**
-  - Every place that touches a tab view before it's in a window: `tabs::add_view` hides views first.
-  - Popups from the call tab, DevTools on it, find-in-page, zoom, fullscreen, and Chrome's own accelerators and context menu in that tab.
-  - Whether `on_pre_key_event` sees every key there, including while the picker is open.
+- ✅ **Call windows** (2026-10-06): `:open --call URL` (`window::create_call`).
+  - **How it works:**
+    - The window and its first tab are Chrome style.
+    - `on_window_created` registers the window, opens that tab, and only then adds the overlay and bars.
+    - `tabs::add_view` now adds a view before hiding it, since a Chrome-style view doesn't exist until then.
+    - `permissions::leave_to_chrome` returns 0 for desktop capture from a Chrome-style tab, so Chrome's picker answers. `content.desktop_capture = false` still refuses.
+  - **Other tabs:** further tabs in a call window are Alloy. CEF requires a popup to match its opener's style, so the call tab's popups open as call windows of their own.
+  - **Sessions** save call windows as ordinary ones. To restore one as a call window, the first tab would have to be added before the bars when restoring too.
+  - **Tests** (`call_windows.rs`):
+    - A share through Chrome's picker returns `displaySurface` `monitor`. The test uses Chromium's `--auto-select-desktop-capture-source` switch, which only Chrome's picker reads.
+    - An ordinary tab still gets riptide's prompt.
+    - Zoom, search, DevTools and `:close` work in a call tab.
+    - Popups and extra tabs in a call window work.
+  - **Not done yet:**
+    - A `content.desktop_capture.call_sites` setting that opens matching URLs as calls.
+    - `:tab-call`, which reopens the current tab in a call window.
+    - Fullscreen, Chrome's accelerators and context menu, and keys while the picker is open, checked by hand on a real desktop.
 - **Fallbacks if call windows don't hold up:**
   - The desktop portal on Wayland: its dialog picks a window or screen, not a tab. Wayland can't be tested here yet.
   - A CEF patch that lets `on_request_media_access_permission` return a chosen `DesktopMediaID`, plus our own picker.

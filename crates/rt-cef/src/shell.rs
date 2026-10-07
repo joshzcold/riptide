@@ -109,6 +109,8 @@ pub struct WindowState {
     pub id: u32,
     /// Private windows keep nothing: an in-memory profile, no history, no session.
     pub private: bool,
+    /// A call window: Chrome style, with a Chrome-style first tab (`:open --call`).
+    pub call: bool,
     pub window: Option<Window>,
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
@@ -157,6 +159,7 @@ impl WindowState {
         Self {
             id,
             private,
+            call: false,
             window: None,
             content: None,
             tabs: TabList::default(),
@@ -788,6 +791,7 @@ pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
         OpenTarget::Background => tabs::open(&url, position, false),
         OpenTarget::Window => crate::window::create(vec![url], Vec::new(), false),
         OpenTarget::Private => crate::window::create(vec![url], Vec::new(), true),
+        OpenTarget::Call => crate::window::create_call(url),
     }
 }
 

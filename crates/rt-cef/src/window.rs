@@ -144,17 +144,25 @@ pub fn arrange_bars(
 /// `commands` (from the command line) run once the tabs are open. The first
 /// window may restore the saved session instead.
 pub fn create(urls: Vec<String>, commands: Vec<String>, private: bool) {
-    open(urls, commands, private, None, None);
+    open(urls, commands, private, None, None, false);
 }
 
 /// A window for one window of a saved session.
 pub fn create_from_session(window: rt_storage::WindowState) {
-    open(Vec::new(), Vec::new(), false, Some(window), None);
+    open(Vec::new(), Vec::new(), false, Some(window), None, false);
 }
 
 /// A window for a page's popup, under `tabs.tabs_are_windows`.
 pub fn create_for_popup(popup: BrowserView, private: bool) {
-    open(Vec::new(), Vec::new(), private, None, Some(popup));
+    open(Vec::new(), Vec::new(), private, None, Some(popup), false);
+}
+
+/// A call window for `url` (`:open --call`). Its window and first tab are
+/// Chrome style, so screen sharing gets Chrome's picker (a tab, a window or
+/// a screen). CEF allows one Chrome-style tab per window, so the rest of its
+/// tabs, and everything else, stay Alloy.
+pub fn create_call(url: String) {
+    open(vec![url], Vec::new(), false, None, None, true);
 }
 
 /// `tabs.tabs_are_windows`: whether a new tab should get its own window.
@@ -169,11 +177,18 @@ fn open(
     private: bool,
     session: Option<rt_storage::WindowState>,
     popup: Option<BrowserView>,
+    call: bool,
 ) {
-    let Some(id) = shell::with(|s| s.new_window(private)) else {
+    let Some(id) = shell::with(|s| {
+        let id = s.new_window(private);
+        let index = s.window_index(id)?;
+        s.windows[index].call = call;
+        Some(id)
+    })
+    .flatten() else {
         return;
     };
-    let mut delegate = RtWindowDelegate::new(id, urls, commands, session, popup);
+    let mut delegate = RtWindowDelegate::new(id, urls, commands, session, popup, call);
     window_create_top_level(Some(&mut delegate));
 }
 
@@ -254,6 +269,15 @@ fn recover_crashed_tabs(urls_given: bool) -> bool {
 }
 
 pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
+    create_view(role, url, false)
+}
+
+/// A call window's tab: Chrome style. It only exists once it's in a window.
+pub fn create_call_tab_view(url: &str) -> Option<BrowserView> {
+    create_view(Role::Tab, url, true)
+}
+
+fn create_view(role: Role, url: &str, chrome: bool) -> Option<BrowserView> {
     let mut client = RtClient::new(role);
     let settings = BrowserSettings {
         // colors.webpage.bg: what a new tab shows before its page paints.
@@ -266,7 +290,7 @@ pub fn create_browser_view(role: Role, url: &str) -> Option<BrowserView> {
         },
         ..Default::default()
     };
-    let mut delegate = RtBrowserViewDelegate::new(role);
+    let mut delegate = RtBrowserViewDelegate::new(role, chrome);
     let mut extra_info = (role == Role::Tab)
         .then(crate::greasemonkey::extra_info)
         .flatten();
@@ -289,6 +313,7 @@ wrap_window_delegate! {
         session: Option<rt_storage::WindowState>,
         // A popup to show as this window's tab (`tabs.tabs_are_windows`).
         popup: Option<BrowserView>,
+        call: bool,
     }
 
     impl ViewDelegate {
@@ -326,7 +351,6 @@ wrap_window_delegate! {
                 cross_axis_alignment: AxisAlignment::STRETCH,
                 ..Default::default()
             }));
-            View::from(&tabbar).set_focusable(0);
 
             // The row holds the page area, and the tab bar when it's on the left or right.
             let row_layout = row.set_to_box_layout(Some(&BoxLayoutSettings {
@@ -348,15 +372,6 @@ wrap_window_delegate! {
                 layout.set_flex_for_view(Some(&mut content_view), 1);
             }
 
-            View::from(&statusbar).set_focusable(0);
-
-            let mut completion_view = View::from(&completion);
-            completion_view.set_focusable(0);
-            let overlay = window.add_overlay_view(Some(&mut completion_view), DockingMode::CUSTOM, 0);
-            if let Some(overlay) = &overlay {
-                overlay.set_visible(0);
-            }
-
             let id = self.id;
             let first = shell::with(|s| {
                 let Some(index) = s.window_index(id) else { return false };
@@ -367,10 +382,32 @@ wrap_window_delegate! {
                 s.row = Some(row.clone());
                 s.statusbar = Some(statusbar.clone());
                 s.completion = Some(completion.clone());
-                s.overlay = overlay;
                 s.windows.len() == 1
             })
             .unwrap_or(false);
+
+            // The first view added decides the window's profile, and CEF then
+            // refuses a Chrome-style tab, so a call window's tab goes first.
+            if self.call {
+                match (&self.popup, self.urls.first()) {
+                    (Some(popup), _) => {
+                        tabs::add_view(popup.clone(), Position::Last, true);
+                    }
+                    (None, Some(url)) => tabs::open_call(url),
+                    (None, None) => {}
+                }
+            }
+
+            let mut completion_view = View::from(&completion);
+            let overlay = window.add_overlay_view(Some(&mut completion_view), DockingMode::CUSTOM, 0);
+            if let Some(overlay) = &overlay {
+                overlay.set_visible(0);
+            }
+            shell::with(|s| {
+                if let Some(index) = s.window_index(id) {
+                    s.windows[index].overlay = overlay;
+                }
+            });
 
             let placement = shell::with(|s| {
                 let placement = BarPlacement::from_settings(s.engine.settings());
@@ -380,9 +417,16 @@ wrap_window_delegate! {
             if let Some(placement) = placement {
                 arrange_bars(window, &row, &tabbar, &statusbar, &placement);
             }
+            // Only once they're in the window: a Chrome-style window's views
+            // don't exist before that.
+            View::from(&tabbar).set_focusable(0);
+            View::from(&statusbar).set_focusable(0);
+            completion_view.set_focusable(0);
 
             window.show();
-            if let Some(popup) = &self.popup {
+            if self.call {
+                // Its tab is already open.
+            } else if let Some(popup) = &self.popup {
                 tabs::add_view(popup.clone(), Position::Last, true);
             } else if let Some(session) = &self.session {
                 tabs::restore_window(session);
@@ -493,7 +537,11 @@ wrap_window_delegate! {
         }
 
         fn window_runtime_style(&self) -> RuntimeStyle {
-            RuntimeStyle::ALLOY
+            if self.call {
+                RuntimeStyle::CHROME
+            } else {
+                RuntimeStyle::ALLOY
+            }
         }
 
         fn linux_window_properties(
@@ -509,6 +557,8 @@ wrap_window_delegate! {
 wrap_browser_view_delegate! {
     struct RtBrowserViewDelegate {
         role: Role,
+        // A call window's tab.
+        chrome: bool,
     }
 
     impl ViewDelegate {
@@ -529,7 +579,11 @@ wrap_browser_view_delegate! {
 
     impl BrowserViewDelegate {
         fn browser_runtime_style(&self) -> RuntimeStyle {
-            RuntimeStyle::ALLOY
+            if self.chrome {
+                RuntimeStyle::CHROME
+            } else {
+                RuntimeStyle::ALLOY
+            }
         }
 
         fn delegate_for_popup_browser_view(
@@ -542,7 +596,8 @@ wrap_browser_view_delegate! {
             if is_devtools != 0 {
                 return Some(DevToolsViewDelegate::new());
             }
-            Some(RtBrowserViewDelegate::new(Role::Tab))
+            // CEF requires a popup to have its opener's style.
+            Some(RtBrowserViewDelegate::new(Role::Tab, self.chrome))
         }
 
         // Popups become tabs. Letting CEF create them (rather than opening the
@@ -567,6 +622,12 @@ wrap_browser_view_delegate! {
                 shell::activate_browser(opener.identifier());
             }
             let background = shell::with(|s| std::mem::take(&mut s.popup_in_background)).unwrap_or(false);
+            // A call tab's popup is Chrome style too, and a window holds only
+            // one Chrome-style tab, so it gets a call window of its own.
+            if self.chrome {
+                open(Vec::new(), Vec::new(), false, None, Some(popup.clone()), true);
+                return 1;
+            }
             if tabs_are_windows() {
                 let private = shell::with(|s| s.private).unwrap_or(false);
                 create_for_popup(popup.clone(), private);

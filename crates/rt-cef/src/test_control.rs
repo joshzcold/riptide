@@ -143,6 +143,7 @@ mod enabled {
                         .is_some_and(|v| cef::View::from(v).is_visible() != 0);
                     json!({
                         "private": w.private,
+                        "call": w.call,
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
                         "crash_notice": crash_notice,

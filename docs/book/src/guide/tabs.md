@@ -40,6 +40,20 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 
 `:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
 
+### Call windows
+
+`:open --call url` opens a video call in a call window. When the call's page shares your screen, Chrome's own picker opens, so you can share a single window or the whole screen, or a tab with its sound. In an ordinary tab, screen sharing asks in the status bar and always shares the whole screen.
+
+```
+:open --call https://meet.google.com/abc-defg-hij
+```
+
+- **Only the first tab:** only the tab a call window opened with shares this way. Further tabs you open in that window are ordinary ones.
+- **Popups:** popups from the call tab open in call windows of their own.
+- **The picker's Tab list** only offers call tabs, not riptide's ordinary tabs.
+- **Sessions:** call windows are saved as ordinary windows, so a restored call shares the whole screen until you reopen it with `--call`.
+- **Turning it off:** `content.desktop_capture = false` still refuses screen sharing everywhere, call windows included.
+
 `tabs.tabs_are_windows = true` opens every tab, and every popup, in its own window and hides the tab bar, which suits tiling window managers that arrange windows themselves.
 
 `window.hide_decoration = true` asks the window manager for windows without a title bar or borders, which suits tiling window managers. It applies to windows opened after the change.

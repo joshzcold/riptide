@@ -32,6 +32,21 @@ enum Outcome {
 /// Decide from settings, or ask and call `done` later. Returns the prompt id if it
 /// asked. `site` means Chromium saves the answer per site itself (permission
 /// prompts); otherwise A/N answers are kept for the session (camera/microphone).
+/// Desktop audio and video capture: `getDisplayMedia`.
+const DESKTOP_CAPTURE: u32 = 4 | 8;
+
+/// A screen-share request from a call window's tab goes to Chrome's own
+/// picker, which only Chrome-style tabs have; any other answer would share
+/// the whole screen. `content.desktop_capture = false` still refuses it here.
+fn leave_to_chrome(browser: Option<&Browser>, requested: u32) -> bool {
+    let chrome_style = browser
+        .and_then(|b| b.host())
+        .is_some_and(|host| host.runtime_style() == RuntimeStyle::CHROME);
+    let refused = shell::with(|s| s.engine.settings().str("content.desktop_capture") == "false")
+        .unwrap_or(false);
+    requested & DESKTOP_CAPTURE != 0 && chrome_style && !refused
+}
+
 fn resolve(
     browser: Option<i32>,
     origin: String,
@@ -145,6 +160,9 @@ wrap_permission_handler! {
             callback: Option<&mut MediaAccessCallback>,
         ) -> ::std::os::raw::c_int {
             let Some(callback) = callback.map(|c| c.clone()) else { return 0 };
+            if leave_to_chrome(browser.as_deref(), requested_permissions) {
+                return 0;
+            }
             let origin = requesting_origin.map(CefString::to_string).unwrap_or_default();
             resolve(browser.map(|b| b.identifier()), origin, requested_permissions, MEDIA_FEATURES, false, move |outcome| {
                 match outcome {

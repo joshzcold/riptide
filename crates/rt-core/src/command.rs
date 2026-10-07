@@ -20,6 +20,8 @@ pub enum OpenTarget {
     Background,
     Window,
     Private,
+    /// A call window, whose tab can pick a tab, window or screen to share.
+    Call,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1918,7 +1920,7 @@ impl<'a> Args<'a> {
             .map_err(|_| self.error(format!("{name} must be a number, got {token:?}")))
     }
 
-    /// `-t`/`-b`/`-w`/`-p`/`-r` flags, ending at `--`. Returns the target and `related`.
+    /// `-t`/`-b`/`-w`/`-p`/`--call`/`-r` flags, ending at `--`. Returns the target and `related`.
     fn open_target(&mut self) -> (OpenTarget, bool) {
         let mut target = OpenTarget::Current;
         let mut related = false;
@@ -1934,6 +1936,7 @@ impl<'a> Args<'a> {
             "--window",
             "-p",
             "--private",
+            "--call",
         ]) {
             match flag {
                 "--" => break,
@@ -1941,6 +1944,7 @@ impl<'a> Args<'a> {
                 "-t" | "--tab" => target = OpenTarget::Tab,
                 "-b" | "--bg" => target = OpenTarget::Background,
                 "-w" | "--window" => target = OpenTarget::Window,
+                "--call" => target = OpenTarget::Call,
                 _ => target = OpenTarget::Private,
             }
         }

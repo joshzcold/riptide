@@ -187,12 +187,26 @@ pub fn open(url: &str, position: Position, focus: bool) {
     }
 }
 
+/// A call window's first tab (see `window::create_call`).
+pub fn open_call(url: &str) {
+    match window::create_call_tab_view(url) {
+        Some(view) => {
+            if let Some(index) = add_view(view, Position::Last, true) {
+                shell::with(|s| s.tabs.get_mut(index).map(|tab| tab.url = url.to_string()));
+            }
+            crate::lua::emit("tab_opened", &[("url", url)]);
+        }
+        None => shell::show_message(Level::Error, "Could not create a browser view"),
+    }
+}
+
 /// Adopt a browser view (new or a CEF popup) as a tab; returns its index.
 pub fn add_view(view: BrowserView, position: Position, focus_tab: bool) -> Option<usize> {
     let content = shell::with(|s| s.content.clone()).flatten()?;
     let mut child = View::from(&view);
-    child.set_visible(0);
+    // Added before it's hidden: a Chrome-style view only exists in a window.
     content.add_child_view(Some(&mut child));
+    child.set_visible(0);
     let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {
