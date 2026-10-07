@@ -93,6 +93,14 @@ jobs:
         run: |
           bin=target/debug/riptide
           [[ -f $bin.exe ]] && bin=$bin.exe
+          # Windows loads libcef.dll at startup. cef-dll-sys copies it next to
+          # the binary only when its build script runs, which a restored cache
+          # skips; its downloaded CEF in the build directory is still there.
+          if [[ $RUNNER_OS == Windows && ! -f target/debug/libcef.dll ]]; then
+            dll=$(find target/debug/build -name libcef.dll -print -quit)
+            [[ -n $dll ]] || { echo "no libcef.dll under target/debug/build"; exit 1; }
+            PATH="$(dirname "$dll"):$PATH"
+          fi
           "$bin" --version
           "$bin" --paths
 
