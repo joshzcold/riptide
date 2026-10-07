@@ -137,6 +137,12 @@ impl Launch {
         self
     }
 
+    /// A stand-in for program `name` (e.g. `notify-send`), found on riptide's
+    /// `PATH` before the real one.
+    pub fn command(self, name: &str, contents: &str) -> Self {
+        self.script(&format!("../bin/{name}"), contents)
+    }
+
     /// An extra command line argument, e.g. a Chromium switch.
     pub fn arg(mut self, arg: &str) -> Self {
         self.args.push(arg.into());
@@ -564,6 +570,15 @@ fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
         // Not the desktop's session bus: tests must not pop up notifications
         // or talk to services on the user's screen.
         .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+        // Stand-ins from `Launch::command` come first.
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                dir.join("bin").display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
         .env(
             "RT_LOG",
             std::env::var("RT_LOG").unwrap_or_else(|_| "info".into()),

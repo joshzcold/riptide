@@ -98,9 +98,13 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.mouse_lock` | ask \| true \| false | `ask` | Let sites lock your mouse pointer, as games do: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
+| `content.notifications.app_name` | string | `riptide` | The app name on desktop notifications (presenter = libnotify), which notification services such as dunst and mako can match to style them |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
-| `content.notifications.presenter` | auto \| messages | `auto` | Where page notifications show: auto (the desktop's notifications) or messages (riptide's status bar) |
-| `content.notifications.show_origin` | boolean | `true` | Start notification messages with the site they came from (presenter = messages) |
+| `content.notifications.presenter` | auto \| libnotify \| messages | `auto` | Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings) or messages (riptide's status bar) |
+| `content.notifications.show_origin` | boolean | `true` | Show the site a notification came from (presenter = libnotify or messages) |
+| `content.notifications.site_icon` | boolean | `true` | Show the site's icon on desktop notifications (presenter = libnotify) |
+| `content.notifications.timeout` | integer | `-1` | Milliseconds a desktop notification stays (presenter = libnotify): -1 lets the desktop decide, 0 keeps it until dismissed |
+| `content.notifications.urgency` | low \| normal \| critical | `normal` | How urgent desktop notifications are (presenter = libnotify): low, normal or critical |
 | `content.pdf_viewer` | boolean | `true` | Show PDFs in the browser; false downloads them instead |
 | `content.prefers_reduced_motion` | boolean | `false` | Tell pages you prefer less motion, so they can tone down animations (after a restart) |
 | `content.proxy` | string | `system` | Proxy: system, none, a proxy URL such as socks5://127.0.0.1:9050, or pac+ and a PAC script's URL |

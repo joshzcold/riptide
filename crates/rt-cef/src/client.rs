@@ -105,7 +105,16 @@ wrap_client! {
                 let text = |i| message.argument_list().map(|a| CefString::from(&a.string(i)).to_string()).unwrap_or_default();
                 let (title, body) = (text(0), text(1));
                 let page = frame.as_ref().map(|f| CefString::from(&f.url()).to_string()).unwrap_or_default();
-                let show_origin = shell::with(|s| s.engine.settings().bool("content.notifications.show_origin")).unwrap_or(true);
+                let (show_origin, desktop) = shell::with(|s| {
+                    let settings = s.engine.settings();
+                    (settings.bool("content.notifications.show_origin"), settings.str("content.notifications.presenter") == "libnotify")
+                })
+                .unwrap_or((true, false));
+                if desktop {
+                    let origin = rt_core::url::origin(&page).filter(|_| show_origin).map(|o| o.trim_end_matches('/').to_string());
+                    crate::notifications::show(browser.as_ref().map(|b| b.identifier()), origin, title, body);
+                    return 1;
+                }
                 let origin = rt_core::url::origin(&page).filter(|_| show_origin).map(|o| format!("{} ", o.trim_end_matches('/'))).unwrap_or_default();
                 let body = if body.is_empty() { String::new() } else { format!(": {body}") };
                 shell::show_message(Level::Info, format!("{origin}{title}{body}"));

@@ -1138,6 +1138,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Mute pages; can be set per site"
     ),
     def!(
+        "content.notifications.app_name",
+        Kind::Str,
+        s("riptide"),
+        "The app name on desktop notifications (presenter = libnotify), which notification services such as dunst and mako can match to style them"
+    ),
+    def!(
         "content.notifications.enabled",
         Kind::Enum(ASK),
         s("ask"),
@@ -1145,15 +1151,36 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "content.notifications.presenter",
-        Kind::Enum(&["auto", "messages"]),
+        Kind::Enum(&["auto", "libnotify", "messages"]),
         s("auto"),
-        "Where page notifications show: auto (the desktop's notifications) or messages (riptide's status bar)"
+        "Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings) or messages (riptide's status bar)"
     ),
     def!(
         "content.notifications.show_origin",
         Kind::Bool,
         Value::Bool(true),
-        "Start notification messages with the site they came from (presenter = messages)"
+        "Show the site a notification came from (presenter = libnotify or messages)"
+    ),
+    def!(
+        "content.notifications.site_icon",
+        Kind::Bool,
+        Value::Bool(true),
+        "Show the site's icon on desktop notifications (presenter = libnotify)"
+    ),
+    def!(
+        "content.notifications.timeout",
+        Kind::Int {
+            min: -1,
+            max: 3_600_000
+        },
+        Value::Int(-1),
+        "Milliseconds a desktop notification stays (presenter = libnotify): -1 lets the desktop decide, 0 keeps it until dismissed"
+    ),
+    def!(
+        "content.notifications.urgency",
+        Kind::Enum(&["low", "normal", "critical"]),
+        s("normal"),
+        "How urgent desktop notifications are (presenter = libnotify): low, normal or critical"
     ),
     def!(
         "content.pdf_viewer",

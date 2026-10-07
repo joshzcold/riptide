@@ -50,7 +50,8 @@ pub fn load() -> (usize, Vec<String>) {
 /// Settings renderers need: tell them when one changes. Outside the shell borrow.
 pub fn sync_settings(settings: &rt_core::settings::Settings) {
     let rocker = settings.bool("input.mouse.rocker_gestures");
-    let messages = settings.str("content.notifications.presenter") == "messages";
+    // Both take notifications from riptide's stand-in instead of Chromium.
+    let messages = settings.str("content.notifications.presenter") != "auto";
     let changed = ROCKER.with(|r| r.replace(rocker))
         != rocker | (NOTIFICATION_MESSAGES.with(|n| n.replace(messages)) != messages);
     if changed {

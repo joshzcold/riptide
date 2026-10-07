@@ -23,6 +23,7 @@ mod history;
 mod lua;
 mod marks;
 mod navigate;
+mod notifications;
 mod permissions;
 mod privacy;
 mod prompts;

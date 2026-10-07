@@ -151,14 +151,17 @@ const ICONS = {
   content: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   url: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
   files: '<path d="M12 4v11M7 10l5 5 5-5M5 19h14"/>',
+  notifications: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   other: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
   reset: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6M4 4v4.6h4.6"/>',
 };
 const GROUPS = [
   { id: "general", title: "General", blurb: "Starting, sessions, quitting, updates and spell checking.",
-    prefixes: ["auto_save", "session", "confirm_quit", "changelog_after_upgrade", "crash_report", "new_instance_open_target", "new_instance_open_target_window", "messages", "spellcheck"] },
+    prefixes: ["auto_save", "session", "confirm_quit", "changelog_after_upgrade", "crash_report", "new_instance_open_target", "new_instance_open_target_window", "spellcheck"] },
   { id: "url", title: "URLs & search", blurb: "Start pages, search engines and how URLs are read.", prefixes: ["url", "search"] },
   { id: "look", title: "Look & feel", blurb: "Theme, window, zoom and scrolling.", prefixes: ["ui", "window", "zoom", "scrolling"] },
+  { id: "notifications", title: "Notifications", blurb: "How site notifications reach you: Chromium's, riptide's own desktop notifications (libnotify) with their app name, urgency, timeout and icon, or the status bar.",
+    prefixes: ["content.notifications", "messages"] },
   { id: "colors", title: "Colors", blurb: "Override single colors of the theme. Empty uses the theme's color, shown in the swatch.", prefixes: ["colors"] },
   { id: "fonts", title: "Fonts", blurb: "riptide's own fonts, and the default fonts of web pages.", prefixes: ["fonts"] },
   { id: "tabs", title: "Tabs", blurb: "The tab bar and how tabs open, close and move.", prefixes: ["tabs"] },
@@ -169,7 +172,20 @@ const GROUPS = [
   { id: "content", title: "Pages & privacy", blurb: "What pages may do, blocking, cookies and permissions.", prefixes: ["content"] },
   { id: "files", title: "Downloads & prompts", blurb: "Downloads, file pickers, the editor and questions.", prefixes: ["downloads", "fileselect", "editor", "prompt"] },
 ];
-const groupOf = (e) => GROUPS.find((g) => g.prefixes.includes(e.section)) || { id: "other", title: "Other", blurb: "", prefixes: [] };
+// The group whose prefix matches the most of the name: content.notifications.* is
+// Notifications, the rest of content.* Pages & privacy.
+const OTHER = { id: "other", title: "Other", blurb: "", prefixes: [] };
+function matchOf(e) {
+  let best = { group: OTHER, prefix: e.section };
+  for (const group of GROUPS) {
+    for (const prefix of group.prefixes) {
+      const hit = e.name === prefix || e.name.startsWith(`${prefix}.`);
+      if (hit && (best.group === OTHER || prefix.length > best.prefix.length)) best = { group, prefix };
+    }
+  }
+  return best;
+}
+const groupOf = (e) => matchOf(e).group;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -427,12 +443,14 @@ function render() {
     // One-off settings come first, without a heading.
     const mixed = group.prefixes.length > 1;
     const split = mixed || entries.length > 10;
-    const count = (s) => entries.filter((x) => x.section === s).length;
-    if (mixed) entries.sort((a, b) => (count(a.section) > 1) - (count(b.section) > 1) || (a.name < b.name ? -1 : 1));
+    const prefixOf = (x) => matchOf(x).prefix;
+    const count = (p) => entries.filter((x) => prefixOf(x) === p).length;
+    if (mixed) entries.sort((a, b) => (count(prefixOf(a)) > 1) - (count(prefixOf(b)) > 1) || (a.name < b.name ? -1 : 1));
     let sub = "";
     for (const e of entries) {
       const parts = e.name.split(".");
-      const part = mixed ? (count(e.section) > 1 ? e.section : "") : parts.length > 2 ? parts[1] : "";
+      const prefix = prefixOf(e);
+      const part = mixed ? (count(prefix) > 1 ? prefix.split(".").pop() : "") : parts.length > 2 ? parts[1] : "";
       if (split && part !== sub) {
         if (part || sub) card.append(el("div", "sub", (part || "general").replaceAll("_", " ")));
         sub = part;

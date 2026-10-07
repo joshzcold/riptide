@@ -22,7 +22,36 @@ For permission prompts:
 
 The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture`, `content.desktop_capture`, `content.mouse_lock` (pointer lock, as games use) and `content.register_protocol_handler` (a site offering to handle `mailto:` links) settings (`ask`, `true` or `false`) answer without asking.
 
-Notifications from sites show on your desktop. `content.notifications.presenter = "messages"` shows them in riptide's status bar instead, starting with the site's origin unless `content.notifications.show_origin = false`.
+## Notifications
+
+`content.notifications.presenter` picks where notifications from sites go:
+
+| Presenter | Where |
+|---|---|
+| `auto` (the default) | Your desktop, sent by Chromium |
+| `libnotify` | Your desktop, sent by riptide with `notify-send` (from libnotify), following the settings below. Clicking one shows its tab. |
+| `messages` | riptide's status bar, for `messages.timeout` milliseconds |
+
+With `libnotify`:
+
+| Setting | What it does |
+|---|---|
+| `content.notifications.app_name` | The app name on the notification (`riptide`), which notification services can match to style riptide's own |
+| `content.notifications.urgency` | `low`, `normal` or `critical` |
+| `content.notifications.timeout` | Milliseconds it stays; `-1` lets your desktop decide and `0` keeps it until you dismiss it |
+| `content.notifications.site_icon` | Show the site's icon |
+| `content.notifications.show_origin` | Put the site it came from on the first line (this also starts status bar messages with it) |
+
+How notifications look (colors, fonts, position, sound) is up to your notification service: dunst, mako, GNOME or KDE. Most can style one app differently, for example in dunst:
+
+```ini
+[riptide]
+appname = riptide
+background = "#181616"
+foreground = "#c5c9c5"
+```
+
+If `notify-send` isn't installed, riptide shows the notification in the status bar and says why.
 
 ## Links to other programs
 
