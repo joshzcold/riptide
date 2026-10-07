@@ -17,6 +17,7 @@ pub mod paths;
 pub mod reference;
 pub mod remote;
 pub mod sandbox;
+pub mod theme_import;
 pub mod themes;
 pub mod toml_file;
 pub mod userscripts;

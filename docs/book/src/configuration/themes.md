@@ -59,6 +59,17 @@ blue = "#658594"      # passthrough mode, pinned tabs
 
 Palette colors are `#rrggbb`; `[colors]` takes any CSS color. Theme files are read with the config, so after editing one run `:config-source`. A file with a mistake is skipped with a message saying what's wrong.
 
+### Themes from other programs
+
+Two kinds of theme file made for other programs work as they are. Copy one into `themes/`, and its file name becomes the theme's name:
+
+| File | What's read |
+|---|---|
+| `<name>.yaml` or `.yml`: a [base16](https://github.com/tinted-theming/home) scheme | `base00`…`base0F`, in either the older flat layout or under `palette:` |
+| `<name>.py`: a qutebrowser theme | `c.colors.… = …` and `config.set("colors.…", …)` lines, with values as strings, variables (`base00 = "#…"`) or dict entries (`palette['bg']`). No Python is run. |
+
+A qutebrowser theme's status bar, completion, hint, error, insert and passthrough colors become the palette, and every other `colors.*` setting riptide also has is used as it is. Many Neovim and terminal themes ship a base16 file; Kanagawa's is in `extras/base16/`.
+
 ## Changing single colors
 
 `colors.*` settings change one color on top of the theme, with qutebrowser's names where there is one. An empty value (the default) uses the theme's. Colors are `#rrggbb`, `#rgb`, `rgb(…)`, `hsl(…)` or a CSS color name:

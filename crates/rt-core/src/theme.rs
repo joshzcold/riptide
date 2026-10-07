@@ -382,6 +382,26 @@ pub fn names() -> Vec<String> {
         .collect()
 }
 
+/// Built-in theme `name`'s palette by [`PALETTE_KEYS`] name, e.g. to fill
+/// in what an imported theme lacks.
+pub fn builtin_palette(name: &str) -> Option<BTreeMap<&'static str, &'static str>> {
+    let p = palette(name)?;
+    Some(BTreeMap::from([
+        ("base", p.base),
+        ("surface", p.surface),
+        ("fg", p.fg),
+        ("accent", p.accent),
+        ("yellow", p.yellow),
+        ("red", p.red),
+        ("green", p.green),
+        ("blue", p.blue),
+        ("surface2", p.surface2),
+        ("surface3", p.surface3),
+        ("muted", p.muted),
+        ("orange", p.orange),
+    ]))
+}
+
 /// The palette keys a theme file's `[palette]` may set; the first eight are required.
 pub const PALETTE_KEYS: &[&str] = &[
     "base", "surface", "fg", "accent", "yellow", "red", "green", "blue", "surface2", "surface3",
@@ -615,7 +635,7 @@ pub fn argb(text: &str) -> Option<u32> {
 }
 
 /// WCAG relative luminance of a `#rrggbb` color.
-fn luminance(hex: &str) -> f64 {
+pub fn luminance(hex: &str) -> f64 {
     let Some((r, g, b)) = rgb(hex) else {
         return 0.0;
     };

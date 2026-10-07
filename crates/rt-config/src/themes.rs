@@ -1,4 +1,5 @@
-//! User themes: `themes/<name>.toml` in the config directory.
+//! User themes: `themes/<name>.toml` in the config directory, or a base16
+//! scheme (`.yaml`) or qutebrowser theme (`.py`) there (see `theme_import`).
 //!
 //! ```toml
 //! [palette]
@@ -46,7 +47,10 @@ fn read(dir: &Path) -> (Themes, Vec<String>) {
     };
     let mut paths: Vec<_> = entries
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e == "toml"))
+        .filter(|p| {
+            p.extension()
+                .is_some_and(|e| ["toml", "yaml", "yml", "py"].iter().any(|x| e == *x))
+        })
         .collect();
     paths.sort();
     for path in paths {
@@ -62,10 +66,24 @@ fn read(dir: &Path) -> (Themes, Vec<String>) {
             errors.push(format!("{shown}: {name} is a built-in theme"));
             continue;
         }
+        if themes.contains_key(name) {
+            errors.push(format!("{shown}: another file already makes theme {name}"));
+            continue;
+        }
+        let kind = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default();
         let parsed = std::fs::read_to_string(&path)
             .map_err(|e| e.to_string())
-            .and_then(|text| toml::from_str::<ThemeFile>(&text).map_err(|e| e.to_string()))
-            .and_then(|file| rt_core::theme::user_theme(&file.palette, &file.colors));
+            .and_then(|text| match kind {
+                "toml" => toml::from_str::<ThemeFile>(&text)
+                    .map(|f| (f.palette, f.colors))
+                    .map_err(|e| e.to_string()),
+                "py" => crate::theme_import::qutebrowser(&text),
+                _ => crate::theme_import::base16(&text),
+            })
+            .and_then(|(palette, colors)| rt_core::theme::user_theme(&palette, &colors));
         match parsed {
             Ok(tokens) => {
                 themes.insert(name.to_string(), tokens);

@@ -248,3 +248,28 @@ fn history_and_downloads_pages_take_the_theme() {
         );
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn base16_and_qutebrowser_themes_are_imported() {
+    let mut base16 = String::from("scheme: \"Test\"\n");
+    for (slot, color) in [
+        "102030", "203040", "304050", "8090a0", "a0b0c0", "e0e0e0", "f0f0f0", "ffffff", "cc4444",
+        "cc8844", "cccc44", "44cc44", "44cccc", "4488cc", "cc44cc", "884422",
+    ]
+    .iter()
+    .enumerate()
+    {
+        base16.push_str(&format!("base0{slot:X}: \"{color}\"\n"));
+    }
+    let qutebrowser = "bg = '#302010'\nc.colors.statusbar.normal.bg = bg\n\
+                       c.colors.statusbar.normal.fg = '#eeeeee'\n";
+    let b = Browser::launch()
+        .file("config/themes/ocean.yaml", &base16)
+        .file("config/themes/qute.py", qutebrowser)
+        .start("page.html");
+    b.run("theme ocean");
+    wait_bg(&b, "rgb(16, 32, 48)");
+    b.run("theme qute");
+    wait_bg(&b, "rgb(48, 32, 16)");
+}
