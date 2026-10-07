@@ -885,7 +885,12 @@ So with Alloy, sharing one tab or one window isn't possible from the page side. 
   - ✅ (2026-10-07) **On by default:** `content.call_sites` defaults to `rt_core::settings::CALL_SITES`: Meet, Teams (three domains), Zoom's `/wc/` and `/j/` paths, Webex, meet.jit.si and Whereby. Slack and Discord are left out, since their calls are inside the whole app. The setting's description says what clearing it loses. Tested with typical meeting URLs and non-meeting pages on the same sites.
   - ✅ (2026-10-07) **Saying so:** when `content.call_sites` sends a page to a call window, the status bar says "Opened <host> in a call window: …" once the page has loaded (`tabs::open_call_site`). `:open --call` and `:tab-call` don't, since the user asked for it.
   - ✅ (2026-10-07) **Tiled, not floating:** the `cef` crate answers 0 for `can_resize`, `can_maximize` and `can_minimize` unless they're implemented, where CEF's default is 1. So every riptide window asked for a fixed 1280×800 (`WM_NORMAL_HINTS` minimum = maximum), and dwm floated it, call windows most visibly. Both window delegates now return 1 and give a 320×240 minimum. Test: `windows_can_be_resized_so_tiling_window_managers_tile_them`.
-  - ✅ (2026-10-07) **Indicators:** `on_media_access_change` sets each tab's video and audio capture. `{media}` in `tabs.title.format` (on by default) and the `media` status bar widget show `[V] `, `[A] ` or `[A/V] `. CEF doesn't say whether video is a camera or the screen. There's no `:share-stop`, because CEF can't stop a page's tracks from outside; call windows have Chrome's "Stop sharing" bar.
+  - ✅ (2026-10-07) **Indicators:** `on_media_access_change` sets each tab's video and audio capture. `{media}` in `tabs.title.format` (on by default) and the `media` status bar widget show `[V] `, `[A] ` or `[A/V] `. CEF doesn't say whether video is a camera or the screen.
+  - ✅ (2026-10-07) **Sharing marker and `:share-stop`:** CEF can't tell a share from a camera or stop one from outside, so a page script does both (`SHARE_JS` in `renderer.rs`, in every web frame).
+    - It wraps `MediaDevices.prototype.getDisplayMedia` once Chromium has defined it (it isn't there when the context is created), and reports the live share's `displaySurface` (`rt.share`; Alloy's whole-screen share has none, so it counts as `monitor`). `ended` events and a 1 s poll while sharing catch the end, since a page stopping its own track fires nothing. Losing video access clears the mark too, for pages that navigate away.
+    - Each tab keeps `sharing`. `{media}` shows `[Share] ` or `[Share/A] `, the new `sharing` status bar widget (on by default) shows any share from any tab, and the start of a share is announced with the site's name.
+    - `:share-stop` sends `rt.share-stop` to every frame of each sharing tab. The frame's stop function stops the tracks and dispatches `ended`, so sites update as if Chrome's "Stop sharing" was pressed. Works in call windows too.
+    - Tests: `share_stop.rs` (from another tab, the page stopping by itself, and a call window).
   - ✅ (2026-10-07) **Background calls:** measured with Chromium's fake devices (`media.rs`). A hidden tab capturing silently has its timers slowed to 1 Hz, as in Chrome. Once it plays audio, as a call does, it runs at full speed: 27 of 30 ticks of 100 ms. Nothing to exempt.
   - **Not done yet:**
     - Fullscreen, Chrome's accelerators and context menu, and keys while the picker is open, checked by hand on a real desktop.
@@ -897,7 +902,7 @@ Whatever path wins:
 
 - **Picker UX:**
   - A keyboard picker in the prompt area: tabs (title and favicon), windows, screens, thumbnails if available, and a "share audio" toggle.
-  - A sharing marker in the status bar and on the tab, `:share-stop`, and switching the shared source mid-call.
+  - ✅ A sharing marker in the status bar and on the tab, and `:share-stop` (2026-10-07). Not done: switching the shared source mid-call.
   - Shared tabs stay highlighted in the tab bar.
 - **Calls keep running in the background:** check that a tab with live capture or WebRTC isn't throttled when hidden (timers, rendering), and exempt it if it is.
 - **Devices:**

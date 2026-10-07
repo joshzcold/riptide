@@ -92,6 +92,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-mute` | `<Alt-m>` | Mute or unmute this tab (Alt-m) |
 | `:pip` | `gp` | Float the page's main video in a picture-in-picture window, or bring it back (gp) |
 | `:call-mute` | `cm` | Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys) |
+| `:share-stop` |  | Stop sharing your screen, a window or a tab, from any tab or window |
 | `:messages` |  | Show this session's messages |
 | `:repeat-command` | `.` | Run the last command again (.) |
 | `:theme` |  | Switch the color theme (ui.theme), or list the themes: :theme [name] |

@@ -32,6 +32,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         | Command::Home
         | Command::TabMute
         | Command::CallMute
+        | Command::ShareStop
         | Command::Pip
         | Command::DevToolsFocus
         | Command::DebugDumpPage { .. }
@@ -189,6 +190,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             });
         }
         Command::CallMute => call_mute(),
+        Command::ShareStop => share_stop(),
         Command::Pip => pip(),
         Command::TabMute => {
             let muted = host.is_audio_muted() == 0;
@@ -295,6 +297,41 @@ wrap_pdf_print_callback! {
             shell::refresh_ui();
         }
     }
+}
+
+/// What a `getDisplayMedia` display surface is called in messages.
+pub fn share_name(surface: &str) -> &'static str {
+    match surface {
+        "browser" => "a tab",
+        "window" => "a window",
+        _ => "your screen",
+    }
+}
+
+/// `:share-stop`: ask every frame of each sharing tab, in any window, to stop.
+fn share_stop() {
+    let tabs: Vec<Browser> = shell::with(|s| {
+        s.windows
+            .iter()
+            .flat_map(|w| w.tabs.iter())
+            .filter(|t| t.sharing.is_some())
+            .filter_map(|t| t.browser())
+            .collect()
+    })
+    .unwrap_or_default();
+    if tabs.is_empty() {
+        return shell::show_message(Level::Error, "Nothing is being shared");
+    }
+    for browser in &tabs {
+        for frame in crate::hints::all_frames(browser) {
+            if let Some(mut message) =
+                process_message_create(Some(&CefString::from(crate::renderer::SHARE_STOP_MESSAGE)))
+            {
+                frame.send_process_message(ProcessId::RENDERER, Some(&mut message));
+            }
+        }
+    }
+    shell::show_message(Level::Info, "Stopped sharing");
 }
 
 /// `:call-mute`: the call is the tab using a microphone. Its site's own

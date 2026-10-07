@@ -1,17 +1,26 @@
 <!doctype html>
 <title>share</title>
 <button id="share" onclick="share()">share screen</button>
+<button id="stop" onclick="stop()">stop from the page</button>
 <script>
   // window.__share: "waiting" while a picker or prompt is open, then the
-  // shared surface ("monitor", "window", "browser") or the error's name.
+  // shared surface ("monitor", "window", "browser") or the error's name, and
+  // "ended" once the track says it ended.
   window.__share = "";
+  let track = null;
   async function share() {
     window.__share = "waiting";
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      window.__share = stream.getVideoTracks()[0].getSettings().displaySurface || "unknown";
+      track = stream.getVideoTracks()[0];
+      track.addEventListener("ended", () => { window.__share = "ended"; });
+      window.__share = track.getSettings().displaySurface || "unknown";
     } catch (e) {
       window.__share = e.name;
     }
+  }
+  // Stopping its own track doesn't fire "ended" on it.
+  function stop() {
+    track?.stop();
   }
 </script>

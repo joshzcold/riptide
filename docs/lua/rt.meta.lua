@@ -615,7 +615,7 @@ function rt.spawn(argv, opts, callback) end
 ---@field padding string Space around the status bar's text, as CSS padding (top right bottom left), e.g. 2px 8px; the bar grows to fit
 ---@field position "top"|"bottom" Where the status bar is
 ---@field show "always"|"never"|"in-mode" When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode)
----@field widgets string[] What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…
+---@field widgets string[] What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…
 
 ---@class rt.c.tabs
 ---@field close_mouse_button "middle"|"right"|"none" Which mouse button closes a tab clicked in the tab bar

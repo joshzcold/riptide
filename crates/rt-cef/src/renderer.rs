@@ -57,6 +57,13 @@ pub const NOTIFICATION_MESSAGE: &str = "rt.notification";
 /// Renderer → browser: a rocker gesture; argument 0 is `back` or `forward`.
 pub const ROCKER_MESSAGE: &str = "rt.rocker";
 
+/// Renderer → browser: what a frame shares through `getDisplayMedia`, as a
+/// display surface (`monitor`, `window`, `browser`), or `""` once it stops.
+pub const SHARE_MESSAGE: &str = "rt.share";
+
+/// Browser → renderer: stop the frame's shares (`:share-stop`).
+pub const SHARE_STOP_MESSAGE: &str = "rt.share-stop";
+
 thread_local! {
     static SCRIPTS: RefCell<(u64, Vec<Script>)> = const { RefCell::new((0, Vec::new())) };
     static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -65,6 +72,8 @@ thread_local! {
     /// `GM_xmlhttpRequest` callbacks waiting for the browser, by request id.
     static XHR_CALLBACKS: RefCell<std::collections::HashMap<i32, (V8Context, V8Value)>> =
         RefCell::new(std::collections::HashMap::new());
+    /// Each page context's function that stops its shares.
+    static SHARE_STOPPERS: RefCell<Vec<(V8Context, V8Value)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// JavaScript for the APIs a script must `@grant`, built on the private
@@ -242,6 +251,7 @@ wrap_render_process_handler! {
                 || (rt_core::ui_message::tab_may_send(&url) && frame.is_main() != 0);
             if !may_send {
                 if !url.starts_with("riptide://") {
+                    install_share_watch(context);
                     run_greasemonkey(frame, context, &url);
                     if ROCKER.with(std::cell::Cell::get) {
                         install_rocker(context);
@@ -311,6 +321,10 @@ wrap_render_process_handler! {
             #[cfg(any(debug_assertions, feature = "test-control"))]
             if name == CRASH_MESSAGE {
                 std::process::abort();
+            }
+            if name == SHARE_STOP_MESSAGE {
+                stop_shares(frame);
+                return 1;
             }
             if name == GM_VALUES_MESSAGE {
                 if let Some(args) = message.argument_list() {
@@ -488,9 +502,102 @@ fn install_notification_messages(context: &V8Context) {
     );
 }
 
+/// Reports what the page shares, so the tab and status bar can say so, and
+/// returns the function `:share-stop` calls. Stopping a track doesn't fire
+/// `ended` on the page's own track, so it's dispatched for the page's
+/// "stopped sharing" handling, and stops by the page itself are polled for.
+const SHARE_JS: &str = r#"(function (report) {
+  const streams = new Set();
+  let timer = 0, last = "";
+  const check = () => {
+    for (const s of streams) if (!s.getVideoTracks().some((t) => t.readyState === "live")) streams.delete(s);
+    const track = [...streams].flatMap((s) => s.getVideoTracks()).find((t) => t.readyState === "live");
+    const now = track ? track.getSettings().displaySurface || "monitor" : "";
+    if (now !== last) { last = now; report(now); }
+    if (!streams.size && timer) { clearInterval(timer); timer = 0; }
+  };
+  // Chromium adds MediaDevices after this runs: wrap it once it's there.
+  let wrapped = false;
+  const install = () => {
+    const proto = globalThis.MediaDevices?.prototype;
+    if (wrapped || !proto?.getDisplayMedia) return;
+    wrapped = true;
+    const native = proto.getDisplayMedia;
+    proto.getDisplayMedia = {
+      getDisplayMedia(...args) {
+        return native.apply(this, args).then((stream) => {
+          streams.add(stream);
+          for (const t of stream.getVideoTracks()) t.addEventListener("ended", check);
+          if (!timer) timer = setInterval(check, 1000);
+          check();
+          return stream;
+        });
+      },
+    }.getDisplayMedia;
+  };
+  install();
+  queueMicrotask(install);
+  addEventListener("DOMContentLoaded", install, { once: true, capture: true });
+  addEventListener("load", install, { once: true, capture: true });
+  return () => {
+    for (const s of streams) {
+      for (const t of s.getTracks()) {
+        if (t.readyState === "live") { t.stop(); t.dispatchEvent(new Event("ended")); }
+      }
+    }
+    check();
+  };
+})"#;
+
+fn install_share_watch(context: &V8Context) {
+    let mut handler = RtShareHandler::new();
+    let stop = install_with(
+        context,
+        SHARE_JS,
+        "riptide:share",
+        v8_value_create_function(Some(&CefString::from("report")), Some(&mut handler)),
+    );
+    if let Some(stop) = stop.filter(|f| f.is_function() != 0) {
+        SHARE_STOPPERS.with(|s| {
+            let mut stoppers = s.borrow_mut();
+            stoppers.retain(|(c, _)| c.is_valid() != 0);
+            stoppers.push((context.clone(), stop));
+        });
+    }
+}
+
+/// `:share-stop` for one frame: run the stop function of each of its contexts.
+fn stop_shares(frame: &Frame) {
+    let id = CefString::from(&frame.identifier()).to_string();
+    let stoppers: Vec<(V8Context, V8Value)> = SHARE_STOPPERS.with(|s| {
+        let mut stoppers = s.borrow_mut();
+        stoppers.retain(|(c, _)| c.is_valid() != 0);
+        stoppers
+            .iter()
+            .filter(|(c, _)| {
+                c.frame()
+                    .is_some_and(|f| CefString::from(&f.identifier()).to_string() == id)
+            })
+            .cloned()
+            .collect()
+    });
+    for (context, stop) in stoppers {
+        if context.enter() != 0 {
+            stop.execute_function(None, Some(&[]));
+            context.exit();
+        }
+    }
+}
+
 /// Run `code` (a function expression) in `context`, giving it `native` as
-/// its one argument so the page never sees it.
-fn install_with(context: &V8Context, code: &str, name: &str, native: Option<V8Value>) {
+/// its one argument so the page never sees it. Returns what it returns.
+fn install_with(
+    context: &V8Context,
+    code: &str,
+    name: &str,
+    native: Option<V8Value>,
+) -> Option<V8Value> {
+    let mut result = None;
     let mut retval = None;
     let mut exception = None;
     context.enter();
@@ -505,12 +612,13 @@ fn install_with(context: &V8Context, code: &str, name: &str, native: Option<V8Va
         let message = exception.map(|e| CefString::from(&e.message()).to_string());
         tracing::warn!(name, ?message, "couldn't install a page helper");
     } else if let (Some(function), Some(native)) = (retval, native) {
-        function.execute_function(None, Some(&[Some(native)]));
+        result = function.execute_function(None, Some(&[Some(native)]));
         if let Some(e) = function.exception() {
             tracing::warn!(name, message = %CefString::from(&e.message()), "a page helper failed");
         }
     }
     context.exit();
+    result
 }
 
 // The notification stand-in's way to the browser.
@@ -534,6 +642,28 @@ wrap_v8_handler! {
                     .unwrap_or_default()
             };
             send_to_browser(NOTIFICATION_MESSAGE, &[&text(0), &text(1)]);
+            1
+        }
+    }
+}
+
+// The share watch's way to the browser.
+wrap_v8_handler! {
+    struct RtShareHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let Some(surface) = arguments.and_then(|a| a.first().cloned().flatten()).filter(|v| v.is_string() != 0) else {
+                return 1;
+            };
+            send_to_browser(SHARE_MESSAGE, &[&CefString::from(&surface.string_value())]);
             1
         }
     }

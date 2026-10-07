@@ -14,7 +14,7 @@ The current tab is the darkest in the bar. To also underline it (or, in a vertic
 
 Tab titles follow `tabs.title.format` (default `{audio}{media}{index}: {current_title}`), and shrunk pinned tabs follow `tabs.title.format_pinned` (default `{index}`). The fields are `{index}`, `{aligned_index}`, `{current_title}`, `{current_url}`, `{host}`, `{perc}` (loading progress), `{audio}` (`[M] ` on a muted tab), `{media}` and `{private}`.
 
-`{media}`, and the status bar's `media` widget, show what a page is capturing: `[V] ` while it uses a camera or shares the screen, `[A] ` for a microphone, and `[A/V] ` for both. Chromium doesn't say whether video comes from a camera or the screen. `tabs.tooltips = false` turns off the title-and-URL tooltip.
+`{media}`, and the status bar's `media` widget, show what a page is capturing: `[V] ` while it uses a camera, `[A] ` for a microphone, `[A/V] ` for both, and `[Share] ` while it shares your screen, a window or a tab (see [Sharing your screen](#sharing-your-screen)). `tabs.tooltips = false` turns off the title-and-URL tooltip.
 
 In a top or bottom bar, tabs share the width evenly. `tabs.max_width` caps each tab and `tabs.min_width` keeps them from getting narrower; once they don't fit, the bar scrolls to keep the current tab in view. `tabs.title.alignment` (`left`, `center`, `right`) places the title, and `tabs.indicator.width` sets the loading indicator's width (`0` hides it):
 
@@ -69,7 +69,13 @@ The settings page (`:settings`) and `:help content.call_sites` show the default 
 - **Sessions:** call windows are saved as ordinary windows, so a restored call shares the whole screen until you reopen it with `--call`.
 - **Turning it off:** `content.desktop_capture = false` still refuses screen sharing everywhere, call windows included.
 - **In the background:** a call keeps running at full speed in a tab you've switched away from, as in Chrome, since it plays sound. A silent page in a background tab has its timers slowed to once a second.
-- **Stopping a share:** in a call window, use the "Stop sharing" bar Chrome shows. riptide can't stop a page's capture from outside; close or reload the tab instead.
+- **Stopping a share:** see [Sharing your screen](#sharing-your-screen).
+
+### Sharing your screen
+
+While a page shares your screen, a window or a tab, its tab shows `[Share] ` in place of `[V] ` (`[Share/A] ` with a microphone). The status bar's `sharing` widget says what's being shared, such as `[sharing your screen]`, whichever tab you're on. When a share starts, the status bar names the site.
+
+`:share-stop` stops every share, in any tab or window. The page is told as if you'd pressed Chrome's "Stop sharing", so the call site updates its own buttons. You can still stop from the site or from Chrome's bar in a call window.
 
 ### Picture-in-picture
 

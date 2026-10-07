@@ -135,6 +135,7 @@ mod enabled {
                                 "crashed": t.crashed.is_some(),
                                 "search_match": t.search_match,
                                 "muted": t.muted,
+                                "sharing": t.sharing,
                             })
                         })
                         .collect();

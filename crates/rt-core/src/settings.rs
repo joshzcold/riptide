@@ -249,6 +249,7 @@ pub const STATUSBAR_WIDGETS: &[&str] = &[
     "blocked",
     "muted",
     "media",
+    "sharing",
     "zoom",
     "search_match",
     "url",
@@ -1816,6 +1817,7 @@ pub static SETTINGS: &[SettingDef] = &[
                 "blocked",
                 "muted",
                 "media",
+                "sharing",
                 "zoom",
                 "search_match",
                 "url",
@@ -1827,7 +1829,7 @@ pub static SETTINGS: &[SettingDef] = &[
             .map(String::from)
             .to_vec()
         ),
-        "What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
+        "What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
         statusbar_widgets
     ),
     def!(

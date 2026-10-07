@@ -418,6 +418,8 @@ pub enum Command {
     TabMute,
     /// Press the call site's mute key in the tab using the microphone, from any tab.
     CallMute,
+    /// Stop every screen, window or tab share, in any tab or window.
+    ShareStop,
     /// Float the page's main video in picture-in-picture, or bring it back.
     Pip,
     /// Show the messages of this session.
@@ -922,6 +924,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "call-mute",
         "Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys)",
+    ),
+    spec(
+        "share-stop",
+        "Stop sharing your screen, a window or a tab, from any tab or window",
     ),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
@@ -1592,6 +1598,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "home" => Command::Home,
         "tab-mute" => Command::TabMute,
         "call-mute" => Command::CallMute,
+        "share-stop" => Command::ShareStop,
         "pip" => Command::Pip,
         "messages" => Command::Messages,
         "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,

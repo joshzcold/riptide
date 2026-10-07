@@ -71,6 +71,9 @@ pub struct TabState {
     /// The current search's match number and count, once Chromium has found any.
     #[serde(default)]
     pub search_match: Option<(i32, i32)>,
+    /// What the page shares: `monitor`, `window` or `browser`.
+    #[serde(default)]
+    pub sharing: Option<String>,
 }
 
 impl TabState {

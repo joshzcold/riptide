@@ -123,7 +123,7 @@ pub fn request(request: HintRequest) {
 }
 
 /// The browser's frames, the main frame first.
-fn all_frames(browser: &Browser) -> Vec<Frame> {
+pub(crate) fn all_frames(browser: &Browser) -> Vec<Frame> {
     let mut ids = CefStringList::new();
     browser.frame_identifiers(Some(&mut ids));
     let mut frames: Vec<Frame> = ids

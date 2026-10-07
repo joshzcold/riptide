@@ -29,13 +29,17 @@ pub struct TabFields<'a> {
     pub muted: bool,
     /// The page has access to video (a camera or the screen) and to audio (a microphone).
     pub media: (bool, bool),
+    /// The page is sharing a screen, window or tab.
+    pub sharing: bool,
     pub private: bool,
 }
 
 /// `[A/V] `, `[V] ` (a camera or the screen) or `[A] ` (a microphone)
 /// while a page captures them; empty otherwise.
-pub fn media_label((video, audio): (bool, bool)) -> &'static str {
+pub fn media_label((video, audio): (bool, bool), sharing: bool) -> &'static str {
     match (video, audio) {
+        _ if sharing && audio => "[Share/A] ",
+        _ if sharing => "[Share] ",
         (true, true) => "[A/V] ",
         (true, false) => "[V] ",
         (false, true) => "[A] ",
@@ -59,7 +63,7 @@ pub fn tab_label(template: &str, f: &TabFields) -> String {
                 .unwrap_or_default(),
         )
         .replace("{audio}", if f.muted { "[M] " } else { "" })
-        .replace("{media}", media_label(f.media))
+        .replace("{media}", media_label(f.media, f.sharing))
         .replace("{private}", if f.private { "[Private] " } else { "" })
 }
 
@@ -69,10 +73,12 @@ mod tests {
 
     #[test]
     fn media_marks_what_a_page_captures() {
-        assert_eq!(media_label((true, true)), "[A/V] ");
-        assert_eq!(media_label((true, false)), "[V] ");
-        assert_eq!(media_label((false, true)), "[A] ");
-        assert_eq!(media_label((false, false)), "");
+        assert_eq!(media_label((true, true), false), "[A/V] ");
+        assert_eq!(media_label((true, false), false), "[V] ");
+        assert_eq!(media_label((false, true), false), "[A] ");
+        assert_eq!(media_label((false, false), false), "");
+        assert_eq!(media_label((true, true), true), "[Share/A] ");
+        assert_eq!(media_label((true, false), true), "[Share] ");
     }
 
     const DEFAULT: &str = "{current_title}{title_sep}Riptide";
@@ -114,6 +120,7 @@ mod tests {
             progress: Some(0.42),
             muted: true,
             media: (false, false),
+            sharing: false,
             private: false,
         };
         assert_eq!(

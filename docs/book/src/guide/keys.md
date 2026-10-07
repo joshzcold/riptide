@@ -195,6 +195,8 @@ The status bar shows the mode, messages and the command line on the left. On the
 | `progress` | Loading progress |
 | `search_match` | `Match [2/14]` after a `/` search |
 | `downloads`, `muted`, `zoom` | Running downloads, a muted tab, and a zoom other than 100% |
+| `media` | What the tab captures: `[V]`, `[A]`, `[A/V]`, `[Share]` |
+| `sharing` | `[sharing your screen]` (or a window or tab) while any tab shares; `:share-stop` stops it |
 | `clock`, `clock:%a %H:%M` | The time, in an optional strftime format |
 | `text:…` | Fixed text |
 

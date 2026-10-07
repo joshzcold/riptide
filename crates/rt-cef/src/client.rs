@@ -120,6 +120,22 @@ wrap_client! {
                 shell::show_message(Level::Info, format!("{origin}{title}{body}"));
                 return 1;
             }
+            if name == crate::renderer::SHARE_MESSAGE {
+                let surface = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
+                let started = shell::with_tab(browser, |s, index, _| {
+                    let tab = s.tabs.get_mut(index)?;
+                    let started = tab.sharing.is_none() && !surface.is_empty();
+                    tab.sharing = (!surface.is_empty()).then(|| surface.clone());
+                    started.then(|| rt_core::url::host(&tab.url).to_string())
+                })
+                .flatten();
+                if let Some(site) = started {
+                    let what = crate::view::share_name(&surface);
+                    shell::show_message(Level::Info, format!("Sharing {what} with {site}. :share-stop stops it"));
+                }
+                shell::refresh_ui();
+                return 1;
+            }
             if name == crate::renderer::ROCKER_MESSAGE {
                 let direction = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string());
                 let enabled = shell::with(|s| s.engine.settings().bool("input.mouse.rocker_gestures")).unwrap_or(false);
@@ -570,6 +586,11 @@ wrap_display_handler! {
             shell::with_tab(browser, |s, index, _| {
                 if let Some(tab) = s.tabs.get_mut(index) {
                     tab.media = media;
+                    // Covers shares the page never got to report the end of,
+                    // such as when it navigates away.
+                    if !media.0 {
+                        tab.sharing = None;
+                    }
                 }
             });
             shell::refresh_ui();

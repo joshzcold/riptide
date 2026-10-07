@@ -55,6 +55,7 @@
   .url.https { color: var(--https); }
   .url.http { color: var(--http); }
   .url.error { color: var(--error-fg); }
+  .sharing { color: var(--error-fg); font-weight: bold; }
   /* On a coloured bar (a mode, a private window, a message), everything
      takes the bar's own text colour so it stays readable. */
   #bar.insert .url, #bar.passthrough .url, #bar.private .url,
@@ -117,6 +118,10 @@
       case "downloads": return text(state.downloads);
       case "muted": return text(state.muted ? "[muted]" : "");
       case "media": return text(state.media || "");
+      case "sharing":
+        el.className = "sharing";
+        el.title = ":share-stop stops it";
+        return text(state.sharing ? `[sharing ${state.sharing}]` : "");
       case "blocked":
         el.title = "Requests the ad blocker stopped on this page";
         return text(state.blocked ? `⊘${state.blocked}` : "");
