@@ -125,6 +125,9 @@ fn call_sites_open_in_a_call_window_from_open_and_from_links() {
         .expect("the first window");
     assert_eq!(first.tabs.len(), 1);
     assert_eq!(first.tabs[0].url, nav1);
+    b.wait_until("the call window says why it opened", |s| {
+        s.message().is_some_and(|m| m.contains("in a call window"))
+    });
     // :open -t too, without leaving an empty tab behind.
     b.run("tab-select 1/1");
     b.run(&format!("open -t {nav2}"));

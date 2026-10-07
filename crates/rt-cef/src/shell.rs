@@ -793,7 +793,7 @@ pub fn open(target: OpenTarget, related: bool, url: Option<String>) {
     };
     // content.call_sites: calls get a call window whichever way they're opened.
     if !matches!(target, OpenTarget::Private | OpenTarget::Call) && tabs::is_call_site(&url) {
-        return crate::window::create_call(url);
+        return tabs::open_call_site(url);
     }
     match target {
         OpenTarget::Current => {

@@ -50,7 +50,7 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 :open --call https://meet.google.com/abc-defg-hij
 ```
 
-Well-known call services open in a call window by themselves: Google Meet, Microsoft Teams, Zoom's web client and join links, Webex, Jitsi Meet and Whereby. Their URL patterns are the default of `content.call_sites`; `:open` and links in ordinary tabs send matching pages to a call window. `:tab-call` reopens any other tab in one.
+Well-known call services open in a call window by themselves: Google Meet, Microsoft Teams, Zoom's web client and join links, Webex, Jitsi Meet and Whereby. Their URL patterns are the default of `content.call_sites`; `:open` and links in ordinary tabs send matching pages to a call window, and once the page has loaded the status bar says so. `:tab-call` reopens any other tab in one.
 
 To add a service, extend the list. To stop opening calls in their own window, clear it; screen sharing on those sites then shares the whole screen, unless you open the call with `:open --call` or `:tab-call`.
 

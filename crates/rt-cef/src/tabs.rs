@@ -840,6 +840,19 @@ pub fn is_call_site(url: &str) -> bool {
     .unwrap_or(false)
 }
 
+/// Open a call site in a call window, and say why once it has loaded: the
+/// window appeared without being asked for.
+pub fn open_call_site(url: String) {
+    let host = rt_core::url::host(&url).to_string();
+    crate::window::create_call(url);
+    shell::show_message_after_load(
+        Level::Info,
+        format!(
+            "Opened {host} in a call window: screen sharing can pick a tab, window or screen. :help content.call_sites to change this"
+        ),
+    );
+}
+
 /// A page in an ordinary tab is navigating to a call site: open it in a
 /// call window instead, and close the tab if that page was all it was for.
 pub fn open_as_call(browser: i32, url: String) {
@@ -864,7 +877,7 @@ wrap_task! {
                 Some((window, index, url.is_empty() || url == "about:blank" || *url == self.url))
             })
             .flatten();
-            crate::window::create_call(self.url.clone());
+            open_call_site(self.url.clone());
             if let Some((window, index, true)) = empty {
                 let source = shell::with(|s| std::mem::replace(&mut s.active, window));
                 close_moved(index);
