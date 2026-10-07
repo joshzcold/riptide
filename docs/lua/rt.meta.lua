@@ -29,6 +29,14 @@ function rt.set(name, value, pattern) end
 ---@return any
 function rt.get(name) end
 
+---Define a theme for `ui.theme` and `:theme`, like a `themes/<name>.toml`
+---file: `palette` holds base, surface, fg, accent, yellow, red, green and blue
+---(and optionally surface2, surface3, muted, orange) as `#rrggbb`, and
+---`colors` any `colors.*` setting without the `colors.` prefix.
+---@param name string a-z, 0-9, `-` and `_`
+---@param spec { palette: table<string, string>, colors?: table<string, string> }
+function rt.theme(name, spec) end
+
 ---Bind keys (qutebrowser notation, e.g. "<Ctrl-x>" or "gg") to a command,
 ---or to a Lua function that runs when they're pressed.
 ---@param keys string

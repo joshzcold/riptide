@@ -428,6 +428,30 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
 
     api.set(
+        "theme",
+        lua.create_function(|lua, (name, spec): (String, mlua::Table)| {
+            if !crate::themes::valid_name(&name) {
+                return Err(mlua::Error::runtime(format!(
+                    "theme {name:?}: a theme name uses only a-z, 0-9, - and _"
+                )));
+            }
+            if rt_core::theme::THEME_CHOICES.contains(&name.as_str()) {
+                return Err(mlua::Error::runtime(format!("{name} is a built-in theme")));
+            }
+            let table = |key: &str| -> mlua::Result<std::collections::BTreeMap<String, String>> {
+                match spec.get::<Value>(key)? {
+                    Value::Nil => Ok(Default::default()),
+                    value => lua.from_value(value),
+                }
+            };
+            let tokens = rt_core::theme::user_theme(&table("palette")?, &table("colors")?)
+                .map_err(|e| mlua::Error::runtime(format!("theme {name}: {e}")))?;
+            rt_core::theme::add_user_theme(name, tokens);
+            Ok(())
+        })?,
+    )?;
+
+    api.set(
         "_is_setting",
         lua.create_function(|_, name: String| Ok(settings::find(&name).is_some()))?,
     )?;
@@ -890,6 +914,45 @@ end)
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn rt_theme_defines_a_theme_that_ui_theme_accepts() {
+        let ops = run_lua(
+            "rt-lua-theme",
+            r##"
+rt.theme("lua-ink", {
+  palette = {
+    base = "#0a0c0f", surface = "#181616", fg = "#c5c9c5", accent = "#8ba4b0",
+    yellow = "#c4b28a", red = "#c4746e", green = "#8a9a7b", blue = "#658594",
+  },
+  colors = { ["statusbar.insert.bg"] = "#123456" },
+})
+c.ui.theme = "lua-ink"
+"##,
+            &[],
+        )
+        .unwrap();
+        assert!(ops.contains(&ConfigOp::Set {
+            name: "ui.theme".into(),
+            value: settings::Value::Str("lua-ink".into()),
+        }));
+        let tokens = rt_core::theme::theme("lua-ink").unwrap();
+        assert_eq!(tokens["statusbar-insert-bg"], "#123456");
+        let error = run_lua(
+            "rt-lua-theme-bad",
+            r##"rt.theme("half", { palette = { base = "#000000" } })"##,
+            &[],
+        )
+        .unwrap_err();
+        assert!(error.contains("palette.surface is missing"), "{error}");
+        let error = run_lua(
+            "rt-lua-theme-nord",
+            r#"rt.theme("nord", { palette = {} })"#,
+            &[],
+        )
+        .unwrap_err();
+        assert!(error.contains("built-in"), "{error}");
     }
 
     fn run_lua(name: &str, code: &str, extra: &[(&str, &str)]) -> Result<Vec<ConfigOp>, String> {

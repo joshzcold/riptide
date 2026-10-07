@@ -94,7 +94,7 @@ fn read(dir: &Path) -> (Themes, Vec<String>) {
     (themes, errors)
 }
 
-fn valid_name(name: &str) -> bool {
+pub(crate) fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()

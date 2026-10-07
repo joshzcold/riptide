@@ -59,6 +59,19 @@ blue = "#658594"      # passthrough mode, pinned tabs
 
 Palette colors are `#rrggbb`; `[colors]` takes any CSS color. Theme files are read with the config, so after editing one run `:config-source`. A file with a mistake is skipped with a message saying what's wrong.
 
+In `config.lua`, `rt.theme` defines a theme the same way:
+
+```lua
+rt.theme("kanagawa-dragon", {
+  palette = {
+    base = "#0a0c0f", surface = "#181616", fg = "#c5c9c5", accent = "#8ba4b0",
+    yellow = "#c4b28a", red = "#c4746e", green = "#8a9a7b", blue = "#658594",
+  },
+  colors = { ["completion.item.selected.bg"] = "#2d4f67" },
+})
+c.ui.theme = "kanagawa-dragon"
+```
+
 ### Themes from other programs
 
 Two kinds of theme file made for other programs work as they are. Copy one into `themes/`, and its file name becomes the theme's name:

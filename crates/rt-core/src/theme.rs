@@ -373,6 +373,14 @@ pub fn set_user_themes(themes: BTreeMap<String, BTreeMap<&'static str, String>>)
     *USER_THEMES.write().unwrap_or_else(|e| e.into_inner()) = themes;
 }
 
+/// Add or replace one user theme (`rt.theme` in `config.lua`).
+pub fn add_user_theme(name: String, tokens: BTreeMap<&'static str, String>) {
+    USER_THEMES
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(name, tokens);
+}
+
 /// Every theme name `ui.theme` accepts: `auto`, the built-in themes, then the user's.
 pub fn names() -> Vec<String> {
     THEME_CHOICES
