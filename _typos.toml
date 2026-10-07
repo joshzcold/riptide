@@ -1,8 +1,10 @@
 # typos (scripts/tool.sh typos): spelling in code, docs and commit messages.
 # These words are right where they are: partial command names and URLs typed
-# in tests, hint labels, and the misspelling the spell checker is tested with.
+# in tests, hint labels, the misspelling the spell checker is tested with, and
+# language codes (fo-FO is Faroese).
 [default.extend-words]
 ba = "ba"
+fo = "fo"
 oll = "oll"
 onl = "onl"
 secon = "secon"

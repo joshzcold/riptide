@@ -293,6 +293,31 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
                 })
                 .collect();
         }
+        "spell-install" => {
+            // One language at a time, after any already typed.
+            let (before, word) = match parsed.pattern.rsplit_once(' ') {
+                Some((before, word)) => (format!("{before} "), word),
+                None => (String::new(), parsed.pattern),
+            };
+            let enabled = settings.list("spellcheck.languages");
+            return ranked(crate::dictionaries::DICTIONARIES.iter(), word, |d| {
+                d.language
+            })
+            .into_iter()
+            .map(|d| Completion {
+                icon: None,
+                category: "Dictionaries",
+                name: format!("{before}{}", d.language),
+                description: if enabled.iter().any(|l| l.eq_ignore_ascii_case(d.language)) {
+                    "on".into()
+                } else {
+                    String::new()
+                },
+                time: None,
+                detail: Some(format!("{:.1} MB", d.size as f64 / 1_000_000.0)),
+            })
+            .collect();
+        }
         "open" => CompletionKind::Url,
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,

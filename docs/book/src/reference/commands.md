@@ -57,6 +57,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:spell-suggest` |  | Suggest fixes for the misspelled word at the cursor (insert mode) |
 | `:spell-replace` |  | Replace the misspelled word: :spell-replace &lt;word&gt; |
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
+| `:spell-install` |  | Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE |
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
 | `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |

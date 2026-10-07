@@ -82,9 +82,87 @@ pub fn run_command(command: &Command) -> bool {
                 shell::show_message(Level::Info, format!("Added “{word}” to your dictionary"));
             }
         }
+        Command::SpellInstall { languages } => {
+            for language in languages {
+                install(language);
+            }
+        }
         _ => return false,
     }
     true
+}
+
+/// `:spell-install`: fetch one dictionary, check it, save it where Chromium
+/// looks, and add its language to `spellcheck.languages`. Installing first
+/// means Chromium never downloads it from Google itself.
+fn install(language: &str) {
+    let Some(dictionary) = rt_core::dictionaries::find(language) else {
+        shell::show_message(
+            Level::Error,
+            format!("There's no dictionary for {language}; :spell-install <Tab> lists them"),
+        );
+        return;
+    };
+    let Some(dir) = shell::with(|s| s.paths.data_dir.join("Dictionaries")) else {
+        return;
+    };
+    shell::show_message(
+        Level::Info,
+        format!("Downloading the {} dictionary…", dictionary.language),
+    );
+    crate::fetch::get(&dictionary.url(), move |result| {
+        let saved = result.and_then(|body| {
+            // gitiles serves files as base64 text.
+            let text: String = String::from_utf8_lossy(&body).split_whitespace().collect();
+            let decoded = base64_decode(Some(&CefString::from(text.as_str())))
+                .ok_or_else(|| "the download isn't base64".to_string())?;
+            let mut bytes = vec![0u8; decoded.size()];
+            decoded.data(Some(&mut bytes), 0);
+            dictionary.verify(&bytes)?;
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let path = dir.join(dictionary.file);
+            let partial = path.with_extension("bdic.part");
+            std::fs::write(&partial, &bytes).map_err(|e| e.to_string())?;
+            std::fs::rename(&partial, &path).map_err(|e| e.to_string())
+        });
+        match saved {
+            Ok(()) => {
+                let on = shell::with(|s| {
+                    s.engine
+                        .settings()
+                        .list("spellcheck.languages")
+                        .iter()
+                        .any(|l| l == dictionary.language)
+                })
+                .unwrap_or(false);
+                let effects = if on {
+                    Vec::new()
+                } else {
+                    let line = format!(
+                        "config-list-add spellcheck.languages {}",
+                        dictionary.language
+                    );
+                    shell::with(|s| s.engine.execute_str(&line, None)).unwrap_or_default()
+                };
+                shell::apply(effects);
+                shell::show_message(
+                    Level::Info,
+                    format!(
+                        "Installed the {} dictionary; spell checking uses it now",
+                        dictionary.language
+                    ),
+                );
+            }
+            Err(e) => shell::show_message(
+                Level::Error,
+                format!(
+                    "Could not install the {} dictionary: {e}",
+                    dictionary.language
+                ),
+            ),
+        }
+        shell::refresh_ui();
+    });
 }
 
 fn current_browser() -> Option<Browser> {

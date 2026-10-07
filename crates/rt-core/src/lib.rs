@@ -6,6 +6,7 @@ pub mod cmdline;
 pub mod command;
 pub mod completion;
 pub mod config;
+pub mod dictionaries;
 pub mod engine;
 pub mod help;
 pub mod hints;
