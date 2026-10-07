@@ -1066,6 +1066,9 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
 
     let current = s.tabs.current();
     // ui.theme and colors.*, sent with every bar's update.
+    crate::scheme::set_page_css(rt_core::theme::page_css(&rt_core::theme::resolve(
+        s.engine.settings(),
+    )));
     // `:theme nord` shows nord while it's being typed or picked.
     let preview = status
         .command_line

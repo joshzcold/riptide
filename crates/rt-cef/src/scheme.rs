@@ -17,6 +17,30 @@ pub const SCHEME: &str = "riptide";
 const CSP: &str =
     "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:";
 
+/// `theme::page_css` for the current theme, kept up to date by the UI thread
+/// because pages are served on the IO thread.
+static PAGE_CSS: std::sync::RwLock<String> = std::sync::RwLock::new(String::new());
+
+pub fn set_page_css(css: String) {
+    if let Ok(mut current) = PAGE_CSS.write()
+        && *current != css
+    {
+        *current = css;
+    }
+}
+
+/// `html` with the theme's colors added at the end of its `<head>`.
+fn themed(html: Arc<[u8]>) -> Arc<[u8]> {
+    let css = PAGE_CSS.read().map(|c| c.clone()).unwrap_or_default();
+    let text = String::from_utf8_lossy(&html);
+    match text.find("</head>") {
+        Some(at) if !css.is_empty() => {
+            Arc::from(format!("{}<style>{css}</style>{}", &text[..at], &text[at..]).into_bytes())
+        }
+        _ => html,
+    }
+}
+
 /// Pages served under `riptide://`, by host and path.
 fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
     let html = "text/html";
@@ -28,11 +52,11 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("ui", "/crashed.html") => embedded(ui::CRASHED_HTML),
         ("help", "/") => Some((crate::help::page(), html)),
         ("changelog", "/") => Some((crate::help::changelog_page(), html)),
-        ("history", "/") => Some((crate::help::history_page(), html)),
+        ("history", "/") => Some((themed(crate::help::history_page()), html)),
         ("messages", "/") => Some((crate::view::messages_page(), html)),
         ("config-diff", "/") => Some((crate::configcmd::diff_page(), html)),
         ("bookmarks", "/") => Some((crate::storage::bookmarks_page(), html)),
-        ("downloads", "/") => Some((crate::downloads::page(), html)),
+        ("downloads", "/") => Some((themed(crate::downloads::page()), html)),
         ("process", "/") => Some((crate::spawn::output_page(), html)),
         _ => None,
     }

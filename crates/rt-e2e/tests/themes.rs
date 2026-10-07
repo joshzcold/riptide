@@ -228,3 +228,23 @@ fn themes_from_the_config_directory_can_be_picked() {
     b.run("config-source");
     wait_bg(&b, "rgb(16, 32, 48)");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn history_and_downloads_pages_take_the_theme() {
+    let b = Browser::launch()
+        .toml("ui.theme = \"nord\"\n")
+        .start("page.html");
+    // nord's surface, #2e3440.
+    wait_bg(&b, "rgb(36, 41, 51)");
+    for page in ["riptide://history", "riptide://downloads"] {
+        b.run(&format!("open {page}"));
+        b.wait_until("the page loads", |s| s.tab().url.starts_with(page));
+        wait_for(
+            &b,
+            page,
+            |b| b.eval("getComputedStyle(document.body).backgroundColor"),
+            "rgb(46, 52, 64)",
+        );
+    }
+}

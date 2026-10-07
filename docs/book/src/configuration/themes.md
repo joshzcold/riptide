@@ -1,6 +1,6 @@
 # Themes and colors
 
-`ui.theme` sets the colors of riptide's own parts: the tab bar, the status bar, completion, prompts and hint labels. Web pages keep their own colors (see [dark mode](../guide/pages.md) for those).
+`ui.theme` sets the colors of riptide's own parts: the tab bar, the status bar, completion, prompts, hint labels, and the `riptide://history` and `riptide://downloads` pages (those pick up a new theme when they next load). Web pages keep their own colors (see [dark mode](../guide/pages.md) for those).
 
 | Theme | Look |
 |---|---|

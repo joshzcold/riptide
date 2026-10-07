@@ -451,6 +451,23 @@ pub fn user_theme(
     Ok(tokens)
 }
 
+/// CSS for riptide's pages that list things (downloads, history): their
+/// `--bg`, `--fg`, `--muted`, `--line`, `--accent` and `--panel` from `colors`
+/// (a [`resolve`]d theme), after the pages' own light and dark defaults.
+pub fn page_css(colors: &BTreeMap<&'static str, String>) -> String {
+    let get = |token: &str| colors.get(token).map_or("", String::as_str);
+    let bg = get("completion-bg");
+    let scheme = if luminance(bg) < 0.2 { "dark" } else { "light" };
+    format!(
+        ":root {{ color-scheme: {scheme}; --bg: {bg}; --fg: {}; --muted: {}; --line: {}; --accent: {}; --panel: {}; }}",
+        get("completion-fg"),
+        get("completion-description-fg"),
+        get("tabs-even-bg"),
+        get("keyhint-fg"),
+        get("tabs-odd-bg"),
+    )
+}
+
 /// riptide's own fonts: the CSS variable (`--rt-<name>`) and its setting.
 pub const FONTS: &[(&str, &str)] = &[
     ("font-statusbar", "fonts.statusbar"),
