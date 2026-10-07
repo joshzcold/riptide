@@ -52,7 +52,11 @@
   .notes { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .35rem; }
   .note { font-size: .74em; padding: .05rem .45rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .note.wins { border-color: var(--accent); color: var(--accent); }
-  .sites { font: .8em var(--mono); color: var(--muted); margin-top: .3rem; }
+  .site-values { display: flex; flex-direction: column; gap: .3rem; margin-top: .45rem; }
+  .site-values .pattern { font: .82em var(--mono); color: var(--muted); min-width: 10rem; }
+  .site-values .line input[type=text] { max-width: 16rem; }
+  .row.cursor, .keyrow.cursor { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+  .keys-help { margin-top: 1rem; padding: .5rem .6rem; font-size: .8em; color: var(--muted); }
   .error { grid-column: 1 / -1; color: var(--error); font-size: .85em; font-weight: 600; }
 
   input, select, button { font: inherit; color: var(--fg); background: var(--base); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
@@ -406,12 +410,65 @@ function row(e) {
   if (e.config_wins) notes.append(el("span", "note wins", "your config file sets this and wins at startup"));
   if (e.restart) notes.append(el("span", "note", "applies after a restart"));
   if (notes.childElementCount) about.append(notes);
-  for (const [pattern, value] of e.sites) {
-    about.append(el("div", "sites", `on ${pattern}: ${shown(value)} (change with :set -u)`));
-  }
+  if (e.per_site) about.append(siteValues(e));
   r.append(about, editor(e));
   if (errors.has(e.name)) r.append(el("div", "error", errors.get(e.name)));
   return r;
+}
+
+// A per-site setting's values: each pattern's value, editable, and a way to add one.
+function siteControl(e, value, id, onChange) {
+  const kind = e.editor.type;
+  if (kind === "bool") {
+    const input = control(e, el("input"), id);
+    input.type = "checkbox";
+    input.checked = !!value;
+    input.addEventListener("change", () => onChange(input.checked));
+    return input;
+  }
+  if (kind === "enum") {
+    const select = control(e, el("select"), id);
+    for (const option of e.editor.options) select.append(new Option(option, option));
+    select.value = value;
+    select.addEventListener("change", () => onChange(select.value));
+    return select;
+  }
+  const input = textInput(e, shown(value), id, (v) => onChange(kind === "int" ? Number(v) : v));
+  return input;
+}
+function siteValues(e) {
+  const box = el("div", "site-values");
+  e.sites.forEach(([pattern, value], i) => {
+    const line = el("div", "line");
+    const ctl = siteControl(e, value, `site${i}`, (v) => rt.send("set", JSON.stringify({ name: e.name, value: v, pattern })));
+    ctl.setAttribute("aria-label", `${e.name} for ${pattern}`);
+    const remove = control(e, el("button", "remove", "✕"), `site-remove${i}`);
+    remove.title = `Forget the value for ${pattern}`;
+    remove.addEventListener("click", () => rt.send("unset-site", JSON.stringify({ pattern, name: e.name })));
+    line.append(el("span", "pattern", pattern), ctl, remove);
+    box.append(line);
+  });
+  const add = control(e, el("button", "add", "+ For a site"), "site-add");
+  add.title = "A different value for pages matching a pattern, like :set -u";
+  add.addEventListener("click", () => {
+    const line = el("div", "line");
+    const pattern = control(e, el("input"), "site-pattern");
+    pattern.placeholder = "*.example.com";
+    pattern.setAttribute("aria-label", "Pattern");
+    let value = e.value;
+    const ctl = siteControl(e, value, "site-new", (v) => { value = v; });
+    const save = control(e, el("button", null, "Save"), "site-save");
+    save.addEventListener("click", () => {
+      const p = pattern.value.trim();
+      if (!p || /\s/.test(p)) return fail(e.name, "Enter a pattern such as example.com, *.example.com or https://example.com");
+      rt.send("set", JSON.stringify({ name: e.name, value, pattern: p }));
+    });
+    line.append(pattern, ctl, save);
+    add.replaceWith(line);
+    pattern.focus();
+  });
+  box.append(add);
+  return box;
 }
 
 function preview() {
@@ -434,6 +491,10 @@ let observer = null;
 // Which tab of the page shows: settings, or keys (with the mode picked).
 const view = { name: "settings", mode: "normal" };
 function render() {
+  draw();
+  markCursor();
+}
+function draw() {
   for (const a of document.querySelectorAll(".views a")) a.classList.toggle("current", a.dataset.view === view.name);
   search.placeholder = { keys: "Search keys and commands", sites: "Search sites" }[view.name] || "Search settings";
   changedOnly.parentElement.style.display = view.name === "sites" ? "none" : "";
@@ -502,7 +563,8 @@ function renderSettings() {
     sections.push(empty);
   }
   list.replaceChildren(...sections);
-  nav.replaceChildren(...links);
+  const help = el("div", "keys-help", "j / k move between settings, Return edits one (switches toggle, choices step), f shows hints, Escape leaves a field.");
+  nav.replaceChildren(...links, help);
   if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
   watchSections();
 }
@@ -518,6 +580,45 @@ function watchSections() {
   }, { rootMargin: "-90px 0px -55% 0px" });
   list.querySelectorAll("section").forEach((s) => observer.observe(s));
 }
+
+// j/k move the highlight between settings and Return edits the highlighted
+// one; riptide sends these keys only in normal mode.
+let cursorName = null;
+const rowsShown = () => [...list.querySelectorAll(view.name === "settings" ? ".row" : ".keyrow")];
+const rowName = (r) => r.dataset.name || r.textContent.slice(0, 80);
+function markCursor() {
+  const rows = rowsShown();
+  for (const r of rows) r.classList.toggle("cursor", rowName(r) === cursorName);
+}
+window.rtKey = (key) => {
+  const rows = rowsShown();
+  if (!rows.length) return;
+  let i = rows.findIndex((r) => rowName(r) === cursorName);
+  if (i < 0) {
+    // Start at the first row in view.
+    const top = header.offsetHeight;
+    i = Math.max(0, rows.findIndex((r) => r.getBoundingClientRect().bottom > top + 8));
+    if (key !== "Return") key = "";
+  }
+  if (key === "j") i = Math.min(rows.length - 1, i + 1);
+  if (key === "k") i = Math.max(0, i - 1);
+  const row = rows[i];
+  cursorName = rowName(row);
+  document.activeElement?.blur();
+  markCursor();
+  row.scrollIntoView({ block: "nearest" });
+  if (key !== "Return") return;
+  const target = row.querySelector(".editor input:not([type=color]), .editor select, .editor button, input:not([type=color]), select, button");
+  if (!target) return;
+  if (target.type === "checkbox") return target.click();
+  if (target.tagName === "SELECT") {
+    // A script can't open the list, so Return steps to the next choice.
+    target.selectedIndex = (target.selectedIndex + 1) % target.options.length;
+    return target.dispatchEvent(new Event("change"));
+  }
+  target.focus();
+  if (target.select) target.select();
+};
 
 // The browser calls these after a change, and when one is refused.
 // The Keys tab.
@@ -786,20 +887,25 @@ function renderSites() {
   if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
 }
 
-// #settings, #keys, #keys/<mode> or #sites.
+// #settings, #keys, #keys/<mode> or #sites, or a place in one of them:
+// #section-<id> (settings) or #site-<n> (sites).
 function route() {
-  const [name, mode] = location.hash.slice(1).split("/");
-  if (name === "sites") {
+  const hash = location.hash.slice(1);
+  const [name, mode] = hash.split("/");
+  const anchor = /^(section|site)-/.test(name) ? name : null;
+  const before = view.name;
+  if (name === "sites" || name.startsWith("site-")) {
     view.name = "sites";
   } else if (name === "keys") {
     view.name = "keys";
     if (mode) view.mode = mode;
-  } else if (name === "settings" || !name) {
-    view.name = "settings";
   } else {
-    return;
+    view.name = "settings";
   }
+  // A link within the page shown: the browser scrolls there by itself.
+  if (anchor && before === view.name && list.childElementCount) return;
   render();
+  if (anchor) document.getElementById(anchor)?.scrollIntoView();
 }
 addEventListener("hashchange", route);
 

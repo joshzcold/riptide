@@ -85,9 +85,37 @@ pub fn run_command(command: &Command) -> bool {
 }
 
 /// A `set` message from the page.
-pub fn set(name: &str, value: &serde_json::Value) {
-    let result = shell::with(|s| s.engine.set_from_page(name, value));
+pub fn set(name: &str, value: &serde_json::Value, pattern: Option<&str>) {
+    let result = shell::with(|s| s.engine.set_from_page(name, value, pattern));
     apply(name, result);
+}
+
+/// In normal mode on the settings page, with nothing typed yet, `j` and `k`
+/// move between settings and `Return` edits one: the page gets them instead
+/// of riptide. True if the key was handed over.
+pub fn forward_key(key: &rt_core::key::Key) -> bool {
+    use rt_core::key::KeyCode;
+    let name = match key.code {
+        _ if !key.mods.is_empty() => return false,
+        KeyCode::Char('j') => "j",
+        KeyCode::Char('k') => "k",
+        KeyCode::Enter => "Return",
+        _ => return false,
+    };
+    let frame = shell::with(|s| {
+        if s.engine.mode() != rt_core::Mode::Normal || !s.engine.status().keystring.is_empty() {
+            return None;
+        }
+        let tab = s.tabs.current()?;
+        if !tab.url.starts_with(URL) {
+            return None;
+        }
+        tab.browser()?.main_frame()
+    })
+    .flatten();
+    let Some(frame) = frame else { return false };
+    shell::exec_js(&frame, &format!("window.rtKey?.({name:?})"));
+    true
 }
 
 /// A `bind` message from the Keys tab. Its refusals are shown under the name `keys`.

@@ -108,6 +108,8 @@ pub struct Entry {
     /// A config file sets it, so that value wins at the next start.
     pub config_wins: bool,
     pub restart: bool,
+    /// It can be set per site (`:set -u`).
+    pub per_site: bool,
     /// Per-site values, as `[pattern, value]`.
     pub sites: Vec<(String, Json)>,
 }
@@ -175,6 +177,7 @@ fn entries(
                 source,
                 config_wins: overridden.contains(def.name),
                 restart: RESTART_REQUIRED.contains(&def.name),
+                per_site: crate::settings::PER_DOMAIN.contains(&def.name),
                 sites: settings
                     .overrides(def.name)
                     .into_iter()
@@ -248,6 +251,8 @@ mod tests {
 
         let js = entry(&entries, "content.javascript.enabled");
         assert_eq!(js.sites, vec![("*.example.com".to_string(), json!(false))]);
+        assert!(js.per_site);
+        assert!(!uppercase.per_site);
         assert_eq!(
             page.sites,
             vec![Site {

@@ -28,6 +28,8 @@ pub enum UiMessage {
     SettingsSet {
         name: String,
         value: serde_json::Value,
+        /// Only for pages matching this pattern, like `:set -u`.
+        pattern: Option<String>,
     },
     /// The settings page's reset button.
     SettingsReset { name: String },
@@ -193,6 +195,8 @@ struct Session {
 struct SettingsSet {
     name: String,
     value: serde_json::Value,
+    #[serde(default)]
+    pattern: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -272,10 +276,17 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let SettingsSet {
                 name: setting,
                 value,
+                pattern,
             } = payload(name, json)?;
+            if pattern.as_ref().is_some_and(|p| {
+                p.trim().is_empty() || p.len() > 500 || p.contains(char::is_whitespace)
+            }) {
+                return Err(format!("{name}: bad pattern"));
+            }
             Ok(UiMessage::SettingsSet {
                 name: setting_name(setting)?,
                 value,
+                pattern,
             })
         }
         ("settings", "bind") => {
@@ -507,8 +518,29 @@ mod tests {
             parse(page, "set", r#"{"name": "hints.chars", "value": "abc"}"#),
             Ok(UiMessage::SettingsSet {
                 name: "hints.chars".into(),
-                value: serde_json::json!("abc")
+                value: serde_json::json!("abc"),
+                pattern: None,
             })
+        );
+        assert_eq!(
+            parse(
+                page,
+                "set",
+                r#"{"name": "content.javascript.enabled", "value": false, "pattern": "*.example.com"}"#
+            ),
+            Ok(UiMessage::SettingsSet {
+                name: "content.javascript.enabled".into(),
+                value: serde_json::json!(false),
+                pattern: Some("*.example.com".into()),
+            })
+        );
+        assert!(
+            parse(
+                page,
+                "set",
+                r#"{"name": "hints.chars", "value": "a", "pattern": "a b"}"#
+            )
+            .is_err()
         );
         assert_eq!(
             parse(page, "reset", r#"{"name": "hints.chars"}"#),

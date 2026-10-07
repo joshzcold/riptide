@@ -232,3 +232,66 @@ fn the_sites_tab_forgets_saved_answers_and_clears_site_data() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn per_site_values_can_be_added_and_j_k_return_work_on_the_page() {
+    let b = Browser::start("page.html");
+    // A link to a section, as a bookmark or restored tab would be.
+    b.run("open riptide://settings/#section-content");
+    b.wait_until("the settings page opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    let q = |key: &str| format!("document.querySelector('[data-key=\"{key}\"]')");
+    wait_eval(
+        &b,
+        &format!("String(!!{})", q("content.javascript.enabled#site-add")),
+        "true",
+    );
+
+    // A per-site value, added on the page.
+    b.eval(&format!(
+        "{}.click(), ''",
+        q("content.javascript.enabled#site-add")
+    ));
+    b.eval(&format!(
+        "{p}.value = '*.example.org'; {v}.click(); {save}.click(), ''",
+        p = q("content.javascript.enabled#site-pattern"),
+        v = q("content.javascript.enabled#site-new"),
+        save = q("content.javascript.enabled#site-save"),
+    ));
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(b.config_dir().join("autoconfig.toml"))
+        .is_ok_and(|t| t.contains("*.example.org") && t.contains("content.javascript.enabled"))
+    {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the per-site value wasn't saved"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // It's listed under the setting, editable.
+    wait_eval(
+        &b,
+        &format!("String(!!{})", q("content.javascript.enabled#site0")),
+        "true",
+    );
+
+    // j/k move a highlight; Return steps a choice.
+    b.run("scroll-to-perc 0");
+    let cursor = "document.querySelector('.cursor')?.dataset.name ?? ''";
+    b.keys("j");
+    wait_eval(&b, cursor, "changelog_after_upgrade");
+    b.keys("j");
+    wait_eval(&b, cursor, "confirm_quit");
+    b.keys("k");
+    wait_eval(&b, cursor, "changelog_after_upgrade");
+    b.keys("<Return>");
+    b.wait_until("Return steps to the next choice", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("changelog_after_upgrade = patch"))
+    });
+    // Other keys still work as usual.
+    b.keys("gg");
+    assert_eq!(b.state().mode, "normal");
+}

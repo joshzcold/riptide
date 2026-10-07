@@ -27,7 +27,11 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::PromptKey { key } => prompt_key(&key),
         UiMessage::BarHeight { bar, height } => crate::window::set_bar_height(bar, height as i32),
         UiMessage::RowHeight { height } => crate::shell::set_row_height(height as i32),
-        UiMessage::SettingsSet { name, value } => crate::settings_page::set(&name, &value),
+        UiMessage::SettingsSet {
+            name,
+            value,
+            pattern,
+        } => crate::settings_page::set(&name, &value, pattern.as_deref()),
         UiMessage::SettingsReset { name } => crate::settings_page::reset(&name),
         UiMessage::SettingsBind {
             mode,

@@ -352,6 +352,10 @@ fn handle_key_event(event: &KeyEvent) -> bool {
     let Some(key) = vk::translate(raw) else {
         return false;
     };
+    if crate::settings_page::forward_key(&key) {
+        shell::with(|s| s.suppress_char = true);
+        return true;
+    }
     let Some(outcome) = shell::with(|s| {
         // hints.auto_follow_timeout: keys typed just after a hint was followed are dropped.
         let timeout = s.engine.settings().int("hints.auto_follow_timeout");

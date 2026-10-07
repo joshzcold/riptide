@@ -1647,15 +1647,30 @@ impl Engine {
         &mut self,
         name: &str,
         value: &serde_json::Value,
+        pattern: Option<&str>,
     ) -> Result<Vec<Effect>, String> {
         let def = settings::find(name).ok_or_else(|| format!("No option {name:?}"))?;
         let value = def.from_json(value)?;
-        let _ = self.settings.set(name, value.clone());
-        self.show_message(Level::Info, format!("{name} = {value}"));
-        Ok(vec![Effect::ConfigChanged(ConfigOp::Set {
-            name: name.to_string(),
-            value,
-        })])
+        let op = match pattern {
+            Some(pattern) => {
+                self.settings.set_for(pattern, name, value.clone())?;
+                self.show_message(Level::Info, format!("{name} = {value} for {pattern}"));
+                ConfigOp::SetFor {
+                    pattern: pattern.to_string(),
+                    name: name.to_string(),
+                    value,
+                }
+            }
+            None => {
+                let _ = self.settings.set(name, value.clone());
+                self.show_message(Level::Info, format!("{name} = {value}"));
+                ConfigOp::Set {
+                    name: name.to_string(),
+                    value,
+                }
+            }
+        };
+        Ok(vec![Effect::ConfigChanged(op)])
     }
 
     /// A binding from the settings page's Keys tab, checked like `:bind`.
