@@ -68,6 +68,9 @@ pub struct TabState {
     pub zoom: u32,
     /// Its renderer process died and it hasn't loaded since.
     pub crashed: bool,
+    /// The current search's match number and count, once Chromium has found any.
+    #[serde(default)]
+    pub search_match: Option<(i32, i32)>,
 }
 
 impl TabState {

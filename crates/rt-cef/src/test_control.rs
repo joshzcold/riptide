@@ -133,6 +133,7 @@ mod enabled {
                                 "mode": t.mode,
                                 "zoom": t.zoom,
                                 "crashed": t.crashed.is_some(),
+                                "search_match": t.search_match,
                                 "muted": t.muted,
                             })
                         })

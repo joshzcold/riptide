@@ -103,7 +103,10 @@ fn search_wrap_false_keeps_n_at_the_last_match() {
 fn return_follows_the_link_a_search_found() {
     let b = Browser::start("follow.html");
     b.keys("/target<Return>");
-    b.wait_mode("normal");
+    // Return follows the link the match is in, once Chromium has found it.
+    b.wait_until("the search found the link", |s| {
+        s.mode == "normal" && s.tab().search_match.is_some_and(|(_, count)| count > 0)
+    });
     b.keys("<Return>");
     b.wait_until("the link is followed", |s| s.tab().title == "nav2");
 }
