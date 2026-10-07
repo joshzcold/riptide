@@ -12,6 +12,14 @@ fn start() -> Browser {
         .start("media.html")
 }
 
+/// Start the page's call once; retried, since a busy machine can drop an eval.
+fn start_call(b: &Browser) {
+    b.wait_eval(
+        "String(window.__started = window.__started || (startCall(), true))",
+        "true",
+    );
+}
+
 fn ticks(b: &Browser, tab: usize) -> u64 {
     b.eval_tab(tab, "String(window.__ticks)").parse().unwrap()
 }
@@ -20,7 +28,7 @@ fn ticks(b: &Browser, tab: usize) -> u64 {
 #[ignore = "starts a browser; run with ./task e2e"]
 fn a_tab_using_the_camera_and_microphone_is_marked() {
     let b = start();
-    b.eval("startCall(); 'started'");
+    start_call(&b);
     b.wait_until("the tab bar marks the call", |_| {
         b.eval_bar("tabbar", "document.body.innerText")
             .contains("[A/V] 1:")
@@ -29,7 +37,7 @@ fn a_tab_using_the_camera_and_microphone_is_marked() {
         b.eval_bar("statusbar", "document.body.innerText")
             .contains("[A/V]")
     });
-    b.eval("endCall()");
+    b.wait_eval("endCall()", "off");
     b.wait_until("the mark goes when the call ends", |_| {
         !b.eval_bar("tabbar", "document.body.innerText")
             .contains("[A/V]")
@@ -40,7 +48,7 @@ fn a_tab_using_the_camera_and_microphone_is_marked() {
 #[ignore = "starts a browser; run with ./task e2e"]
 fn a_call_in_a_background_tab_keeps_its_pace() {
     let b = start();
-    b.eval("startCall(); 'started'");
+    start_call(&b);
     b.wait_until("the call is live", |_| {
         b.eval_bar("tabbar", "document.body.innerText")
             .contains("[A/V]")
