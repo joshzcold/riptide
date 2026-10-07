@@ -466,9 +466,10 @@ pub enum Command {
         name: String,
         values: Vec<String>,
     },
-    /// Put a setting back to its default.
+    /// Put a setting back to its default, or forget its value for `pattern`.
     ConfigUnset {
         name: String,
+        pattern: Option<String>,
     },
     /// Add `value` to a list setting.
     ConfigListAdd {
@@ -930,7 +931,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "config-unset",
-        "Put a setting back to its default: :config-unset <option>",
+        "Put a setting back to its default, or forget its value for one site: :config-unset [-u pattern] <option>",
     ),
     spec(
         "config-list-add",
@@ -1640,9 +1641,16 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
             Command::ConfigCycle { name, values }
         }
-        "config-unset" => Command::ConfigUnset {
-            name: args.required("option")?.to_string(),
-        },
+        "config-unset" => {
+            let pattern = match args.flag(&["-u", "--pattern"]) {
+                Some(_) => Some(args.required("pattern")?.to_string()),
+                None => None,
+            };
+            Command::ConfigUnset {
+                name: args.required("option")?.to_string(),
+                pattern,
+            }
+        }
         "config-list-add" | "config-list-remove" => {
             let add = name == "config-list-add";
             let name = args.required("option")?.to_string();

@@ -42,6 +42,10 @@ pub enum UiMessage {
         mode: crate::mode::Mode,
         keys: String,
     },
+    /// The Sites tab forgot a setting's value for a pattern.
+    SettingsUnsetSite { pattern: String, name: String },
+    /// The Sites tab's "clear cookies and site data" for a host or origin.
+    ClearSite { site: String },
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -219,6 +223,39 @@ fn bind_message(name: &str, json: &str) -> Result<(crate::mode::Mode, String, St
     Ok((mode, keys, command))
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnsetSite {
+    pattern: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ClearSite {
+    site: String,
+}
+
+/// A host (`example.com`, `*.example.com`) or origin (`https://example.com`),
+/// as the Sites tab clears data for.
+fn site(text: &str) -> Option<String> {
+    let text = text.trim().trim_end_matches('/');
+    let host = text.split_once("://").map_or(text, |(scheme, rest)| {
+        if matches!(scheme, "http" | "https") {
+            rest
+        } else {
+            ""
+        }
+    });
+    let host = host.strip_prefix("*.").unwrap_or(host);
+    let ok = !host.is_empty()
+        && host.len() <= 253
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']'));
+    ok.then(|| text.to_string())
+}
+
 fn setting_name(name: String) -> Result<String, String> {
     if crate::settings::find(&name).is_some() {
         Ok(name)
@@ -252,6 +289,25 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
         ("settings", "unbind") => {
             let (mode, keys, _) = bind_message(name, json)?;
             Ok(UiMessage::SettingsUnbind { mode, keys })
+        }
+        ("settings", "unset-site") => {
+            let UnsetSite {
+                pattern,
+                name: setting,
+            } = payload(name, json)?;
+            if pattern.is_empty() || pattern.len() > 500 {
+                return Err(format!("{name}: bad pattern"));
+            }
+            Ok(UiMessage::SettingsUnsetSite {
+                pattern,
+                name: setting_name(setting)?,
+            })
+        }
+        ("settings", "clear-site") => {
+            let ClearSite { site: text } = payload(name, json)?;
+            let site =
+                site(&text).ok_or_else(|| format!("{text:?} isn't a site, e.g. example.com"))?;
+            Ok(UiMessage::ClearSite { site })
         }
         ("settings", "reset") => {
             let SettingName { name: setting } = payload(name, json)?;
@@ -481,6 +537,23 @@ mod tests {
             .is_err()
         );
         assert!(parse(page, "unbind", r#"{"mode": "insert", "keys": ""}"#).is_err());
+        assert_eq!(
+            parse(page, "clear-site", r#"{"site": "https://example.com/"}"#),
+            Ok(UiMessage::ClearSite {
+                site: "https://example.com".into()
+            })
+        );
+        assert!(parse(page, "clear-site", r#"{"site": "*.example.org"}"#).is_ok());
+        assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
+        assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
+        assert!(
+            parse(
+                page,
+                "unset-site",
+                r#"{"pattern": "x.com", "name": "nope"}"#
+            )
+            .is_err()
+        );
         assert!(parse(page, "set", r#"{"name": "nope", "value": 1}"#).is_err());
         assert!(parse(page, "set", r#"{"name": "hints.chars"}"#).is_err());
         assert!(parse(page, "select-tab", r#"{"index": 0}"#).is_err());

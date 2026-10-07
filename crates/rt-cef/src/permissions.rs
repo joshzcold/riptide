@@ -216,42 +216,64 @@ wrap_permission_handler! {
 /// written into Chromium's content settings too. Only exact origins
 /// (`https://host[:port]`, what `A`/`N` save) can be; wildcard patterns
 /// only apply when Chromium asks.
+/// Per-site settings that Chromium also keeps, for exact origins.
+const SITE_TYPES: &[(&str, ContentSettingTypes)] = &[
+    ("content.geolocation", ContentSettingTypes::GEOLOCATION),
+    (
+        "content.notifications.enabled",
+        ContentSettingTypes::NOTIFICATIONS,
+    ),
+    (
+        "content.media.audio_capture",
+        ContentSettingTypes::MEDIASTREAM_MIC,
+    ),
+    (
+        "content.media.video_capture",
+        ContentSettingTypes::MEDIASTREAM_CAMERA,
+    ),
+];
+
+/// `pattern` as a URL Chromium keeps settings for, if it's one exact origin.
+fn exact_origin(pattern: &str) -> Option<String> {
+    let origin = pattern.trim_end_matches('/');
+    let exact = (origin.starts_with("https://") || origin.starts_with("http://"))
+        && !origin.contains('*')
+        && origin
+            .split_once("://")
+            .is_some_and(|(_, rest)| !rest.contains('/'));
+    exact.then(|| format!("{origin}/"))
+}
+
+/// A per-site answer was forgotten (`:config-unset -u`, the Sites tab):
+/// Chromium's copy goes back to asking.
+pub fn forget_site(pattern: &str, name: &str) {
+    let (Some(url), Some((_, kind))) = (
+        exact_origin(pattern),
+        SITE_TYPES.iter().find(|(n, _)| *n == name),
+    ) else {
+        return;
+    };
+    if let Some(context) = request_context_get_global_context() {
+        let url = CefString::from(url.as_str());
+        context.set_content_setting(Some(&url), Some(&url), *kind, ContentSettingValues::DEFAULT);
+    }
+}
+
 pub fn sync_site_settings(
     settings: &rt_core::settings::Settings,
 ) -> Vec<(String, ContentSettingTypes, ContentSettingValues)> {
-    const TYPES: &[(&str, ContentSettingTypes)] = &[
-        ("content.geolocation", ContentSettingTypes::GEOLOCATION),
-        (
-            "content.notifications.enabled",
-            ContentSettingTypes::NOTIFICATIONS,
-        ),
-        (
-            "content.media.audio_capture",
-            ContentSettingTypes::MEDIASTREAM_MIC,
-        ),
-        (
-            "content.media.video_capture",
-            ContentSettingTypes::MEDIASTREAM_CAMERA,
-        ),
-    ];
     let mut out = Vec::new();
-    for (name, kind) in TYPES {
+    for (name, kind) in SITE_TYPES {
         for (pattern, value) in settings.overrides(name) {
-            let origin = pattern.trim_end_matches('/');
-            let exact = (origin.starts_with("https://") || origin.starts_with("http://"))
-                && !origin.contains('*')
-                && origin
-                    .split_once("://")
-                    .is_some_and(|(_, rest)| !rest.contains('/'));
-            if !exact {
+            let Some(url) = exact_origin(&pattern) else {
                 continue;
-            }
+            };
             let value = match value {
                 rt_core::settings::Value::Str(v) if v == "true" => ContentSettingValues::ALLOW,
                 rt_core::settings::Value::Str(v) if v == "false" => ContentSettingValues::BLOCK,
                 _ => ContentSettingValues::DEFAULT,
             };
-            out.push((format!("{origin}/"), *kind, value));
+            out.push((url, *kind, value));
         }
     }
     out

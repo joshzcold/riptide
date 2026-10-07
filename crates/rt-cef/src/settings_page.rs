@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use cef::ImplBrowser;
+use cef::*;
 
 use rt_core::command::{Command, OpenTarget};
 
@@ -100,6 +100,52 @@ pub fn bind(mode: rt_core::Mode, keys: &str, command: &str) {
 pub fn unbind(mode: rt_core::Mode, keys: &str) {
     let result = shell::with(|s| s.engine.unbind_from_page(mode, keys));
     apply("keys", result);
+}
+
+/// The Sites tab forgot `name` for `pattern`; refusals show under the name `sites`.
+pub fn unset_site(pattern: &str, name: &str) {
+    let result = shell::with(|s| s.engine.unset_site_from_page(pattern, name));
+    apply("sites", result);
+}
+
+/// The origins a Sites tab entry stands for: itself if it's an origin, or
+/// the host over https and http.
+fn origins(site: &str) -> Vec<String> {
+    if site.contains("://") {
+        return vec![site.to_string()];
+    }
+    let host = site.strip_prefix("*.").unwrap_or(site);
+    vec![format!("https://{host}"), format!("http://{host}")]
+}
+
+/// Clear `site`'s cookies and stored data (local storage, IndexedDB, cache…).
+pub fn clear_site(site: &str) {
+    let origins = origins(site);
+    if let Some(manager) = cookie_manager_get_global_manager(None) {
+        for origin in &origins {
+            manager.delete_cookies(Some(&CefString::from(origin.as_str())), None, None);
+        }
+    }
+    // The Storage domain is the whole profile's; any tab can ask.
+    let host = shell::with(|s| s.current_browser())
+        .flatten()
+        .and_then(|b| b.host());
+    if let Some(host) = host {
+        for (id, origin) in (1000..).zip(&origins) {
+            let message = serde_json::json!({
+                "id": id,
+                "method": "Storage.clearDataForOrigin",
+                "params": { "origin": origin, "storageTypes": "all" },
+            })
+            .to_string();
+            host.send_dev_tools_message(Some(message.as_bytes()));
+        }
+    }
+    shell::show_message(
+        rt_core::engine::Level::Info,
+        format!("Cleared cookies and site data for {site}"),
+    );
+    shell::refresh_ui();
 }
 
 /// A `reset` message from the page.

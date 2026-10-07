@@ -270,6 +270,9 @@ impl Engine {
                 .map(|_| ())
                 .map_err(|e| e.to_string()),
             ConfigOp::Unset { name } => self.settings.unset(name),
+            ConfigOp::UnsetFor { pattern, name } => {
+                self.settings.unset_for(pattern, name).map(|_| ())
+            }
         }
     }
 
@@ -1528,7 +1531,19 @@ impl Engine {
                     format!("Put {} setting(s) back to their defaults", changed.len()),
                 );
             }
-            Command::ConfigUnset { name } => match self.settings.unset(&name) {
+            Command::ConfigUnset {
+                name,
+                pattern: Some(pattern),
+            } => match self.unset_site(&pattern, &name) {
+                Ok(op) => effects.push(Effect::ConfigChanged(op)),
+                Err(e) => {
+                    self.show_message(Level::Error, e);
+                }
+            },
+            Command::ConfigUnset {
+                name,
+                pattern: None,
+            } => match self.settings.unset(&name) {
                 Ok(()) => {
                     let value = self.settings.get(&name).map(ToString::to_string);
                     self.show_message(
@@ -1677,6 +1692,27 @@ impl Engine {
         }
         self.show_message(Level::Info, format!("Unbound {keys} in {mode} mode"));
         Ok(vec![Effect::ConfigChanged(ConfigOp::Unbind { mode, keys })])
+    }
+
+    /// Forget `name`'s value for `pattern`, like `:config-unset -u`.
+    fn unset_site(&mut self, pattern: &str, name: &str) -> Result<ConfigOp, String> {
+        if !self.settings.unset_for(pattern, name)? {
+            return Err(format!("{name} has no value for {pattern}"));
+        }
+        self.show_message(Level::Info, format!("Forgot {name} for {pattern}"));
+        Ok(ConfigOp::UnsetFor {
+            pattern: pattern.to_string(),
+            name: name.to_string(),
+        })
+    }
+
+    /// The Sites tab's revoke button.
+    pub fn unset_site_from_page(
+        &mut self,
+        pattern: &str,
+        name: &str,
+    ) -> Result<Vec<Effect>, String> {
+        Ok(vec![Effect::ConfigChanged(self.unset_site(pattern, name)?)])
     }
 
     /// The settings page's reset button: back to the default, like `:config-unset`.

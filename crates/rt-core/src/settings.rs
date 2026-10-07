@@ -2194,6 +2194,15 @@ impl Settings {
         self.set(name, def.default_value())
     }
 
+    /// Forget `name`'s value for `pattern`; false if there was none.
+    pub fn unset_for(&mut self, pattern: &str, name: &str) -> Result<bool, String> {
+        let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
+        let before = self.per_domain.len();
+        self.per_domain
+            .retain(|(p, n, _)| !(p == pattern && *n == def.name));
+        Ok(self.per_domain.len() != before)
+    }
+
     pub fn set_for(&mut self, pattern: &str, name: &str, value: Value) -> Result<(), String> {
         let def = find(name).ok_or_else(|| format!("No option {name:?}"))?;
         if !PER_DOMAIN.contains(&def.name) {

@@ -28,4 +28,9 @@ pub enum ConfigOp {
     Unset {
         name: String,
     },
+    /// Forget a setting's value for one URL pattern.
+    UnsetFor {
+        pattern: String,
+        name: String,
+    },
 }

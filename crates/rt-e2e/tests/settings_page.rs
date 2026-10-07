@@ -159,3 +159,76 @@ fn the_keys_tab_binds_unbinds_and_restores_and_warns_about_clashes() {
             .is_some_and(|m| m.contains("d is bound to 'tab-close'"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_sites_tab_forgets_saved_answers_and_clears_site_data() {
+    let b = Browser::start("page.html");
+    let origin = b.url("").trim_end_matches('/').to_string();
+    b.eval("document.cookie = 'rt=1; max-age=3600'; localStorage.setItem('rt', '1'), ''");
+    assert_eq!(b.eval("document.cookie"), "rt=1");
+    b.run("set -u https://meet.example.com content.media.video_capture true");
+    b.run("set -u https://meet.example.com content.media.audio_capture true");
+    let autoconfig = b.config_dir().join("autoconfig.toml");
+    let saved = |b: &Browser| {
+        std::fs::read_to_string(b.config_dir().join("autoconfig.toml")).unwrap_or_default()
+    };
+    let start = std::time::Instant::now();
+    while !saved(&b).contains("audio_capture") {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "not saved");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    b.run("open -t riptide://settings/#sites");
+    b.wait_until("the sites tab opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    let forget = "document.querySelector('[data-key=\"site:https://meet.example.com:content.media.video_capture#forget\"]')";
+    wait_eval(&b, &format!("String(!!{forget})"), "true");
+    b.eval(&format!("{forget}.click(), ''"));
+    wait_eval(&b, &format!("String(!!{forget})"), "false");
+    let start = std::time::Instant::now();
+    while saved(&b).contains("video_capture") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "still in {}",
+            autoconfig.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // The command does the same.
+    b.run("config-unset -u https://meet.example.com content.media.audio_capture");
+    let start = std::time::Instant::now();
+    while saved(&b).contains("meet.example.com") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the site's table is still there"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    // Clearing the test page's site takes its cookie and local storage.
+    b.eval(&format!(
+        "(i => {{ i.value = {origin:?}; document.querySelector('[data-key=\"sites#clear-button\"]').click(); return ''; }})\
+         (document.querySelector('[data-key=\"sites#clear\"]'))"
+    ));
+    b.wait_until("the site is cleared", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("Cleared cookies and site data"))
+    });
+    b.run("tab-prev");
+    b.wait_until("back on the page", |s| s.tab().url.starts_with("http"));
+    b.run("reload");
+    let start = std::time::Instant::now();
+    loop {
+        let left = b.eval("document.cookie + '|' + (localStorage.getItem('rt') ?? '')");
+        if left == "|" {
+            break;
+        }
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "left after clearing: {left}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}

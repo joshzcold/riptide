@@ -559,6 +559,9 @@ fn persist(op: rt_core::config::ConfigOp) {
         rt_core::config::ConfigOp::Unset { name } => {
             with(|s| s.setting_sources.remove(name));
         }
+        rt_core::config::ConfigOp::UnsetFor { pattern, name } => {
+            crate::permissions::forget_site(pattern, name);
+        }
         _ => {}
     }
     crate::help::refresh();

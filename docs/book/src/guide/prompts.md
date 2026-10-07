@@ -67,6 +67,8 @@ The permission settings above, `content.tls.certificate_errors`, `content.blocki
 :set -u https://meet.example.com content.media.video_capture true
 :set -u *.example.org content.javascript.enabled false
 ```
+`:config-unset -u https://meet.example.com content.media.video_capture` forgets one site's value, and the Sites tab of `:settings` lists and forgets them with a click.
+
 ```toml
 [per_domain."*.example.com"]          # config.toml or autoconfig.toml
 "content.blocking.enabled" = false

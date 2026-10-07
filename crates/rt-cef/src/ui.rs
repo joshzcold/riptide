@@ -35,6 +35,10 @@ pub fn handle_message(message: UiMessage) {
             command,
         } => crate::settings_page::bind(mode, &keys, &command),
         UiMessage::SettingsUnbind { mode, keys } => crate::settings_page::unbind(mode, &keys),
+        UiMessage::SettingsUnsetSite { pattern, name } => {
+            crate::settings_page::unset_site(&pattern, &name)
+        }
+        UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
         UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),
         UiMessage::RecoverForget { session } => crate::recover::forget(&session),
         UiMessage::ColorScheme { dark } => {

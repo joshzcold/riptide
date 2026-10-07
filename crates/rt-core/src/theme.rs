@@ -497,7 +497,7 @@ pub fn page_css(colors: &BTreeMap<&'static str, String>) -> String {
     let scheme = if luminance(bg) < 0.2 { "dark" } else { "light" };
     format!(
         ":root {{ color-scheme: {scheme}; --bg: {bg}; --fg: {}; --muted: {}; --line: {}; --accent: {}; --panel: {}; \
-         --base: {}; --selected-bg: {}; --selected-fg: {}; --error: {}; }}",
+         --base: {}; --selected-bg: {}; --selected-fg: {}; --error: {}; --ok: {}; }}",
         get("completion-fg"),
         get("completion-description-fg"),
         get("tabs-even-bg"),
@@ -507,6 +507,7 @@ pub fn page_css(colors: &BTreeMap<&'static str, String>) -> String {
         get("completion-selected-bg"),
         get("completion-selected-fg"),
         get("messages-error-bg"),
+        get("statusbar-insert-bg"),
     )
 }
 

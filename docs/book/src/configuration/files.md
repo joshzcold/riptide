@@ -14,6 +14,8 @@ The directories for each platform are listed in [Installing](../guide/installing
 
 The page's **Keys** tab lists each mode's bindings, marking the ones you added or changed. Edit a binding's command in place, remove it with ✕, or put a default back with ↺ (removed defaults are listed at the bottom with a Restore button). To add one, type the keys in riptide's notation (`gx`, `<Ctrl-y>`) or press Record and then the keys, enter a command and press Bind. The page warns first when the new keys are the start of another binding, or another binding is the start of them, since riptide then waits to see which you mean. Like `:bind`, it's saved in `autoconfig.toml`. Keys riptide itself uses in insert mode, such as `Escape`, can't be recorded; type them instead.
 
+The **Sites** tab lists every site with saved values: the answers you gave with `A` or `N` when it asked for the camera, microphone, location or notifications, certificate exceptions, and anything set with `:set -u`. ✕ forgets one value (permissions go back to asking), "Forget all" forgets the site, and "Clear data" deletes its cookies and stored data (local storage, IndexedDB, cache). The field at the top clears any site, e.g. `example.com`. One-time `y` answers are kept by Chromium itself and aren't listed.
+
 Every setting is listed in the [settings reference](../reference/settings.md), and the completion popup lists them as you type `:set `, with each one's current value. After a name it offers the values: `true`/`false`, a setting's choices, or its current and default values. In the browser:
 
 - `:set hints.chars asdf` changes a setting; `:set hints.uppercase!` toggles one; `:set hints.chars` shows the value.

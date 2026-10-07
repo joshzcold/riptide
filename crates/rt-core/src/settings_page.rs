@@ -19,6 +19,31 @@ pub struct Page {
     pub theme: BTreeMap<&'static str, String>,
     /// The Keys tab: each mode's bindings.
     pub keys: Vec<ModeKeys>,
+    /// The Sites tab: per-site values (saved permission answers among them), by pattern.
+    pub sites: Vec<Site>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct Site {
+    pub pattern: String,
+    /// `[setting, value]`, in the order they were set.
+    pub settings: Vec<(&'static str, Json)>,
+}
+
+fn sites(settings: &Settings) -> Vec<Site> {
+    let mut sites: Vec<Site> = Vec::new();
+    for (pattern, name, value) in settings.all_overrides() {
+        let value = value.to_json();
+        match sites.iter_mut().find(|s| s.pattern == pattern) {
+            Some(site) => site.settings.push((name, value)),
+            None => sites.push(Site {
+                pattern,
+                settings: vec![(name, value)],
+            }),
+        }
+    }
+    sites.sort_by(|a, b| a.pattern.cmp(&b.pattern));
+    sites
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -99,6 +124,7 @@ pub fn build(
         entries: entries(settings, sources, overridden),
         theme: crate::theme::resolve(settings),
         keys: keys(keymap),
+        sites: sites(settings),
     }
 }
 
@@ -222,6 +248,13 @@ mod tests {
 
         let js = entry(&entries, "content.javascript.enabled");
         assert_eq!(js.sites, vec![("*.example.com".to_string(), json!(false))]);
+        assert_eq!(
+            page.sites,
+            vec![Site {
+                pattern: "*.example.com".into(),
+                settings: vec![("content.javascript.enabled", json!(false))],
+            }]
+        );
     }
 
     #[test]

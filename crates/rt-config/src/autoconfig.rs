@@ -87,6 +87,24 @@ impl AutoConfig {
             ConfigOp::Unset { name } => {
                 self.table.remove(name);
             }
+            ConfigOp::UnsetFor { pattern, name } => {
+                let Some(sites) = self
+                    .table
+                    .get_mut("per_domain")
+                    .and_then(|v| v.as_table_mut())
+                else {
+                    return;
+                };
+                if let Some(site) = sites.get_mut(pattern).and_then(|v| v.as_table_mut()) {
+                    site.remove(name);
+                    if site.is_empty() {
+                        sites.remove(pattern);
+                    }
+                }
+                if sites.is_empty() {
+                    self.table.remove("per_domain");
+                }
+            }
         }
     }
 
