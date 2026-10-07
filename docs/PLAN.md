@@ -182,6 +182,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
 - [ ] Lua plugins as capable as Neovim's: installed and pinned from git, lazy-loaded, hooking events, keys and commands, drawing floats, pickers and panels, with a plugins page and a plugin authoring guide (M27)
+- [ ] Investigate running Chrome builds of extensions (uBlock Origin Lite, password managers) in CEF, or native alternatives (M28)
 
 ### Session / state
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
@@ -1256,6 +1257,28 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 3. UI: `rt.ui.select`/`input`, floats, status bar widgets, panels.
 4. Pages: `rt.page.*`, custom hints, plugin pages.
 5. Docs and ecosystem: the guide, generated reference, `:help` integration, template, example plugins, the test runner.
+
+### M28 — Browser extensions (investigation)
+
+**Question:** what would it take to run extensions such as uBlock Origin and password managers (Bitwarden, 1Password, KeePassXC-Browser, Proton Pass)? Nothing is built until the investigation answers the questions below.
+
+**Firefox extensions can't run as such.** riptide is Chromium, and Firefox's `.xpi` add-ons depend on Gecko's own WebExtensions implementation. The realistic route is the Chrome build of the same extension; every extension named above has one. So this milestone is about Chrome extensions in CEF.
+
+**What to find out (CEF 154):**
+- **Does CEF load extensions at all now?** CEF's old extension API (`CefRequestContext::LoadExtension`) was Alloy-only, supported a small subset of `chrome.*`, and was removed along with the Alloy runtime. The Chrome runtime is supposed to support extensions in Chrome-style browsers. Check `--load-extension=<dir>`, `chrome://extensions` in a Chrome-style tab, and installing from the Chrome Web Store.
+- **Do they reach Alloy-style tabs?** riptide's tabs are Alloy-style views (decision #2) inside the Chrome runtime. Check whether content scripts, `webRequest`/`declarativeNetRequest` rules and background service workers apply to them, or only to Chrome-style browsers. If only the latter, extensions reopen decision #5 (Alloy or Chrome style) more forcefully than M22 did.
+- **Extension UI without a toolbar:** riptide has no toolbar, so there's nowhere for an action button or its popup. Options: `:extension-popup <name>` opening the popup page (`chrome-extension://<id>/popup.html`) in a float or tab, a status bar widget, and keys for an extension's own commands (`chrome.commands`). Options pages can open in a tab.
+- **Manifest V2:** uBlock Origin proper is Manifest V2. Chromium has been removing MV2 support, and by Chromium 154 it is probably gone, leaving uBlock Origin Lite (MV3, `declarativeNetRequest`, no custom cosmetic or scriptlet filters). Check whether CEF still has the MV2 code paths.
+- **Native messaging:** 1Password and KeePassXC-Browser talk to a desktop app through native messaging hosts (`NativeMessagingHosts/*.json`). Check where CEF's Chrome runtime looks for them, and whether `--basedir` changes it. Bitwarden and Proton Pass work without a desktop app.
+- **Autofill and passkeys:** password managers fill forms through content scripts, and some act as WebAuthn providers. Check both in an Alloy-style tab, and how they interact with insert mode and hints.
+- **Private windows:** Chrome keeps extensions out of incognito unless allowed; decide the same per extension.
+- **Security:** an extension with `<all_urls>` can read every page. Installing one should show its permissions and ask, as M27's plugin sandbox does, and `:extensions` should list what each one may access.
+
+**Alternatives if extensions don't work well in Alloy tabs:**
+- **Ad blocking:** riptide already blocks with adblock-rust (M8), which handles cosmetic filters and scriptlets. What uBlock Origin adds is per-site switches and the element picker, which could be built natively (a per-site toggle, and a hint mode that writes a cosmetic filter).
+- **Passwords:** userscripts already work (M9), so riptide versions of qutebrowser's `qute-bitwarden`, `qute-keepassxc` and `qute-pass`, driven by `rbw`, `bw`, `keepassxc-cli` or `pass`, could ship and be documented, with a picker later through M27's plugin UI. M27's plugin pages can also show a password manager's web vault in a panel.
+
+**Deliverable:** a short report in this section on what works in CEF 154 in Alloy and Chrome-style tabs, tested with uBlock Origin Lite, Bitwarden and KeePassXC-Browser, and a recommendation: extension support, the native alternatives, or both.
 
 ## Chromium update cadence
 
