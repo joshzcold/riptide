@@ -18,6 +18,7 @@ pub mod path_complete;
 pub mod permissions;
 pub mod prompt;
 pub mod settings;
+pub mod settings_page;
 pub mod shell_words;
 pub mod tab_history;
 pub mod tabs;

@@ -1626,6 +1626,36 @@ impl Engine {
     }
 
     /// Set `name` to `value`, checked like `:set`, and persist it.
+    /// A change from the settings page: checked like `:set`, applied and
+    /// saved, or the reason it was refused.
+    pub fn set_from_page(
+        &mut self,
+        name: &str,
+        value: &serde_json::Value,
+    ) -> Result<Vec<Effect>, String> {
+        let def = settings::find(name).ok_or_else(|| format!("No option {name:?}"))?;
+        let value = def.from_json(value)?;
+        let _ = self.settings.set(name, value.clone());
+        self.show_message(Level::Info, format!("{name} = {value}"));
+        Ok(vec![Effect::ConfigChanged(ConfigOp::Set {
+            name: name.to_string(),
+            value,
+        })])
+    }
+
+    /// The settings page's reset button: back to the default, like `:config-unset`.
+    pub fn reset_from_page(&mut self, name: &str) -> Result<Vec<Effect>, String> {
+        self.settings.unset(name)?;
+        let value = self.settings.get(name).map(ToString::to_string);
+        self.show_message(
+            Level::Info,
+            format!("{name} = {}", value.unwrap_or_default()),
+        );
+        Ok(vec![Effect::ConfigChanged(ConfigOp::Unset {
+            name: name.to_string(),
+        })])
+    }
+
     fn set_value(&mut self, name: &str, value: Value, effects: &mut Vec<Effect>) {
         let checked = settings::find(name)
             .ok_or_else(|| format!("No option {name:?}"))

@@ -818,6 +818,8 @@ Today the bar colors are hardcoded CSS variables in each UI page; the Riptide pa
 
 ### M21 — Interactive settings
 
+- ✅ (2026-10-07) **Settings page, first part:** `:settings` opens `riptide://settings/` with every setting by section, search and "changed only"; editors for bool, enum (themes too), int with bounds, color (text plus a `#rrggbb` picker), text, list rows and map rows; where a changed value came from, "your config file sets this and wins at startup", "applies after a restart", per-site values (read-only for now) and a reset button. Edits are `set`/`reset` UI messages, accepted from a tab only when its main frame is `riptide://settings/` (`ui_message::tab_may_send`), checked like `:set` (`Engine::set_from_page`) and saved to `autoconfig.toml`; refusals show next to the setting. Data model in `rt_core::settings_page` (unit tested), e2e test in `crates/rt-e2e/tests/settings_page.rs`. Still to do: per-site editing, keyboard navigation (`j`/`k` between settings), the Keys and Sites tabs.
+
 - **`riptide://settings` (`:settings`):** every setting grouped by section, with a search box (`/` focuses it). Each one shows its type, default, current value, where the value came from (default, `config.toml`, `config.lua`, `autoconfig.toml` or `:set`), and any per-site overrides.
 - **Editors by kind:** a toggle for true/false, a select for enums, a number field with its bounds, text, lists (add, remove, reorder), maps (key/value rows), and colors with a swatch and picker (shared with M20).
 - **Saving:**

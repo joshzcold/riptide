@@ -238,7 +238,9 @@ wrap_render_process_handler! {
         ) {
             let (Some(frame), Some(context)) = (frame, context) else { return };
             let url = CefString::from(&frame.url()).to_string();
-            if !url.starts_with(rt_core::ui_message::UI_PREFIX) {
+            let may_send = url.starts_with(rt_core::ui_message::UI_PREFIX)
+                || (rt_core::ui_message::tab_may_send(&url) && frame.is_main() != 0);
+            if !may_send {
                 if !url.starts_with("riptide://") {
                     run_greasemonkey(frame, context, &url);
                     if ROCKER.with(std::cell::Cell::get) {

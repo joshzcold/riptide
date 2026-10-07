@@ -58,6 +58,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("config-diff", "/") => Some((crate::configcmd::diff_page(), html)),
         ("bookmarks", "/") => Some((crate::storage::bookmarks_page(), html)),
         ("downloads", "/") => Some((themed(crate::downloads::page()), html)),
+        ("settings", "/") => Some((themed(crate::settings_page::page()), html)),
         ("process", "/") => Some((crate::spawn::output_page(), html)),
         _ => None,
     }

@@ -155,8 +155,11 @@ wrap_client! {
             }
             if name == UI_MESSAGE {
                 // Trust the browser process's view of the frame, not the page.
+                let main = frame.as_ref().is_some_and(|f| f.is_main() != 0);
                 let url = frame.map(|f| CefString::from(&f.url()).to_string()).unwrap_or_default();
-                if self.role != Role::Tab
+                // In a tab, only the settings page's own frame may send.
+                let allowed = self.role != Role::Tab || (main && rt_core::ui_message::tab_may_send(&url));
+                if allowed
                     && let Some(args) = message.argument_list()
                 {
                     let name = CefString::from(&args.string(0)).to_string();

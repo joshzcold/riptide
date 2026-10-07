@@ -24,6 +24,13 @@ pub enum UiMessage {
     RowHeight { height: u32 },
     /// Whether pages are asked for dark colors, for `ui.theme = auto`.
     ColorScheme { dark: bool },
+    /// The settings page changed a setting; `value` is checked like `:set`'s.
+    SettingsSet {
+        name: String,
+        value: serde_json::Value,
+    },
+    /// The settings page's reset button.
+    SettingsReset { name: String },
 }
 
 /// Which bar a size is for.
@@ -114,13 +121,62 @@ pub fn split_url(url: &str) -> Option<(&str, &str)> {
     (!path.contains("..")).then_some((host, path))
 }
 
+/// The page at `url` that may send messages: a `riptide://ui/` page's file
+/// name, or `settings` for `riptide://settings/`.
+pub fn sender(url: &str) -> Option<&str> {
+    if let Some(page) = url.strip_prefix(UI_PREFIX) {
+        return page.split(['?', '#']).next();
+    }
+    (split_url(url) == Some(("settings", "/"))).then_some("settings")
+}
+
+/// Whether a page in a tab (not one of riptide's bars) may send messages.
+/// Only the settings page may; web pages can't load or frame it.
+pub fn tab_may_send(url: &str) -> bool {
+    sender(url) == Some("settings")
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingsSet {
+    name: String,
+    value: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingName {
+    name: String,
+}
+
+fn setting_name(name: String) -> Result<String, String> {
+    if crate::settings::find(&name).is_some() {
+        Ok(name)
+    } else {
+        Err(format!("no setting {name:?}"))
+    }
+}
+
 /// Validate a message from the page at `url`.
 pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
-    let page = url
-        .strip_prefix(UI_PREFIX)
-        .ok_or_else(|| format!("{url} may not send UI messages"))?;
-    let page = page.split(['?', '#']).next().unwrap_or_default();
+    let page = sender(url).ok_or_else(|| format!("{url} may not send UI messages"))?;
     match (page, name) {
+        ("settings", "set") => {
+            let SettingsSet {
+                name: setting,
+                value,
+            } = payload(name, json)?;
+            Ok(UiMessage::SettingsSet {
+                name: setting_name(setting)?,
+                value,
+            })
+        }
+        ("settings", "reset") => {
+            let SettingName { name: setting } = payload(name, json)?;
+            Ok(UiMessage::SettingsReset {
+                name: setting_name(setting)?,
+            })
+        }
         ("tabbar.html", "select-tab") => {
             let TabIndex { index } = payload(name, json)?;
             Ok(UiMessage::SelectTab { index })
@@ -239,6 +295,40 @@ mod tests {
         assert!(parse(overlay, "prompt-key", r#"{"key": ""}"#).is_err());
         assert!(parse(tabbar, "bar-click", r#"{"x": 1}"#).is_err());
         assert!(parse(tabbar, "cycle-tab", r#"{"forward": 1}"#).is_err());
+    }
+
+    #[test]
+    fn the_settings_page_may_set_and_reset_known_settings_only() {
+        let page = "riptide://settings/";
+        assert!(tab_may_send(page));
+        assert!(tab_may_send("riptide://settings"));
+        assert!(!tab_may_send("riptide://ui/statusbar.html"));
+        assert!(!tab_may_send("riptide://help/"));
+        assert!(!tab_may_send("https://settings/"));
+        assert_eq!(
+            parse(page, "set", r#"{"name": "hints.chars", "value": "abc"}"#),
+            Ok(UiMessage::SettingsSet {
+                name: "hints.chars".into(),
+                value: serde_json::json!("abc")
+            })
+        );
+        assert_eq!(
+            parse(page, "reset", r#"{"name": "hints.chars"}"#),
+            Ok(UiMessage::SettingsReset {
+                name: "hints.chars".into()
+            })
+        );
+        assert!(parse(page, "set", r#"{"name": "nope", "value": 1}"#).is_err());
+        assert!(parse(page, "set", r#"{"name": "hints.chars"}"#).is_err());
+        assert!(parse(page, "select-tab", r#"{"index": 0}"#).is_err());
+        assert!(
+            parse(
+                "riptide://ui/tabbar.html",
+                "set",
+                r#"{"name": "hints.chars", "value": "a"}"#
+            )
+            .is_err()
+        );
     }
 
     #[test]

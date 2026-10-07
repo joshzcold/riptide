@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4fafb; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
+    --error: #b8323f;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+    --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #071a28; --fg: #e3f2f4; --muted: #8aa9b8; --line: #173246; --accent: #3ccfc1; --panel: #0c2536; --error: #ff6b6b; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
+  header { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 1rem 1.5rem .75rem; }
+  header h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  .controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  #search { flex: 1; max-width: 32rem; }
+  input, select, button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .2rem .45rem; }
+  input:focus, select:focus, button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { cursor: pointer; }
+  main { max-width: 64rem; padding: 0 1.5rem 3rem; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1.6rem 0 .2rem; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem); gap: .4rem 1.5rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
+  .name { font: .95em var(--mono); }
+  .row.changed .name { color: var(--accent); font-weight: bold; }
+  .desc { color: var(--muted); font-size: .9em; }
+  .notes { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .2rem; }
+  .note { font-size: .78em; padding: 0 .4rem; border-radius: 3px; background: var(--panel); color: var(--muted); }
+  .note.wins { color: var(--accent); }
+  .sites { font: .8em var(--mono); color: var(--muted); margin-top: .2rem; }
+  .error { grid-column: 1 / -1; color: var(--error); font-size: .85em; }
+  .editor { display: flex; flex-direction: column; gap: .3rem; align-items: stretch; }
+  .line { display: flex; gap: .3rem; align-items: center; }
+  .line input[type=text], .line input[type=number], .line select { flex: 1; min-width: 0; }
+  input[type=color] { padding: 0; width: 2.2rem; height: 1.8rem; flex: none; }
+  input[type=checkbox] { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
+  .reset { font-size: .8em; align-self: flex-end; }
+  .add { align-self: flex-start; font-size: .85em; }
+  #empty { color: var(--muted); margin-top: 2rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Settings</h1>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search names and descriptions" autocomplete="off" aria-label="Search settings">
+    <label><input id="changed" type="checkbox"> Changed only</label>
+  </div>
+</header>
+<main id="list"></main>
+<script>
+"use strict";
+let entries = /*RT_DATA*/null || [];
+const errors = new Map();
+const list = document.getElementById("list");
+const search = document.getElementById("search");
+const changedOnly = document.getElementById("changed");
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const send = (name, value) => rt.send("set", JSON.stringify({ name, value }));
+const shown = (v) => (typeof v === "string" ? v : JSON.stringify(v));
+
+// Each control gets an id from its setting and position, so focus survives a redraw.
+function control(e, input, id) {
+  input.dataset.key = `${e.name}#${id}`;
+  return input;
+}
+
+function textInput(e, value, id, onChange, type = "text") {
+  const input = control(e, el("input"), id);
+  input.type = type;
+  input.value = value;
+  input.setAttribute("aria-label", e.name);
+  input.addEventListener("change", () => onChange(input.value));
+  return input;
+}
+
+function editor(e) {
+  const box = el("div", "editor");
+  const kind = e.editor.type;
+  const line = el("div", "line");
+  box.append(line);
+  if (kind === "bool") {
+    const input = control(e, el("input"), "bool");
+    input.type = "checkbox";
+    input.checked = !!e.value;
+    input.setAttribute("aria-label", e.name);
+    input.addEventListener("change", () => send(e.name, input.checked));
+    line.append(input);
+  } else if (kind === "enum") {
+    const select = control(e, el("select"), "enum");
+    for (const option of e.editor.options) select.append(new Option(option, option));
+    select.value = e.value;
+    select.setAttribute("aria-label", e.name);
+    select.addEventListener("change", () => send(e.name, select.value));
+    line.append(select);
+  } else if (kind === "int") {
+    const input = textInput(e, e.value, "int", (v) => send(e.name, Number(v)), "number");
+    input.min = e.editor.min;
+    input.max = e.editor.max;
+    line.append(input);
+  } else if (kind === "color") {
+    const text = textInput(e, e.value, "text", (v) => send(e.name, v));
+    text.placeholder = "the theme's";
+    line.append(text);
+    // The picker only understands #rrggbb.
+    if (/^#[0-9a-f]{6}$/i.test(e.value) || e.value === "") {
+      const picker = control(e, el("input"), "picker");
+      picker.type = "color";
+      picker.value = e.value || "#000000";
+      picker.setAttribute("aria-label", `${e.name} color`);
+      picker.addEventListener("change", () => send(e.name, picker.value));
+      line.prepend(picker);
+    }
+  } else if (kind === "str") {
+    line.append(textInput(e, e.value, "str", (v) => send(e.name, v)));
+  } else if (kind === "list") {
+    box.replaceChildren();
+    const items = Array.isArray(e.value) ? e.value : [];
+    items.forEach((item, i) => {
+      const row = el("div", "line");
+      row.append(textInput(e, item, `item${i}`, (v) => send(e.name, items.map((x, j) => (j === i ? v : x)))));
+      const remove = control(e, el("button", null, "✕"), `remove${i}`);
+      remove.title = "Remove";
+      remove.addEventListener("click", () => send(e.name, items.filter((_, j) => j !== i)));
+      row.append(remove);
+      box.append(row);
+    });
+    const add = control(e, el("button", "add", "+ Add"), "add");
+    add.addEventListener("click", () => {
+      const row = el("div", "line");
+      const input = textInput(e, "", "new", (v) => v && send(e.name, [...items, v]));
+      row.append(input);
+      add.before(row);
+      input.focus();
+    });
+    box.append(add);
+  } else if (kind === "map") {
+    box.replaceChildren();
+    const map = e.value && typeof e.value === "object" ? e.value : {};
+    const keys = Object.keys(map);
+    const without = (key) => Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
+    keys.forEach((key, i) => {
+      const row = el("div", "line");
+      const k = textInput(e, key, `key${i}`, (v) => v && send(e.name, { ...without(key), [v]: map[key] }));
+      const v = textInput(e, shown(map[key]), `value${i}`, (text) => send(e.name, { ...map, [key]: text }));
+      const remove = control(e, el("button", null, "✕"), `remove${i}`);
+      remove.title = "Remove";
+      remove.addEventListener("click", () => send(e.name, without(key)));
+      row.append(k, v, remove);
+      box.append(row);
+    });
+    const add = control(e, el("button", "add", "+ Add"), "add");
+    add.addEventListener("click", () => {
+      const row = el("div", "line");
+      const k = textInput(e, "", "newkey", () => {});
+      const v = textInput(e, "", "newvalue", (text) => k.value && send(e.name, { ...map, [k.value]: text }));
+      k.placeholder = "key";
+      v.placeholder = "value";
+      row.append(k, v);
+      add.before(row);
+      k.focus();
+    });
+    box.append(add);
+  }
+  if (!same(e.value, e.default)) {
+    const reset = control(e, el("button", "reset", "Reset to default"), "reset");
+    reset.title = `Default: ${shown(e.default)}`;
+    reset.addEventListener("click", () => rt.send("reset", JSON.stringify({ name: e.name })));
+    box.append(reset);
+  }
+  return box;
+}
+
+function row(e) {
+  const changed = !same(e.value, e.default);
+  const r = el("div", changed ? "row changed" : "row");
+  r.dataset.name = e.name;
+  const about = el("div");
+  about.append(el("div", "name", e.name), el("div", "desc", e.description));
+  const notes = el("div", "notes");
+  if (e.source) notes.append(el("span", "note", `set in ${e.source}`));
+  if (e.config_wins) notes.append(el("span", "note wins", "your config file sets this and wins at startup"));
+  if (e.restart) notes.append(el("span", "note", "applies after a restart"));
+  if (notes.childElementCount) about.append(notes);
+  for (const [pattern, value] of e.sites) {
+    about.append(el("div", "sites", `on ${pattern}: ${shown(value)} (change with :set -u)`));
+  }
+  r.append(about, editor(e));
+  if (errors.has(e.name)) r.append(el("div", "error", errors.get(e.name)));
+  return r;
+}
+
+function render() {
+  const focused = document.activeElement?.dataset?.key;
+  const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const visible = entries.filter((e) => {
+    if (changedOnly.checked && same(e.value, e.default)) return false;
+    const hay = `${e.name} ${e.description}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+  const parts = [];
+  let section = "";
+  for (const e of visible) {
+    if (e.section !== section) {
+      section = e.section;
+      parts.push(el("h2", null, section));
+    }
+    parts.push(row(e));
+  }
+  if (!parts.length) {
+    const empty = el("p", null, entries.length ? "No setting matches." : "No settings.");
+    empty.id = "empty";
+    parts.push(empty);
+  }
+  list.replaceChildren(...parts);
+  if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
+}
+
+// The browser calls these after a change, and when one is refused.
+window.rtSettings = (data) => {
+  entries = data;
+  errors.clear();
+  render();
+};
+window.rtSettingsError = (name, error) => {
+  errors.set(name, error);
+  render();
+};
+
+search.addEventListener("input", render);
+changedOnly.addEventListener("change", render);
+render();
+</script>
+</body>
+</html>

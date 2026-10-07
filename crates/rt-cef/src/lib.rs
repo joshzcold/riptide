@@ -31,6 +31,7 @@ mod renderer;
 mod scheme;
 mod screenshot;
 mod search;
+mod settings_page;
 mod shell;
 #[cfg(unix)]
 mod signals;
