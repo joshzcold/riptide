@@ -57,6 +57,28 @@ fn the_settings_page_changes_saves_and_resets_settings() {
         "shown",
     );
 
+    // The page itself refuses what can't be right, before sending it.
+    b.eval(
+        "(i => { i.value = 'nonsense'; i.dispatchEvent(new Event('change')); return ''; })\
+         (document.querySelector('[data-key=\"colors.hints.bg#text\"]'))",
+    );
+    wait_eval(
+        &b,
+        "document.querySelector('[data-name=\"colors.hints.bg\"] .error')?.textContent.includes(\"isn't a color\") ? 'shown' : ''",
+        "shown",
+    );
+    // The typed text stays in the field to be fixed.
+    wait_eval(
+        &b,
+        "document.querySelector('[data-key=\"colors.hints.bg#text\"]').value",
+        "nonsense",
+    );
+    b.run("set colors.hints.bg");
+    b.wait_until("nothing was sent", |s| {
+        s.message()
+            .is_some_and(|m| m.trim_end() == "colors.hints.bg =")
+    });
+
     b.eval("document.querySelector('[data-key=\"hints.uppercase#reset\"]').click(), ''");
     wait_eval(&b, &format!("String({checkbox}.checked)"), "false");
     b.run("set hints.uppercase");

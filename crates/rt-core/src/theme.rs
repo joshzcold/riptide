@@ -496,12 +496,17 @@ pub fn page_css(colors: &BTreeMap<&'static str, String>) -> String {
     let bg = get("completion-bg");
     let scheme = if luminance(bg) < 0.2 { "dark" } else { "light" };
     format!(
-        ":root {{ color-scheme: {scheme}; --bg: {bg}; --fg: {}; --muted: {}; --line: {}; --accent: {}; --panel: {}; }}",
+        ":root {{ color-scheme: {scheme}; --bg: {bg}; --fg: {}; --muted: {}; --line: {}; --accent: {}; --panel: {}; \
+         --base: {}; --selected-bg: {}; --selected-fg: {}; --error: {}; }}",
         get("completion-fg"),
         get("completion-description-fg"),
         get("tabs-even-bg"),
         get("keyhint-fg"),
         get("tabs-odd-bg"),
+        get("statusbar-bg"),
+        get("completion-selected-bg"),
+        get("completion-selected-fg"),
+        get("messages-error-bg"),
     )
 }
 

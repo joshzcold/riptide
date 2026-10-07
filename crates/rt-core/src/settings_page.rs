@@ -8,6 +8,15 @@ use serde_json::{Value as Json, json};
 
 use crate::settings::{Kind, RESTART_REQUIRED, SETTINGS, Settings};
 
+/// What the page draws: every setting, and the theme's colors for the
+/// colors preview and the swatches of colors left to the theme.
+#[derive(Serialize, Debug)]
+pub struct Page {
+    pub entries: Vec<Entry>,
+    /// `--rt-<token>` values, as the bars get them.
+    pub theme: BTreeMap<&'static str, String>,
+}
+
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Entry {
     pub name: &'static str,
@@ -34,6 +43,17 @@ pub fn build(
     settings: &Settings,
     sources: &BTreeMap<String, String>,
     overridden: &BTreeSet<String>,
+) -> Page {
+    Page {
+        entries: entries(settings, sources, overridden),
+        theme: crate::theme::resolve(settings),
+    }
+}
+
+fn entries(
+    settings: &Settings,
+    sources: &BTreeMap<String, String>,
+    overridden: &BTreeSet<String>,
 ) -> Vec<Entry> {
     let mut entries: Vec<Entry> = SETTINGS
         .iter()
@@ -42,7 +62,13 @@ pub fn build(
                 Kind::Bool => json!({ "type": "bool" }),
                 Kind::Int { min, max } => json!({ "type": "int", "min": min, "max": max }),
                 Kind::Enum(options) => json!({ "type": "enum", "options": options }),
-                Kind::Str if def.name.starts_with("colors.") => json!({ "type": "color" }),
+                Kind::Str if def.name.starts_with("colors.") => {
+                    let token = crate::theme::TOKENS
+                        .iter()
+                        .find(|(_, setting)| *setting == def.name)
+                        .map(|(token, _)| *token);
+                    json!({ "type": "color", "token": token })
+                }
                 Kind::Str if theme_setting(def.name) => {
                     let mut names = crate::theme::names();
                     if def.name != "ui.theme" {
@@ -111,7 +137,9 @@ mod tests {
             .unwrap();
         let sources = BTreeMap::from([("hints.chars".to_string(), "config.toml".to_string())]);
         let overridden = BTreeSet::from(["hints.chars".to_string()]);
-        let entries = build(&settings, &sources, &overridden);
+        let page = build(&settings, &sources, &overridden);
+        assert_eq!(page.theme["statusbar-bg"], "#061826");
+        let entries = page.entries;
         assert_eq!(entries.len(), SETTINGS.len());
         assert!(entries.windows(2).all(|w| w[0].name < w[1].name));
 
@@ -126,7 +154,10 @@ mod tests {
         assert_eq!(uppercase.source, "");
         assert!(!uppercase.config_wins);
 
-        assert_eq!(entry(&entries, "colors.hints.bg").editor["type"], "color");
+        assert_eq!(
+            entry(&entries, "colors.hints.bg").editor,
+            json!({ "type": "color", "token": "hints-bg" })
+        );
         assert_eq!(entry(&entries, "prompt.position").editor["type"], "enum");
         assert_eq!(entry(&entries, "prompt.width").editor["min"], 200);
         let themes = &entry(&entries, "ui.theme").editor;

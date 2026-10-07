@@ -6,59 +6,170 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f4fafb; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
-    --error: #b8323f;
+    --base: #e6f0f3; --bg: #f7fbfc; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6; --panel: #e6f2f4;
+    --selected-bg: #0e7fa6; --selected-fg: #ffffff; --error: #b8323f;
     --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
     --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #071a28; --fg: #e3f2f4; --muted: #8aa9b8; --line: #173246; --accent: #3ccfc1; --panel: #0c2536; --error: #ff6b6b; }
+    :root { --base: #061826; --bg: #0b2a3f; --fg: #e9f7f6; --muted: #8fb3c4; --line: #164260; --accent: #2ec4b6; --panel: #12364f;
+      --selected-bg: #2ec4b6; --selected-fg: #061826; --error: #b8323f; }
   }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
-  header { position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line); padding: 1rem 1.5rem .75rem; }
-  header h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
-  .controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-  #search { flex: 1; max-width: 32rem; }
-  input, select, button { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .2rem .45rem; }
-  input:focus, select:focus, button:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  * { box-sizing: border-box; }
+  :root { --header: 5.4rem; }
+  html { scroll-padding-top: calc(var(--header) + 1rem); }
+  body { margin: 0; background: var(--base); color: var(--fg); font: 14px/1.5 var(--sans); }
+  svg.icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  header { position: sticky; top: 0; z-index: 3; background: var(--base); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 76rem; margin: 0 auto; padding: .9rem 1.5rem; display: flex; gap: 1.25rem; align-items: center; }
+  .bar h1 { font-size: 1.25rem; margin: 0; width: 13rem; flex: none; display: flex; gap: .5rem; align-items: center; }
+  .bar h1 svg.icon { width: 22px; height: 22px; color: var(--accent); }
+  #search { flex: 1; max-width: 34rem; padding: .45rem .7rem; background: var(--bg); }
+  .toggle { display: flex; gap: .4rem; align-items: center; color: var(--muted); white-space: nowrap; }
+
+  .layout { max-width: 76rem; margin: 0 auto; padding: 1.25rem 1.5rem 4rem; display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 1.25rem; }
+  nav { position: sticky; top: calc(var(--header) + 1.25rem); align-self: start; display: flex; flex-direction: column; gap: 2px; }
+  nav a { display: flex; gap: .6rem; align-items: center; padding: .4rem .6rem; border-radius: 6px; color: var(--muted); text-decoration: none; }
+  nav a:hover { background: var(--bg); color: var(--fg); }
+  nav a.current { background: var(--bg); color: var(--fg); box-shadow: inset 3px 0 0 var(--accent); }
+  nav a.current svg.icon { color: var(--accent); }
+  nav .count { margin-left: auto; font-size: .75em; color: var(--muted); }
+
+  section { margin-bottom: 2rem; }
+  section > h2 { display: flex; gap: .55rem; align-items: center; font-size: 1.05rem; margin: 0 0 .15rem; }
+  section > h2 svg.icon { color: var(--accent); }
+  section > .blurb { color: var(--muted); margin: 0 0 .7rem; font-size: .9em; }
+  .card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .sub { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: .7rem 1rem .2rem; background: var(--bg); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem); gap: .4rem 1.5rem; padding: .75rem 1rem; border-top: 1px solid var(--line); }
+  .sub + .row { border-top: none; }
+  .card > .row:first-child { border-top: none; }
+  .row.changed { box-shadow: inset 3px 0 0 var(--accent); }
+  .name { font: 600 .92em var(--mono); word-break: break-word; }
+  .row.changed .name { color: var(--accent); }
+  .desc { color: var(--muted); font-size: .88em; margin-top: .1rem; }
+  .notes { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .35rem; }
+  .note { font-size: .74em; padding: .05rem .45rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .note.wins { border-color: var(--accent); color: var(--accent); }
+  .sites { font: .8em var(--mono); color: var(--muted); margin-top: .3rem; }
+  .error { grid-column: 1 / -1; color: var(--error); font-size: .85em; font-weight: 600; }
+
+  input, select, button { font: inherit; color: var(--fg); background: var(--base); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .55rem; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  input.invalid { border-color: var(--error); outline-color: var(--error); }
   button { cursor: pointer; }
-  main { max-width: 64rem; padding: 0 1.5rem 3rem; }
-  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 1.6rem 0 .2rem; }
-  .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem); gap: .4rem 1.5rem; padding: .6rem 0; border-bottom: 1px solid var(--line); }
-  .name { font: .95em var(--mono); }
-  .row.changed .name { color: var(--accent); font-weight: bold; }
-  .desc { color: var(--muted); font-size: .9em; }
-  .notes { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .2rem; }
-  .note { font-size: .78em; padding: 0 .4rem; border-radius: 3px; background: var(--panel); color: var(--muted); }
-  .note.wins { color: var(--accent); }
-  .sites { font: .8em var(--mono); color: var(--muted); margin-top: .2rem; }
-  .error { grid-column: 1 / -1; color: var(--error); font-size: .85em; }
-  .editor { display: flex; flex-direction: column; gap: .3rem; align-items: stretch; }
-  .line { display: flex; gap: .3rem; align-items: center; }
+  button:hover { border-color: var(--accent); }
+  .editor { display: flex; flex-direction: column; gap: .35rem; }
+  .line { display: flex; gap: .35rem; align-items: center; }
   .line input[type=text], .line input[type=number], .line select { flex: 1; min-width: 0; }
-  input[type=color] { padding: 0; width: 2.2rem; height: 1.8rem; flex: none; }
-  input[type=checkbox] { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
-  .reset { font-size: .8em; align-self: flex-end; }
+  .reset { padding: .25rem .4rem; line-height: 0; color: var(--muted); }
+  .reset svg.icon { width: 15px; height: 15px; }
   .add { align-self: flex-start; font-size: .85em; }
-  #empty { color: var(--muted); margin-top: 2rem; }
+  .remove { padding: .25rem .5rem; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .chip { display: inline-flex; align-items: center; gap: .15rem; padding: .05rem .1rem .05rem .55rem; border-radius: 999px; background: var(--panel); font: .85em var(--mono); }
+  .chip-remove { border: none; background: none; padding: 0 .35rem; color: var(--muted); font-size: .85em; }
+  .chip-remove:hover { color: var(--error); }
+  input[type=checkbox] { width: 2.4rem; height: 1.35rem; appearance: none; border-radius: 999px; background: var(--panel); position: relative; cursor: pointer; padding: 0; }
+  input[type=checkbox]::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.35rem - 6px); height: calc(1.35rem - 6px); border-radius: 50%; background: var(--muted); transition: left .12s; }
+  input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+  input[type=checkbox]:checked::after { left: calc(100% - 1.35rem + 4px); background: var(--selected-fg); }
+  .swatch { width: 2rem; height: 1.9rem; flex: none; border: 1px solid var(--line); border-radius: 6px; padding: 0; position: relative; overflow: hidden; }
+  .swatch input { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); opacity: 0; cursor: pointer; }
+  .themes { font-size: .8em; color: var(--muted); }
+  #empty { color: var(--muted); padding: 2rem; text-align: center; }
+
+  /* The colors preview: riptide's bars drawn with the --rt-* colors. */
+  .preview { position: sticky; top: var(--header); z-index: 2; margin-bottom: .8rem; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font: 12px/18px var(--mono); box-shadow: 0 6px 18px rgb(0 0 0 / 25%); }
+  .p-tabs { display: flex; background: var(--rt-tabs-bar-bg); }
+  .p-tab { padding: 0 .6rem; color: var(--rt-tabs-fg); white-space: nowrap; overflow: hidden; }
+  .p-tab.odd { background: var(--rt-tabs-odd-bg); flex: 1; }
+  .p-tab.even { background: var(--rt-tabs-even-bg); flex: 1; }
+  .p-tab.selected { background: var(--rt-tabs-selected-bg); color: var(--rt-tabs-selected-fg); flex: 1; box-shadow: inset 0 -2px 0 var(--rt-tabs-indicator-start); }
+  .p-tab.pinned { background: var(--rt-tabs-pinned-bg); color: var(--rt-tabs-pinned-fg); }
+  .p-page { background: var(--rt-webpage-bg, #ffffff); color: #333; padding: .6rem .8rem; display: flex; gap: 1.5rem; align-items: flex-start; min-height: 3.6rem; position: relative; font-family: var(--sans); }
+  .p-link { color: #1a4fd6; text-decoration: underline; position: relative; }
+  .p-hint { position: absolute; left: -.3rem; top: -.55rem; padding: 0 3px; font: bold 11px/14px var(--mono); border-radius: 3px; background: var(--rt-hints-bg); color: var(--rt-hints-fg); border: 1px solid var(--rt-hints-border); text-decoration: none; }
+  .p-hint b { color: var(--rt-hints-match-fg); }
+  .p-prompt { margin-left: auto; width: 19rem; background: var(--rt-prompts-bg); color: var(--rt-prompts-fg); border: 1px solid var(--rt-prompts-border); border-left-width: 3px; padding: .3rem .5rem; font: 11px/16px var(--mono); }
+  .p-prompt .t { color: var(--rt-prompts-border); font-weight: bold; }
+  .p-prompt kbd { background: var(--rt-prompts-key-bg); color: var(--rt-prompts-border); padding: 0 .35rem; border-radius: 3px; font: inherit; }
+  .p-comp { background: var(--rt-completion-bg); color: var(--rt-completion-fg); }
+  .p-comp .h { background: var(--rt-completion-category-bg); color: var(--rt-completion-category-fg); font-weight: bold; padding: 0 .5rem; }
+  .p-comp .r { display: flex; justify-content: space-between; padding: 0 .5rem; }
+  .p-comp .r span:last-child { color: var(--rt-completion-description-fg); }
+  .p-comp .r.sel { background: var(--rt-completion-selected-bg); color: var(--rt-completion-selected-fg); }
+  .p-comp .r.sel span:last-child { color: var(--rt-completion-selected-fg); }
+  .p-comp .m { color: var(--rt-completion-match-fg); font-weight: bold; }
+  .p-status { display: flex; justify-content: space-between; padding: 0 .5rem; background: var(--rt-statusbar-bg); color: var(--rt-statusbar-fg); }
+  .p-status .u { color: var(--rt-statusbar-https-fg); }
+  .p-status.insert { background: var(--rt-statusbar-insert-bg); color: var(--rt-statusbar-insert-fg); }
+  .p-status.error { background: var(--rt-messages-error-bg); color: var(--rt-messages-error-fg); }
+  .p-status.warning { background: var(--rt-messages-warning-bg); color: var(--rt-messages-warning-fg); }
+
+  @media (max-width: 52rem) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    nav { display: none; }
+    .bar h1 { width: auto; }
+    .row { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Settings</h1>
-  <div class="controls">
-    <input id="search" type="search" placeholder="Search names and descriptions" autocomplete="off" aria-label="Search settings">
-    <label><input id="changed" type="checkbox"> Changed only</label>
+  <div class="bar">
+    <h1><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</h1>
+    <input id="search" type="search" placeholder="Search settings" autocomplete="off" aria-label="Search settings">
+    <label class="toggle"><input id="changed" type="checkbox"> Changed only</label>
   </div>
 </header>
-<main id="list"></main>
+<div class="layout">
+  <nav id="nav" aria-label="Sections"></nav>
+  <main id="list"></main>
+</div>
 <script>
 "use strict";
-let entries = /*RT_DATA*/null || [];
+let page = /*RT_DATA*/null || { entries: [], theme: {} };
 const errors = new Map();
 const list = document.getElementById("list");
+const nav = document.getElementById("nav");
 const search = document.getElementById("search");
 const changedOnly = document.getElementById("changed");
+
+// Icon paths, drawn with the text color (no images: riptide pages load nothing).
+const ICONS = {
+  general: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  look: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  colors: '<path d="M12 3c-3.5 4.2-6 7.3-6 10.5a6 6 0 0 0 12 0C18 10.3 15.5 7.2 12 3z"/>',
+  fonts: '<path d="M4 19l5-14 5 14M6 14h6M15 19c0-2 1.3-3 3-3s3 1 3 3v-5"/>',
+  tabs: '<path d="M3 20V9a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8z"/><path d="M13 7h4l1.5 3"/>',
+  statusbar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16h18M6 18h4"/>',
+  completion: '<path d="M5 7l4 4-4 4M12 17h7"/>',
+  hints: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  keys: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/>',
+  content: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+  url: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
+  files: '<path d="M12 4v11M7 10l5 5 5-5M5 19h14"/>',
+  other: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
+  reset: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6M4 4v4.6h4.6"/>',
+};
+const GROUPS = [
+  { id: "general", title: "General", blurb: "Starting, sessions, quitting, updates and spell checking.",
+    prefixes: ["auto_save", "session", "confirm_quit", "changelog_after_upgrade", "crash_report", "new_instance_open_target", "new_instance_open_target_window", "messages", "spellcheck"] },
+  { id: "look", title: "Look & feel", blurb: "Theme, window, zoom and scrolling.", prefixes: ["ui", "window", "zoom", "scrolling"] },
+  { id: "colors", title: "Colors", blurb: "Override single colors of the theme. Empty uses the theme's color, shown in the swatch.", prefixes: ["colors"] },
+  { id: "fonts", title: "Fonts", blurb: "riptide's own fonts, and the default fonts of web pages.", prefixes: ["fonts"] },
+  { id: "tabs", title: "Tabs", blurb: "The tab bar and how tabs open, close and move.", prefixes: ["tabs"] },
+  { id: "statusbar", title: "Status bar", blurb: "Where the status bar sits and what it shows.", prefixes: ["statusbar"] },
+  { id: "completion", title: "Command line", blurb: "Completion while typing commands, URLs and settings.", prefixes: ["completion"] },
+  { id: "hints", title: "Hints", blurb: "Labels for following links and clicking elements.", prefixes: ["hints"] },
+  { id: "keys", title: "Keys & input", blurb: "Bindings, aliases, key hints and insert mode.", prefixes: ["bindings", "aliases", "input", "keyhint"] },
+  { id: "content", title: "Pages & privacy", blurb: "What pages may do, blocking, cookies and permissions.", prefixes: ["content"] },
+  { id: "url", title: "URLs & search", blurb: "Start pages, search engines and how URLs are read.", prefixes: ["url", "search"] },
+  { id: "files", title: "Downloads & prompts", blurb: "Downloads, file pickers, the editor and questions.", prefixes: ["downloads", "fileselect", "editor", "prompt"] },
+];
+const groupOf = (e) => GROUPS.find((g) => g.prefixes.includes(e.section)) || { id: "other", title: "Other", blurb: "", prefixes: [] };
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -66,24 +177,83 @@ function el(tag, cls, text) {
   if (text !== undefined) e.textContent = text;
   return e;
 }
-
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const send = (name, value) => rt.send("set", JSON.stringify({ name, value }));
-const shown = (v) => (typeof v === "string" ? v : JSON.stringify(v));
-
-// Each control gets an id from its setting and position, so focus survives a redraw.
-function control(e, input, id) {
-  input.dataset.key = `${e.name}#${id}`;
-  return input;
+function icon(name) {
+  const span = document.createElement("span");
+  span.innerHTML = `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.other}</svg>`;
+  return span.firstChild;
 }
 
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const shown = (v) => (typeof v === "string" ? v : JSON.stringify(v));
+// What was last sent per setting, so a refused value stays in its field.
+const attempted = new Map();
+function send(name, value) {
+  attempted.set(name, value);
+  rt.send("set", JSON.stringify({ name, value }));
+}
+// `value`, when given, is what was typed, kept in the field to be fixed.
+function fail(name, message, value) {
+  if (value !== undefined) attempted.set(name, value);
+  errors.set(name, message);
+  render();
+}
+
+// Each control gets an id from its setting and position, so focus survives a redraw.
+function control(e, node, id) {
+  node.dataset.key = `${e.name}#${id}`;
+  return node;
+}
 function textInput(e, value, id, onChange, type = "text") {
   const input = control(e, el("input"), id);
   input.type = type;
   input.value = value;
   input.setAttribute("aria-label", e.name);
-  input.addEventListener("change", () => onChange(input.value));
+  input.addEventListener("change", () => onChange(input.value, input));
+  if (errors.has(e.name) && attempted.get(e.name) === value) input.classList.add("invalid");
   return input;
+}
+// The value to show: a refused one stays so it can be fixed.
+const current = (e) => (errors.has(e.name) && attempted.has(e.name) ? attempted.get(e.name) : e.value);
+
+const isColor = (v) => v === "" || CSS.supports("color", v);
+function toHex(color) {
+  const probe = document.createElement("canvas").getContext("2d");
+  probe.fillStyle = "#000000";
+  probe.fillStyle = color;
+  return /^#[0-9a-f]{6}$/i.test(probe.fillStyle) ? probe.fillStyle : "#000000";
+}
+
+function colorEditor(e, line) {
+  const token = e.editor.token;
+  const value = current(e);
+  const themeColor = page.theme[token] || "";
+  const swatch = el("label", "swatch");
+  swatch.title = "Pick a color";
+  const paint = (c) => { swatch.style.background = c || themeColor; };
+  paint(isColor(value) ? value : "");
+  const picker = control(e, el("input"), "picker");
+  picker.type = "color";
+  picker.value = toHex(value || themeColor);
+  picker.setAttribute("aria-label", `${e.name} color`);
+  const text = textInput(e, value, "text", (v, input) => {
+    if (!isColor(v.trim())) return fail(e.name, `${v} isn't a color, e.g. #2ec4b6, rgb(46, 196, 182) or teal`, v);
+    send(e.name, v.trim());
+  });
+  text.placeholder = themeColor ? `theme: ${themeColor}` : "the theme's";
+  // Typing and picking show in the preview at once; the change saves on Return or leaving.
+  const live = (c) => {
+    paint(c);
+    if (token) document.querySelector(".preview")?.style.setProperty(`--rt-${token}`, c || themeColor);
+  };
+  text.addEventListener("input", () => {
+    const ok = isColor(text.value.trim());
+    text.classList.toggle("invalid", !ok);
+    if (ok) live(text.value.trim());
+  });
+  picker.addEventListener("input", () => { text.value = picker.value; text.classList.remove("invalid"); live(picker.value); });
+  picker.addEventListener("change", () => send(e.name, picker.value));
+  swatch.append(picker);
+  line.append(swatch, text);
 }
 
 function editor(e) {
@@ -91,71 +261,74 @@ function editor(e) {
   const kind = e.editor.type;
   const line = el("div", "line");
   box.append(line);
+  const value = current(e);
   if (kind === "bool") {
     const input = control(e, el("input"), "bool");
     input.type = "checkbox";
-    input.checked = !!e.value;
+    input.checked = !!value;
     input.setAttribute("aria-label", e.name);
     input.addEventListener("change", () => send(e.name, input.checked));
     line.append(input);
   } else if (kind === "enum") {
     const select = control(e, el("select"), "enum");
     for (const option of e.editor.options) select.append(new Option(option, option));
-    select.value = e.value;
+    select.value = value;
     select.setAttribute("aria-label", e.name);
     select.addEventListener("change", () => send(e.name, select.value));
     line.append(select);
   } else if (kind === "int") {
-    const input = textInput(e, e.value, "int", (v) => send(e.name, Number(v)), "number");
-    input.min = e.editor.min;
-    input.max = e.editor.max;
+    const { min, max } = e.editor;
+    const input = textInput(e, value, "int", (v, input) => {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < min || n > max) return fail(e.name, `Enter a whole number from ${min} to ${max}`, v);
+      send(e.name, n);
+    }, "number");
+    input.min = min;
+    input.max = max;
+    input.step = 1;
+    input.addEventListener("input", () => {
+      const n = Number(input.value);
+      input.classList.toggle("invalid", input.value === "" || !Number.isInteger(n) || n < min || n > max);
+    });
     line.append(input);
   } else if (kind === "color") {
-    const text = textInput(e, e.value, "text", (v) => send(e.name, v));
-    text.placeholder = "the theme's";
-    line.append(text);
-    // The picker only understands #rrggbb.
-    if (/^#[0-9a-f]{6}$/i.test(e.value) || e.value === "") {
-      const picker = control(e, el("input"), "picker");
-      picker.type = "color";
-      picker.value = e.value || "#000000";
-      picker.setAttribute("aria-label", `${e.name} color`);
-      picker.addEventListener("change", () => send(e.name, picker.value));
-      line.prepend(picker);
-    }
+    colorEditor(e, line);
   } else if (kind === "str") {
-    line.append(textInput(e, e.value, "str", (v) => send(e.name, v)));
+    line.append(textInput(e, value, "str", (v) => send(e.name, v)));
   } else if (kind === "list") {
+    // Items as chips; a field at the end adds one.
     box.replaceChildren();
-    const items = Array.isArray(e.value) ? e.value : [];
+    const items = Array.isArray(value) ? value : [];
+    const chips = el("div", "chips");
     items.forEach((item, i) => {
-      const row = el("div", "line");
-      row.append(textInput(e, item, `item${i}`, (v) => send(e.name, items.map((x, j) => (j === i ? v : x)))));
-      const remove = control(e, el("button", null, "✕"), `remove${i}`);
-      remove.title = "Remove";
+      const chip = el("span", "chip", item);
+      const remove = control(e, el("button", "chip-remove", "✕"), `remove${i}`);
+      remove.title = `Remove ${item}`;
+      remove.setAttribute("aria-label", `Remove ${item}`);
       remove.addEventListener("click", () => send(e.name, items.filter((_, j) => j !== i)));
-      row.append(remove);
-      box.append(row);
+      chip.append(remove);
+      chips.append(chip);
     });
-    const add = control(e, el("button", "add", "+ Add"), "add");
-    add.addEventListener("click", () => {
-      const row = el("div", "line");
-      const input = textInput(e, "", "new", (v) => v && send(e.name, [...items, v]));
-      row.append(input);
-      add.before(row);
-      input.focus();
+    box.append(chips);
+    const line = el("div", "line");
+    const input = textInput(e, "", "new", (v) => {
+      const item = v.trim();
+      if (!item) return;
+      if (items.includes(item)) return fail(e.name, `${item} is already in the list`);
+      send(e.name, [...items, item]);
     });
-    box.append(add);
+    input.placeholder = "Add an item and press Return";
+    line.append(input);
+    box.append(line);
   } else if (kind === "map") {
     box.replaceChildren();
-    const map = e.value && typeof e.value === "object" ? e.value : {};
-    const keys = Object.keys(map);
+    const map = value && typeof value === "object" ? value : {};
     const without = (key) => Object.fromEntries(Object.entries(map).filter(([k]) => k !== key));
-    keys.forEach((key, i) => {
+    Object.keys(map).forEach((key, i) => {
       const row = el("div", "line");
       const k = textInput(e, key, `key${i}`, (v) => v && send(e.name, { ...without(key), [v]: map[key] }));
       const v = textInput(e, shown(map[key]), `value${i}`, (text) => send(e.name, { ...map, [key]: text }));
-      const remove = control(e, el("button", null, "✕"), `remove${i}`);
+      const remove = control(e, el("button", "remove", "✕"), `remove${i}`);
       remove.title = "Remove";
       remove.addEventListener("click", () => send(e.name, without(key)));
       row.append(k, v, remove);
@@ -175,17 +348,18 @@ function editor(e) {
     box.append(add);
   }
   if (!same(e.value, e.default)) {
-    const reset = control(e, el("button", "reset", "Reset to default"), "reset");
-    reset.title = `Default: ${shown(e.default)}`;
+    const reset = control(e, el("button", "reset"), "reset");
+    reset.title = `Reset to the default: ${shown(e.default) || "empty"}`;
+    reset.setAttribute("aria-label", `Reset ${e.name}`);
+    reset.append(icon("reset"));
     reset.addEventListener("click", () => rt.send("reset", JSON.stringify({ name: e.name })));
-    box.append(reset);
+    (kind === "list" || kind === "map" ? box : line).append(reset);
   }
   return box;
 }
 
 function row(e) {
-  const changed = !same(e.value, e.default);
-  const r = el("div", changed ? "row changed" : "row");
+  const r = el("div", same(e.value, e.default) ? "row" : "row changed");
   r.dataset.name = e.name;
   const about = el("div");
   about.append(el("div", "name", e.name), el("div", "desc", e.description));
@@ -202,42 +376,114 @@ function row(e) {
   return r;
 }
 
+function preview() {
+  const p = el("div", "preview");
+  p.setAttribute("aria-label", "Preview of the colors");
+  for (const [token, color] of Object.entries(page.theme)) p.style.setProperty(`--rt-${token}`, color);
+  p.innerHTML = `
+    <div class="p-tabs"><span class="p-tab selected">1: Current tab</span><span class="p-tab pinned">2</span><span class="p-tab odd">3: Docs</span><span class="p-tab even">4: News</span></div>
+    <div class="p-page"><span class="p-link">A link<span class="p-hint"><b>a</b>s</span></span><span class="p-link">Another<span class="p-hint">df</span></span>
+      <div class="p-prompt"><div class="t">Permission request</div>Show notifications? <kbd>y</kbd> yes <kbd>n</kbd> no</div></div>
+    <div class="p-comp"><div class="h">Settings</div><div class="r sel"><span><span class="m">hint</span>s.chars</span><span>Characters for hint labels</span></div><div class="r"><span><span class="m">hint</span>s.uppercase</span><span>Show hint labels in upper case</span></div></div>
+    <div class="p-status"><span>:set hint</span><span class="u">https://riptide.example/ [Top] [1/4]</span></div>
+    <div class="p-status insert"><span>-- INSERT MODE --</span><span>https://riptide.example/</span></div>
+    <div class="p-status error"><span>An error message</span><span></span></div>
+    <div class="p-status warning"><span>A warning</span><span></span></div>`;
+  return p;
+}
+
+let observer = null;
 function render() {
   const focused = document.activeElement?.dataset?.key;
   const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
-  const visible = entries.filter((e) => {
+  const visible = page.entries.filter((e) => {
     if (changedOnly.checked && same(e.value, e.default)) return false;
     const hay = `${e.name} ${e.description}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
-  const parts = [];
-  let section = "";
+  const groups = new Map();
   for (const e of visible) {
-    if (e.section !== section) {
-      section = e.section;
-      parts.push(el("h2", null, section));
+    const g = groupOf(e);
+    if (!groups.has(g.id)) groups.set(g.id, { group: g, entries: [] });
+    groups.get(g.id).entries.push(e);
+  }
+  const order = [...GROUPS.map((g) => g.id), "other"];
+  const sections = [];
+  const links = [];
+  for (const id of order) {
+    const found = groups.get(id);
+    if (!found) continue;
+    const { group, entries } = found;
+    const section = el("section");
+    section.id = `section-${id}`;
+    const h2 = el("h2");
+    h2.append(icon(id), group.title);
+    section.append(h2);
+    if (group.blurb) section.append(el("p", "blurb", group.blurb));
+    if (id === "colors") section.append(preview());
+    const card = el("div", "card");
+    // Sections made of several prefixes get a heading per prefix (ui,
+    // zoom); big ones per second name part (colors.statusbar).
+    // One-off settings come first, without a heading.
+    const mixed = group.prefixes.length > 1;
+    const split = mixed || entries.length > 10;
+    const count = (s) => entries.filter((x) => x.section === s).length;
+    if (mixed) entries.sort((a, b) => (count(a.section) > 1) - (count(b.section) > 1) || (a.name < b.name ? -1 : 1));
+    let sub = "";
+    for (const e of entries) {
+      const parts = e.name.split(".");
+      const part = mixed ? (count(e.section) > 1 ? e.section : "") : parts.length > 2 ? parts[1] : "";
+      if (split && part !== sub) {
+        if (part || sub) card.append(el("div", "sub", (part || "general").replaceAll("_", " ")));
+        sub = part;
+      }
+      card.append(row(e));
     }
-    parts.push(row(e));
+    section.append(card);
+    sections.push(section);
+    const link = el("a");
+    link.href = `#section-${id}`;
+    link.dataset.section = id;
+    link.append(icon(id), group.title, el("span", "count", String(entries.length)));
+    links.push(link);
   }
-  if (!parts.length) {
-    const empty = el("p", null, entries.length ? "No setting matches." : "No settings.");
+  if (!sections.length) {
+    const empty = el("p", null, page.entries.length ? "No setting matches." : "No settings.");
     empty.id = "empty";
-    parts.push(empty);
+    sections.push(empty);
   }
-  list.replaceChildren(...parts);
+  list.replaceChildren(...sections);
+  nav.replaceChildren(...links);
   if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
+  watchSections();
+}
+
+// The sidebar marks the section at the top of the view.
+function watchSections() {
+  observer?.disconnect();
+  const visible = new Set();
+  observer = new IntersectionObserver((seen) => {
+    for (const s of seen) (s.isIntersecting ? visible.add(s.target.id) : visible.delete(s.target.id));
+    const first = [...list.querySelectorAll("section")].find((s) => visible.has(s.id));
+    for (const a of nav.querySelectorAll("a")) a.classList.toggle("current", first && a.dataset.section === first.id.slice(8));
+  }, { rootMargin: "-90px 0px -55% 0px" });
+  list.querySelectorAll("section").forEach((s) => observer.observe(s));
 }
 
 // The browser calls these after a change, and when one is refused.
 window.rtSettings = (data) => {
-  entries = data;
+  page = data;
   errors.clear();
+  attempted.clear();
   render();
 };
-window.rtSettingsError = (name, error) => {
-  errors.set(name, error);
-  render();
-};
+window.rtSettingsError = (name, error) => fail(name, error);
+
+// Sticky things sit right under the header, whatever its height.
+const header = document.querySelector("header");
+const measure = () => document.documentElement.style.setProperty("--header", `${header.offsetHeight}px`);
+new ResizeObserver(measure).observe(header);
+measure();
 
 search.addEventListener("input", render);
 changedOnly.addEventListener("change", render);
