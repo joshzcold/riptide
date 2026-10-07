@@ -96,4 +96,43 @@ fn crash_report_says_when_there_are_none() {
         s.tab().url == "riptide://crash/" && !s.tab().loading
     });
     b.wait_eval("String(document.getElementById('none').hidden)", "false");
+    b.wait_eval("String(document.getElementById('dumps').hidden)", "true");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_chromium_crash_leaves_a_dump_that_the_next_start_mentions() {
+    let b = Browser::launch()
+        .toml("url.start_pages = [\"about:blank\"]\nmessages.timeout = 0\n")
+        .start("page.html");
+    // Crashpad, turned on by the crash_reporter.cfg riptide writes, keeps a
+    // dump of the tab's renderer.
+    b.crash_tab();
+    b.wait_until("the tab crashed", |s| s.tab().crashed);
+    let start = std::time::Instant::now();
+    while !std::fs::read_dir(b.data_dir().join("pending")).is_ok_and(|d| {
+        d.flatten()
+            .any(|e| e.path().extension().is_some_and(|x| x == "dmp"))
+    }) {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "no crash dump in {}",
+            b.data_dir().display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.run("quit");
+    b.wait_exit();
+    b.restart();
+    b.wait_until("the dump is mentioned", |s| {
+        s.message().is_some_and(|m| m.contains("left a crash dump"))
+    });
+    b.run("crash-report");
+    b.wait_until("the report page opens", |s| {
+        s.tab().url == "riptide://crash/" && !s.tab().loading
+    });
+    b.wait_eval(
+        "String(document.querySelectorAll('#dump-list li').length)",
+        "1",
+    );
 }

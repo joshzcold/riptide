@@ -31,6 +31,16 @@ build=target/release
 version=${1:-$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"riptide","version":"\([^"]*\)".*/\1/p')}
 name=riptide-$version-linux-$(uname -m)
 
+# crash_reporter.cfg turns on Chromium's crash reporter. With no ServerURL it
+# only keeps dumps in the data directory. Keep in step with
+# rt_storage::crash_reports::dumps::reporter_config.
+crash_config() {
+    printf '%s\n' \
+        "# Written by riptide: Chromium's crash reporter keeps crash dumps in the" \
+        "# data directory and never uploads them (there is no ServerURL)." \
+        "[Config]" "ProductName=riptide" "ProductVersion=$version"
+}
+
 [[ -x $build/riptide ]] || { echo "package-linux.sh: run 'task release' first" >&2; exit 1; }
 
 stage=dist/$name
@@ -45,6 +55,7 @@ for f in "${files[@]}"; do
 done
 cp -a "$build/locales" "$stage/"
 cp LICENSE README.md CHANGELOG.md packaging/riptide.desktop packaging/riptide.svg "$stage/"
+crash_config > "$stage/crash_reporter.cfg"
 # CEF ships libcef.so with debug info (1.4 GB); stripped it is ~260 MB.
 strip "$stage/riptide" "$stage/libcef.so" "$stage/libvk_swiftshader.so"
 

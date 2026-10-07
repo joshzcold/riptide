@@ -46,9 +46,14 @@
       <span id="note" class="muted"></span>
     </div>
   </div>
+  <section id="dumps" hidden>
+    <h2>Chromium crash dumps</h2>
+    <p>When Chromium itself crashes, a page's process or the browser, it leaves a crash dump: a binary snapshot of the crashed process's memory. They're kept here and never sent. To report one, attach the file to a <a id="dump-issue" target="_blank" rel="noreferrer">GitHub issue</a>. A dump can hold parts of the pages that were open, so only share one you're comfortable with.</p>
+    <ul id="dump-list"></ul>
+  </section>
 </main>
 <script>
-  // {dir, reports: [{name, text}] newest first, email, issues}
+  // {dir, reports: [{name, text}] newest first, dumps: [{path, when, size}] newest first, email, issues}
   const DATA = /*RT_DATA*/null;
   // GitHub refuses issue links much longer than this.
   const MAX_URL = 7500;
@@ -85,6 +90,20 @@
     $("path").textContent = `${DATA.dir}/${report.name}`;
     $("text").value = report.text;
     update();
+  }
+
+  if (DATA && DATA.dumps && DATA.dumps.length > 0) {
+    $("dumps").hidden = false;
+    $("dump-issue").href = DATA.issues;
+    $("dump-list").replaceChildren(...DATA.dumps.map((d) => {
+      const li = document.createElement("li");
+      const kb = Math.max(1, Math.round(d.size / 1024));
+      li.append(`${d.when} UTC, ${kb} KB: `);
+      const code = document.createElement("code");
+      code.textContent = d.path;
+      li.append(code);
+      return li;
+    }));
   }
 
   if (!DATA || DATA.reports.length === 0) {

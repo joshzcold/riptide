@@ -956,7 +956,11 @@ Whatever path wins:
       - The next start says "riptide crashed last time. The report is in …", once. The message waits until the first page has loaded, because starting a load clears messages.
       - Tests: unit tests in `crash_reports.rs`, and the e2e test `a_panic_writes_a_report_that_the_next_start_mentions_once`. The test channel's `Panic` request triggers it.
       - ✅ **Fixed:** a page starting to load clears every message, so the recovery messages ("Restored the tabs open before the crash" and the others) vanished as soon as the restored tabs loaded. `shell::show_message_after_load` now holds startup messages until a page has finished loading; `sessions.rs` checks all three.
-    - For native crashes in CEF, enable Crashpad to write minidumps locally with uploads off, and record the dump's path.
+    - ✅ **Native crashes** (2026-10-07): Crashpad is on, with uploads off.
+      - CEF reads `crash_reporter.cfg` next to the executable. `crash::write_reporter_config` writes it at startup (no `ServerURL`), and `package-linux.sh` ships it. The experimental macOS and Windows packages don't yet.
+      - Dumps land in `<data>/pending/` (or `completed/`, `new/`) as `*.dmp`. CEF has no size or age limit on Linux, so `rt_storage::crash_reports::dumps` keeps the newest ten.
+      - The next start says "Chromium crashed since the last start and left a crash dump", once (`crashes/.dumps-seen`). A Rust panic's abort leaves a dump too, so a panic report's message wins. `riptide://crash/` lists the dumps with their paths and a warning that they can hold page content.
+      - Tests: the unit test `dumps_are_listed_newest_first_pruned_and_mentioned_once`, and the e2e test `a_chromium_crash_leaves_a_dump_that_the_next_start_mentions`.
   - ✅ **Offer after the crash** (2026-10-06): the next start says "riptide crashed last time. :crash-report shows the report (…)". `:crash-report` opens `riptide://crash/` (`ui/crash.html`, filled in by `crash::page`), which shows the newest reports for the user to edit before sending:
     - **GitHub issue:** a filled-in `issues/new` link, rebuilt as the text changes. A report too long for a link (over about 7,500 characters) is shortened, and the page asks the user to attach the file.
     - **Email:** a `mailto:` link to `crash_report.email`, hidden when that's empty (the default).

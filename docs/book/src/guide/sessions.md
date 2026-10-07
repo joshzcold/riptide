@@ -55,6 +55,8 @@ When riptide itself crashes because of a bug (a Rust panic), it writes a report 
 
 Backtraces name the source files of the build, which for a build of your own include its directory.
 
+When Chromium itself crashes (the browser, or a page's process), its crash reporter leaves a crash dump in `pending/` or `completed/` in the data directory. The next start mentions it, and `:crash-report` lists the dumps with their paths. A dump is a binary snapshot of the crashed process's memory, so it can hold parts of the pages that were open: only attach one to an issue if you're comfortable with that. Dumps are never uploaded, and the newest ten are kept. The crash reporter is turned on by `crash_reporter.cfg` next to the `riptide` executable, which riptide writes and the packages ship.
+
 ### A crashed tab
 
 Pages run in processes separate from the browser. If a page's process crashes, runs out of memory or is killed, the browser keeps running and the tab shows a notice saying why. `r` reloads the page, and the tab keeps its back and forward history.

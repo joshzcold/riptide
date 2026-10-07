@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rt_core::engine::Level;
-use rt_storage::crash_reports::{CrashReports, Report};
+use rt_storage::crash_reports::{CrashReports, Report, dumps};
 
 use crate::shell;
 
@@ -23,6 +23,26 @@ pub fn set_email(email: String) {
     }
 }
 
+/// Turn on Chromium's crash reporter (Crashpad), which reads
+/// `crash_reporter.cfg` next to the executable. Release packages ship the
+/// file; this writes it for builds run from where they were built. A
+/// read-only install directory is fine: then it's the package's own.
+pub fn write_reporter_config() {
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    else {
+        return;
+    };
+    let path = dir.join("crash_reporter.cfg");
+    let config = dumps::reporter_config(env!("CARGO_PKG_VERSION"));
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(config.as_str())
+        && let Err(e) = std::fs::write(&path, config)
+    {
+        tracing::debug!("can't write {}: {e}", path.display());
+    }
+}
+
 /// `riptide://crash/`: the newest reports, read from disk each time.
 pub fn page() -> Arc<[u8]> {
     let dir = DIR.get().cloned().unwrap_or_default();
@@ -37,9 +57,20 @@ pub fn page() -> Arc<[u8]> {
         })
         .collect();
     let email = EMAIL.lock().map(|e| e.clone()).unwrap_or_default();
+    let dumps: Vec<serde_json::Value> = dir
+        .parent()
+        .map(dumps::list)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|d| {
+            let when = rt_storage::recovery::utc_stamp(d.modified);
+            serde_json::json!({ "path": d.path.display().to_string(), "when": when, "size": d.size })
+        })
+        .collect();
     let data = serde_json::json!({
         "dir": dir.display().to_string(),
         "reports": reports,
+        "dumps": dumps,
         "email": email,
         "issues": ISSUES,
     });
@@ -101,12 +132,28 @@ pub fn mention_last_report() {
     let Some(data_dir) = shell::with(|s| s.paths.data_dir.clone()) else {
         return;
     };
+    dumps::prune(&data_dir, dumps::KEEP_DUMPS);
+    // A Rust panic aborts, so Crashpad leaves a dump of it too; the report
+    // says more, and the page lists both.
+    let new_dumps = dumps::take_new(&data_dir);
     if let Some(path) = reports(&data_dir).take_unseen() {
         shell::show_message_after_load(
             Level::Error,
             format!(
                 "riptide crashed last time. :crash-report shows the report ({})",
                 path.display()
+            ),
+        );
+    } else if new_dumps > 0 {
+        let what = if new_dumps == 1 {
+            "a crash dump".to_string()
+        } else {
+            format!("{new_dumps} crash dumps")
+        };
+        shell::show_message_after_load(
+            Level::Error,
+            format!(
+                "Chromium crashed since the last start and left {what}; :crash-report lists them"
             ),
         );
     }

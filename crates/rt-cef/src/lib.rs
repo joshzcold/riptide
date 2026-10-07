@@ -270,6 +270,10 @@ pub fn run() -> i32 {
     if let Some(Err(code)) = early {
         return code;
     }
+    // Before CEF starts, which reads it in every process.
+    if !subprocess {
+        crash::write_reporter_config();
+    }
 
     // On macOS the CEF framework is loaded at runtime from the app bundle.
     #[cfg(target_os = "macos")]
