@@ -5,7 +5,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, OpenFlags, params, params_from_iter};
 
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryEntry {
@@ -62,6 +62,17 @@ impl History {
                  );
                  CREATE INDEX IF NOT EXISTS completion_last_visit ON completion (last_visit);
                  PRAGMA user_version = 1;",
+            )?;
+        }
+        if version < 2 {
+            // Each site's icon, for completion.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS favicons (
+                     host TEXT PRIMARY KEY,
+                     icon TEXT NOT NULL,
+                     updated INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 2;",
             )?;
         }
         Ok(Self { conn })
@@ -168,8 +179,26 @@ impl History {
     }
 
     pub fn clear(&self) -> rusqlite::Result<()> {
-        self.conn
-            .execute_batch("DELETE FROM visits; DELETE FROM completion; VACUUM;")
+        self.conn.execute_batch(
+            "DELETE FROM visits; DELETE FROM completion; DELETE FROM favicons; VACUUM;",
+        )
+    }
+
+    /// Remember `host`'s icon (a `data:` URL), replacing an older one.
+    pub fn set_favicon(&self, host: &str, icon: &str, now: i64) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT INTO favicons (host, icon, updated) VALUES (?1, ?2, ?3)
+             ON CONFLICT (host) DO UPDATE SET icon = excluded.icon, updated = excluded.updated",
+            params![host, icon, now],
+        )?;
+        Ok(())
+    }
+
+    /// Every remembered icon, by host.
+    pub fn favicons(&self) -> rusqlite::Result<Vec<(String, String)>> {
+        let mut rows = self.conn.prepare("SELECT host, icon FROM favicons")?;
+        let icons = rows.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        icons.collect()
     }
 
     /// Forget every visit to `url`. Returns whether there were any.
@@ -198,6 +227,49 @@ fn escape_like(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn favicons_are_kept_per_host_and_cleared_with_history() {
+        let h = History::open_in_memory().unwrap();
+        h.set_favicon("example.com", "data:image/png;base64,AAAA", 1)
+            .unwrap();
+        h.set_favicon("example.com", "data:image/png;base64,BBBB", 2)
+            .unwrap();
+        h.set_favicon("other.org", "data:image/png;base64,CCCC", 2)
+            .unwrap();
+        let mut icons = h.favicons().unwrap();
+        icons.sort();
+        assert_eq!(
+            icons,
+            [
+                (
+                    "example.com".to_string(),
+                    "data:image/png;base64,BBBB".to_string()
+                ),
+                (
+                    "other.org".to_string(),
+                    "data:image/png;base64,CCCC".to_string()
+                ),
+            ]
+        );
+        h.clear().unwrap();
+        assert!(h.favicons().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_version_1_database_gets_the_favicons_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE visits (url TEXT NOT NULL, title TEXT NOT NULL, atime INTEGER NOT NULL);
+             CREATE TABLE completion (url TEXT PRIMARY KEY, title TEXT NOT NULL, last_visit INTEGER NOT NULL, visits INTEGER NOT NULL);
+             PRAGMA user_version = 1;",
+        )
+        .unwrap();
+        let h = History::init(conn).unwrap();
+        h.set_favicon("a.example", "data:image/png;base64,AAAA", 1)
+            .unwrap();
+        assert_eq!(h.favicons().unwrap().len(), 1);
+    }
 
     #[test]
     fn imports_qutebrowser_history_once() {

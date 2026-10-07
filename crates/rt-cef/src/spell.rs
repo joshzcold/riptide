@@ -187,6 +187,7 @@ pub fn completions(pattern: &str) -> Vec<Completion> {
             .iter()
             .filter(|w| w.starts_with(pattern))
             .map(|w| Completion {
+                icon: None,
                 time: None,
                 detail: None,
                 category: "Spelling",

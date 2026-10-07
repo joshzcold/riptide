@@ -157,7 +157,7 @@ keyhint.blacklist = ["<Ctrl-x>*", "g$"]
 
 In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from search engines, quickmarks, bookmarks, history and, for paths starting with `/` or `~/`, files. Every typed word must match, in any order.
 
-Command names, settings, setting values and themes match anywhere in the name: `:set hints` offers `hints.chars` and also `colors.hints.bg`. Names that start with what you typed come first, then names with a part that starts with it (after a `.`, `-` or `_`), then the rest. The matched text is highlighted in the list (`colors.completion.match.fg`).
+In `:open`, history, bookmarks, quickmarks and tabs show each site's icon (remembered from your visits, but not from private windows). Command names, settings, setting values and themes match anywhere in the name: `:set hints` offers `hints.chars` and also `colors.hints.bg`. Names that start with what you typed come first, then names with a part that starts with it (after a `.`, `-` or `_`), then the rest. The matched text is highlighted in the list (`colors.completion.match.fg`).
 
 | Setting | What it does |
 |---|---|

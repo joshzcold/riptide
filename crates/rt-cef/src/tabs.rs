@@ -697,6 +697,7 @@ pub fn completions(pattern: &str, others_only: bool) -> Vec<rt_core::completion:
             .chain(others)
             .filter(|t| !(others_only && t.current_window) && tab_matches(t, &words))
             .map(|t| rt_core::completion::Completion {
+                icon: crate::storage::icon_for(&t.url),
                 time: None,
                 detail: None,
                 category: "Tabs",

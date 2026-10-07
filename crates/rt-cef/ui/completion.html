@@ -54,6 +54,7 @@
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
   .match { color: var(--match-fg); font-weight: bold; }
+  .site-icon { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
   .row.selected .match { color: inherit; text-decoration: underline; }
   .name { width: 50%; max-width: 70ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; padding-right: 2ch; box-sizing: border-box; }
   .desc { flex: 1 1 auto; min-width: 0; color: var(--desc-fg); overflow: hidden; text-overflow: ellipsis; }
@@ -383,6 +384,14 @@
       const name = document.createElement("span");
       name.className = "name";
       setMatched(name, row.name, payload.words);
+      if (row.icon) {
+        // The site's icon, before its URL or tab.
+        const icon = document.createElement("img");
+        icon.className = "site-icon";
+        icon.src = row.icon;
+        icon.alt = "";
+        name.prepend(icon);
+      }
       const desc = document.createElement("span");
       desc.className = "desc";
       setMatched(desc, row.description, payload.words);

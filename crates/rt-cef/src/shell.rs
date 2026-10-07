@@ -1526,6 +1526,7 @@ fn completion_rows(view: &CompletionView, max_rows: usize) -> Vec<serde_json::Va
                 "description": item.description,
                 "time": item.time,
                 "detail": item.detail,
+                "icon": item.icon,
                 "selected": view.selected == Some(i),
             }));
         }

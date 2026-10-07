@@ -389,6 +389,7 @@ impl Engine {
                         .iter()
                         .filter(|(n, _)| completion::rank(n, typed).is_some())
                         .map(|(n, d)| completion::Completion {
+                            icon: None,
                             category: "Commands",
                             name: n.clone(),
                             description: d.clone(),
@@ -2470,6 +2471,7 @@ mod tests {
             ["https://a.org/", "https://b.org/", "https://c.org/"]
                 .iter()
                 .map(|u| Completion {
+                    icon: None,
                     time: None,
                     detail: None,
                     category: "History",
@@ -2731,6 +2733,7 @@ mod tests {
                 .iter()
                 .filter(|u| u.contains(pattern))
                 .map(|u| Completion {
+                    icon: None,
                     time: None,
                     detail: None,
                     category: "History",

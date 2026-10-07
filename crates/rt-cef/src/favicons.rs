@@ -62,15 +62,20 @@ pub fn changed(browser: &Browser, urls: Vec<String>) {
 }
 
 fn set(browser: i32, favicon: Option<String>) {
-    shell::with(|s| {
-        if let Some(tab) = s
+    // Private windows' sites aren't remembered.
+    let keep = shell::with(|s| {
+        let private = s.private;
+        let tab = s
             .tabs
             .iter_mut()
-            .find(|t| t.browser().is_some_and(|b| b.identifier() == browser))
-        {
-            tab.favicon = favicon;
-        }
-    });
+            .find(|t| t.browser().is_some_and(|b| b.identifier() == browser))?;
+        tab.favicon = favicon.clone();
+        (!private).then(|| tab.url.clone()).zip(favicon)
+    })
+    .flatten();
+    if let Some((url, icon)) = keep {
+        crate::storage::remember_favicon(&url, &icon);
+    }
     shell::refresh_ui();
 }
 

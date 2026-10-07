@@ -18,6 +18,9 @@ pub struct Completion {
     /// Shown at the right, e.g. a setting's current value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// The site's icon, as a `data:` URL, drawn before the name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
 }
 
 /// Dynamic sources the browser layer provides.
@@ -163,6 +166,7 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
         return ranked(SETTINGS.iter(), partial, |d| d.name)
             .into_iter()
             .map(|d| Completion {
+                icon: None,
                 category: "Settings",
                 name: d.name.to_string(),
                 description: d.description.to_string(),
@@ -197,6 +201,7 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
                 _ => "",
             };
             Completion {
+                icon: None,
                 category: "Values",
                 description: note.to_string(),
                 name: v,
@@ -216,6 +221,7 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         return ranked(COMMANDS.iter().filter(|c| !c.hidden), typed, |c| c.name)
             .into_iter()
             .map(|c| Completion {
+                icon: None,
                 time: None,
                 detail: None,
                 category: "Commands",
@@ -234,6 +240,7 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
             return ranked(crate::theme::names(), parsed.pattern, |t| t.as_str())
                 .into_iter()
                 .map(|t| Completion {
+                    icon: None,
                     category: "Themes",
                     name: t.to_string(),
                     description: if t == current {
@@ -289,6 +296,7 @@ mod tests {
 
     fn item(category: &'static str, name: &str) -> Completion {
         Completion {
+            icon: None,
             time: None,
             detail: None,
             category,

@@ -22,13 +22,51 @@ thread_local! {
     /// Settings the completion source needs; it can't read the engine's while
     /// the engine is asking it for completions.
     static COMPLETION: RefCell<CompletionSettings> = RefCell::new(CompletionSettings::default());
+    /// Each site's icon by host, from the history database, for completion.
+    static FAVICONS: RefCell<std::collections::HashMap<String, String>> = RefCell::new(Default::default());
 }
 
 /// Open storage; returns errors to report (the browser works without it).
 pub fn open(paths: &Paths) -> Vec<String> {
     let (storage, errors) = Storage::open(&paths.config_dir, &paths.data_dir);
+    let icons = storage
+        .history
+        .as_ref()
+        .and_then(|h| h.favicons().ok())
+        .unwrap_or_default();
+    FAVICONS.with(|f| *f.borrow_mut() = icons.into_iter().collect());
     STORAGE.with(|s| *s.borrow_mut() = Some(storage));
     errors
+}
+
+/// A page's icon arrived: keep it for its site, for completion.
+pub fn remember_favicon(url: &str, icon: &str) {
+    let host = rt_core::url::host(url);
+    if host.is_empty() || !rt_storage::history::is_recordable(url) {
+        return;
+    }
+    let known = FAVICONS.with(|f| f.borrow().get(host).is_some_and(|i| i == icon));
+    if known {
+        return;
+    }
+    FAVICONS.with(|f| f.borrow_mut().insert(host.to_string(), icon.to_string()));
+    with(|s| {
+        if let Some(history) = &s.history
+            && let Err(e) = history.set_favicon(host, icon, now())
+        {
+            tracing::warn!(%e, "could not save a favicon");
+        }
+    });
+}
+
+/// The icon of `url`'s site, if one was seen.
+pub fn icon_for(url: &str) -> Option<String> {
+    FAVICONS.with(|f| f.borrow().get(rt_core::url::host(url)).cloned())
+}
+
+fn with_icon(mut item: Completion, url: &str) -> Completion {
+    item.icon = icon_for(url);
+    item
 }
 
 pub fn with<R>(f: impl FnOnce(&mut Storage) -> R) -> Option<R> {
@@ -176,6 +214,7 @@ pub fn set_title(url: &str, title: &str) {
 
 fn item(category: &'static str, name: &str, description: &str) -> Completion {
     Completion {
+        icon: None,
         time: None,
         detail: None,
         category,
@@ -249,7 +288,7 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
             s.quickmarks
                 .iter()
                 .filter(|(n, u)| matches(pattern, &[n, u]))
-                .map(|(name, url)| item("Quickmarks", url, name))
+                .map(|(name, url)| with_icon(item("Quickmarks", url, name), url))
                 .collect()
         })
         .unwrap_or_default(),
@@ -257,7 +296,7 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
             s.bookmarks
                 .iter()
                 .filter(|(u, t)| matches(pattern, &[u, t]))
-                .map(|(url, title)| item("Bookmarks", url, title))
+                .map(|(url, title)| with_icon(item("Bookmarks", url, title), url))
                 .collect()
         })
         .unwrap_or_default(),
@@ -275,6 +314,7 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                         .iter()
                         .filter(|e| !exclude.iter().any(|glob| rt_core::url::glob(glob, &e.url)))
                         .map(|e| Completion {
+                            icon: icon_for(&e.url),
                             time: Some(e.last_visit),
                             ..item("History", &e.url, &e.title)
                         })
@@ -576,7 +616,10 @@ pub fn run_command(command: &Command) -> bool {
         Command::HistoryClear { force: true } => {
             let result = with(|s| s.history.as_ref().map(|h| h.clear()));
             match result.flatten() {
-                Some(Ok(())) => shell::show_message(Level::Info, "History cleared"),
+                Some(Ok(())) => {
+                    FAVICONS.with(|f| f.borrow_mut().clear());
+                    shell::show_message(Level::Info, "History cleared");
+                }
                 Some(Err(e)) => {
                     shell::show_message(Level::Error, format!("Could not clear history: {e}"))
                 }

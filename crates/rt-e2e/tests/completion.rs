@@ -229,3 +229,32 @@ fn floating_overlay_shows_the_command_in_a_box() {
     let bar = b.eval_bar("statusbar", "document.body.innerText");
     assert!(bar.contains(":set ui.over"), "the status bar shows {bar:?}");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn open_completion_shows_each_sites_icon_and_history_keeps_it() {
+    let b = Browser::start("icon.html");
+    // The icon arrives after the page loads.
+    let start = std::time::Instant::now();
+    while b.eval_bar(
+        "tabbar",
+        "String(!!document.querySelector('.tab img.icon'))",
+    ) != "true"
+    {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the tab has no icon");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let db = b.data_dir().join("history.sqlite");
+    let start = std::time::Instant::now();
+    while rt_e2e::sqlite(&db, "SELECT count(*) FROM favicons") != "1" {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the icon wasn't saved");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.keys(":open icon");
+    wait_overlay(
+        &b,
+        "String(document.querySelectorAll('img.site-icon').length > 0)",
+        |v| v == "true",
+    );
+    b.keys("<Escape>");
+}

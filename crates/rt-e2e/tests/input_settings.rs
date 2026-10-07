@@ -46,6 +46,27 @@ fn input_mouse_rocker_gestures_go_back_and_drop_the_context_menu() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn mouse_back_and_forward_buttons_navigate() {
+    let b = Browser::start("page.html");
+    b.open("second.html");
+    let (first, second) = (b.url("page.html"), b.url("second.html"));
+    // Real X button presses over the page: buttons 8 and 9 are back and forward.
+    let click = |button: &str| {
+        let status = std::process::Command::new("xdotool")
+            .args(["mousemove", "400", "300", "click", button])
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    click("8");
+    b.wait_until("back on the first page", |s| s.tab().is_loaded(&first));
+    click("9");
+    b.wait_until("forward again", |s| s.tab().is_loaded(&second));
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn input_spatial_navigation_moves_focus_with_arrows() {
     let b = Browser::launch()
         .toml("\"input.spatial_navigation\" = true\n")

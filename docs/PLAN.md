@@ -135,7 +135,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `:tab-pin` and pinned tabs (M14)
 - [x] `:tab-clone`, `:tab-give`, `:tab-take` (2026-10-02; the page is reopened, so its back/forward history doesn't move)
 - [x] Mouse: click/middle-click/wheel/drag in the tab bar, middle-click links (M14)
-- [x] Favicons in the tab bar (M14); not yet in completion
+- [x] Favicons in the tab bar (M14) and in `:open` and tab completion (2026-10-07)
 - [x] Multiple windows (2026-10-02)
 - [x] Each tab keeps its own insert/normal mode: switching back restores it (qutebrowser's `tabs.mode_on_change = restore`). Each tab stores the mode it was left in; with `restore`, switching back brings insert or passthrough mode back (2026-10-02). Hints, the caret and the like end on any switch; the command line and prompts stay.
 - [x] **Closing a pinned tab asks instead of refusing** (2026-10-06). `d`, `:tab-close` and a middle-click ask "Close pinned tab <title>?" (default no); `--force` doesn't ask, `tabs.pinned.close` (`ask`, `refuse`, `close`) chooses, `:tab-only` still keeps pinned tabs, and `u` reopens the tab pinned. Covered by the e2e test `pinned_tabs_ask_before_d_closes_them`.
@@ -459,10 +459,10 @@ Result:
   - A new tab could miss keyboard focus requested before its browser existed (`on_after_created` now re-focuses it).
 
 Not done:
-- Favicons in `:open` completion and cached in history.
+- ✅ (2026-10-07) Favicons in `:open` and tab completion: each site's icon is kept per host in the history database (`favicons` table, schema 2; not from private windows; cleared with the history) and attached to history, bookmark, quickmark and tab rows. e2e test `open_completion_shows_each_sites_icon_and_history_keeps_it`.
 - Saving favicons in sessions (they're re-fetched when the page loads).
 - Middle-clicking links in pages to open background tabs works through Chromium's popup handling but isn't tested yet.
-- Mouse back/forward buttons.
+- ✅ (2026-10-07) Mouse back/forward buttons: Chromium already handles buttons 8 and 9; `mouse_back_and_forward_buttons_navigate` presses them with xdotool.
 - **Lost keys after `:open -t` (seen under Xvfb only):** a key sent by `xdotool` just as a tab opened from the command line finishes loading is dropped about 1 time in 5. It never reaches `OnPreKeyEvent`, `CefWindowDelegate::OnKeyEvent` or a high-priority window accelerator, so it's lost below Views (X11/aura). Tabs opened through the remote command don't lose keys (0/16), nor do keys sent 0.3 s after the load (0/12). It hasn't been seen with a real keyboard and window manager yet. The smoke test pauses 0.3 s after that step; check again on a real desktop and with Wayland (M10).
 
 Original plan:
