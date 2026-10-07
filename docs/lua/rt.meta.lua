@@ -43,7 +43,23 @@ function rt.theme(name, spec) end
 ---@param keys string
 ---@param command string|fun()
 ---@param mode? rt.Mode defaults to "normal"
+---@return string command what the keys run (`lua-call <n>` for a function)
 function rt.bind(keys, command, mode) end
+
+rt.keymap = {}
+
+---Bind keys in one mode or several, as `vim.keymap.set`. `opts.desc` is shown
+---in the key hints popup instead of the command.
+---@param mode rt.Mode|rt.Mode[]
+---@param keys string
+---@param rhs string|fun()
+---@param opts? { desc?: string }
+function rt.keymap.set(mode, keys, rhs, opts) end
+
+---Remove a binding in one mode or several.
+---@param mode rt.Mode|rt.Mode[]
+---@param keys string
+function rt.keymap.del(mode, keys) end
 
 ---Remove a binding.
 ---@param keys string
@@ -51,10 +67,13 @@ function rt.bind(keys, command, mode) end
 function rt.unbind(keys, mode) end
 
 ---Define a command, e.g. `:wiki rust`; `fn` gets the rest of the line.
+---`opts` is a description, or a table with `desc` and `complete`, a function
+---that gets what's typed after the command and returns completions: strings,
+---or `{ name = "…", desc = "…" }` tables.
 ---@param name string letters, digits, `-` and `_`
 ---@param fn fun(args: string)
----@param description? string shown in completion
-function rt.command(name, fn, description) end
+---@param opts? string|{ desc?: string, complete?: fun(arglead: string): (string|{ name: string, desc?: string })[] }
+function rt.command(name, fn, opts) end
 
 ---Run `fn` on an event, with a table of what it's about (`e.url`, …):
 ---- `startup`: riptide has started and loaded config.lua

@@ -71,3 +71,51 @@ fn config_lua_hears_events_with_patterns_groups_and_once() {
     // The pattern kept page.html's title out.
     assert!(!log.contains("title ready"), "{log}");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn keymap_descriptions_show_in_key_hints_and_commands_complete_their_arguments() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.keymap.set("normal", "<Space>h", function() rt.notify("hi") end, { desc = "Say hi" })
+rt.command("greet", function(args) rt.notify("hello " .. args) end, {
+  desc = "Greet someone",
+  complete = function() return { "alice", { name = "bob", desc = "a friend" } } end,
+})
+"#,
+        )
+        .start("page.html");
+    b.keys("<Space>");
+    let start = std::time::Instant::now();
+    while !b
+        .eval_bar("completion", "document.body.innerText")
+        .contains("Say hi")
+    {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "no description in the key hints"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.keys("h");
+    b.wait_until("the function ran", |s| s.message() == Some("hi"));
+
+    b.keys(":greet ");
+    let s = b.wait_until("the arguments complete", |s| {
+        s.completion["items"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|i| i["name"] == "bob"))
+    });
+    let names: Vec<&str> = s.completion["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|i| i["name"].as_str())
+        .collect();
+    assert_eq!(names, ["alice", "bob"]);
+    b.keys("<Tab><Return>");
+    b.wait_until("the command ran with the choice", |s| {
+        s.message() == Some("hello alice")
+    });
+}

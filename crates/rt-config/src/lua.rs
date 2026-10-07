@@ -120,6 +120,24 @@ rt._entry[1] = rt._fire
 
 -- Neovim's name for it.
 rt.notify = rt.message
+
+-- rt.keymap.set(mode, keys, fn_or_command, { desc = "…" }), as vim.keymap.set:
+-- one mode or a list; desc shows in the key hints.
+rt.keymap = {}
+local function modes_of(mode)
+  if mode == nil then return { "normal" } end
+  if type(mode) == "string" then return { mode } end
+  return mode
+end
+function rt.keymap.set(mode, keys, rhs, opts)
+  for _, m in ipairs(modes_of(mode)) do
+    local command = rt.bind(keys, rhs, m)
+    if opts and opts.desc then rt._describe(command, opts.desc) end
+  end
+end
+function rt.keymap.del(mode, keys)
+  for _, m in ipairs(modes_of(mode)) do rt.unbind(keys, m) end
+end
 "#;
 
 /// The events `rt.on` takes, with what each one's table carries.
@@ -159,6 +177,8 @@ struct State {
     actions: Vec<Action>,
     next_callback: u32,
     commands: Vec<(String, String)>,
+    /// `rt.keymap.set`'s `desc`, by the command a key runs (`lua-call 3`).
+    descriptions: std::collections::BTreeMap<String, String>,
 }
 
 /// What callbacks see of the browser.
@@ -334,6 +354,52 @@ pub fn spawned(
     actions
 }
 
+/// What `rt.keymap.set`'s `desc` says a key's command does, for key hints.
+pub fn describe(command: &str) -> Option<String> {
+    RUNTIME.with(|r| {
+        r.borrow()
+            .as_ref()
+            .and_then(|rt| rt.state.borrow().descriptions.get(command).cloned())
+    })
+}
+
+/// Completions for the arguments of command `name`, from its `complete`
+/// function, as `(text, description)`. Called while the browser is busy
+/// completing, so the function gets no context and can't act.
+pub fn complete_command(name: &str, arglead: &str) -> Vec<(String, String)> {
+    let found = RUNTIME.with(|r| -> mlua::Result<Vec<(String, String)>> {
+        let runtime = r.borrow();
+        let Some(rt) = runtime.as_ref() else {
+            return Ok(Vec::new());
+        };
+        let api: mlua::Table = rt.lua.globals().get("rt")?;
+        let Some(complete) = api
+            .get::<mlua::Table>("_completers")?
+            .get::<Option<mlua::Function>>(name)?
+        else {
+            return Ok(Vec::new());
+        };
+        let items: mlua::Table = complete.call(arglead)?;
+        items
+            .sequence_values::<Value>()
+            .map(|item| match item? {
+                Value::String(s) => Ok((s.to_str()?.to_string(), String::new())),
+                Value::Table(t) => Ok((
+                    t.get("name")?,
+                    t.get::<Option<String>>("desc")?.unwrap_or_default(),
+                )),
+                _ => Err(mlua::Error::runtime(
+                    "completion items are strings or { name = …, desc = … }",
+                )),
+            })
+            .collect()
+    });
+    found.unwrap_or_else(|e| {
+        tracing::warn!("completion for :{name}: {e}");
+        Vec::new()
+    })
+}
+
 /// A timer from `rt.defer`/`rt.every` ran out: call its function.
 pub fn timer(id: u32, context: &Context) -> Result<Vec<Action>, String> {
     invoke(
@@ -424,6 +490,7 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
         actions: Vec::new(),
         next_callback: 1,
         commands: Vec::new(),
+        descriptions: Default::default(),
     }));
     let lua = Lua::new();
     let result = setup(&lua, paths, state.clone())
@@ -603,6 +670,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
 
     api.set("_callbacks", lua.create_table()?)?;
+    api.set("_completers", lua.create_table()?)?;
     api.set("_commands", lua.create_table()?)?;
     let events = lua.create_table()?;
     for (name, _) in EVENTS {
@@ -636,21 +704,51 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                         ));
                     }
                 };
-                s.borrow_mut().ops.push(ConfigOp::Bind {
-                    mode,
-                    keys,
-                    command,
-                });
-                Ok(())
+                let mut state = s.borrow_mut();
+                if state.loaded {
+                    // From a callback: the same as typing :bind.
+                    let line = format!("bind --mode {mode} {keys} {command}");
+                    state.actions.push(Action::Run(line));
+                } else {
+                    state.ops.push(ConfigOp::Bind {
+                        mode,
+                        keys,
+                        command: command.clone(),
+                    });
+                }
+                Ok(command)
             },
         )?,
     )?;
 
     let s = state.clone();
     api.set(
+        "_describe",
+        lua.create_function(move |_, (command, description): (String, String)| {
+            s.borrow_mut().descriptions.insert(command, description);
+            Ok(())
+        })?,
+    )?;
+
+    let s = state.clone();
+    api.set(
         "command",
         lua.create_function(
-            move |lua, (name, f, description): (String, mlua::Function, Option<String>)| {
+            move |lua, (name, f, options): (String, mlua::Function, Value)| {
+                // A description, or { desc = "…", complete = function(arglead) … end }.
+                let (description, complete) = match options {
+                    Value::Nil => (None, None),
+                    Value::String(text) => (Some(text.to_str()?.to_string()), None),
+                    Value::Table(t) => (
+                        t.get::<Option<String>>("desc")?,
+                        t.get::<Option<mlua::Function>>("complete")?,
+                    ),
+                    _ => {
+                        return Err(mlua::Error::runtime(
+                            "rt.command's third argument is a description or an options table",
+                        ));
+                    }
+                };
                 let valid = !name.is_empty()
                     && name
                         .chars()
@@ -665,6 +763,8 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 }
                 let api: mlua::Table = lua.globals().get("rt")?;
                 api.get::<mlua::Table>("_commands")?.set(name.clone(), f)?;
+                api.get::<mlua::Table>("_completers")?
+                    .set(name.clone(), complete)?;
                 let mut state = s.borrow_mut();
                 state.commands.retain(|(n, _)| *n != name);
                 state.commands.push((
@@ -841,7 +941,13 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
         lua.create_function(move |_, (keys, mode): (String, Option<String>)| {
             Key::parse_sequence(&keys).map_err(|e| mlua::Error::runtime(e.to_string()))?;
             let mode = mode_arg(mode)?;
-            s.borrow_mut().ops.push(ConfigOp::Unbind { mode, keys });
+            let mut state = s.borrow_mut();
+            if state.loaded {
+                let line = format!("unbind --mode {mode} {keys}");
+                state.actions.push(Action::Run(line));
+            } else {
+                state.ops.push(ConfigOp::Unbind { mode, keys });
+            }
             Ok(())
         })?,
     )?;
@@ -912,6 +1018,82 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 argv: vec!["notify-send".into(), "hi there".into()],
                 ..SpawnRequest::default()
             })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn keymaps_with_descriptions_and_commands_with_completion() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-keymap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.keymap.set("normal", "<Space>h", function() rt.notify("hi") end, { desc = "Say hi" })
+rt.keymap.set({ "normal", "insert" }, "<Ctrl-y>", "reload", { desc = "Reload the page" })
+rt.keymap.set("normal", "gx", "tab-close")
+rt.keymap.del("normal", "gx")
+rt.command("greet", function(args) rt.notify("hello " .. args) end, {
+  desc = "Greet someone",
+  complete = function(arglead)
+    local out = {}
+    for _, n in ipairs({ "alice", "bob", { name = "carol", desc = "a friend" } }) do
+      local name = type(n) == "table" and n.name or n
+      if name:find("^" .. arglead) then table.insert(out, n) end
+    end
+    return out
+  end,
+})
+rt.command("late-bind", function() rt.keymap.set("normal", "zz", "reload") end)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (ops, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let binds: Vec<String> = ops
+            .iter()
+            .filter_map(|op| match op {
+                ConfigOp::Bind {
+                    mode,
+                    keys,
+                    command,
+                } => Some(format!("{mode} {keys} {command}")),
+                ConfigOp::Unbind { mode, keys } => Some(format!("{mode} -{keys}")),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            binds,
+            [
+                "normal <Space>h lua-call 1",
+                "normal <Ctrl-y> reload",
+                "insert <Ctrl-y> reload",
+                "normal gx tab-close",
+                "normal -gx",
+            ]
+        );
+        assert_eq!(describe("lua-call 1").as_deref(), Some("Say hi"));
+        assert_eq!(describe("reload").as_deref(), Some("Reload the page"));
+        assert_eq!(describe("tab-close"), None);
+        assert_eq!(
+            complete_command("greet", ""),
+            [
+                ("alice".to_string(), String::new()),
+                ("bob".to_string(), String::new()),
+                ("carol".to_string(), "a friend".to_string()),
+            ]
+        );
+        assert_eq!(
+            complete_command("greet", "b"),
+            [("bob".to_string(), String::new())]
+        );
+        assert!(complete_command("nope", "").is_empty());
+        assert!(user_commands().contains(&("greet".to_string(), "Greet someone".to_string())));
+        // A binding made from a callback becomes a :bind.
+        assert_eq!(
+            run_command("late-bind", "", &Context::default()).unwrap(),
+            [Action::Run("bind --mode normal zz reload".into())]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

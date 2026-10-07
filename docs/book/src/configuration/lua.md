@@ -19,6 +19,27 @@ rt.on("load_finished", { pattern = "news.example.com" }, function(e)
 end)
 ```
 
+## Keys and commands
+
+`rt.keymap.set(mode, keys, rhs, opts)` binds keys like `vim.keymap.set`: `mode` is one mode or a list, `rhs` a command line or a function, and `opts.desc` describes it in the key hints popup. `rt.keymap.del(mode, keys)` removes a binding. `rt.bind` and `rt.unbind` still work, and both also work inside callbacks.
+
+`rt.command(name, fn, opts)` takes a description, or a table with `desc` and `complete`. `complete` gets what's typed after the command and returns its completions, as strings or `{ name = "…", desc = "…" }`:
+
+```lua
+rt.keymap.set({ "normal", "insert" }, "<Ctrl-y>", "reload", { desc = "Reload the page" })
+
+rt.command("project", function(name) rt.open("https://github.com/me/" .. name, "tab") end, {
+  desc = "Open one of my projects",
+  complete = function(arglead)
+    local out = {}
+    for _, p in ipairs({ "riptide", "dotfiles", "notes" }) do
+      if p:find(arglead, 1, true) then table.insert(out, p) end
+    end
+    return out
+  end,
+})
+```
+
 ## Events
 
 `rt.on(event, [opts], fn)` runs `fn` with a table describing the event:

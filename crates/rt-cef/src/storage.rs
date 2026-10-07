@@ -225,6 +225,13 @@ fn item(category: &'static str, name: &str, description: &str) -> Completion {
 
 /// The engine's completion source.
 pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
+    if kind == CompletionKind::UserArgs {
+        let (name, arglead) = pattern.split_once('\t').unwrap_or((pattern, ""));
+        return rt_config::lua::complete_command(name, arglead)
+            .into_iter()
+            .map(|(name, desc)| item("Arguments", &name, &desc))
+            .collect();
+    }
     if kind == CompletionKind::Spelling {
         return crate::spell::completions(pattern);
     }

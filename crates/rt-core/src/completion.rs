@@ -37,6 +37,9 @@ pub enum CompletionKind {
     Tab,
     /// Tabs in the other windows, for `:tab-take`.
     OtherTab,
+    /// The arguments of a command from config.lua; the pattern is the
+    /// command's name, a tab, then what's typed after it.
+    UserArgs,
 }
 
 pub type Source = Box<dyn Fn(CompletionKind, &str) -> Vec<Completion>>;
@@ -327,6 +330,13 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "spell-replace" => CompletionKind::Spelling,
         "tab-select" => CompletionKind::Tab,
         "tab-take" => CompletionKind::OtherTab,
+        // Anything else may be a config.lua command with its own completion.
+        name if !crate::command::COMMANDS.iter().any(|c| c.name == name) => {
+            let pattern = format!("{name}\t{}", parsed.pattern);
+            return source
+                .map(|s| s(CompletionKind::UserArgs, &pattern))
+                .unwrap_or_default();
+        }
         _ => return Vec::new(),
     };
     source.map(|s| s(kind, parsed.pattern)).unwrap_or_default()

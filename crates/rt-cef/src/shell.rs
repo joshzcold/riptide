@@ -1590,7 +1590,11 @@ fn keyhints(s: &mut Shell) -> (Option<(serde_json::Value, usize)>, Option<i64>) 
     let items: Vec<_> = items
         .into_iter()
         .take(rows * columns)
-        .map(|(keys, command)| json!({ "keys": keys, "command": command }))
+        .map(|(keys, command)| {
+            // rt.keymap.set's desc says more than `lua-call 3`.
+            let command = rt_config::lua::describe(&command).unwrap_or(command);
+            json!({ "keys": keys, "command": command })
+        })
         .collect();
     let payload = json!({ "kind": "keyhints", "prefix": prefix, "items": items, "rows": rows });
     (Some((payload, rows + 1)), None)
