@@ -157,6 +157,7 @@ const ICONS = {
 const GROUPS = [
   { id: "general", title: "General", blurb: "Starting, sessions, quitting, updates and spell checking.",
     prefixes: ["auto_save", "session", "confirm_quit", "changelog_after_upgrade", "crash_report", "new_instance_open_target", "new_instance_open_target_window", "messages", "spellcheck"] },
+  { id: "url", title: "URLs & search", blurb: "Start pages, search engines and how URLs are read.", prefixes: ["url", "search"] },
   { id: "look", title: "Look & feel", blurb: "Theme, window, zoom and scrolling.", prefixes: ["ui", "window", "zoom", "scrolling"] },
   { id: "colors", title: "Colors", blurb: "Override single colors of the theme. Empty uses the theme's color, shown in the swatch.", prefixes: ["colors"] },
   { id: "fonts", title: "Fonts", blurb: "riptide's own fonts, and the default fonts of web pages.", prefixes: ["fonts"] },
@@ -166,7 +167,6 @@ const GROUPS = [
   { id: "hints", title: "Hints", blurb: "Labels for following links and clicking elements.", prefixes: ["hints"] },
   { id: "keys", title: "Keys & input", blurb: "Bindings, aliases, key hints and insert mode.", prefixes: ["bindings", "aliases", "input", "keyhint"] },
   { id: "content", title: "Pages & privacy", blurb: "What pages may do, blocking, cookies and permissions.", prefixes: ["content"] },
-  { id: "url", title: "URLs & search", blurb: "Start pages, search engines and how URLs are read.", prefixes: ["url", "search"] },
   { id: "files", title: "Downloads & prompts", blurb: "Downloads, file pickers, the editor and questions.", prefixes: ["downloads", "fileselect", "editor", "prompt"] },
 ];
 const groupOf = (e) => GROUPS.find((g) => g.prefixes.includes(e.section)) || { id: "other", title: "Other", blurb: "", prefixes: [] };
