@@ -43,7 +43,85 @@ local function proxy(prefix)
   })
 end
 c = proxy("")
+
+-- rt.on: hooks per event, with a URL pattern, a group to clear them by, and
+-- once. rt._dispatch runs them; the browser calls it for each event.
+local events = {}
+for _, name in ipairs(rt.EVENTS) do events[name] = true end
+local hooks, next_id = {}, 0
+
+function rt.on(event, opts, fn)
+  if type(opts) == "function" then opts, fn = {}, opts end
+  if not events[event] then
+    error(("unknown event %q; events: %s"):format(event, table.concat(rt.EVENTS, ", ")), 2)
+  end
+  if type(fn) ~= "function" then error("rt.on needs a function", 2) end
+  opts = opts or {}
+  next_id = next_id + 1
+  hooks[event] = hooks[event] or {}
+  table.insert(hooks[event], { id = next_id, fn = fn, pattern = opts.pattern, group = opts.group, once = opts.once })
+  return next_id
+end
+
+-- Remove one hook (its id from rt.on), or every hook of a group.
+function rt.off(id)
+  for _, list in pairs(hooks) do
+    for i = #list, 1, -1 do
+      if list[i].id == id or (type(id) == "string" and list[i].group == id) then table.remove(list, i) end
+    end
+  end
+end
+
+-- A name for hooks that belong together; { clear = true } first removes the
+-- group's hooks, so a script can run again without doubling them.
+function rt.group(name, opts)
+  if opts and opts.clear then rt.off(name) end
+  return name
+end
+
+rt._entry = {}
+function rt._dispatch(event, payload)
+  local list = hooks[event]
+  if not list then return end
+  for _, hook in ipairs({ table.unpack(list) }) do
+    local wanted = hook.pattern == nil
+      or (payload.url ~= nil and rt._matches(hook.pattern, payload.url))
+    if wanted then
+      if hook.once then rt.off(hook.id) end
+      hook.fn(payload)
+    end
+  end
+end
+rt._entry[0] = rt._dispatch
 "#;
+
+/// The events `rt.on` takes, with what each one's table carries.
+pub const EVENTS: &[(&str, &str)] = &[
+    ("startup", "riptide has started and loaded config.lua"),
+    ("quit", "riptide is about to quit"),
+    ("load_started", "a tab started loading a page (url)"),
+    ("load_finished", "a tab finished loading a page (url)"),
+    ("url_changed", "a tab's address changed (url)"),
+    ("title_changed", "a tab's title changed (url, title)"),
+    ("tab_opened", "a tab was opened (url)"),
+    ("tab_closed", "a tab was closed (url)"),
+    (
+        "tab_selected",
+        "another tab became the current one (url, index from 1)",
+    ),
+    (
+        "window_opened",
+        "a window was opened (private: \"true\" or \"false\")",
+    ),
+    ("window_closed", "a window was closed"),
+    ("mode_changed", "the mode changed (from, to)"),
+    ("setting_changed", "a setting changed (name, value as text)"),
+    ("download_started", "a download started (url, path)"),
+    (
+        "download_finished",
+        "a download finished (url, path, state: done, failed or cancelled)",
+    ),
+];
 
 struct State {
     ops: Vec<ConfigOp>,
@@ -259,7 +337,16 @@ pub fn emit(
     match prepared {
         None => Ok(Vec::new()),
         Some(Err(e)) => Err(e.to_string()),
-        Some(Ok((key, args))) => invoke("_hooks", key, args, context),
+        Some(Ok((key, args))) => {
+            let mut args = args.into_vec();
+            args.insert(0, key);
+            invoke(
+                "_entry",
+                mlua::Value::Integer(0),
+                mlua::MultiValue::from_vec(args),
+                context,
+            )
+        }
     }
 }
 
@@ -458,7 +545,11 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 
     api.set("_callbacks", lua.create_table()?)?;
     api.set("_commands", lua.create_table()?)?;
-    api.set("_hooks", lua.create_table()?)?;
+    let events = lua.create_table()?;
+    for (name, _) in EVENTS {
+        events.push(*name)?;
+    }
+    api.set("EVENTS", events)?;
     api.set("_spawned", lua.create_table()?)?;
 
     let s = state.clone();
@@ -527,26 +618,9 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
 
     api.set(
-        "on",
-        lua.create_function(move |lua, (event, f): (String, mlua::Function)| {
-            const EVENTS: &[&str] = &["load_finished", "url_changed", "tab_opened", "mode_changed"];
-            if !EVENTS.contains(&event.as_str()) {
-                return Err(mlua::Error::runtime(format!(
-                    "unknown event {event:?}; events: {}",
-                    EVENTS.join(", ")
-                )));
-            }
-            let api: mlua::Table = lua.globals().get("rt")?;
-            let hooks: mlua::Table = api.get("_hooks")?;
-            let list = match hooks.get::<Option<mlua::Table>>(event.clone())? {
-                Some(list) => list,
-                None => {
-                    let list = lua.create_table()?;
-                    hooks.set(event, list.clone())?;
-                    list
-                }
-            };
-            list.push(f)
+        "_matches",
+        lua.create_function(|_, (pattern, url): (String, String)| {
+            Ok(rt_core::url::pattern_matches(&pattern, &url))
         })?,
     )?;
 
@@ -761,6 +835,69 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 ..SpawnRequest::default()
             })]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn hooks_take_patterns_groups_and_once() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-hooks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+local g = rt.group("mine", { clear = true })
+rt.on("load_finished", { pattern = "*.example.com", group = g }, function(e) rt.message("example " .. e.url) end)
+rt.on("load_finished", { once = true }, function() rt.message("first load") end)
+local id = rt.on("tab_closed", function() rt.message("closed") end)
+rt.off(id)
+rt.on("setting_changed", function(e) rt.message(e.name .. "=" .. e.value) end)
+rt.command("drop-mine", function() rt.group("mine", { clear = true }) end)
+assert(not pcall(rt.on, "nope", function() end))
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let ctx = Context::default();
+        let texts = |actions: Vec<Action>| -> Vec<String> {
+            actions
+                .into_iter()
+                .filter_map(|a| match a {
+                    Action::Message { text, .. } => Some(text),
+                    _ => None,
+                })
+                .collect()
+        };
+        let news = [("url", "https://news.example.com/")];
+        assert_eq!(
+            texts(emit("load_finished", &news, &ctx).unwrap()),
+            ["example https://news.example.com/", "first load"]
+        );
+        // `once` ran once; the pattern keeps other sites out.
+        assert_eq!(
+            texts(emit("load_finished", &news, &ctx).unwrap()),
+            ["example https://news.example.com/"]
+        );
+        assert!(
+            texts(emit("load_finished", &[("url", "https://other.org/")], &ctx).unwrap())
+                .is_empty()
+        );
+        assert!(texts(emit("tab_closed", &[("url", "x")], &ctx).unwrap()).is_empty());
+        assert_eq!(
+            texts(
+                emit(
+                    "setting_changed",
+                    &[("name", "zoom.default"), ("value", "125")],
+                    &ctx
+                )
+                .unwrap()
+            ),
+            ["zoom.default=125"]
+        );
+        // Clearing the group removes its hooks.
+        run_command("drop-mine", "", &ctx).unwrap();
+        assert!(texts(emit("load_finished", &news, &ctx).unwrap()).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

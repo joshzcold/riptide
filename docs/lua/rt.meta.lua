@@ -5,6 +5,7 @@
 
 ---@alias rt.Mode "normal"|"insert"|"command"|"passthrough"|"hint"|"prompt"|"yesno"|"set_mark"|"jump_mark"|"record_macro"|"run_macro"|"caret"
 ---@alias rt.SettingName "aliases"|"auto_save.interval"|"auto_save.session"|"bindings.key_mappings"|"changelog_after_upgrade"|"colors.completion.category.bg"|"colors.completion.category.fg"|"colors.completion.description.fg"|"colors.completion.fg"|"colors.completion.item.selected.bg"|"colors.completion.item.selected.fg"|"colors.completion.match.fg"|"colors.completion.odd.bg"|"colors.hints.bg"|"colors.hints.border"|"colors.hints.fg"|"colors.hints.match.fg"|"colors.keyhint.suffix.fg"|"colors.messages.error.bg"|"colors.messages.error.fg"|"colors.messages.warning.bg"|"colors.messages.warning.fg"|"colors.prompts.bg"|"colors.prompts.border"|"colors.prompts.fg"|"colors.prompts.key.bg"|"colors.statusbar.insert.bg"|"colors.statusbar.insert.fg"|"colors.statusbar.normal.bg"|"colors.statusbar.normal.fg"|"colors.statusbar.passthrough.bg"|"colors.statusbar.passthrough.fg"|"colors.statusbar.private.bg"|"colors.statusbar.private.fg"|"colors.statusbar.url.error.fg"|"colors.statusbar.url.success.http.fg"|"colors.statusbar.url.success.https.fg"|"colors.tabs.bar.bg"|"colors.tabs.even.bg"|"colors.tabs.indicator.error"|"colors.tabs.indicator.start"|"colors.tabs.odd.bg"|"colors.tabs.odd.fg"|"colors.tabs.pinned.odd.bg"|"colors.tabs.pinned.odd.fg"|"colors.tabs.selected.accent"|"colors.tabs.selected.odd.bg"|"colors.tabs.selected.odd.fg"|"colors.webpage.bg"|"colors.webpage.darkmode.enabled"|"colors.webpage.preferred_color_scheme"|"completion.cmd_history_max_items"|"completion.delay"|"completion.height"|"completion.min_chars"|"completion.open_categories"|"completion.quick"|"completion.show"|"completion.shrink"|"completion.timestamp_format"|"completion.use_best_match"|"completion.web_history.exclude"|"completion.web_history.max_items"|"confirm_quit"|"content.autoplay"|"content.blocking.adblock.lists"|"content.blocking.enabled"|"content.blocking.whitelist"|"content.cache.size"|"content.call_mute_keys"|"content.call_sites"|"content.canvas_reading"|"content.cookies.accept"|"content.cookies.store"|"content.desktop_capture"|"content.dns_prefetch"|"content.geolocation"|"content.headers.accept_language"|"content.headers.custom"|"content.headers.do_not_track"|"content.headers.referer"|"content.headers.user_agent"|"content.images"|"content.javascript.can_close_tabs"|"content.javascript.can_open_tabs_automatically"|"content.javascript.clipboard"|"content.javascript.enabled"|"content.javascript.log_message.levels"|"content.local_content_can_access_file_urls"|"content.media.audio_capture"|"content.media.video_capture"|"content.mouse_lock"|"content.mute"|"content.notifications.app_name"|"content.notifications.enabled"|"content.notifications.presenter"|"content.notifications.show_origin"|"content.notifications.site_icon"|"content.notifications.timeout"|"content.notifications.urgency"|"content.pdf_viewer"|"content.prefers_reduced_motion"|"content.proxy"|"content.register_protocol_handler"|"content.tls.certificate_errors"|"content.unknown_url_scheme_policy"|"content.user_stylesheets"|"content.webgl"|"content.webrtc_ip_handling_policy"|"content.widevine"|"crash_report.email"|"downloads.location.directory"|"downloads.location.prompt"|"downloads.location.remember"|"downloads.location.suggestion"|"downloads.open_dispatcher"|"downloads.remove_finished"|"editor.command"|"editor.remove_file"|"fileselect.folder.command"|"fileselect.handler"|"fileselect.multiple_files.command"|"fileselect.single_file.command"|"fonts.completion.category"|"fonts.completion.entry"|"fonts.default_family"|"fonts.default_size"|"fonts.hints"|"fonts.keyhint"|"fonts.prompts"|"fonts.statusbar"|"fonts.tabs.selected"|"fonts.tabs.unselected"|"fonts.web.family.fixed"|"fonts.web.family.sans_serif"|"fonts.web.family.serif"|"fonts.web.family.standard"|"fonts.web.size.default"|"fonts.web.size.default_fixed"|"fonts.web.size.minimum"|"hints.auto_follow"|"hints.auto_follow_timeout"|"hints.chars"|"hints.dictionary"|"hints.hide_unmatched_rapid_hints"|"hints.leave_on_load"|"hints.min_chars"|"hints.mode"|"hints.next_regexes"|"hints.padding"|"hints.prev_regexes"|"hints.radius"|"hints.scatter"|"hints.selectors"|"hints.uppercase"|"input.forward_unbound_keys"|"input.insert_mode.auto_enter"|"input.insert_mode.auto_leave"|"input.insert_mode.auto_load"|"input.insert_mode.leave_on_load"|"input.match_counts"|"input.media_keys"|"input.mode_override"|"input.mouse.rocker_gestures"|"input.partial_timeout"|"input.spatial_navigation"|"keyhint.blacklist"|"keyhint.delay"|"messages.timeout"|"new_instance_open_target"|"new_instance_open_target_window"|"prompt.position"|"prompt.width"|"scrolling.bar"|"scrolling.smooth"|"search.ignore_case"|"search.incremental"|"search.wrap"|"search.wrap_messages"|"session.default_name"|"session.lazy_restore"|"spellcheck.languages"|"statusbar.padding"|"statusbar.position"|"statusbar.show"|"statusbar.widgets"|"tabs.close_mouse_button"|"tabs.close_mouse_button_on_bar"|"tabs.favicons.show"|"tabs.indicator.width"|"tabs.last_close"|"tabs.max_width"|"tabs.min_width"|"tabs.mode_on_change"|"tabs.mousewheel_switching"|"tabs.new_position.related"|"tabs.new_position.unrelated"|"tabs.padding"|"tabs.pinned.close"|"tabs.pinned.frozen"|"tabs.pinned.shrink"|"tabs.position"|"tabs.select_on_remove"|"tabs.show"|"tabs.show_switching_delay"|"tabs.tabs_are_windows"|"tabs.title.alignment"|"tabs.title.format"|"tabs.title.format_pinned"|"tabs.tooltips"|"tabs.undo_stack_size"|"tabs.width"|"tabs.wrap"|"ui.auto_theme.dark"|"ui.auto_theme.light"|"ui.overlay.position"|"ui.overlay.width"|"ui.theme"|"url.auto_search"|"url.default_page"|"url.incdec_segments"|"url.open_base_url"|"url.searchengines"|"url.start_pages"|"url.yank_ignored_parameters"|"window.hide_decoration"|"window.title_format"|"zoom.default"|"zoom.levels"
+---@alias rt.Event "startup"|"quit"|"load_started"|"load_finished"|"url_changed"|"title_changed"|"tab_opened"|"tab_closed"|"tab_selected"|"window_opened"|"window_closed"|"mode_changed"|"setting_changed"|"download_started"|"download_finished"
 
 ---@class rt
 ---@field platform "linux"|"macos"|"windows"
@@ -55,11 +56,41 @@ function rt.unbind(keys, mode) end
 ---@param description? string shown in completion
 function rt.command(name, fn, description) end
 
----Run `fn` on an event: "load_finished" and "url_changed" (`e.url`),
----"tab_opened" (`e.url`) or "mode_changed" (`e.from`, `e.to`).
----@param event "load_finished"|"url_changed"|"tab_opened"|"mode_changed"
----@param fn fun(e: table)
-function rt.on(event, fn) end
+---Run `fn` on an event, with a table of what it's about (`e.url`, …):
+---- `startup`: riptide has started and loaded config.lua
+---- `quit`: riptide is about to quit
+---- `load_started`: a tab started loading a page (url)
+---- `load_finished`: a tab finished loading a page (url)
+---- `url_changed`: a tab's address changed (url)
+---- `title_changed`: a tab's title changed (url, title)
+---- `tab_opened`: a tab was opened (url)
+---- `tab_closed`: a tab was closed (url)
+---- `tab_selected`: another tab became the current one (url, index from 1)
+---- `window_opened`: a window was opened (private: "true" or "false")
+---- `window_closed`: a window was closed
+---- `mode_changed`: the mode changed (from, to)
+---- `setting_changed`: a setting changed (name, value as text)
+---- `download_started`: a download started (url, path)
+---- `download_finished`: a download finished (url, path, state: done, failed or cancelled)
+---`opts.pattern` only runs it for matching pages (as `:set -u` patterns),
+---`opts.group` names it for `rt.off`/`rt.group`, and `opts.once` runs it once.
+---`rt.on(event, fn)` works too. Returns an id for `rt.off`.
+---@param event rt.Event
+---@param opts { pattern?: string, group?: string, once?: boolean }|fun(e: table)
+---@param fn? fun(e: table)
+---@return integer
+function rt.on(event, opts, fn) end
+
+---Remove a hook by the id `rt.on` returned, or every hook in a group.
+---@param id integer|string
+function rt.off(id) end
+
+---A group name for hooks; `{ clear = true }` first removes the group's
+---hooks, so a script that runs again doesn't add them twice.
+---@param name string
+---@param opts? { clear?: boolean }
+---@return string
+function rt.group(name, opts) end
 
 ---The current page's URL (in callbacks).
 ---@return string

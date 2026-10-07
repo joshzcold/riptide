@@ -13,9 +13,45 @@ rt.command("wiki", function(args)
   rt.open("https://en.wikipedia.org/wiki/" .. args, "tab")
 end, "Search Wikipedia")
 
--- Hooks: load_finished, url_changed, tab_opened (e.url), mode_changed (e.from, e.to).
-rt.on("load_finished", function(e)
-  if e.url:find("^https://news%.example%.com/") then rt.run("scroll-to-perc 0") end
+-- A hook: runs whenever a page on news.example.com finishes loading.
+rt.on("load_finished", { pattern = "news.example.com" }, function(e)
+  rt.run("scroll-to-perc 0")
+end)
+```
+
+## Events
+
+`rt.on(event, [opts], fn)` runs `fn` with a table describing the event:
+
+| Event | When | The table has |
+|---|---|---|
+| `startup` | riptide has started and loaded `config.lua` | |
+| `quit` | riptide is about to quit | |
+| `load_started`, `load_finished` | a tab starts or finishes loading a page | `url` |
+| `url_changed` | a tab's address changes | `url` |
+| `title_changed` | a tab's title changes | `url`, `title` |
+| `tab_opened`, `tab_closed` | a tab opens or closes | `url` |
+| `tab_selected` | another tab becomes the current one | `url`, `index` (from 1) |
+| `window_opened`, `window_closed` | a window opens or closes | `private` (`"true"`, `"false"`) on opening |
+| `mode_changed` | the mode changes | `from`, `to` |
+| `setting_changed` | a setting changes (`:set`, the settings page) | `name`, `value` (as text) |
+| `download_started`, `download_finished` | a download starts or ends | `url`, `path`; `state` (`done`, `failed`, `cancelled`) when it ends |
+
+`opts` can have:
+
+- `pattern`: only pages matching it, written as for `:set -u` (`example.com`, `*.example.com`, `https://example.com`, `*://*.example.com/docs/*`).
+- `once = true`: run the first time only.
+- `group`: a name, so `rt.off(group)` removes them all.
+
+`rt.on` returns an id for `rt.off(id)`. `rt.group(name, { clear = true })` removes the group's hooks and returns its name, so a script that runs again (`:config-source`) doesn't add its hooks twice:
+
+```lua
+local g = rt.group("reading", { clear = true })
+rt.on("tab_selected", { group = g, pattern = "*.wikipedia.org" }, function(e)
+  rt.message("Reading tab " .. e.index)
+end)
+rt.on("download_finished", { group = g }, function(e)
+  if e.state == "done" then rt.spawn({ "notify-send", "Downloaded", e.path }) end
 end)
 ```
 

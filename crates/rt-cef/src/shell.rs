@@ -591,6 +591,15 @@ fn persist(op: rt_core::config::ConfigOp) {
         ),
         _ => {}
     }
+    // rt.on("setting_changed"): the new value, as :set would show it.
+    if let rt_core::config::ConfigOp::Set { name, .. } | rt_core::config::ConfigOp::Unset { name } =
+        &op
+    {
+        let value = with(|s| s.engine.settings().get(name).map(ToString::to_string))
+            .flatten()
+            .unwrap_or_default();
+        crate::lua::emit("setting_changed", &[("name", name), ("value", &value)]);
+    }
 }
 
 pub fn apply(effects: Vec<Effect>) {
@@ -751,6 +760,7 @@ fn run_command(command: Command, count: Option<u32>) {
             if !confirm_quit(move || run_command(Command::Quit { save }, None)) {
                 return;
             }
+            crate::lua::emit("quit", &[]);
             let save = with(|s| {
                 s.quitting = true;
                 save || s.save_session_on_quit || s.engine.settings().bool("auto_save.session")

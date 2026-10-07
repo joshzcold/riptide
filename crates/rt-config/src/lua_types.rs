@@ -91,6 +91,15 @@ pub fn generate() -> String {
         .map(|d| format!("\"{}\"", d.name))
         .collect::<Vec<_>>()
         .join("|");
+    let events = crate::lua::EVENTS
+        .iter()
+        .map(|(name, _)| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join("|");
+    let event_list: String = crate::lua::EVENTS
+        .iter()
+        .map(|(name, about)| format!("\n---- `{name}`: {about}"))
+        .collect();
     let mut out = String::new();
     let _ = write!(
         out,
@@ -101,6 +110,7 @@ pub fn generate() -> String {
 
 ---@alias rt.Mode {modes}
 ---@alias rt.SettingName {names}
+---@alias rt.Event {events}
 
 ---@class rt
 ---@field platform "linux"|"macos"|"windows"
@@ -151,11 +161,26 @@ function rt.unbind(keys, mode) end
 ---@param description? string shown in completion
 function rt.command(name, fn, description) end
 
----Run `fn` on an event: "load_finished" and "url_changed" (`e.url`),
----"tab_opened" (`e.url`) or "mode_changed" (`e.from`, `e.to`).
----@param event "load_finished"|"url_changed"|"tab_opened"|"mode_changed"
----@param fn fun(e: table)
-function rt.on(event, fn) end
+---Run `fn` on an event, with a table of what it's about (`e.url`, …):{event_list}
+---`opts.pattern` only runs it for matching pages (as `:set -u` patterns),
+---`opts.group` names it for `rt.off`/`rt.group`, and `opts.once` runs it once.
+---`rt.on(event, fn)` works too. Returns an id for `rt.off`.
+---@param event rt.Event
+---@param opts {{ pattern?: string, group?: string, once?: boolean }}|fun(e: table)
+---@param fn? fun(e: table)
+---@return integer
+function rt.on(event, opts, fn) end
+
+---Remove a hook by the id `rt.on` returned, or every hook in a group.
+---@param id integer|string
+function rt.off(id) end
+
+---A group name for hooks; `{{ clear = true }}` first removes the group's
+---hooks, so a script that runs again doesn't add them twice.
+---@param name string
+---@param opts? {{ clear?: boolean }}
+---@return string
+function rt.group(name, opts) end
 
 ---The current page's URL (in callbacks).
 ---@return string

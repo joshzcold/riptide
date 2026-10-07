@@ -587,6 +587,7 @@ wrap_display_handler! {
             });
             if let Some(Some(url)) = url {
                 storage::set_title(&url, &title);
+                crate::lua::emit("title_changed", &[("url", &url), ("title", &title)]);
             }
             shell::refresh_ui();
         }
@@ -660,6 +661,8 @@ wrap_load_handler! {
                 if let Some(browser) = browser {
                     crate::adblock::reset_blocked(browser.identifier());
                 }
+                let url = CefString::from(&frame.url()).to_string();
+                crate::lua::emit("load_started", &[("url", &url)]);
             }
         }
 

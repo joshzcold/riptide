@@ -460,6 +460,11 @@ wrap_window_delegate! {
                     crate::crash::mention_last_report();
                 }
             }
+            let private = shell::with(|s| s.private).unwrap_or(false).to_string();
+            crate::lua::emit("window_opened", &[("private", &private)]);
+            if first {
+                crate::lua::emit("startup", &[]);
+            }
             crate::remote::run_commands(&self.commands);
         }
 
@@ -491,6 +496,7 @@ wrap_window_delegate! {
             })
             .flatten();
             drop(state);
+            crate::lua::emit("window_closed", &[]);
             shell::refresh_ui();
         }
 

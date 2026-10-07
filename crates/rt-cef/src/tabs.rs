@@ -278,7 +278,7 @@ fn focus_number(number: i64) {
 
 /// Make `index` the visible, focused tab. `force` re-shows it even if it is already current.
 fn switch_to(index: usize, force: bool) {
-    let Some(Some((window_id, view, effects))) = shell::with(|s| {
+    let Some(Some((window_id, view, effects, url, position))) = shell::with(|s| {
         let leaving = s.tabs.current_index();
         let mode = s.engine.mode();
         if let Some(tab) = s.tabs.get_mut(leaving) {
@@ -292,13 +292,18 @@ fn switch_to(index: usize, force: bool) {
         let view = current.view.clone();
         s.engine.set_url(&url);
         let left_in = s.tabs.current().map(|t| t.mode);
-        Some((s.id, view, s.engine.tab_switched(left_in)))
+        let position = s.tabs.current_index() + 1;
+        Some((s.id, view, s.engine.tab_switched(left_in), url, position))
     }) else {
         return;
     };
     show_current_in(window_id, true);
     load_pending(&view);
     shell::apply(effects);
+    crate::lua::emit(
+        "tab_selected",
+        &[("url", &url), ("index", &position.to_string())],
+    );
 }
 
 /// Show window `window_id`'s current tab and hide the others. A tab whose
@@ -482,7 +487,9 @@ pub fn close(index: usize) {
         crate::prompts::withdraw_for_browser(browser.identifier(), None);
     }
     // Dropping the last reference closes the browser, which re-enters the shell.
+    let url = tab.url.clone();
     drop(tab);
+    crate::lua::emit("tab_closed", &[("url", &url)]);
     if was_current && let Some(index) = shell::with(|s| s.tabs.current_index()) {
         switch_to(index, true);
     }

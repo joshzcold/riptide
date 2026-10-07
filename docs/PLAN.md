@@ -1251,7 +1251,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 - A plugin test runner (`riptide --plugin-test <dir>`) that loads one plugin in a headless browser with a small assertion library, so authors can test theirs in CI.
 
 **Phases:**
-1. API foundation: the event list with options and groups, `rt.keymap`, commands with completion, `rt.notify`, timers, `rt.store`, settings watchers, error containment.
+1. API foundation (in progress): ✅ (2026-10-07) events: `rt.on(event, { pattern, group, once }, fn)`, `rt.off`, `rt.group(name, { clear = true })` and 15 events (`rt_config::lua::EVENTS`, also generating the `rt.Event` type stub); hook lists and dispatch live in the Lua prelude; e2e test `lua_events.rs`. Still in phase 1: the event list with options and groups, `rt.keymap`, commands with completion, `rt.notify`, timers, `rt.store`, settings watchers, error containment.
 2. Packages: `rt.pack`, the lockfile, git caching, lazy loading, `riptide://plugins`, `:pack-update` with review.
 3. UI: `rt.ui.select`/`input`, floats, status bar widgets, panels.
 4. Pages: `rt.page.*`, custom hints, plugin pages.

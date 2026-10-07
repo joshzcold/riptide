@@ -116,6 +116,7 @@ fn save_to(
             let _ = std::fs::create_dir_all(dir);
         }
         callback.cont(Some(&CefString::from(path.to_string_lossy().as_ref())), 0);
+        let started = (url.clone(), path.to_string_lossy().into_owned());
         DOWNLOADS.with(|d| {
             d.borrow_mut().push(Download {
                 id,
@@ -129,6 +130,10 @@ fn save_to(
         });
         publish();
         shell::refresh_ui();
+        crate::lua::emit(
+            "download_started",
+            &[("url", &started.0), ("path", &started.1)],
+        );
     };
     if path.exists() {
         let message = format!("{} already exists. Overwrite it?", path.display());
@@ -268,8 +273,18 @@ wrap_download_handler! {
                 } else {
                     download.callback = None;
                 }
-                changed.then(|| (state, download.path.clone(), download.open_when_done.clone()))
+                changed.then(|| (state, download.path.clone(), download.open_when_done.clone(), download.url.clone()))
             });
+            let event = finished.as_ref().and_then(|(state, path, _, url)| {
+                let name = match state {
+                    State::Done => "done",
+                    State::Cancelled => "cancelled",
+                    State::Failed => "failed",
+                    State::Running => return None,
+                };
+                Some((url.clone(), path.to_string_lossy().into_owned(), name))
+            });
+            let finished = finished.map(|(state, path, open, _)| (state, path, open));
             match finished {
                 Some((State::Done, path, Some(command))) => {
                     if let Err(e) = open_with(&path, command.as_deref()) {
@@ -287,6 +302,9 @@ wrap_download_handler! {
                 Some((State::Cancelled, path, _)) => shell::show_message(Level::Warning, format!("Download cancelled: {}", path.display())),
                 Some((State::Failed, path, _)) => shell::show_message(Level::Error, format!("Download failed: {}", path.display())),
                 _ => {}
+            }
+            if let Some((url, path, state)) = event {
+                crate::lua::emit("download_finished", &[("url", &url), ("path", &path), ("state", state)]);
             }
             publish();
             shell::refresh_ui();
