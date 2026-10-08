@@ -318,7 +318,14 @@ Gaps:
     - **Redirects and parameters:** `Blocker::check` gives a `Verdict`. A `Redirect`'s `data:` URL is held by request id and served from `resource_handler` (`scheme::bytes_resource`, with `Access-Control-Allow-Origin: *` for XHR). A `Rewrite` (`$removeparam`) changes the request's URL. Top-level pages only get rewrites, never blocks.
     - **Tests:** a unit test in `rt-adblock`; e2e `scriptlets_run_first_and_redirects_stand_in` and `tracking_parameters_come_off_page_addresses`.
     - **Limit:** a tab keeps a host's scriptlets until it closes, even if the site is then whitelisted.
-  - Not done: continuous re-checking (a MutationObserver would need a page-to-browser channel for web pages), subframes, procedural filters, automatic list updates, and qutebrowser's hosts-file method.
+  - ✅ **Procedural and action filters** (2026-10-08):
+    - adblock-rust only parses procedural operators with its `css-validation` feature (now on); without it, `.x:has-text(y)` was taken as a plain, invalid selector. `Cosmetic::procedural` holds `url_cosmetic_resources`' `procedural_actions` (JSON: operators plus an optional action).
+    - `rt-adblock/src/procedural.js` applies them. Each operator narrows the set in order: css-selector (relative with `:scope` after the first), has-text, min-text-length, matches-attr, matches-css(-before/-after), matches-path, upward (a count or a selector) and xpath.
+    - Actions: hide, which sets an inline `display: none !important`; remove; style; remove-attr; and remove-class.
+    - A MutationObserver re-applies the filters at most every 100 ms. It's switched off while they're applied, so their own changes don't retrigger it.
+    - `Cosmetic::page_script` puts it after the scriptlets in the per-(tab, host) DevTools registration, so it watches from document start.
+    - Test: e2e `procedural_filters_hide_remove_and_restyle_even_late_content`.
+  - Not done: subframes, automatic list updates, and qutebrowser's hosts-file method. Generic (non-procedural) element hiding is still applied after load and re-checked at 2 s and 6 s.
 - ✅ **Per-domain settings** (2026-10-02):
   - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
   - `rt_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.

@@ -34,7 +34,9 @@ If you set `content.blocking.adblock.lists` yourself before uBlock Origin's list
 
 Run `:adblock-update` after changing the lists.
 
-Not supported yet: procedural element hiding (`:has-text()`, `:upward()` and the like), and element hiding inside frames.
+Procedural element hiding works too, for elements CSS alone can't pick out: `:has-text()`, `:upward()`, `:matches-css()` (and `-before`, `-after`), `:matches-attr()`, `:matches-path()`, `:min-text-length()` and `:xpath()`, with the actions `:remove()`, `:style()`, `:remove-attr()` and `:remove-class()`. They're applied as the page loads and again whenever it changes, so content added later is caught too.
+
+Not supported yet: element hiding inside frames.
 
 ## Network traffic
 

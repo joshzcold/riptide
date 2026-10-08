@@ -108,3 +108,20 @@ fn tracking_parameters_come_off_page_addresses() {
         s.tab().is_loaded(&clean)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn procedural_filters_hide_remove_and_restyle_even_late_content() {
+    let b = with_lists(&["filters-procedural.txt"]);
+    b.open("procedural.html");
+    b.wait_eval(
+        "window.report()",
+        &[
+            "sponsored=true promoted=true news=false box=true grandparent=true",
+            "underlined=true plain=false attr=true banner=removed",
+            "restyle=rgb(0, 128, 0) tracked=false classy=classy",
+            "long=true brief=false late=true",
+        ]
+        .join(" "),
+    );
+}

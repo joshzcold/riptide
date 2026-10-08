@@ -1,0 +1,45 @@
+<!doctype html>
+<title>procedural</title>
+<div class="card" id="sponsored">Sponsored by someone</div>
+<div class="card" id="promoted">Promoted BY a brand</div>
+<div class="card" id="news">Real news</div>
+<div class="box" id="box"><div><span class="ad-label">Ad</span></div></div>
+<div id="grandparent"><div><span class="deep">x</span></div></div>
+<p id="underlined" style="text-decoration: underline">underlined</p>
+<p id="plain">plain</p>
+<div class="attr" id="attr" data-kind="ad-slot">attr</div>
+<div class="banner" id="banner">banner</div>
+<div class="restyle" id="restyle">restyle</div>
+<div class="tracked" id="tracked" onclick="void 0">tracked</div>
+<div class="classy flashy" id="classy">classy</div>
+<div class="short" id="long">this text is long enough to match</div>
+<div class="short" id="brief">brief</div>
+<div id="feed"></div>
+<script>
+  // An ad that arrives later: only the page watching for changes catches it.
+  setTimeout(() => {
+    const late = document.createElement("div");
+    late.className = "card";
+    late.id = "late";
+    late.textContent = "Sponsored, later";
+    document.getElementById("feed").append(late);
+  }, 2000);
+  const hidden = (id) => getComputedStyle(document.getElementById(id)).display === "none";
+  window.report = () => [
+    `sponsored=${hidden("sponsored")}`,
+    `promoted=${hidden("promoted")}`,
+    `news=${hidden("news")}`,
+    `box=${hidden("box")}`,
+    `grandparent=${hidden("grandparent")}`,
+    `underlined=${hidden("underlined")}`,
+    `plain=${hidden("plain")}`,
+    `attr=${hidden("attr")}`,
+    `banner=${document.getElementById("banner") === null ? "removed" : "kept"}`,
+    `restyle=${getComputedStyle(document.getElementById("restyle")).color}`,
+    `tracked=${document.getElementById("tracked").hasAttribute("onclick")}`,
+    `classy=${document.getElementById("classy").className}`,
+    `long=${hidden("long")}`,
+    `brief=${hidden("brief")}`,
+    `late=${document.getElementById("late") ? hidden("late") : "none"}`,
+  ].join(" ");
+</script>

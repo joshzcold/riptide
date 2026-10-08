@@ -189,8 +189,9 @@ pub fn take_stand_in(request: u64) -> Option<(Vec<u8>, &'static str)> {
     Some((bytes, crate::scheme::static_mime(mime)))
 }
 
-/// Scriptlets (`##+js(...)`) must run before the page's own scripts. Each
-/// tab gets a site's scriptlets once, through DevTools, which runs them in
+/// Scriptlets (`##+js(...)`) must run before the page's own scripts, and
+/// procedural filters (`:has-text()`) watch the page from the start. Each
+/// tab gets a site's page script once, through DevTools, which runs it in
 /// every new document whose host is that site's, before anything else.
 pub fn before_navigation(browser: &Browser, url: &str) {
     let Some(blocker) = blocker_for(url) else {
@@ -204,15 +205,13 @@ pub fn before_navigation(browser: &Browser, url: &str) {
     if SCRIPTLETS_SENT.with(|s| s.borrow().contains(&key)) {
         return;
     }
-    let script = blocker.cosmetic(url).script;
+    let script = blocker.cosmetic(url).page_script();
     SCRIPTLETS_SENT.with(|s| s.borrow_mut().insert(key));
     if script.is_empty() {
         return;
     }
     let host_json = serde_json::to_string(&host).unwrap_or_default();
-    let source = format!(
-        "if (location.hostname === {host_json}) {{ (function () {{ const scriptletGlobals = {{}};\n{script}\n}})(); }}"
-    );
+    let source = format!("if (location.hostname === {host_json}) {{\n{script}}}");
     let message = serde_json::json!({
         "id": 1,
         "method": "Page.addScriptToEvaluateOnNewDocument",

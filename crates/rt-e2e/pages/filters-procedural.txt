@@ -1,0 +1,12 @@
+! Procedural and action cosmetic filters for procedural.html.
+127.0.0.1##.card:has-text(Sponsored)
+127.0.0.1##.card:has-text(/promoted by/i)
+127.0.0.1##span.ad-label:upward(.box)
+127.0.0.1##.deep:upward(2)
+127.0.0.1##p:matches-css(text-decoration-line: underline)
+127.0.0.1##.attr:matches-attr(data-kind=/^ad-/)
+127.0.0.1##.banner:remove()
+127.0.0.1##.restyle:style(color: rgb(0, 128, 0))
+127.0.0.1##.tracked:remove-attr(onclick)
+127.0.0.1##.classy:remove-class(flashy)
+127.0.0.1##.short:min-text-length(20)

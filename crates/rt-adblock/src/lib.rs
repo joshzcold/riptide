@@ -69,9 +69,36 @@ pub struct Cosmetic {
     pub css: String,
     /// Scriptlets to run in the page before its own scripts, or empty.
     pub script: String,
+    /// Procedural and action filters (`:has-text()`, `:remove()`), as
+    /// adblock-rust's JSON, for `procedural.js`.
+    pub procedural: Vec<String>,
     /// False when the lists say `#@#` generic hiding is off for the site.
     pub generic: bool,
     exceptions: HashSet<String>,
+}
+
+/// Applies procedural filters in the page; see the file.
+const PROCEDURAL_JS: &str = include_str!("procedural.js");
+
+impl Cosmetic {
+    /// What runs in the page before its own scripts: the scriptlets, then
+    /// the procedural filters' applier. Empty when there's neither.
+    pub fn page_script(&self) -> String {
+        let mut out = String::new();
+        if !self.script.is_empty() {
+            // uBlock Origin's scriptlets read their settings from here.
+            out.push_str("(function () { const scriptletGlobals = {};\n");
+            out.push_str(&self.script);
+            out.push_str("\n})();\n");
+        }
+        if !self.procedural.is_empty() {
+            out.push_str(PROCEDURAL_JS.trim_end());
+            out.push_str("([");
+            out.push_str(&self.procedural.join(","));
+            out.push_str("]);\n");
+        }
+        out
+    }
 }
 
 /// One rule per selector: a single invalid selector would void a whole list.
@@ -165,6 +192,11 @@ impl Blocker {
         Cosmetic {
             css: hide_css(&resources.hide_selectors),
             script: resources.injected_script,
+            procedural: {
+                let mut actions: Vec<String> = resources.procedural_actions.into_iter().collect();
+                actions.sort();
+                actions
+            },
             generic: !resources.generichide,
             exceptions: resources.exceptions,
         }
@@ -405,6 +437,44 @@ mod tests {
                 .contains("setConstant(")
         );
         assert!(UBO_VERSION.trim().starts_with("1."), "{UBO_VERSION}");
+    }
+
+    #[test]
+    fn procedural_filters_reach_the_page_script() {
+        let list = concat!(
+            "news.example.org##.card:has-text(Sponsored)\n",
+            "news.example.org##span.label:upward(2)\n",
+            "news.example.org##.banner:remove()\n",
+            "news.example.org##.box:style(color: red)\n",
+        );
+        let (b, _) = Blocker::from_lists([list]);
+        let cosmetic = b.cosmetic("https://news.example.org/");
+        assert_eq!(cosmetic.procedural.len(), 4, "{:?}", cosmetic.procedural);
+        assert!(
+            cosmetic
+                .procedural
+                .iter()
+                .any(|p| p.contains(r#"{"type":"has-text","arg":"Sponsored"}"#)),
+            "{:?}",
+            cosmetic.procedural
+        );
+        assert!(
+            cosmetic
+                .procedural
+                .iter()
+                .any(|p| p.contains(r#""action":{"type":"remove"}"#))
+        );
+        let script = cosmetic.page_script();
+        assert!(
+            script.contains("const OPS = {") && script.ends_with("]);\n"),
+            "{script}"
+        );
+        assert!(!script.contains("scriptletGlobals"), "no scriptlets here");
+        assert!(
+            b.cosmetic("https://other.example.org/")
+                .page_script()
+                .is_empty()
+        );
     }
 
     #[test]
