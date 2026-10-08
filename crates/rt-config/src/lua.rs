@@ -261,6 +261,7 @@ function rt._sandbox(name, permissions, require_fn)
   api.ui.select, api.ui.input = own.select, own.input
   api.ui.float = rt._float_for(name)
   api.ui.panel = rt._panel_for(name)
+  api.ui.page = rt._page_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
   else
@@ -454,6 +455,36 @@ function rt._panel_closed(id)
   if panel and panel.opts.on_close then panel.opts.on_close() end
 end
 rt.ui.panel = rt._panel_for(nil)
+
+-- rt.ui.page(opts): one of a plugin's own pages, in a tab; see rt.meta.lua.
+local plugin_pages, last_page = {}, 0
+function rt._page_for(source)
+  return function(opts)
+    opts = opts or {}
+    if source == nil then error("rt.ui.page: only plugins have pages", 2) end
+    local path = opts.path or "index.html"
+    if type(path) ~= "string" or path:find("%.%.") or path:find("[?#]") then
+      error("rt.ui.page: path is a file in the plugin's pages folder", 2)
+    end
+    last_page = last_page + 1
+    local id = last_page
+    local handle = { id = id }
+    plugin_pages[id] = { source = source, opts = opts, handle = handle }
+    function handle:send(name, data)
+      rt._page_send(source, id, tostring(name), data == nil and "null" or rt.json.encode(data))
+    end
+    rt._page_open(source, id, path)
+    return handle
+  end
+end
+function rt._page_message(source, id, name, json)
+  local page = plugin_pages[id]
+  if not page or page.source ~= source or not page.opts.on_message then return end
+  local ok, data = pcall(rt.json.decode, json)
+  if not ok then error("a page sent a message that isn't JSON: " .. tostring(data)) end
+  page.opts.on_message(name, data, page.handle)
+end
+rt.ui.page = rt._page_for(nil)
 "##;
 
 /// The events `rt.on` takes, with what each one's table carries.
@@ -618,6 +649,19 @@ pub enum Action {
     PanelClose { id: u32 },
     /// A panel's `focus`: its keys work until Escape.
     PanelFocus { id: u32 },
+    /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`, in a tab.
+    PluginPage {
+        source: String,
+        id: u32,
+        path: String,
+    },
+    /// A page handle's `send`: `json` to plugin `source`'s page `id`.
+    PluginPageSend {
+        source: String,
+        id: u32,
+        name: String,
+        json: String,
+    },
 }
 
 /// What `rt.ui` asks.
@@ -821,6 +865,22 @@ pub fn panel_key(id: u32, key: &str, line: u32, context: &Context) -> Result<Vec
         let api: mlua::Table = lua.globals().get("rt")?;
         api.get::<mlua::Function>("_panel_key")?
             .call::<()>((id, key, line))
+    })
+}
+
+/// A message from page `id` of plugin `source`: its handle's `on_message`.
+pub fn page_message(
+    source: &str,
+    id: u32,
+    name: &str,
+    json: &str,
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    let (source, name, json) = (source.to_string(), name.to_string(), json.to_string());
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_page_message")?
+            .call::<()>((source, id, name, json))
     })
 }
 
@@ -1759,6 +1819,32 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             Ok(())
         })?,
     )?;
+    let s = state.clone();
+    api.set(
+        "_page_open",
+        lua.create_function(move |_, (source, id, path): (String, u32, String)| {
+            s.borrow_mut()
+                .actions
+                .push(Action::PluginPage { source, id, path });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_page_send",
+        lua.create_function(
+            move |_, (source, id, name, json): (String, u32, String, String)| {
+                s.borrow_mut().actions.push(Action::PluginPageSend {
+                    source,
+                    id,
+                    name,
+                    json,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+
     let s = state.clone();
     api.set(
         "_panel",

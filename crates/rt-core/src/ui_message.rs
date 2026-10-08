@@ -168,6 +168,29 @@ pub fn split_url(url: &str) -> Option<(&str, &str)> {
     (!path.contains("..")).then_some((host, path))
 }
 
+/// The plugin a `riptide://<name>.plugin/…` page belongs to. Each plugin's
+/// pages are their own origin, so plugins can't read each other's storage.
+pub fn plugin_page(url: &str) -> Option<&str> {
+    let (host, _) = split_url(url)?;
+    let name = host.strip_suffix(".plugin")?;
+    let ok = !name.is_empty()
+        && name.len() <= 64
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'));
+    ok.then_some(name)
+}
+
+/// The `page=<id>` an `rt.ui.page` URL carries, which says which handle its messages go to.
+pub fn plugin_page_id(url: &str) -> Option<u32> {
+    let query = url.split_once('?')?.1.split('#').next()?;
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("page="))?
+        .parse()
+        .ok()
+}
+
 /// The page at `url` that may send messages: a `riptide://ui/` page's file
 /// name, or `settings` and `recover` for `riptide://settings/` and
 /// `riptide://recover/`.
@@ -651,6 +674,18 @@ mod tests {
             })
         );
         assert!(parse(page, "clear-site", r#"{"site": "*.example.org"}"#).is_ok());
+        assert_eq!(
+            plugin_page("riptide://notes.plugin/index.html?page=3"),
+            Some("notes")
+        );
+        assert_eq!(
+            plugin_page_id("riptide://notes.plugin/index.html?page=3#top"),
+            Some(3)
+        );
+        assert_eq!(plugin_page("riptide://settings/"), None);
+        assert_eq!(plugin_page("riptide://a.b.plugin/"), None);
+        assert_eq!(plugin_page("riptide://.plugin/"), None);
+        assert_eq!(plugin_page("https://notes.plugin/"), None);
         assert_eq!(
             parse(page, "plugin", r#"{"name": "hello", "action": "check"}"#),
             Ok(UiMessage::Plugin {

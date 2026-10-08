@@ -96,12 +96,20 @@ wrap_scheme_handler_factory! {
             request: Option<&mut Request>,
         ) -> Option<ResourceHandler> {
             let url = request.map(|r| CefString::from(&r.url()).to_string()).unwrap_or_default();
-            let found = split_url(&url).and_then(|(host, path)| page(host, path));
-            let (body, mime, status) = match found {
-                Some((body, mime)) => (body, mime, 200),
-                None => (Arc::from(&b"<!doctype html><title>Not found</title>Not found"[..]), "text/html", 404),
+            let plugin = rt_core::ui_message::plugin_page(&url).and_then(|name| {
+                let (_, path) = split_url(&url)?;
+                crate::pages::serve(name, path)
+            });
+            let found = plugin.or_else(|| {
+                split_url(&url)
+                    .and_then(|(host, path)| page(host, path))
+                    .map(|(body, mime)| (body, mime, CSP.to_string()))
+            });
+            let (body, mime, csp, status) = match found {
+                Some((body, mime, csp)) => (body, mime, csp, 200),
+                None => (Arc::from(&b"<!doctype html><title>Not found</title>Not found"[..]), "text/html", CSP.to_string(), 404),
             };
-            Some(RtResource::new(body, mime, status, Arc::new(AtomicUsize::new(0))))
+            Some(RtResource::new(body, mime, csp, status, Arc::new(AtomicUsize::new(0))))
         }
     }
 }
@@ -110,6 +118,8 @@ wrap_resource_handler! {
     struct RtResource {
         body: Arc<[u8]>,
         mime: &'static str,
+        // UI pages get [`CSP`]; plugin pages their own (`pages::serve`).
+        csp: String,
         status: i32,
         // Shared so clones of the handler agree on how much was read.
         offset: Arc<AtomicUsize>,
@@ -141,7 +151,7 @@ wrap_resource_handler! {
                 let header = |name: &str, value: &str| {
                     response.set_header_by_name(Some(&CefString::from(name)), Some(&CefString::from(value)), 1)
                 };
-                header("Content-Security-Policy", CSP);
+                header("Content-Security-Policy", &self.csp);
                 header("X-Content-Type-Options", "nosniff");
                 header("Cache-Control", "no-store");
             }

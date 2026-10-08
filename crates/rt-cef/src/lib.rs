@@ -26,6 +26,7 @@ mod marks;
 mod navigate;
 mod notifications;
 mod page;
+mod pages;
 mod panel;
 mod permissions;
 mod plugins;

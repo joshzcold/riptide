@@ -247,8 +247,10 @@ wrap_render_process_handler! {
         ) {
             let (Some(frame), Some(context)) = (frame, context) else { return };
             let url = CefString::from(&frame.url()).to_string();
+            // Plugin pages too: the browser routes theirs to the plugin's own Lua.
             let may_send = url.starts_with(rt_core::ui_message::UI_PREFIX)
-                || (rt_core::ui_message::tab_may_send(&url) && frame.is_main() != 0);
+                || (rt_core::ui_message::tab_may_send(&url) && frame.is_main() != 0)
+                || rt_core::ui_message::plugin_page(&url).is_some();
             if !may_send {
                 if !url.starts_with("riptide://") {
                     install_share_watch(context);

@@ -288,6 +288,23 @@ function Panel:focus() end
 ---@return boolean
 function Panel:is_open() end
 
+---@class rt.PageOpts
+---@field path? string A file in the plugin's `pages/` folder (default `index.html`).
+---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
+
+---@class rt.Page
+---@field id integer
+local Page = {}
+---Send the page a message: it gets an `rtmessage` event with `detail.name` and `detail.data`.
+---@param name string
+---@param data any Anything `rt.json.encode` takes.
+function Page:send(name, data) end
+
+---Open one of this plugin's pages in a tab. Only plugins have pages.
+---@param opts? rt.PageOpts
+---@return rt.Page
+function rt.ui.page(opts) end
+
 ---Lines beside or below the page, one panel per side of a window. A plugin's panels show its name.
 ---@param opts rt.PanelOpts
 ---@return rt.Panel

@@ -118,4 +118,30 @@ end
 return M
 ```
 
+### Pages
+
+A plugin can ship HTML in a `pages/` folder and open it in a tab with `rt.ui.page({ path, on_message })`. Its pages are served as `riptide://<name>.plugin/…`, each plugin its own origin, and they talk to the plugin, and only to it, with messages:
+
+```lua
+-- plugin/reading-list.lua
+rt.command("reading-list", function()
+  rt.ui.page({
+    path = "index.html",
+    on_message = function(name, data, page)
+      if name == "ready" then page:send("urls", rt.store().get("urls") or {}) end
+    end,
+  })
+end)
+```
+
+```js
+// pages/app.js, loaded with <script src="app.js"> from pages/index.html
+addEventListener("rtmessage", (e) => {
+  if (e.detail.name === "urls") render(e.detail.data);
+});
+rt.send("ready", JSON.stringify({}));
+```
+
+Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
+
 The [Lua page](lua.md) describes the API; errors name the plugin's file and line, e.g. `reading-list/lua/reading-list/init.lua:7: …`.

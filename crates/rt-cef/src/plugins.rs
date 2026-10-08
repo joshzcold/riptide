@@ -98,6 +98,7 @@ pub fn start() {
     let lock = Lockfile::load(&config_dir).unwrap_or_default();
     // The config was just applied: the old placeholders went with it.
     WAITING.with(|w| w.borrow_mut().clear());
+    crate::pages::unregister_all();
     for spec in rt_config::lua::plugin_specs() {
         let dir = folder(&spec, &data_dir);
         if spec.dir.is_some() || spec.src.is_empty() {
@@ -409,7 +410,10 @@ fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
     let context = crate::lua::current_context();
     let result = rt_config::lua::load_plugin(name, dir, permissions, trusted, &context);
     match &result {
-        Ok(_) => set_state(name, "loaded", None),
+        Ok(_) => {
+            crate::pages::register(name, dir, permissions, trusted);
+            set_state(name, "loaded", None);
+        }
         Err(e) => set_state(name, "failed", Some(e.clone())),
     }
     crate::lua::carry_out_for(name, result);

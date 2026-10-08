@@ -133,6 +133,13 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
             Action::Panel { id, source, spec } => crate::panel::show(id, source, spec),
             Action::PanelClose { id } => crate::panel::close(id, true),
             Action::PanelFocus { id } => crate::panel::focus(id),
+            Action::PluginPage { source, id, path } => crate::pages::open(&source, id, &path),
+            Action::PluginPageSend {
+                source,
+                id,
+                name,
+                json,
+            } => crate::pages::send(&source, id, &name, &json),
             Action::Unbind { mode, keys } => {
                 if let Some(Err(e)) = shell::with(|s| s.engine.unbind_from_lua(mode, &keys)) {
                     shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));

@@ -300,3 +300,52 @@ fn builtin_plugins_ship_with_riptide_and_still_ask() {
         "no commit for a builtin: {lock}"
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugin_pages_talk_to_their_own_plugin_only() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/notes/plugin/notes.lua",
+            r#"
+rt.command("open-notes", function()
+  rt.ui.page({
+    path = "index.html",
+    on_message = function(name, data, page)
+      rt.notify("got " .. name .. " " .. data.n)
+      page:send("echo", { text = "pong" })
+    end,
+  })
+end)
+"#,
+        )
+        .file(
+            "scratch-plugins/notes/pages/index.html",
+            r#"<!doctype html><html><head><title>notes</title>
+<script>window.inlineRan = true;</script>
+<script src="app.js"></script></head><body>Notes</body></html>"#,
+        )
+        .file(
+            "scratch-plugins/notes/pages/app.js",
+            r#"addEventListener("rtmessage", (e) => { document.title = e.detail.name + " " + e.detail.data.text; });
+rt.send("hello", JSON.stringify({ n: 1 }));"#,
+        )
+        .lua(r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/notes" })"#)
+        .start("page.html");
+    b.run("open-notes");
+    b.wait_until("the page's message reached the plugin", |s| {
+        s.message() == Some("got hello 1")
+    });
+    let s = b.wait_until("the plugin's answer reached the page", |s| {
+        s.tab().title == "echo pong"
+    });
+    assert!(
+        s.tab()
+            .url
+            .starts_with("riptide://notes.plugin/index.html?page="),
+        "{}",
+        s.tab().url
+    );
+    // Only its own scripts run: the inline one was blocked by the CSP.
+    assert_eq!(b.eval("String(window.inlineRan)"), "undefined");
+}
