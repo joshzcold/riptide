@@ -31,7 +31,7 @@ When something changed since riptide started, the tab says so, with a **Restart 
 | `:extension-remove <name or id>` | delete an installed extension |
 | `:extensions` | the Extensions tab |
 
-Names complete with `Tab`. Remove extensions here or with `:extension-remove`, not with Remove on Chrome's extensions page: riptide loads them from their folder at every start, so Chrome's button only hides one until the next start.
+Names complete with `Tab`. See [Limits](#limits) for what works differently from Chrome.
 
 To load an extension you're writing, or one you unpacked yourself, list its folder:
 
@@ -42,12 +42,24 @@ extensions.load = ["~/code/my-extension"]
 
 ## What works
 
-Content scripts, background workers and blocking rules work in every tab. So do extensions' options pages, and their messages to the pages they run in. Two things are different from Chrome:
+Content scripts, background workers and blocking rules work in every tab. So do extensions' options pages, their messages to the pages they run in, and what they show inside a page, such as an autofill menu on a login field.
 
-- **No toolbar buttons.** An extension's popup opens as a page (**Popup** or `:extension-open`), but extensions can't see riptide's tabs as "the current tab". Popup buttons that act on the page you're on, such as uBlock Origin Lite's per-site switch or a password manager's "fill this page", don't reach it. What an extension does inside the page, such as an autofill menu on a login field, works.
-- **Private windows** don't run extensions.
+## Limits
 
-For passwords, the builtin [passwords plugin](passwords.md) fills logins with a key and needs no popup.
+| Limit | What to do instead |
+|---|---|
+| **Popups can't act on the page you're on.** A popup opens as a tab (**Popup** or `:extension-open`), and extensions can't see riptide's tabs as "the current tab". Buttons such as uBlock Origin Lite's per-site switch or a password manager's "fill this page" don't reach the page. | For logins, the builtin [passwords plugin](passwords.md) fills them with a key. Settings that don't depend on the current page, such as filter lists, work from the popup or options. |
+| **Only Manifest V3.** Chromium no longer runs Manifest V2 extensions, such as the original uBlock Origin, and riptide refuses to install them. Firefox add-ons don't run either. | uBlock Origin Lite, or riptide's own ad blocker (`content.blocking`). |
+| **Changes need a restart.** Extensions load when riptide starts. | Accept the "Restart now?" question, or use **Restart now** on the Extensions tab. |
+| **No automatic updates.** | Press **Check for updates** on the Extensions tab, or run `:extension-update`. |
+| **Not in private windows.** | Use a normal window. |
+| **Chrome's own Remove only hides an extension until the next start**, because riptide loads it from its folder each time. | **Remove** on the Extensions tab, or `:extension-remove`. |
+| **Desktop apps are linked at startup.** riptide only finds a password manager's desktop app if the app set itself up for another Chromium browser first. | Turn on the app's browser integration for Chromium or Chrome, then restart riptide. |
+| **Not tested yet:** extensions' keyboard shortcuts, passkeys, and autofill against a real vault. | Please report what you find. |
+
+### What an install checks
+
+riptide downloads extensions over HTTPS from Google, and checks that the file's key gives the extension id you asked for. It doesn't check the Web Store's signature on the file. A `.crx` file you install from disk has no id to check, so only install files you trust. Either way, you see what the extension asks for before anything is installed.
 
 ## Password managers' desktop apps
 

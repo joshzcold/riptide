@@ -41,6 +41,10 @@
   section > h2 svg.icon { color: var(--accent); }
   section > .blurb { color: var(--muted); margin: 0 0 .7rem; font-size: .9em; }
   .card { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .limits { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .8rem; margin-bottom: .8rem; }
+  .limits summary { cursor: pointer; font-weight: 600; }
+  .limits ul { margin: .4rem 0; padding-left: 1.2rem; }
+  .limits li { margin: .2rem 0; }
   .sub { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: .7rem 1rem .2rem; background: var(--bg); }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem); gap: .4rem 1.5rem; padding: .75rem 1rem; border-top: 1px solid var(--line); }
   .sub + .row { border-top: none; }
@@ -972,6 +976,34 @@ const EXTENSION_STATES = {
   loaded: ["Loaded", "allowed"], new: ["Loads after a restart", ""], changed: ["Changed; restart to load it", ""],
 };
 const extensionAction = (id, action) => rt.send("extension", JSON.stringify({ id, action }));
+const EXTENSION_LIMITS = [
+  "Popups open in a tab, and can't act on the page you were on: per-site switches and \"fill this page\" buttons don't reach it. For logins, use the builtin passwords plugin.",
+  "Only Manifest V3 extensions run. The original uBlock Origin and Firefox add-ons don't.",
+  "Changes load after a restart.",
+  "Updates aren't automatic: use Check for updates, or :extension-update.",
+  "Private windows run no extensions.",
+  "Remove extensions here. Chrome's own Remove only hides one until riptide restarts.",
+];
+
+// What works differently from Chrome. Closing it is remembered; the page
+// works without storage too.
+function extensionLimits() {
+  const box = el("details", "limits");
+  let open = true;
+  try { open = localStorage.getItem("extension-limits") !== "closed"; } catch {}
+  box.open = open;
+  box.append(el("summary", null, "What doesn't work like in Chrome"));
+  const items = el("ul");
+  for (const text of EXTENSION_LIMITS) items.append(el("li", "desc", text));
+  const more = el("a", null, "All the limits, and what to do instead");
+  more.href = "https://joshzcold.github.io/riptide/guide/extensions.html#limits";
+  more.target = "_blank";
+  box.append(items, more);
+  box.addEventListener("toggle", () => {
+    try { localStorage.setItem("extension-limits", box.open ? "open" : "closed"); } catch {}
+  });
+  return box;
+}
 
 function renderExtensions() {
   observer?.disconnect();
@@ -988,7 +1020,8 @@ function renderExtensions() {
   const section = el("section");
   const h2 = el("h2");
   h2.append(icon("extensions"), "Extensions");
-  section.append(h2, el("p", "blurb", "Chrome extensions, installed with :extension-install or listed in extensions.load. They load when riptide starts. Popups open in a tab, where they can't act on the page you were on."));
+  section.append(h2, el("p", "blurb", "Chrome extensions, installed with :extension-install or listed in extensions.load. They load when riptide starts."));
+  section.append(extensionLimits());
   const top = el("div", "actions");
   top.style.marginBottom = "10px";
   const topButton = (text, title, click) => {

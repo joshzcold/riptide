@@ -94,6 +94,11 @@ fn extensions_from_folders_run_in_tabs_and_block() {
         "page.extensions.items.map((x) => `${x.name}|${x.state}|${x.popup}|${x.options}|${x.installed}`).join()",
         "riptide probe|loaded|true|true|false",
     );
+    // What works differently from Chrome is on the tab, open the first time.
+    b.wait_eval(
+        "`${document.querySelector('details.limits').open}|${document.querySelectorAll('.limits li').length}`",
+        "true|6",
+    );
     let id = b.eval("page.extensions.items[0].id");
     b.eval(&format!(
         "rt.send('extension', JSON.stringify({{ id: '{id}', action: 'popup' }})); ''"
@@ -120,7 +125,18 @@ fn extensions_from_folders_run_in_tabs_and_block() {
             .is_some_and(|m| m.contains("take it out of extensions.load"))
     });
 
-    // The tab's button opens Chrome's own page in a call window.
+    // The tab's button opens Chrome's own page in a call window, and its
+    // link to the guide's limits opens in a tab.
+    b.run("extensions");
+    b.wait_until("the Extensions tab opens", |s| {
+        s.tab().url.ends_with("#extensions") && !s.tab().loading
+    });
+    b.follow_hint("hint", |h| h.text.contains("all the limits"));
+    b.wait_until("the guide opens in a tab", |s| {
+        s.tabs()
+            .iter()
+            .any(|t| t.url.ends_with("/guide/extensions.html#limits"))
+    });
     b.run("extensions");
     b.wait_until("the Extensions tab opens", |s| {
         s.tab().url.ends_with("#extensions") && !s.tab().loading
@@ -143,7 +159,8 @@ fn extension_install_asks_first_and_loads_after_restart() {
   "default_locale": "en",
   "version": "2.0",
   "content_scripts": [{ "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_start" }],
-  "permissions": ["nativeMessaging"]
+  "permissions": ["nativeMessaging"],
+  "action": { "default_popup": "popup.html" }
 }"#;
     let file = b.scratch().join("packed.crx");
     std::fs::write(
@@ -169,6 +186,7 @@ fn extension_install_asks_first_and_loads_after_restart() {
         "Packed probe 2.0",
         "read and change everything on every site you visit",
         "talk to programs on your computer",
+        "Its popup opens in a tab and can't act on the page you're on.",
     ] {
         assert!(message.contains(part), "{part:?} in {message}");
     }

@@ -474,8 +474,16 @@ fn offer(bytes: &[u8], expected: Option<&str>) {
             (
                 "Install extension",
                 format!(
-                    "{} {} ({}) asks to:{asks}\nInstall it? It loads after a restart.",
-                    about.name, about.version, package.crx.id
+                    "{} {} ({}) asks to:{asks}{popup}\nInstall it? It loads after a restart.",
+                    about.name,
+                    about.version,
+                    package.crx.id,
+                    // What it shows in its popup can't reach the page you're on.
+                    popup = if about.popup.is_some() {
+                        "\nIts popup opens in a tab and can't act on the page you're on."
+                    } else {
+                        ""
+                    },
                 ),
             )
         }
