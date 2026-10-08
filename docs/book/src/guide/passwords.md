@@ -1,12 +1,12 @@
 # Passwords
 
-The `passwords` plugin ships with riptide and fills logins from your password manager's command line tool. Password manager [extensions](extensions.md#password-managers) can't fill logins in riptide, so this is the way to use Bitwarden, KeePassXC or pass here. Turn it on in `config.lua`:
+The `passwords` plugin fills logins from your password manager's command line tool. Password manager [extensions](extensions.md#password-managers) can't fill logins in riptide, so this is the way to use Bitwarden, KeePassXC or pass here. It lives in [riptide-plugins](https://github.com/joshzcold/riptide-plugins); add it in `config.lua`:
 
 ```lua
-rt.pack.add({ builtin = "passwords", opts = { backend = "pass" } })
+rt.pack.add({ "https://github.com/joshzcold/riptide-plugins", subdir = "passwords", opts = { backend = "pass" } })
 ```
 
-The first time it loads, riptide asks you to allow it to run programs (your password manager) and to fill in pages.
+riptide installs it the first time it starts with this (it needs `git`), then asks you to allow it to run programs (your password manager) and to fill in pages. Like other plugins from git, it stays on the version installed until you update it from `:plugins`.
 
 | Key | Command | Fills |
 |---|---|---|
@@ -38,7 +38,7 @@ The master and database passwords go to the tool on its input or in its environm
 ## Options
 
 ```lua
-rt.pack.add({ builtin = "passwords", opts = {
+rt.pack.add({ "https://github.com/joshzcold/riptide-plugins", subdir = "passwords", opts = {
   backend = "keepassxc",
   database = "~/Passwords.kdbx",
   keyfile = "~/Passwords.key",  -- keepassxc only, optional

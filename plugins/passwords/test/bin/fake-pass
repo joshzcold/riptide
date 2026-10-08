@@ -1,8 +1,0 @@
-#!/bin/sh
-# Stands in for pass: `show <entry>` prints the entry.
-[ "$1" = show ] || exit 2
-case $2 in
-  plugin-test.localhost/alice) printf 'pw-alice\nlogin: alice@example.com\nurl: x\n' ;;
-  plugin-test.localhost/bob) printf 'pw-bob\n' ;;
-  *) echo "Error: $2 is not in the password store." >&2; exit 1 ;;
-esac

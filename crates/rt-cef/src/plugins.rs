@@ -55,9 +55,6 @@ fn paths() -> Option<(PathBuf, PathBuf)> {
 
 /// Where a plugin lives: its own folder, or its `subdir` of `<data>/pack/<name>` for one from git.
 fn folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
-    if spec.builtin {
-        return builtin_folder(&spec.name);
-    }
     match &spec.dir {
         Some(dir) => dir.clone(),
         None => repo_folder(spec, data_dir).join(&spec.subdir),
@@ -69,32 +66,6 @@ fn repo_folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
     spec.dir
         .clone()
         .unwrap_or_else(|| data_dir.join("pack").join(&spec.name))
-}
-
-/// A plugin that ships with riptide: `plugins/<name>` next to the
-/// executable, which is where every package puts it, or in the checkout a
-/// cargo build in `target/` came from. A name not found gives the first
-/// place, so the error names where it was looked for.
-fn builtin_folder(name: &str) -> PathBuf {
-    let exe_dir = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.canonicalize().ok())
-        .and_then(|e| e.parent().map(Path::to_path_buf))
-        .unwrap_or_default();
-    let shipped = exe_dir.join("plugins").join(name);
-    if !rt_config::plugins::valid_name(name) {
-        return shipped;
-    }
-    let checkout = exe_dir
-        .parent()
-        .filter(|p| p.file_name().is_some_and(|n| n == "target"))
-        .and_then(Path::parent)
-        .map(|repo| repo.join("plugins").join(name));
-    [Some(shipped.clone()), checkout]
-        .into_iter()
-        .flatten()
-        .find(|dir| dir.join("riptide-plugin.toml").is_file())
-        .unwrap_or(shipped)
 }
 
 /// Load every plugin `rt.pack.add` asked for: install or move to its locked
@@ -509,9 +480,7 @@ pub fn page_data() -> serde_json::Value {
             serde_json::json!({
                 "name": spec.name,
                 "description": description,
-                "src": if spec.builtin {
-                    format!("builtin (riptide {})", env!("CARGO_PKG_VERSION"))
-                } else if spec.src.is_empty() {
+                "src": if spec.src.is_empty() {
                     spec.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_default()
                 } else if spec.subdir.is_empty() {
                     spec.src.clone()

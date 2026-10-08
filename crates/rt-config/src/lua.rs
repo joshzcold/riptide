@@ -159,14 +159,9 @@ local pack_specs = {}
 local function add_spec(spec)
   if type(spec) == "string" then spec = { spec } end
   local src = spec.src or spec[1]
-  if spec.builtin ~= nil then
-    if src ~= nil or spec.dir ~= nil then error("a builtin plugin has no git URL or dir", 3) end
-    if spec.name ~= nil and spec.name ~= spec.builtin then error("a builtin plugin keeps its own name", 3) end
-  elseif src == nil and spec.dir == nil then
-    error("a plugin needs a git URL, dir or builtin", 3)
-  end
+  if src == nil and spec.dir == nil then error("a plugin needs a git URL or dir", 3) end
   if spec.subdir ~= nil and src == nil then error("subdir is a folder in a plugin's git repository", 3) end
-  local name = spec.builtin or spec.name or rt._plugin_name(spec.subdir or src or spec.dir)
+  local name = spec.name or rt._plugin_name(spec.subdir or src or spec.dir)
   local function list(value)
     if value == nil then return {} end
     if type(value) ~= "table" then return { value } end
@@ -181,11 +176,11 @@ local function add_spec(spec)
     end
   end
   rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true,
-    list(spec.event), list(spec.cmd), keys, spec.builtin ~= nil, spec.subdir)
+    list(spec.event), list(spec.cmd), keys, spec.subdir)
   pack_specs[name] = spec
 end
 function rt.pack.add(specs)
-  if type(specs) == "string" or specs.src or specs.dir or specs.builtin or type(specs[1]) == "string" then
+  if type(specs) == "string" or specs.src or specs.dir or type(specs[1]) == "string" then
     add_spec(specs)
   else
     for _, spec in ipairs(specs) do add_spec(spec) end
@@ -582,8 +577,6 @@ pub struct PluginSpec {
     pub events: Vec<String>,
     pub commands: Vec<String>,
     pub keys: Vec<(Mode, String)>,
-    /// One of the plugins that ship with riptide, found by name.
-    pub builtin: bool,
     /// The plugin's folder inside its git repository, for a repository of
     /// several plugins; empty for its root.
     pub subdir: String,
@@ -1546,7 +1539,7 @@ fn tidy_error(error: &str, config_dir: &Path) -> String {
 }
 
 /// `rt._pack_spec`'s arguments: name, src, dir, version, trusted, events,
-/// commands, `{ keys, mode }` pairs and whether it's builtin.
+/// commands, `{ keys, mode }` pairs and the folder in the repository.
 type PackSpecArgs = (
     String,
     String,
@@ -1556,7 +1549,6 @@ type PackSpecArgs = (
     Vec<String>,
     Vec<String>,
     Vec<Vec<String>>,
-    bool,
     Option<String>,
 );
 
@@ -1825,7 +1817,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "_pack_spec",
         lua.create_function(
-            move |_, (name, src, dir, version, trusted, events, commands, keys, builtin, subdir): PackSpecArgs| {
+            move |_, (name, src, dir, version, trusted, events, commands, keys, subdir): PackSpecArgs| {
                 let bad =
                     |what: String| Err(mlua::Error::runtime(format!("plugin {name:?}: {what}")));
                 if !crate::plugins::valid_name(&name) {
@@ -1875,7 +1867,6 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     events,
                     commands,
                     keys: parsed,
-                    builtin,
                     subdir,
                 });
                 Ok(())

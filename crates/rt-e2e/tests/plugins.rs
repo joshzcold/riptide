@@ -266,43 +266,6 @@ rt.pack.add({
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
-fn builtin_plugins_ship_with_riptide_and_still_ask() {
-    let b = Browser::launch()
-        .lua(r#"rt.pack.add({ { builtin = "passwords", opts = {} }, { builtin = "no-such-plugin" } })"#)
-        .start("page.html");
-    let s = b.wait_until("passwords asks", |s| s.mode == "yesno");
-    let message = s
-        .prompt
-        .as_ref()
-        .map(|p| p["message"].to_string())
-        .unwrap_or_default();
-    assert!(
-        message.contains("passwords") && message.contains("run programs"),
-        "a builtin plugin isn't trusted: {message}"
-    );
-    b.keys("y");
-    b.wait_mode("normal");
-    b.run("plugins");
-    let version = env!("CARGO_PKG_VERSION");
-    b.wait_eval(
-        "page.plugins.map((p) => `${p.name}|${p.src}|${p.git}|${p.state}`).join(' ')",
-        &format!(
-            "passwords|builtin (riptide {version})|false|loaded no-such-plugin|builtin (riptide {version})|false|failed"
-        ),
-    );
-    let lock = std::fs::read_to_string(b.config_dir().join("rt-pack-lock.json")).unwrap();
-    let lock: serde_json::Value = serde_json::from_str(&lock).unwrap();
-    assert_eq!(
-        lock["plugins"]["passwords"]["commit"]
-            .as_str()
-            .unwrap_or_default(),
-        "",
-        "no commit for a builtin: {lock}"
-    );
-}
-
-#[test]
-#[ignore = "starts a browser; run with ./task e2e"]
 fn plugin_pages_talk_to_their_own_plugin_only() {
     let b = Browser::launch()
         .file(
