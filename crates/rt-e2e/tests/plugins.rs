@@ -648,3 +648,32 @@ rt.pack.add({ { dir = dir .. "backend" }, { dir = dir .. "orphan" } })
             .contains("nowhere")
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_are_checked_for_updates_in_the_background() {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-check-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&repo);
+    let (first, _) = versioned_repo(&repo);
+    let src = repo.display().to_string();
+    let b = Browser::launch()
+        .lua(&format!(
+            "c.plugins.check_interval = 1\nrt.pack.add({{ src = {src:?}, name = 'versioned', opts = {{}} }})"
+        ))
+        // Pinned to the first commit, and last checked long ago.
+        .file(
+            "config/rt-pack-lock.json",
+            &format!("{{\"plugins\": {{\"versioned\": {{\"src\": {src:?}, \"commit\": \"{first}\"}}}}}}"),
+        )
+        .file("data/pack-last-check", "1")
+        .start("page.html");
+    b.wait_until("the background check found the update", |s| {
+        s.message() == Some("Plugin updates for versioned; review them on :plugins")
+    });
+    // Nothing moved; the check time was recorded.
+    b.run("which-version");
+    b.wait_until("still the pinned version", |s| s.message() == Some("v1"));
+    let checked = std::fs::read_to_string(b.data_dir().join("pack-last-check")).unwrap();
+    assert!(checked.trim().parse::<u64>().unwrap() > 1);
+    std::fs::remove_dir_all(&repo).unwrap();
+}

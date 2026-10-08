@@ -64,6 +64,8 @@ Its permissions are still asked for at startup, so a key or command never stops 
 
 Every update is recorded in `rt-pack-lock.json` and reloads your config once; if a new version asks for more permissions, you're asked about those first.
 
+Every `plugins.check_interval` days (7 by default; 0 turns it off), riptide checks in the background a few seconds after it starts and says which plugins have updates, such as "Plugin updates for pass, passwords; review them on :plugins". The check changes nothing.
+
 ## The plugins page
 
 `:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't) and the permissions you approved, with the buttons above.

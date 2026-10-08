@@ -148,6 +148,21 @@ pub fn start() {
     for (src, members) in repositories() {
         begin(&src, &members, &lock, &data_dir);
     }
+    // Once installs started now have had time to finish.
+    if !CHECKED.replace(true) {
+        let mut task = BackgroundCheck::new();
+        post_delayed_task(ThreadId::UI, Some(&mut task), 5_000);
+    }
+}
+
+wrap_task! {
+    struct BackgroundCheck {}
+
+    impl Task {
+        fn execute(&self) {
+            maybe_check();
+        }
+    }
 }
 
 /// Install repository `src` or move it to its locked commit if need be, then
@@ -747,6 +762,43 @@ thread_local! {
     /// Repositories still being fetched, and whether any moved, for one
     /// reload once the last is done.
     static FETCHING: std::cell::Cell<(usize, bool)> = const { std::cell::Cell::new((0, false)) };
+    /// A background check (`plugins.check_interval`) is running: one message
+    /// at the end naming the plugins with updates, instead of one each.
+    static QUIET: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+    /// The background check is due once per run of riptide, not per reload.
+    static CHECKED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// When it last checked in the background, as seconds since the epoch.
+fn last_check_file(data_dir: &Path) -> PathBuf {
+    data_dir.join("pack-last-check")
+}
+
+/// At startup: check for updates in the background if `plugins.check_interval`
+/// days have passed since the last time.
+fn maybe_check() {
+    let Some((_, data_dir)) = paths() else { return };
+    let days = shell::with(|s| s.engine.settings().int("plugins.check_interval")).unwrap_or(0);
+    if days <= 0 || repositories().is_empty() {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    // The first run starts the clock: what was just installed is current.
+    let Some(last) = std::fs::read_to_string(last_check_file(&data_dir))
+        .ok()
+        .and_then(|t| t.trim().parse::<u64>().ok())
+    else {
+        let _ = std::fs::write(last_check_file(&data_dir), now.to_string());
+        return;
+    };
+    if now.saturating_sub(last) < days as u64 * 86_400 {
+        return;
+    }
+    let _ = std::fs::write(last_check_file(&data_dir), now.to_string());
+    QUIET.with(|q| *q.borrow_mut() = Some(Vec::new()));
+    fetch(None, After::Check);
 }
 
 /// The repositories `name` (or every plugin from git) comes from.
@@ -781,6 +833,10 @@ fn fetch(name: Option<&str>, after: After) {
         .filter(|(_, members)| repo_folder(&members[0], &data_dir).is_dir())
         .collect();
     if repos.is_empty() {
+        // A background check with nothing installed says nothing.
+        if QUIET.with(|q| q.borrow_mut().take()).is_some() {
+            return;
+        }
         if FETCHING.with(|f| f.get()) == (0, true) {
             // :pack-sync with nothing installed yet.
             FETCHING.with(|f| f.set((0, false)));
@@ -801,7 +857,9 @@ fn fetch(name: Option<&str>, after: After) {
         .iter()
         .flat_map(|(_, m)| m.iter().map(|s| s.name.clone()))
         .collect();
-    shell::show_message(Level::Info, format!("{verb} {}…", names.join(", ")));
+    if QUIET.with(|q| q.borrow().is_none()) {
+        shell::show_message(Level::Info, format!("{verb} {}…", names.join(", ")));
+    }
     FETCHING.with(|f| {
         let (pending, moved) = f.get();
         f.set((pending + repos.len(), moved));
@@ -847,7 +905,19 @@ wrap_task! {
             let label = names.join(", ");
             let log: Vec<String> = self.log.lines().map(str::to_string).filter(|l| !l.is_empty()).collect();
             let moved = !self.latest.is_empty() && self.updated && !log.is_empty();
-            if self.latest.is_empty() {
+            let quiet = QUIET.with(|q| {
+                let mut q = q.borrow_mut();
+                let found = q.as_mut()?;
+                if !log.is_empty() {
+                    found.extend(names.iter().cloned());
+                }
+                Some(())
+            });
+            if quiet.is_some() {
+                if self.latest.is_empty() {
+                    tracing::warn!("background check of {label}: {}", self.log);
+                }
+            } else if self.latest.is_empty() {
                 shell::show_message(Level::Error, format!("Plugin {label}: {}", self.log.trim_start_matches("error: ")));
             } else if moved {
                 record(&self.src, &names, &self.latest);
@@ -874,6 +944,14 @@ wrap_task! {
             });
             if pending == 0 {
                 FETCHING.with(|f| f.set((0, false)));
+                if let Some(found) = QUIET.with(|q| q.borrow_mut().take())
+                    && !found.is_empty()
+                {
+                    shell::show_message(
+                        Level::Info,
+                        format!("Plugin updates for {}; review them on :plugins", found.join(", ")),
+                    );
+                }
                 if any {
                     reload();
                 }
