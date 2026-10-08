@@ -328,7 +328,12 @@ fn link_native_hosts(data_dir: &Path, sources: &[PathBuf]) {
                 continue;
             }
             let _ = std::fs::create_dir_all(&target);
-            match std::os::unix::fs::symlink(&path, &link) {
+            #[cfg(unix)]
+            let linked = std::os::unix::fs::symlink(&path, &link);
+            // Chromium finds hosts through the registry on Windows; a copy keeps the folder complete.
+            #[cfg(not(unix))]
+            let linked = std::fs::copy(&path, &link).map(|_| ());
+            match linked {
                 Ok(()) => tracing::info!("linked native messaging host {}", path.display()),
                 Err(e) => tracing::warn!("can't link {}: {e}", path.display()),
             }

@@ -171,6 +171,10 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     b.wait_until("the Extensions tab opens", |s| {
         s.tab().url.ends_with("#extensions") && !s.tab().loading
     });
+    b.wait_eval(
+        "String([...document.querySelectorAll('.limits a')].some((a) => a.offsetParent))",
+        "true",
+    );
     b.follow_hint("hint", |h| h.text.contains("all the limits"));
     b.wait_until("the guide opens in a tab", |s| {
         s.tabs()
