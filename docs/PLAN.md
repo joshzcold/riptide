@@ -158,7 +158,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] Primary selection (`yY`, `pP`; X11 via arboard, the clipboard elsewhere) (2026-10-02)
 
 ### Content
-- [x] Ad blocking (EasyList / uBlock lists, and hosts files since 2026-10-07) (M8)
+- [x] Ad blocking (EasyList / uBlock lists, and hosts files since 2026-10-07; uBlock Origin's lists by default, scriptlets, `$redirect`, `$removeparam`, procedural filters and frames since 2026-10-08) (M8)
 - [x] Per-domain settings for permissions and content blocking (M8; JS, cookies and images still to come)
 - [x] Downloads with status-bar progress and prompts
 - [x] Permission prompts (geolocation, camera, notifications)

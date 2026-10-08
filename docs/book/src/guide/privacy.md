@@ -53,6 +53,8 @@ Chromium calls Google in the background. riptide turns off the calls that only s
 | `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; riptide has its own `url.searchengines`) |
 | `accounts.google.com/ListAccounts` | Google accounts in the cookie jar | **still sent** once at startup. Google sign-in is off, but something still asks for the cookie jar; it carries your google.com cookies if you have any. |
 
+Beyond the pages you visit, riptide goes online for what you set up or ask for: `:adblock-update` downloads the filter lists (from `easylist.to` and `ublockorigin.github.io` by default), `:extension-install` and `:extension-update` ask the Chrome Web Store (`clients2.google.com`), and plugins added with `rt.pack.add` are fetched with git the first time riptide starts with them, and when you check for updates.
+
 The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 
 ## Proxy and network
