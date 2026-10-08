@@ -1023,6 +1023,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists); uBlock Origin's own lists may use its trusted scriptlets"
     ),
     def!(
+        "content.blocking.adblock.rules",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Your own filter rules, in Adblock Plus syntax (e.g. example.com##.banner); they apply at once, without :adblock-update"
+    ),
+    def!(
         "content.blocking.enabled",
         Kind::Bool,
         Value::Bool(true),

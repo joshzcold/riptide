@@ -1,0 +1,12 @@
+<!doctype html><title>picker</title>
+<style>div { margin: 8px; padding: 8px; }</style>
+<div class="promo-box" style="width:300px;height:60px">Buy now</div>
+<div class="content">text</div>
+<div class="promo-box" style="width:300px;height:60px">Also buy</div>
+<script>
+const shown = (el) => getComputedStyle(el).display;
+setInterval(() => {
+  const [first, second] = document.querySelectorAll('.promo-box');
+  document.title = `promo=${shown(first)},${shown(second)} content=${shown(document.querySelector('.content'))}`;
+}, 100);
+</script>

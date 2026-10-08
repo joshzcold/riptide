@@ -93,7 +93,8 @@ pub fn request(request: HintRequest) {
         );
     };
     let selectors = serde_json::to_string(selectors).unwrap_or_default();
-    let code = format!("{HINTS_JS}; window.__rtHints.collect({selectors})");
+    let pick = request.target == HintTarget::Hide;
+    let code = format!("{HINTS_JS}; window.__rtHints.collect({selectors}, {pick})");
     let mut frames = all_frames(&browser);
     // A plugin's hints only look in frames of sites it may act on.
     if let Some(lua) = &request.lua {
@@ -389,6 +390,10 @@ pub fn follow(index: usize, url: Option<String>, target: HintTarget) {
         }
         (HintTarget::Yank, None) => shell::show_message(Level::Error, "That element has no URL"),
         (HintTarget::Hover, _) => mouse_at(&browser, index, false),
+        (HintTarget::Hide, _) => match frame_of(index) {
+            Some((frame, _, local)) => crate::adblock::pick(frame, local),
+            None => shell::show_message(Level::Error, "The element is gone"),
+        },
         // Elements without a URL (buttons, inputs) are clicked instead.
         _ => mouse_at(&browser, index, true),
     }

@@ -26,6 +26,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `;o` | `hint links fill :open {hint-url}` |
 | `;r` | `hint --rapid links tab-bg` |
 | `;t` | `hint inputs` |
+| `;x` | `hint blocks hide` |
 | `;y` | `hint links yank` |
 | `<Alt-1>` | `tab-focus 1` |
 | `<Alt-2>` | `tab-focus 2` |

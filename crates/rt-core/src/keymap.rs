@@ -272,6 +272,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     (";t", "hint inputs"),
     (";y", "hint links yank"),
     (";d", "hint links download"),
+    (";x", "hint blocks hide"),
     ("yy", "yank"),
     ("yt", "yank title"),
     ("yd", "yank domain"),

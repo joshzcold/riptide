@@ -29,7 +29,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-call` |  | Reopen the current tab in a call window, where screen sharing picks a tab, window or screen |
 | `:tab-take` |  | Move a tab from another window here: :tab-take &lt;window/tab&gt; |
 | `:undo` | `<Ctrl-T>` `u` | Re-open the last closed tab |
-| `:hint` | `;I` `;O` `;b` `;d` `;f` `;h` `;i` `;o` `;r` `;t` `;y` `F` `f` | Label elements to follow: [--rapid] [group] [target] [fill text] |
+| `:hint` | `;I` `;O` `;b` `;d` `;f` `;h` `;i` `;o` `;r` `;t` `;x` `;y` `F` `f` | Label elements to follow: [--rapid] [group] [target] [fill text] |
 | `:yank` | `yD` `yT` `yY` `yd` `yt` `yy` | Copy the page's url, title or domain to the clipboard |
 | `:set` |  | Show or change an option: :set name [value], :set name! toggles |
 | `:bind` |  | Show or set a key binding: :bind [--mode m] keys [command] |

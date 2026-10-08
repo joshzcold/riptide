@@ -20,6 +20,10 @@ struct State {
     /// Per-site `content.blocking.enabled`, as `(pattern, enabled)`; the last match wins.
     enabled_for: Vec<(String, bool)>,
     whitelist: Vec<String>,
+    /// `content.blocking.adblock.rules` as last compiled; `None` until the
+    /// engine is first loaded.
+    rules: Option<Vec<String>>,
+    data_dir: Option<PathBuf>,
 }
 
 static STATE: RwLock<State> = RwLock::new(State {
@@ -27,7 +31,12 @@ static STATE: RwLock<State> = RwLock::new(State {
     enabled: true,
     enabled_for: Vec::new(),
     whitelist: Vec::new(),
+    rules: None,
+    data_dir: None,
 });
+
+/// Bumped for each compile, so a slower, older one can't replace a newer engine.
+static GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 thread_local! {
     /// Downloads in flight, kept alive until they finish.
@@ -55,17 +64,47 @@ pub fn sync_settings(settings: &Settings) {
             })
             .collect();
         state.whitelist = settings.list("content.blocking.whitelist").to_vec();
+        let rules = settings.list("content.blocking.adblock.rules").to_vec();
+        if state.rules.as_ref().is_some_and(|r| *r != rules)
+            && let Some(data_dir) = state.data_dir.clone()
+        {
+            state.rules = Some(rules.clone());
+            let lists = settings.list("content.blocking.adblock.lists").to_vec();
+            recompile(data_dir, lists, rules);
+        }
+    }
+}
+
+/// The user's own rules changed: compile again from the saved lists, without downloading.
+fn recompile(data_dir: PathBuf, lists: Vec<String>, rules: Vec<String>) {
+    let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    std::thread::spawn(move || {
+        let blocker = Store::new(&data_dir)
+            .compile(&lists, &rules)
+            .map(|(b, _)| b);
+        install(generation, blocker);
+    });
+}
+
+fn install(generation: u64, blocker: Option<Blocker>) {
+    if let Ok(mut state) = STATE.write()
+        && GENERATION.load(std::sync::atomic::Ordering::SeqCst) == generation
+    {
+        state.blocker = blocker.map(Arc::new);
     }
 }
 
 /// Load the cached engine (or compile the saved lists) in the background.
-pub fn load(data_dir: PathBuf, lists: Vec<String>) {
+pub fn load(data_dir: PathBuf, lists: Vec<String>, rules: Vec<String>) {
+    if let Ok(mut state) = STATE.write() {
+        state.rules = Some(rules.clone());
+        state.data_dir = Some(data_dir.clone());
+    }
+    let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
     std::thread::spawn(move || {
-        let blocker = Store::new(&data_dir).load(&lists);
+        let blocker = Store::new(&data_dir).load(&lists, &rules);
         let loaded = blocker.is_some();
-        if let Ok(mut state) = STATE.write() {
-            state.blocker = blocker.map(Arc::new);
-        }
+        install(generation, blocker);
         if !loaded {
             shell::post_message(
                 Level::Info,
@@ -347,24 +386,22 @@ fn finish() {
     let Some(update) = UPDATE.with(|u| u.borrow_mut().take()) else {
         return;
     };
-    let Some((data_dir, lists)) = shell::with(|s| {
+    let Some((data_dir, lists, rules)) = shell::with(|s| {
+        let settings = s.engine.settings();
         (
             s.paths.data_dir.clone(),
-            s.engine
-                .settings()
-                .list("content.blocking.adblock.lists")
-                .to_vec(),
+            settings.list("content.blocking.adblock.lists").to_vec(),
+            settings.list("content.blocking.adblock.rules").to_vec(),
         )
     }) else {
         return;
     };
+    let generation = GENERATION.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
     std::thread::spawn(move || {
-        let compiled = Store::new(&data_dir).compile(&lists);
+        let compiled = Store::new(&data_dir).compile(&lists, &rules);
         let message = match compiled {
             Some((blocker, rules)) => {
-                if let Ok(mut state) = STATE.write() {
-                    state.blocker = Some(Arc::new(blocker));
-                }
+                install(generation, Some(blocker));
                 let ok = lists.len() - update.failed.len();
                 match update.failed.as_slice() {
                     [] => (
@@ -434,6 +471,88 @@ wrap_urlrequest_client! {
             post_task(ThreadId::UI, Some(&mut task));
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct Picked {
+    host: String,
+    selector: String,
+}
+
+/// `:hint blocks hide` chose an element: offer a hiding rule for it, and on
+/// Return hide it now and add the rule to `content.blocking.adblock.rules`.
+pub fn pick(frame: Frame, index: usize) {
+    let target = frame.clone();
+    eval::eval_frame(
+        &frame,
+        &format!("window.__rtHints.describe({index})"),
+        move |result| {
+            let Some(picked) = result
+                .ok()
+                .and_then(|json| serde_json::from_str::<Option<Picked>>(&json).ok())
+                .flatten()
+            else {
+                return shell::show_message(Level::Error, "The element is gone");
+            };
+            let rule = match picked.host.as_str() {
+                "" => format!("##{}", picked.selector),
+                host => format!("{host}##{}", picked.selector),
+            };
+            crate::prompts::ask(
+                None,
+                crate::prompts::Scope::Other,
+                rt_core::prompt::Topic::Confirm,
+                "Hide",
+                "Add this rule to content.blocking.adblock.rules (edit it first if you like)",
+                rt_core::prompt::PromptKind::Text {
+                    default: rule,
+                    masked: false,
+                    path: false,
+                },
+                move |answer| {
+                    let rt_core::prompt::PromptAnswer::Text(rule) = answer else {
+                        return;
+                    };
+                    add_rule(&target, index, rule.trim());
+                },
+            );
+        },
+    );
+}
+
+fn add_rule(frame: &Frame, index: usize, rule: &str) {
+    if rule.is_empty() {
+        return;
+    }
+    // Plain CSS hides at once; scriptlets and procedural rules wait for the next load.
+    let selector = rule
+        .split_once("##")
+        .map(|(_, s)| s)
+        .filter(|s| !s.starts_with('+'))
+        .unwrap_or("");
+    let selector = serde_json::to_string(selector).unwrap_or_default();
+    eval::eval_frame(
+        frame,
+        &format!("window.__rtHints.hide({index}, {selector})"),
+        |_| {},
+    );
+    let Some(mut rules) = shell::with(|s| {
+        s.engine
+            .settings()
+            .list("content.blocking.adblock.rules")
+            .to_vec()
+    }) else {
+        return;
+    };
+    if !rules.iter().any(|r| r == rule) {
+        rules.push(rule.to_string());
+        crate::settings_page::set(
+            "content.blocking.adblock.rules",
+            &serde_json::json!(rules),
+            None,
+        );
+    }
+    shell::show_message(Level::Info, format!("Added {rule}"));
 }
 
 /// Every class and id in the page, for the generic hiding rules.

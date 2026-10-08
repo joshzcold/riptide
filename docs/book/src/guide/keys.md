@@ -120,7 +120,7 @@ The mouse's back and forward buttons go back and forward. With `input.mouse.rock
 ## Hints
 
 `:hint [group] [target]` labels elements and acts on the one you pick. `f` is `:hint`, and `;y` is `:hint links yank`. The groups come from `hints.selectors`:
-- **Built in:** `all`, `links`, `images`, `media` and `inputs`.
+- **Built in:** `all`, `links`, `images`, `media`, `inputs`, and `blocks`, the page's parts, which `;x` (`:hint blocks hide`) uses to [hide one for good](privacy.md#your-own-rules).
 - **Your own:** add a group with a CSS selector list. Your groups are added to the built-in ones, which stay.
 
 ```lua

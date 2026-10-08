@@ -90,13 +90,70 @@
   // separately and needs to know where they are.
   let crossFrames = [];
 
+  // Picking something to hide: big enough to be worth it, and not the page itself.
+  let picking = false;
+  function pickable(el) {
+    if (el === el.ownerDocument.body || el === el.ownerDocument.documentElement) return false;
+    const r = el.getBoundingClientRect();
+    return r.width >= 24 && r.height >= 16;
+  }
+
+  // Of nested elements with the same box, keep the outermost.
+  function outermost(entries) {
+    const same = (a, b) =>
+      Math.abs(a.left - b.left) <= 2 && Math.abs(a.top - b.top) <= 2 &&
+      Math.abs(a.right - b.right) <= 2 && Math.abs(a.bottom - b.bottom) <= 2;
+    const boxes = new Map(entries.map(({ el }) => [el, el.getBoundingClientRect()]));
+    return entries.filter(({ el }) => {
+      for (let up = el.parentElement; up; up = up.parentElement) {
+        if (boxes.has(up) && same(boxes.get(up), boxes.get(el))) return false;
+      }
+      return true;
+    });
+  }
+
+  // Names that look generated (long digit runs) change between visits.
+  const stable = (name) => /^-?[A-Za-z_][\w-]*$/.test(name) && !/\d{3,}/.test(name);
+
+  function ownSelector(el) {
+    if (el.id && stable(el.id)) return `#${el.id}`;
+    const classes = [...el.classList].filter(stable).slice(0, 3);
+    return classes.length ? classes.map((c) => `.${c}`).join("") : el.localName;
+  }
+
+  // A CSS selector for `el` in its document: its id or classes, narrowed by
+  // its parents' until it picks out only `el` (or four levels up).
+  function selectorFor(el) {
+    const doc = el.ownerDocument;
+    const count = (s) => {
+      try {
+        return doc.querySelectorAll(s).length;
+      } catch {
+        return 0;
+      }
+    };
+    let selector = ownSelector(el);
+    if (!/[.#]/.test(selector) && el.parentElement) {
+      const same = [...el.parentElement.children].filter((c) => c.localName === el.localName);
+      if (same.length > 1) selector += `:nth-of-type(${same.indexOf(el) + 1})`;
+    }
+    let node = el;
+    for (let depth = 0; depth < 4 && count(selector) > 1; depth++) {
+      node = node.parentElement;
+      if (!node || node === doc.body || node === doc.documentElement) break;
+      selector = `${ownSelector(node)} > ${selector}`;
+    }
+    return selector;
+  }
+
   // Elements in `root` (a document or an open shadow root) and in the
   // shadow roots inside it, which querySelectorAll doesn't enter.
   function gatherRoot(root, frames, selector, out) {
     for (const el of root.querySelectorAll(selector)) {
       // Frames are searched (same-origin) or hinted by the browser (cross-origin)
-      // instead of hinted themselves.
-      if (el.tagName === "IFRAME" || el.tagName === "FRAME") continue;
+      // instead of hinted themselves, unless they're being picked to hide.
+      if ((el.tagName === "IFRAME" || el.tagName === "FRAME") && !picking) continue;
+      if (picking && !pickable(el)) continue;
       const entry = { el, frames };
       if (visibleRect(entry) && isShown(el)) out.push(entry);
     }
@@ -136,8 +193,9 @@
     // `selector` is a CSS selector list from hints.selectors.
     // Also says whether this frame collects for itself (the top page, or a
     // frame its parent can't see into) and lists the cross-origin frames in it.
-    collect(selector) {
+    collect(selector, pick = false) {
       clear();
+      picking = pick;
       let root;
       try {
         root = window.frameElement === null;
@@ -146,6 +204,7 @@
       }
       crossFrames = [];
       elements = root ? gather(document, [], selector, []) : [];
+      if (picking) elements = outermost(elements);
       return JSON.stringify({
         root,
         items: elements.map(({ el }) => ({ url: urlOf(el), text: textOf(el) })),
@@ -211,6 +270,27 @@
       entry.el.focus?.();
       entry.el.click?.();
       return "";
+    },
+
+    // The site and a selector for an element, to write a hiding rule from.
+    describe(i) {
+      const entry = elements[i];
+      if (!entry || !entry.el.isConnected) return JSON.stringify(null);
+      const doc = entry.el.ownerDocument;
+      return JSON.stringify({ host: doc.location.hostname, selector: selectorFor(entry.el) });
+    },
+
+    // Hide what `selector` matches in the element's document, or the element
+    // alone when the selector isn't plain CSS.
+    hide(i, selector) {
+      const entry = elements[i];
+      let targets = [];
+      try {
+        if (entry && selector) targets = [...entry.el.ownerDocument.querySelectorAll(selector)];
+      } catch {}
+      if (!targets.length && entry && entry.el.isConnected) targets = [entry.el];
+      for (const el of targets) el.style.setProperty("display", "none", "important");
+      return String(targets.length);
     },
 
     // Centre of the element's first visible box, in viewport CSS pixels.

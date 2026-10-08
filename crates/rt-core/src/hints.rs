@@ -25,6 +25,10 @@ pub const DEFAULT_SELECTORS: &[(&str, &str)] = &[
          input[type=date], input[type=datetime-local], input[type=month], input[type=time], \
          input[type=week], textarea, [contenteditable]:not([contenteditable=false])",
     ),
+    (
+        "blocks",
+        "[class], [id], img, iframe, ins, aside, video, embed, object",
+    ),
 ];
 
 /// When a hint is followed without pressing Return (`hints.auto_follow`).
@@ -77,6 +81,8 @@ pub enum HintTarget {
     Userscript,
     /// Hand the element to a Lua function (`rt.page.hint`).
     Lua,
+    /// Write an element-hiding rule for it into `content.blocking.adblock.rules`.
+    Hide,
 }
 
 macro_rules! names {
@@ -115,6 +121,7 @@ names!(HintTarget {
     Spawn => "spawn",
     Userscript => "userscript",
     Lua => "lua",
+    Hide => "hide",
 });
 
 /// A parsed `:hint` command.

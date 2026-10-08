@@ -40,6 +40,21 @@ Frames get element hiding too, by the rules for their own site: an ad in a frame
 
 Not supported yet: scriptlets in frames from another site than the page (frames from the page's own site get them).
 
+## Your own rules
+
+`content.blocking.adblock.rules` holds rules of your own, in the same syntax as the lists. They apply as soon as you change them, without `:adblock-update`, and work even with no lists at all:
+
+```toml
+"content.blocking.adblock.rules" = [
+  "news.example.com##.newsletter-signup",
+  "||tracker.example.net^",
+]
+```
+
+To hide something on a page without writing the rule yourself, press `;x` (`:hint blocks hide`) and pick it. riptide proposes a rule for it, such as `example.com##.promo-box`, which you can edit (to `##.promo-box` for every site, say) before pressing `Return`. The element and others like it disappear at once, and the rule is saved to `content.blocking.adblock.rules`. To take a rule back, remove it from the setting, on the settings page or with `:set`.
+
+Your rules are never trusted: their scriptlets can't use uBlock Origin's trusted ones.
+
 ## Network traffic
 
 Chromium calls Google in the background. riptide turns off the calls that only serve Google and keeps the security updates (`crates/rt-cef/src/privacy.rs`). Measured on a fresh profile left on `about:blank` for 90 seconds, with `--log-net-log`:

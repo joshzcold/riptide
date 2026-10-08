@@ -293,28 +293,48 @@ impl Store {
             .collect()
     }
 
-    /// Compile the downloaded lists and refresh the cache.
-    pub fn compile(&self, urls: &[String]) -> Option<(Blocker, usize)> {
-        let texts = self.read_lists(urls);
+    /// Which lists and rules the cached engine was compiled from.
+    fn key_path(&self) -> PathBuf {
+        self.dir.join("engine.key")
+    }
+
+    fn key(urls: &[String], rules: &[String]) -> String {
+        short_hash(&format!("{}\n\n{}", urls.join("\n"), rules.join("\n")))
+    }
+
+    /// Compile the downloaded lists, plus `rules` (the user's own, never
+    /// trusted), and refresh the cache.
+    pub fn compile(&self, urls: &[String], rules: &[String]) -> Option<(Blocker, usize)> {
+        let mut texts = self.read_lists(urls);
+        if !rules.is_empty() {
+            texts.push((false, rules.join("\n")));
+        }
         if texts.is_empty() {
             return None;
         }
-        let (blocker, rules) = Blocker::from_sources(texts.iter().map(|(t, s)| (*t, s.as_str())));
-        if let Err(e) = std::fs::write(self.cache_path(), blocker.serialize()) {
+        let (blocker, count) = Blocker::from_sources(texts.iter().map(|(t, s)| (*t, s.as_str())));
+        let written = std::fs::create_dir_all(&self.dir)
+            .and_then(|()| std::fs::write(self.cache_path(), blocker.serialize()))
+            .and_then(|()| std::fs::write(self.key_path(), Self::key(urls, rules)));
+        if let Err(e) = written {
             tracing::warn!("can't cache the adblock engine: {e}");
         }
-        Some((blocker, rules))
+        Some((blocker, count))
     }
 
-    /// The cached engine, or a fresh compile when there is no usable cache.
-    pub fn load(&self, urls: &[String]) -> Option<Blocker> {
-        if let Some(blocker) = std::fs::read(self.cache_path())
-            .ok()
-            .and_then(|bytes| Blocker::deserialize(&bytes))
+    /// The cached engine, or a fresh compile when the cache is missing or
+    /// was built from other lists or rules.
+    pub fn load(&self, urls: &[String], rules: &[String]) -> Option<Blocker> {
+        let current =
+            std::fs::read_to_string(self.key_path()).is_ok_and(|key| key == Self::key(urls, rules));
+        if current
+            && let Some(blocker) = std::fs::read(self.cache_path())
+                .ok()
+                .and_then(|bytes| Blocker::deserialize(&bytes))
         {
             return Some(blocker);
         }
-        self.compile(urls).map(|(blocker, _)| blocker)
+        self.compile(urls, rules).map(|(blocker, _)| blocker)
     }
 }
 
@@ -524,13 +544,23 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rt-adblock-{}", std::process::id()));
         let store = Store::new(&dir);
         let urls = vec!["https://lists.test/a.txt".to_string()];
-        assert!(store.load(&urls).is_none());
+        assert!(store.load(&urls, &[]).is_none());
         store.save_list(&urls[0], LIST).unwrap();
-        let (_, rules) = store.compile(&urls).unwrap();
+        let (_, rules) = store.compile(&urls, &[]).unwrap();
         assert_eq!(rules, 4);
         assert!(store.cache_path().exists());
-        let b = store.load(&urls).unwrap();
+        let b = store.load(&urls, &[]).unwrap();
         assert!(b.should_block("https://ads.example.com/x.js", "https://a.org/", "script"));
+        // The user's own rules count, and changing them recompiles rather
+        // than loading the stale cache.
+        let mine = vec!["||mine.test^".to_string()];
+        let b = store.load(&urls, &mine).unwrap();
+        assert!(b.should_block("https://mine.test/x.js", "https://a.org/", "script"));
+        let b = store.load(&urls, &[]).unwrap();
+        assert!(!b.should_block("https://mine.test/x.js", "https://a.org/", "script"));
+        // Rules alone are enough, without any list.
+        let b = store.load(&[], &mine).unwrap();
+        assert!(b.should_block("https://mine.test/x.js", "https://a.org/", "script"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

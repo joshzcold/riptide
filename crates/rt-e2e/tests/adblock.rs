@@ -137,3 +137,45 @@ fn element_hiding_reaches_frames_from_other_sites() {
         "site=true generic=true sponsored=true news=false",
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn your_own_rules_apply_without_downloading_lists() {
+    let b = Browser::launch()
+        .toml(
+            "content.blocking.adblock.lists = []\n\
+             content.blocking.adblock.rules = [\"/ads/banner.js\", \"127.0.0.1##.local-ad\"]\n",
+        )
+        .start("adblock.html");
+    b.wait_eval("document.title", "ads b=no a=yes");
+    b.open("cosmetic.html");
+    b.wait_eval(
+        "document.title",
+        "banner=block local=none content=block late=block",
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_picker_hides_an_element_and_keeps_the_rule() {
+    let b = Browser::launch()
+        .toml("content.blocking.adblock.lists = []\n")
+        .start("picker.html");
+    b.wait_eval("document.title", "promo=block,block content=block");
+    b.follow_hint("hint blocks hide", |h| h.text == "buy now");
+    // The rule is offered for editing, then hides every match at once.
+    let s = b.wait_until("the rule is offered", |s| s.prompt.is_some());
+    assert_eq!(s.prompt.unwrap()["input"], "127.0.0.1##.promo-box");
+    b.keys("<Return>");
+    b.wait_eval("document.title", "promo=none,none content=block");
+    let autoconfig = b.config_dir().join("autoconfig.toml");
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(&autoconfig).is_ok_and(|t| t.contains("127.0.0.1##.promo-box")) {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the rule wasn't saved");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // Later visits hide it through the engine.
+    b.open("cosmetic.html");
+    b.open("picker.html");
+    b.wait_eval("document.title", "promo=none,none content=block");
+}
