@@ -283,6 +283,9 @@ fn early_cli() -> Result<(Cli, Paths), i32> {
             let _ = scheme::TEST_PAGES.set(dir.join("test"));
         }
         cli.basedir = Some(base);
+        // Tests keep secrets in memory, never in your keyring.
+        // SAFETY: nothing else runs yet; CEF and its threads start later.
+        unsafe { std::env::set_var("RIPTIDE_SECRET_STORE", "memory") };
     }
     let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {
         eprintln!("riptide: {e}");
