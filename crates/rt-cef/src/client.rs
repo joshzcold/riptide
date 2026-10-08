@@ -40,6 +40,10 @@ pub enum Role {
     Panel,
     /// A plugin page in a panel: keys and focus work as in a tab.
     PanelPage,
+    /// An extension's popup page (`popup.rs`): keys and focus as in a panel page.
+    Popup,
+    /// The bar above an extension's popup, with its close button.
+    PopupBar,
 }
 
 wrap_client! {
@@ -219,14 +223,14 @@ wrap_client! {
                 }
                 return 1;
             }
-            if !matches!(self.role, Role::Tab | Role::PanelPage) || name != FOCUS_MESSAGE {
+            if !matches!(self.role, Role::Tab | Role::PanelPage | Role::Popup) || name != FOCUS_MESSAGE {
                 return 0;
             }
             let args = message.argument_list();
             let editable = args.as_ref().is_some_and(|a| a.bool(0) != 0);
             let user = args.as_ref().is_none_or(|a| a.bool(1) != 0);
             // A page panel isn't a tab: typing in it drives the mode directly.
-            if self.role == Role::PanelPage {
+            if matches!(self.role, Role::PanelPage | Role::Popup) {
                 if user && let Some(effects) = shell::with(|s| s.engine.focus_changed(editable)) {
                     shell::apply(effects);
                 }
@@ -430,7 +434,7 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
         return false;
     }
     let consumed = handle_key_event(event);
-    if consumed || matches!(role, Role::Tab | Role::PanelPage) {
+    if consumed || matches!(role, Role::Tab | Role::PanelPage | Role::Popup) {
         return consumed;
     }
     // During prompts the status bar has focus on purpose (see `focus_for_prompt`).
@@ -476,7 +480,10 @@ fn handle_key_event(event: &KeyEvent) -> bool {
     let Some(key) = vk::translate(raw) else {
         return false;
     };
-    if crate::float::forward_key(&key) || crate::panel::forward_key(&key) {
+    if crate::popup::forward_key(&key)
+        || crate::float::forward_key(&key)
+        || crate::panel::forward_key(&key)
+    {
         shell::with(|s| s.suppress_char = true);
         return true;
     }
@@ -791,6 +798,18 @@ wrap_load_handler! {
                     return;
                 }
                 Role::PanelPage => return,
+                Role::Popup => {
+                    if let Some(browser) = &browser {
+                        crate::popup::page_loaded(browser);
+                    }
+                    return;
+                }
+                Role::PopupBar => {
+                    if let Some(browser) = &browser {
+                        crate::popup::bar_loaded(browser);
+                    }
+                    return;
+                }
             };
             shell::refresh_ui();
         }

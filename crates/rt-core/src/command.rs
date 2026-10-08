@@ -876,7 +876,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "extension-open",
-        "Open an extension's popup, or its options: :extension-open <name> [popup|options]",
+        "Open an extension's popup over the page, or its options in a tab: :extension-open <name> [popup|options]",
     ),
     spec(
         "extension-update",

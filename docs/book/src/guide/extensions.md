@@ -20,7 +20,7 @@ Installed extensions keep their Web Store id, so their settings carry over betwe
 
 `:extensions` opens the Extensions tab of `:settings`. It lists every extension with its version, where it's from and what it can do, and these buttons:
 
-- **Popup** and **Options** open the extension's popup or options page in a tab.
+- **Popup** opens the extension's popup over the top right of the page, as Chrome does. Escape or its ✕ closes it, and so does switching tabs. **Options** opens its options page in a tab.
 - **Remove** deletes an installed one.
 - **Check for updates** asks the Web Store for newer versions. **Update to …** then shows what the new version asks for that the old one didn't, before installing it.
 - **Chrome's extensions page** turns extensions on or off, and shows their errors.
@@ -30,7 +30,7 @@ When something changed since riptide started, the tab says so, with a **Restart 
 | Command | |
 |---|---|
 | `:extension-install [page, id or file]` | install or update (the store page you're on, without an argument), after showing what it asks for |
-| `:extension-open <name> [popup\|options]` | open its popup (or else its options) in a tab |
+| `:extension-open <name> [popup\|options]` | open its popup over the page (or, without one, its options in a tab) |
 | `:extension-update [name]` | check every installed extension for updates, or update one |
 | `:extension-remove <name or id>` | delete an installed extension |
 | `:extensions` | the Extensions tab |
@@ -54,7 +54,7 @@ What doesn't work is anything that needs the extension to know which site you're
 
 | Limit | What to do instead |
 |---|---|
-| **Extensions can't tell which site you're on.** Anything that depends on it doesn't work: uBlock Origin Lite's per-site switch, filtering level and element picker, and password managers' login suggestions. Popups open as a tab (**Popup** or `:extension-open`). | Settings that don't depend on the site, such as filter lists and the default blocking level, work from the popup or options. For logins, see [Password managers](#password-managers). |
+| **Extensions can't tell which site you're on.** Anything that depends on it doesn't work: uBlock Origin Lite's per-site switch, filtering level and element picker (its popup says "not a website"), and password managers' login suggestions. | Settings that don't depend on the site, such as filter lists and the default blocking level, work from the popup or options. For logins, see [Password managers](#password-managers). |
 | **Only Manifest V3.** Chromium no longer runs Manifest V2 extensions, such as the original uBlock Origin, and riptide refuses to install them. Firefox add-ons don't run either. | uBlock Origin Lite, or riptide's own ad blocker (`content.blocking`). |
 | **Changes need a restart.** Extensions load when riptide starts. | Accept the "Restart now?" question, or use **Restart now** on the Extensions tab. |
 | **No automatic updates.** | Press **Check for updates** on the Extensions tab, or run `:extension-update`. |

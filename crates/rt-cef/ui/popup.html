@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: var(--rt-prompts-bg, #0b2a3f);
+    --fg: var(--rt-prompts-fg, #e9f7f6);
+    --accent: var(--rt-prompts-border, #d9b44a);
+    --key-bg: var(--rt-prompts-key-bg, #3a3420);
+    --font: var(--rt-font-prompts, 10pt "DejaVu Sans Mono", "Monospace", monospace);
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  /* The bar above an extension's popup: its name and a close button. */
+  #bar {
+    box-sizing: border-box;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    padding: 0 .5rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: var(--font);
+    border: 1px solid var(--accent);
+    border-bottom: none;
+    user-select: none;
+    cursor: default;
+  }
+  #title { flex: 1; color: var(--accent); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  kbd { font: var(--font); font-size: .85em; padding: 0 .4ch; border-radius: 3px; background: var(--key-bg); color: var(--accent); }
+  button { font: var(--font); color: var(--fg); background: none; border: none; cursor: pointer; padding: 0 .3ch; }
+  button:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="bar"><span id="title"></span><kbd>Esc</kbd><button id="close" title="Close the popup (Escape)">✕</button></div>
+<script>
+  // rtPopup({ title }) from the browser once it's loaded.
+  window.rtPopup = ({ title }) => { document.getElementById("title").textContent = title; };
+  const close = document.getElementById("close");
+  close.addEventListener("mousedown", (e) => e.preventDefault());
+  close.addEventListener("click", () => rt.send("close", "{}"));
+</script>
+</body>
+</html>

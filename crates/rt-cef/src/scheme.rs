@@ -52,6 +52,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("ui", "/float.html") => embedded(ui::FLOAT_HTML),
         ("ui", "/panel.html") => embedded(ui::PANEL_HTML),
         ("ui", "/crashed.html") => embedded(ui::CRASHED_HTML),
+        ("ui", "/popup.html") => embedded(ui::POPUP_HTML),
         ("help", "/") => Some((crate::help::page(), html)),
         ("changelog", "/") => Some((crate::help::changelog_page(), html)),
         ("history", "/") => Some((themed(crate::help::history_page()), html)),

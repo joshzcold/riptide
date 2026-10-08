@@ -281,7 +281,7 @@ fn create_view(role: Role, url: &str, chrome: bool) -> Option<BrowserView> {
     let mut client = RtClient::new(role);
     let settings = BrowserSettings {
         // colors.webpage.bg: what a new tab shows before its page paints.
-        background_color: if role == Role::Tab {
+        background_color: if matches!(role, Role::Tab | Role::Popup) {
             shell::with(|s| rt_core::theme::argb(s.engine.settings().str("colors.webpage.bg")))
                 .flatten()
                 .unwrap_or(0xFFFF_FFFF)
@@ -295,7 +295,7 @@ fn create_view(role: Role, url: &str, chrome: bool) -> Option<BrowserView> {
         .then(crate::greasemonkey::extra_info)
         .flatten();
     // A plugin page in a panel shares its window's profile, private or not.
-    let mut context = matches!(role, Role::Tab | Role::PanelPage)
+    let mut context = matches!(role, Role::Tab | Role::PanelPage | Role::Popup)
         .then(request_context)
         .flatten();
     browser_view_create(

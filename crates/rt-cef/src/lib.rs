@@ -31,6 +31,7 @@ mod pages;
 mod panel;
 mod permissions;
 mod plugins;
+mod popup;
 mod privacy;
 mod prompts;
 mod recover;

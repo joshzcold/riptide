@@ -38,6 +38,9 @@ pub struct State {
     /// `rt.ui.float`s open: id, source, title, text and placed.
     #[serde(default)]
     pub floats: Vec<Value>,
+    /// An extension's popup: title, url and size, or null.
+    #[serde(default)]
+    pub popup: Value,
     /// `rt.ui.panel`s open: id, source, side, title, lines, cursor, focused, width and height.
     #[serde(default)]
     pub panels: Vec<Value>,

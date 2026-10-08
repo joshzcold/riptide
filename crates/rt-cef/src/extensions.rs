@@ -540,7 +540,7 @@ fn offer(bytes: &[u8], expected: Option<&str>) {
                     package.crx.id,
                     // What it shows in its popup can't reach the page you're on.
                     popup = if about.popup.is_some() {
-                        "\nBlocking works. Anything that needs to know which site you're on doesn't, such as per-site switches or a password manager's login suggestions. Its popup opens as a tab."
+                        "\nBlocking works. Anything that needs to know which site you're on doesn't, such as per-site switches or a password manager's login suggestions."
                     } else {
                         ""
                     },
@@ -690,6 +690,11 @@ fn open(name: &str, page: Option<&str>) {
         let what = page.unwrap_or("popup or options page");
         return shell::show_message(Level::Error, format!("{} has no {what}", entry.about.name));
     };
+    let url = format!("chrome-extension://{}/{path}", entry.id);
+    // A popup floats over the page, as in Chrome; options get a tab.
+    if Some(&path) == entry.about.popup.as_ref() && page != Some("options") {
+        return crate::popup::open(&entry.about.name, &url);
+    }
     shell::open(
         rt_core::command::OpenTarget::Tab,
         true,

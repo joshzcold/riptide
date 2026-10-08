@@ -103,8 +103,19 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     b.eval(&format!(
         "rt.send('extension', JSON.stringify({{ id: '{id}', action: 'popup' }})); ''"
     ));
+    // The popup floats over the page, sized to what it draws, and Escape closes it.
     let popup = format!("chrome-extension://{id}/popup.html");
-    b.wait_until("the popup opens in a tab", |s| s.tab().is_loaded(&popup));
+    let s = b.wait_until("the popup floats over the page", |s| {
+        s.popup["url"] == popup.as_str() && s.popup["size"][0] != 360
+    });
+    assert_eq!(s.popup["title"], "riptide probe");
+    assert_eq!(s.tabs().len(), 2, "no new tab");
+    b.keys("<Escape>");
+    b.wait_until("Escape closes it", |s| s.popup.is_null());
+    b.run("extension-open riptide probe");
+    b.wait_until("it floats again", |s| s.popup["url"] == popup.as_str());
+    b.run("tab-prev");
+    b.wait_until("switching tabs closes it", |s| s.popup.is_null());
 
     // :extension-open completes names and opens the options page.
     b.keys(":extension-open rip<Tab>");

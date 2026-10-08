@@ -60,6 +60,8 @@ pub enum UiMessage {
     ExtensionInstall { source: String },
     /// A page's "restart now" button.
     Restart,
+    /// The close button above an extension's popup.
+    PopupClose,
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -535,6 +537,7 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             }
             Ok(UiMessage::FloatSize { id, width, height })
         }
+        ("popup.html", "close") => Ok(UiMessage::PopupClose),
         ("panel.html", "click") => {
             let PanelClick { id, line } = payload(name, json)?;
             Ok(UiMessage::PanelClick { id, line })

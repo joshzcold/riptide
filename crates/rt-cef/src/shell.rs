@@ -1079,6 +1079,7 @@ fn apply_ui_update(update: UiUpdate) {
 /// Re-anchor the completion overlay after the window is resized.
 pub fn position_overlay() {
     crate::float::reposition();
+    crate::popup::reposition();
     let Some(Some((overlay, rows))) = with(|s| {
         let overlay = s.overlay.clone()?;
         Some((overlay, s.last_overlay_rows))

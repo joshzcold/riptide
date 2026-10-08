@@ -1324,6 +1324,11 @@ Not checked: real autofill with a vault (needs an account), passkeys, `chrome.co
   - A `.crx` download (the store names them `<ID>_<version>.crx`) is cancelled by not continuing its `BeforeDownloadCallback`; riptide fetches the URL itself (or reads a `file://`) and offers the install with the id from the name. Letting Chromium finish the download doesn't work: it hands the file to its own CRX installer, which deletes it.
   - The Extensions tab has an Installing card: the steps, and a box for a store page (the `extension-install` UI message only accepts a store page or an id, never a file).
   - Its limits box links to the guide's Limits section.
+- ✅ **Floating popups** (2026-10-08):
+  - The Popup button and `:extension-open` show an extension's popup as Chrome does (`popup.rs`): over the top right of the page, sized to the page's max-content size (220–800 × up to 600). Above it is a bar (`ui/popup.html`) with the name, Esc and ✕.
+  - Escape in normal mode, the ✕ (`popup.html` "close"), switching tabs, or another popup closes it.
+  - The roles are `Role::Popup` (keys and focus as a panel page, the window's profile, a white page background) and `Role::PopupBar`.
+  - The popup still can't see the current tab.
 - **Not done:** popups reaching the current tab (needs CEF to put Alloy tabs in `chrome.tabs`), a per-site ad-block switch and element picker built natively, and automatic update checks.
 
 **Recommendation: build MV3 extension support, and keep the native alternatives for what `chrome.tabs` blocks.**

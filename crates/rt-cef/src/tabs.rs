@@ -310,6 +310,8 @@ fn switch_to(index: usize, force: bool) {
 /// renderer died is replaced by the crash notice, since there's nothing left
 /// to draw the page.
 pub fn show_current_in(window_id: u32, focus: bool) {
+    // An extension's popup belongs to the tab it was opened over.
+    crate::popup::close();
     let Some(Some((views, crashed, content, notice))) = shell::with(|s| {
         let w = s.windows.iter().find(|w| w.id == window_id)?;
         let current = w.tabs.current_index();

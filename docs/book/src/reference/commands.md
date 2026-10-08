@@ -62,7 +62,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:extension-install` |  | Install a Chrome extension: the Web Store page you're on, or a store page address, an id or a .crx file; it loads after a restart |
 | `:extension-remove` |  | Delete an installed extension, by name or id; it's gone after :restart |
 | `:extensions` |  | List extensions in :settings, with their popups, options, updates and Remove |
-| `:extension-open` |  | Open an extension's popup, or its options: :extension-open &lt;name&gt; [popup\|options] |
+| `:extension-open` |  | Open an extension's popup over the page, or its options in a tab: :extension-open &lt;name&gt; [popup\|options] |
 | `:extension-update` |  | Check installed extensions for updates, or update one: :extension-update [name] |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
 | `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |
