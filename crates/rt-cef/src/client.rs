@@ -725,9 +725,18 @@ wrap_load_handler! {
             frame: Option<&mut Frame>,
             _http_status_code: ::std::os::raw::c_int,
         ) {
-            let Some(frame) = frame.filter(|f| f.is_main() != 0) else {
+            let Some(frame) = frame else { return };
+            // A tab's frames get element hiding of their own.
+            if frame.is_main() == 0 {
+                if self.role == Role::Tab
+                    && let Some(page) = browser.as_deref().and_then(|b| b.main_frame())
+                {
+                    let url = CefString::from(&frame.url()).to_string();
+                    let page = CefString::from(&page.url()).to_string();
+                    crate::adblock::apply_cosmetic_frame(frame, &url, &page);
+                }
                 return;
-            };
+            }
             // riptide's own bars are sized for 100%: undo a zoom saved for
             // them (Chromium keeps one per site, and they share riptide://ui).
             if self.role != Role::Tab

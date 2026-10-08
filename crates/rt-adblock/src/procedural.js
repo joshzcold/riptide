@@ -112,7 +112,12 @@
     observer.disconnect();
     try { apply(); } finally { if (document.documentElement) watch(); }
   }
-  if (document.documentElement) watch();
-  document.addEventListener("DOMContentLoaded", run, { once: true });
-  addEventListener("load", run, { once: true });
+  // Before the page's scripts, wait for it; added to a loaded frame, go now.
+  if (document.readyState === "loading") {
+    if (document.documentElement) watch();
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+    addEventListener("load", run, { once: true });
+  } else {
+    run();
+  }
 })

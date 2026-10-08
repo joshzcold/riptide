@@ -36,7 +36,9 @@ Run `:adblock-update` after changing the lists.
 
 Procedural element hiding works too, for elements CSS alone can't pick out: `:has-text()`, `:upward()`, `:matches-css()` (and `-before`, `-after`), `:matches-attr()`, `:matches-path()`, `:min-text-length()` and `:xpath()`, with the actions `:remove()`, `:style()`, `:remove-attr()` and `:remove-class()`. They're applied as the page loads and again whenever it changes, so content added later is caught too.
 
-Not supported yet: element hiding inside frames.
+Frames get element hiding too, by the rules for their own site: an ad in a frame from another site is hidden like one in the page. The page's site still decides whether anything is blocked, so allowing a site (`content.blocking.whitelist`) covers its frames.
+
+Not supported yet: scriptlets in frames from another site than the page (frames from the page's own site get them).
 
 ## Network traffic
 

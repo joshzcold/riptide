@@ -1,0 +1,14 @@
+<!doctype html><title>inner</title>
+<div class="frame-ad" id="site">site rule</div>
+<div class="generic-frame-ad" id="generic">generic rule</div>
+<div class="promo" id="sponsored">Sponsored post</div>
+<div class="promo" id="news">News post</div>
+<script>
+  // Tell the page what's hidden, a few times as the rules arrive.
+  const hidden = (id) => getComputedStyle(document.getElementById(id)).display === "none";
+  const report = () => parent.postMessage(
+    `site=${hidden("site")} generic=${hidden("generic")} sponsored=${hidden("sponsored")} news=${hidden("news")}`,
+    "*",
+  );
+  for (const ms of [500, 1500, 3000, 5000]) setTimeout(report, ms);
+</script>

@@ -325,7 +325,12 @@ Gaps:
     - A MutationObserver re-applies the filters at most every 100 ms. It's switched off while they're applied, so their own changes don't retrigger it.
     - `Cosmetic::page_script` puts it after the scriptlets in the per-(tab, host) DevTools registration, so it watches from document start.
     - Test: e2e `procedural_filters_hide_remove_and_restyle_even_late_content`.
-  - Not done: subframes, automatic list updates, and qutebrowser's hosts-file method. Generic (non-procedural) element hiding is still applied after load and re-checked at 2 s and 6 s.
+  - ✅ **Frames** (2026-10-08): `on_load_end` for a tab's subframe calls `adblock::apply_cosmetic_frame(frame, frame_url, page_url)`.
+    - The page's site decides whether to filter at all (`blocker_for(page)`), and the frame's own address picks the rules: site-specific CSS, then generic class and id rules collected with `eval_frame` and re-checked at 2 s and 6 s.
+    - Frames from another site also get the procedural applier, which runs at once when the document has already loaded. Same-site frames already have it, from the DevTools registration guarded by `location.hostname`.
+    - Test: e2e `element_hiding_reaches_frames_from_other_sites` (127.0.0.1 embedding localhost).
+    - Not done: scriptlets in frames from another site (they're separate DevTools targets; it would need `Target.setAutoAttach`).
+  - Not done: automatic list updates, and qutebrowser's hosts-file method. Generic (non-procedural) element hiding is still applied after load and re-checked at 2 s and 6 s.
 - ✅ **Per-domain settings** (2026-10-02):
   - `Settings` keeps `(pattern, name, value)` overrides for an allowlist (`settings::PER_DOMAIN`: the `content.*` permission settings and `content.blocking.enabled`). `get_for(name, url)` returns the last matching one.
   - `rt_core::url::pattern_matches` handles hosts, `*.` subdomains, origins with ports, and Chrome match patterns. It's shared with Greasemonkey.

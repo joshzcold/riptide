@@ -457,22 +457,40 @@ struct ClassesAndIds {
 /// its site-specific rules, then the generic ones for the classes and ids
 /// it uses.
 pub fn apply_cosmetic(browser: &Browser, url: &str) {
+    if let Some(frame) = browser.main_frame() {
+        apply_cosmetic_frame(&frame, url, url);
+    }
+}
+
+/// Element hiding in one of a page's frames, once it has loaded: the rules
+/// for the frame's own address. `page` is the tab's page, whose site
+/// decides whether anything is blocked at all.
+pub fn apply_cosmetic_frame(frame: &Frame, url: &str, page: &str) {
     if !(url.starts_with("http://") || url.starts_with("https://")) {
         return;
     }
-    let Some(blocker) = blocker_for(url) else {
+    let Some(blocker) = blocker_for(page) else {
         return;
     };
     let cosmetic = Arc::new(blocker.cosmetic(url));
-    inject_css(browser, &cosmetic.css);
+    inject_css_frame(frame, &cosmetic.css);
+    // The tab's own site gets these before its scripts, through DevTools;
+    // a frame from another site only now.
+    let same_site = rt_core::url::host(url) == rt_core::url::host(page);
+    if frame.is_main() == 0 && !same_site {
+        let script = cosmetic.procedural_script();
+        if !script.is_empty() {
+            shell::exec_js(frame, &script);
+        }
+    }
     if !cosmetic.generic {
         return;
     }
-    hide_generic(browser, url, blocker.clone(), cosmetic.clone());
+    hide_generic(frame, url, blocker.clone(), cosmetic.clone());
     // Ads often arrive after the load; look again a little later.
     for delay in [2000, 6000] {
         let mut task = Recheck::new(
-            browser.clone(),
+            frame.clone(),
             url.to_string(),
             blocker.clone(),
             cosmetic.clone(),
@@ -482,27 +500,24 @@ pub fn apply_cosmetic(browser: &Browser, url: &str) {
 }
 
 fn hide_generic(
-    browser: &Browser,
+    frame: &Frame,
     url: &str,
     blocker: Arc<Blocker>,
     cosmetic: Arc<rt_adblock::Cosmetic>,
 ) {
-    // Stop if the tab moved on to another page meanwhile.
-    let current = browser
-        .main_frame()
-        .map(|f| CefString::from(&f.url()).to_string());
-    if current.as_deref() != Some(url) {
+    // Stop if the frame has gone or moved on to another page meanwhile.
+    if frame.is_valid() == 0 || CefString::from(&frame.url()).to_string() != url {
         return;
     }
-    let target = browser.clone();
-    eval::eval(browser, COLLECT_JS, move |result| {
+    let target = frame.clone();
+    eval::eval_frame(frame, COLLECT_JS, move |result| {
         let Some(found) = result
             .ok()
             .and_then(|json| serde_json::from_str::<ClassesAndIds>(&json).ok())
         else {
             return;
         };
-        inject_css(
+        inject_css_frame(
             &target,
             &blocker.generic_css(&found.classes, &found.ids, &cosmetic),
         );
@@ -511,7 +526,7 @@ fn hide_generic(
 
 wrap_task! {
     struct Recheck {
-        browser: Browser,
+        frame: Frame,
         url: String,
         blocker: Arc<Blocker>,
         cosmetic: Arc<rt_adblock::Cosmetic>,
@@ -519,13 +534,19 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
-            hide_generic(&self.browser, &self.url, self.blocker.clone(), self.cosmetic.clone());
+            hide_generic(&self.frame, &self.url, self.blocker.clone(), self.cosmetic.clone());
         }
     }
 }
 
 /// Add CSS rules to the page's riptide style element (skipping ones it has).
 pub(crate) fn inject_css(browser: &Browser, css: &str) {
+    if let Some(frame) = browser.main_frame() {
+        inject_css_frame(&frame, css);
+    }
+}
+
+fn inject_css_frame(frame: &Frame, css: &str) {
     if css.is_empty() {
         return;
     }
@@ -539,7 +560,7 @@ pub(crate) fn inject_css(browser: &Browser, css: &str) {
          const add = {css}.split('\\n').filter((r) => r && !have.has(r)); \
          if (add.length) s.textContent += add.join('\\n') + '\\n'; return 'null'; }})()"
     );
-    eval::eval(browser, &code, |_| {});
+    eval::eval_frame(frame, &code, |_| {});
 }
 
 #[cfg(test)]

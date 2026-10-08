@@ -1,0 +1,8 @@
+<!doctype html><title>adframe</title>
+<iframe id="f" style="width: 400px; height: 200px; border: 0"></iframe>
+<script>
+  // The same server as localhost: another site.
+  const other = (page) => location.href.replace("127.0.0.1", "localhost").replace(/[^/]*$/, page);
+  document.getElementById("f").src = other("adframe-inner.html");
+  addEventListener("message", (e) => { document.title = e.data; });
+</script>

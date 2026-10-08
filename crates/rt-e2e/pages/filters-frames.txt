@@ -1,0 +1,4 @@
+! Element hiding inside a frame from another site (adframe-inner.html on localhost).
+localhost##.frame-ad
+##.generic-frame-ad
+localhost##.promo:has-text(Sponsored)

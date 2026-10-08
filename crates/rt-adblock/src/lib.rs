@@ -91,13 +91,20 @@ impl Cosmetic {
             out.push_str(&self.script);
             out.push_str("\n})();\n");
         }
-        if !self.procedural.is_empty() {
-            out.push_str(PROCEDURAL_JS.trim_end());
-            out.push_str("([");
-            out.push_str(&self.procedural.join(","));
-            out.push_str("]);\n");
-        }
+        out.push_str(&self.procedural_script());
         out
+    }
+
+    /// The procedural filters' applier alone, or empty.
+    pub fn procedural_script(&self) -> String {
+        if self.procedural.is_empty() {
+            return String::new();
+        }
+        format!(
+            "{}([{}]);\n",
+            PROCEDURAL_JS.trim_end(),
+            self.procedural.join(",")
+        )
     }
 }
 

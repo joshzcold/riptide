@@ -125,3 +125,15 @@ fn procedural_filters_hide_remove_and_restyle_even_late_content() {
         .join(" "),
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn element_hiding_reaches_frames_from_other_sites() {
+    let b = with_lists(&["filters-frames.txt"]);
+    b.open("adframe.html");
+    // The frame (localhost, in a page on 127.0.0.1) reports into the title.
+    b.wait_eval(
+        "document.title",
+        "site=true generic=true sponsored=true news=false",
+    );
+}
