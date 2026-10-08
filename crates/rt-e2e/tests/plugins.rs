@@ -447,7 +447,7 @@ fn plugin_test_runs_the_templates_specs_and_exits_with_the_result() {
     // A browser only for its display; the test runner starts its own.
     let b = Browser::start("page.html");
     let template =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugin-template");
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("plugins/reading-list");
     let out = std::process::Command::new(rt_e2e::binary())
         .arg("--plugin-test")
         .arg(&template)

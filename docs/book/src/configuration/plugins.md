@@ -172,7 +172,7 @@ end)
 | `page("login.html")` | the address of a file in the plugin's `test/` folder, served as an ordinary web page (`http://plugin-test.localhost/…`) |
 | `plugin_test.dir` | the plugin's folder, e.g. for `opts.command = plugin_test.dir .. "/test/bin/fake-tool"` |
 
-Each test gets 10 seconds. `test/config.lua`, if there is one, replaces the default `rt.pack.add({ dir = DIR, opts = {} })`, to pass other options. [`examples/plugin-template`](https://github.com/joshzcold/riptide/tree/main/examples/plugin-template) is a plugin to start from, with a spec and a GitHub workflow that runs it.
+Each test gets 10 seconds. `test/config.lua`, if there is one, replaces the default `rt.pack.add({ dir = DIR, opts = {} })`, to pass other options. [riptide-plugin-template](https://github.com/joshzcold/riptide-plugin-template) is a plugin to start from, with a spec and a GitHub workflow that runs it, and [riptide-plugins](https://github.com/joshzcold/riptide-plugins) collects plugins, each installed with `subdir`.
 
 `:help <name>` shows a plugin's description, permissions and its `doc/<name>.md` (or `README.md`), as text.
 
