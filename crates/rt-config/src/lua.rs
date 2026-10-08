@@ -2524,7 +2524,7 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
             dir.join("config.lua"),
             format!(
                 r#"
-rt.pack.add({{ dir = "{dir_text}/plugins/painter" }})
+rt.pack.add({{ dir = [[{dir_text}/plugins/painter]] }})
 rt.command("draw", function()
   rt.ui.float({{ title = "T", lines = {{ "a\nb", {{ {{ "c", "error" }}, "d" }} }}, position = "top", keys = {{ q = function() end }} }})
 end)
@@ -2598,7 +2598,7 @@ rt.command("bad-key", function() rt.ui.float({{ keys = {{ ["ab"] = function() en
             dir.join("config.lua"),
             format!(
                 r#"
-rt.pack.add({{ dir = "{dir_text}/plugins/tree" }})
+rt.pack.add({{ dir = [[{dir_text}/plugins/tree]] }})
 rt.command("open-panel", function()
   local p = rt.ui.panel({{ side = "bottom", size = 150, lines = {{ "x" }}, keys = {{ ["<Return>"] = function() end }} }})
   p:focus()
@@ -2885,9 +2885,9 @@ return M
             &format!(
                 r#"
 rt.pack.add({{
-  {{ dir = "{dir_text}/plugins/demo", opts = {{ greeting = "hi" }} }},
-  {{ dir = "{dir_text}/plugins/boom" }},
-  {{ dir = "{dir_text}/plugins/free", trusted = true }},
+  {{ dir = [[{dir_text}/plugins/demo]], opts = {{ greeting = "hi" }} }},
+  {{ dir = [[{dir_text}/plugins/boom]] }},
+  {{ dir = [[{dir_text}/plugins/free]], trusted = true }},
 }})
 assert(not pcall(require, "demo"))
 rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)

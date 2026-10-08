@@ -312,9 +312,10 @@ pub fn valid_git_url(src: &str) -> bool {
 }
 
 pub fn name_from(src: &str) -> String {
+    // Windows paths too, such as C:\plugins\name.
     let last = src
-        .trim_end_matches('/')
-        .rsplit(['/', ':'])
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\', ':'])
         .next()
         .unwrap_or(src);
     let last = last.trim_end_matches(".git");
@@ -458,6 +459,8 @@ mod tests {
         );
         assert_eq!(name_from("git@github.com:me/tabtree.nvim"), "tabtree");
         assert_eq!(name_from("/home/me/code/notes/"), "notes");
+        assert_eq!(name_from(r"C:\Users\me\plugins\notes"), "notes");
+        assert_eq!(name_from(r"\\?\C:\Users\me\my-plugin\"), "my-plugin");
         assert!(valid_name("reading-list"));
         assert!(!valid_name("../x"));
     }
