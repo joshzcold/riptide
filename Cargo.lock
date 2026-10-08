@@ -1406,7 +1406,7 @@ dependencies = [
 
 [[package]]
 name = "riptide"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rt-cef",
  "tracing-subscriber",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "rt-adblock"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "adblock",
  "serde_json",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "rt-cef"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "arboard",
  "cef",
@@ -1450,7 +1450,7 @@ dependencies = [
 
 [[package]]
 name = "rt-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "mlua",
  "rt-core",
@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "rt-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1472,7 +1472,7 @@ dependencies = [
 
 [[package]]
 name = "rt-e2e"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rt-config",
  "serde",
@@ -1483,7 +1483,7 @@ dependencies = [
 
 [[package]]
 name = "rt-storage"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rusqlite",
  "serde",
