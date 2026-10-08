@@ -85,10 +85,15 @@ pub fn show(id: u32, source: String, spec: PanelSpec) {
     for old in taken {
         close(old, false);
     }
-    let Some(view) = crate::window::create_browser_view(Role::Panel, URL) else {
+    let (role, url) = match &spec.page {
+        Some(page) => (Role::PanelPage, page.as_str()),
+        None => (Role::Panel, URL),
+    };
+    let Some(view) = crate::window::create_browser_view(role, url) else {
         return;
     };
-    View::from(&view).set_focusable(0);
+    // A page panel takes typing, like a tab; a lines panel gets keys through riptide.
+    View::from(&view).set_focusable(i32::from(spec.page.is_some()));
     let side = spec.side.clone();
     PANELS.with(|p| {
         p.borrow_mut().push(Docked {
@@ -254,6 +259,36 @@ fn set_focus(id: Option<u32>) {
     for changed in [before, id].into_iter().flatten() {
         render(changed);
     }
+    // A page panel gets the keyboard itself; leaving one gives it back to the tab.
+    let page = id.and_then(|id| {
+        PANELS.with(|p| {
+            p.borrow()
+                .iter()
+                .find(|p| p.id == id && p.spec.page.is_some())
+                .map(|p| p.view.clone())
+        })
+    });
+    if let Some(view) = page {
+        View::from(&view).request_focus();
+    } else if id.is_none()
+        && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
+    {
+        View::from(&tab).request_focus();
+    }
+}
+
+/// The main frames of page panels showing plugin pages.
+pub fn page_frames() -> Vec<(String, Frame)> {
+    PANELS.with(|p| {
+        p.borrow()
+            .iter()
+            .filter(|p| p.spec.page.is_some())
+            .filter_map(|p| {
+                let frame = p.view.browser()?.main_frame()?;
+                Some((CefString::from(&frame.url()).to_string(), frame))
+            })
+            .collect()
+    })
 }
 
 /// A click on line `line` of panel `id`: focus it there.
@@ -285,7 +320,7 @@ pub fn ready(browser: i32) {
 fn render(id: u32) {
     let Some((frame, source, spec, cursor)) = PANELS.with(|p| {
         let all = p.borrow();
-        let panel = all.iter().find(|p| p.id == id)?;
+        let panel = all.iter().find(|p| p.id == id && p.spec.page.is_none())?;
         let frame = panel.view.browser()?.main_frame()?;
         Some((
             frame,
@@ -342,7 +377,9 @@ pub fn forward_key(key: &Key) -> bool {
     }
     let then = PANELS.with(|p| {
         let mut all = p.borrow_mut();
-        let panel = all.iter_mut().find(|p| p.id == id && p.window == window)?;
+        let panel = all
+            .iter_mut()
+            .find(|p| p.id == id && p.window == window && p.spec.page.is_none())?;
         let lines = panel.spec.lines.len();
         if let Some(at) = panel.keys.iter().position(|k| k == key) {
             return Some(Then::Call(

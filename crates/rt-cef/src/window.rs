@@ -294,7 +294,10 @@ fn create_view(role: Role, url: &str, chrome: bool) -> Option<BrowserView> {
     let mut extra_info = (role == Role::Tab)
         .then(crate::greasemonkey::extra_info)
         .flatten();
-    let mut context = (role == Role::Tab).then(request_context).flatten();
+    // A plugin page in a panel shares its window's profile, private or not.
+    let mut context = matches!(role, Role::Tab | Role::PanelPage)
+        .then(request_context)
+        .flatten();
     browser_view_create(
         Some(&mut client),
         Some(&CefString::from(url)),
@@ -591,7 +594,7 @@ wrap_browser_view_delegate! {
     impl ViewDelegate {
         fn preferred_size(&self, view: Option<&mut View>) -> Size {
             match view {
-                Some(view) if self.role == Role::Panel => {
+                Some(view) if matches!(self.role, Role::Panel | Role::PanelPage) => {
                     crate::panel::size_for(view).unwrap_or(Size { width: 1, height: 1 })
                 }
                 _ => bar_size(self.role),

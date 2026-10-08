@@ -142,6 +142,8 @@ addEventListener("rtmessage", (e) => {
 rt.send("ready", JSON.stringify({}));
 ```
 
-Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
+`where = "panel"` docks the page beside the page area instead, with `side` (`left`, `right` or `bottom`) and `size` in pixels: a sidebar that shows a web app in an iframe, say. Clicking a field in it types there, as in a tab, and `:panel-focus` moves the keyboard to it and back. `page:close()` closes it.
+
+Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
 
 The [Lua page](lua.md) describes the API; errors name the plugin's file and line, e.g. `reading-list/lua/reading-list/init.lua:7: …`.

@@ -380,6 +380,9 @@ function Panel:is_open() end
 
 ---@class rt.PageOpts
 ---@field path? string A file in the plugin's `pages/` folder (default `index.html`).
+---@field where? "tab"|"panel" Default tab.
+---@field side? "left"|"right"|"bottom" In a panel; default right.
+---@field size? integer In a panel: its width, or height below the page, in pixels (default 400).
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
 ---@class rt.Page
@@ -389,8 +392,10 @@ local Page = {{}}
 ---@param name string
 ---@param data any Anything `rt.json.encode` takes.
 function Page:send(name, data) end
+---Close its panel, or the tabs showing it.
+function Page:close() end
 
----Open one of this plugin's pages in a tab. Only plugins have pages.
+---Open one of this plugin's pages in a tab or a panel. Only plugins have pages.
 ---@param opts? rt.PageOpts
 ---@return rt.Page
 function rt.ui.page(opts) end

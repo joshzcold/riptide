@@ -174,20 +174,32 @@ pub fn message(plugin: &str, url: &str, name: &str, payload: &str) {
     crate::lua::carry_out_for(plugin, result);
 }
 
+/// Whether `url` is page `id` of plugin `source`.
+fn is_page(url: &str, source: &str, id: u32) -> bool {
+    rt_core::ui_message::plugin_page(url) == Some(source)
+        && rt_core::ui_message::plugin_page_id(url) == Some(id)
+}
+
+/// Panels for pages are numbered apart from `rt.ui.panel`'s.
+const PANEL_IDS: u32 = 1 << 31;
+
 /// `page:send(name, data)`: hand `json` to the plugin's open pages for `id`.
 pub fn send(source: &str, id: u32, name: &str, json: &str) {
-    let frames = shell::with(|s| {
+    let mut frames = shell::with(|s| {
         s.windows
             .iter()
             .flat_map(|w| w.tabs.iter())
-            .filter(|t| {
-                rt_core::ui_message::plugin_page(&t.url) == Some(source)
-                    && rt_core::ui_message::plugin_page_id(&t.url) == Some(id)
-            })
+            .filter(|t| is_page(&t.url, source, id))
             .filter_map(|t| t.browser()?.main_frame())
             .collect::<Vec<_>>()
     })
     .unwrap_or_default();
+    frames.extend(
+        crate::panel::page_frames()
+            .into_iter()
+            .filter(|(url, _)| is_page(url, source, id))
+            .map(|(_, frame)| frame),
+    );
     let quote = |text: &str| serde_json::to_string(text).unwrap_or_default();
     let code = format!(
         "window.dispatchEvent(new CustomEvent('rtmessage', {{ detail: {{ name: {}, data: JSON.parse({}) }} }}))",
@@ -199,8 +211,25 @@ pub fn send(source: &str, id: u32, name: &str, json: &str) {
     }
 }
 
-/// `rt.ui.page`: open page `id` of plugin `source` in a tab.
-pub fn open(source: &str, id: u32, path: &str) {
+/// `page:close()`: close its panel, or the tabs showing it.
+pub fn close(source: &str, id: u32) {
+    crate::panel::close(PANEL_IDS | id, true);
+    let tabs: Vec<usize> = shell::with(|s| {
+        s.tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| is_page(&t.url, source, id))
+            .map(|(i, _)| i)
+            .collect()
+    })
+    .unwrap_or_default();
+    for index in tabs.into_iter().rev() {
+        crate::tabs::close(index);
+    }
+}
+
+/// `rt.ui.page`: open page `id` of plugin `source` in a tab, or in a panel.
+pub fn open(source: &str, id: u32, path: &str, title: String, panel: Option<(String, u32)>) {
     if source.is_empty() {
         return shell::show_message(Level::Error, "config.lua: only plugins have pages");
     }
@@ -214,11 +243,20 @@ pub fn open(source: &str, id: u32, path: &str) {
             format!("Plugin {source}: it has no pages folder"),
         );
     }
-    shell::open(
-        rt_core::command::OpenTarget::Tab,
-        true,
-        Some(url(source, path, id)),
-    );
+    let url = url(source, path, id);
+    match panel {
+        Some((side, size)) => {
+            let spec = rt_config::lua::PanelSpec {
+                title,
+                side,
+                size,
+                page: Some(url),
+                ..Default::default()
+            };
+            crate::panel::show(PANEL_IDS | id, source.to_string(), spec);
+        }
+        None => shell::open(rt_core::command::OpenTarget::Tab, true, Some(url)),
+    }
 }
 
 #[cfg(test)]

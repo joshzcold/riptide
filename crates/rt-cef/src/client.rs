@@ -38,6 +38,8 @@ pub enum Role {
     Float,
     /// An `rt.ui.panel`.
     Panel,
+    /// A plugin page in a panel: keys and focus work as in a tab.
+    PanelPage,
 }
 
 wrap_client! {
@@ -217,12 +219,19 @@ wrap_client! {
                 }
                 return 1;
             }
-            if self.role != Role::Tab || name != FOCUS_MESSAGE {
+            if !matches!(self.role, Role::Tab | Role::PanelPage) || name != FOCUS_MESSAGE {
                 return 0;
             }
             let args = message.argument_list();
             let editable = args.as_ref().is_some_and(|a| a.bool(0) != 0);
             let user = args.as_ref().is_none_or(|a| a.bool(1) != 0);
+            // A page panel isn't a tab: typing in it drives the mode directly.
+            if self.role == Role::PanelPage {
+                if user && let Some(effects) = shell::with(|s| s.engine.focus_changed(editable)) {
+                    shell::apply(effects);
+                }
+                return 1;
+            }
             // Background tabs can move focus too; only the visible one drives the mode.
             // Focus the page moved by itself (autofocus) counts only with auto_load.
             let effects = shell::with_tab(browser, |s, _, current| {
@@ -421,7 +430,7 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
         return false;
     }
     let consumed = handle_key_event(event);
-    if consumed || role == Role::Tab {
+    if consumed || matches!(role, Role::Tab | Role::PanelPage) {
         return consumed;
     }
     // During prompts the status bar has focus on purpose (see `focus_for_prompt`).
@@ -780,6 +789,7 @@ wrap_load_handler! {
                     }
                     return;
                 }
+                Role::PanelPage => return,
             };
             shell::refresh_ui();
         }

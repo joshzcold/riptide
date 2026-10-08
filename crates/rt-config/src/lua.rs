@@ -473,7 +473,13 @@ function rt._page_for(source)
     function handle:send(name, data)
       rt._page_send(source, id, tostring(name), data == nil and "null" or rt.json.encode(data))
     end
-    rt._page_open(source, id, path)
+    function handle:close()
+      if plugin_pages[id] then
+        plugin_pages[id] = nil
+        rt._page_close(source, id)
+      end
+    end
+    rt._page_open(source, id, path, opts)
     return handle
   end
 end
@@ -649,12 +655,17 @@ pub enum Action {
     PanelClose { id: u32 },
     /// A panel's `focus`: its keys work until Escape.
     PanelFocus { id: u32 },
-    /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`, in a tab.
+    /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`,
+    /// in a tab, or in a panel when `panel` gives its side and size.
     PluginPage {
         source: String,
         id: u32,
         path: String,
+        title: String,
+        panel: Option<(String, u32)>,
     },
+    /// A page handle's `close`.
+    PluginPageClose { source: String, id: u32 },
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
     PluginPageSend {
         source: String,
@@ -829,6 +840,8 @@ pub struct PanelSpec {
     pub size: u32,
     /// The keys it takes while focused; `j`/`k` move its cursor.
     pub keys: Vec<String>,
+    /// A plugin page's URL to show instead of lines (`rt.ui.page` in a panel).
+    pub page: Option<String>,
 }
 
 pub const PANEL_SIDES: &[&str] = &["left", "right", "bottom"];
@@ -854,6 +867,7 @@ impl PanelSpec {
             side,
             size: size.unwrap_or(default).clamp(80, 2000),
             keys: keys_from_lua(what, table)?,
+            page: None,
         })
     }
 }
@@ -1822,10 +1836,48 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     let s = state.clone();
     api.set(
         "_page_open",
-        lua.create_function(move |_, (source, id, path): (String, u32, String)| {
+        lua.create_function(
+            move |_, (source, id, path, opts): (String, u32, String, mlua::Table)| {
+                let title: Option<String> = opts.get("title")?;
+                let place: Option<String> = opts.get("where")?;
+                let panel = match place.as_deref() {
+                    None | Some("tab") => None,
+                    Some("panel") => {
+                        let side: Option<String> = opts.get("side")?;
+                        let side = side.unwrap_or_else(|| "right".into());
+                        if !PANEL_SIDES.contains(&side.as_str()) {
+                            return Err(mlua::Error::runtime(format!(
+                                "rt.ui.page: side is one of {}",
+                                PANEL_SIDES.join(", ")
+                            )));
+                        }
+                        let size: Option<u32> = opts.get("size")?;
+                        Some((side, size.unwrap_or(400).clamp(80, 2000)))
+                    }
+                    Some(other) => {
+                        return Err(mlua::Error::runtime(format!(
+                            "rt.ui.page: where is \"tab\" or \"panel\", not {other:?}"
+                        )));
+                    }
+                };
+                s.borrow_mut().actions.push(Action::PluginPage {
+                    source,
+                    id,
+                    path,
+                    title: title.unwrap_or_default(),
+                    panel,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_page_close",
+        lua.create_function(move |_, (source, id): (String, u32)| {
             s.borrow_mut()
                 .actions
-                .push(Action::PluginPage { source, id, path });
+                .push(Action::PluginPageClose { source, id });
             Ok(())
         })?,
     )?;

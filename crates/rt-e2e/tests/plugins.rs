@@ -308,6 +308,16 @@ fn plugin_pages_talk_to_their_own_plugin_only() {
         .file(
             "scratch-plugins/notes/plugin/notes.lua",
             r#"
+local panel_page
+rt.command("open-notes-panel", function()
+  panel_page = rt.ui.page({
+    where = "panel",
+    side = "right",
+    size = 320,
+    on_message = function(name, data) rt.notify("panel got " .. name .. " " .. data.n) end,
+  })
+end)
+rt.command("close-notes-panel", function() panel_page:close() end)
 rt.command("open-notes", function()
   rt.ui.page({
     path = "index.html",
@@ -348,4 +358,17 @@ rt.send("hello", JSON.stringify({ n: 1 }));"#,
     );
     // Only its own scripts run: the inline one was blocked by the CSP.
     assert_eq!(b.eval("String(window.inlineRan)"), "undefined");
+
+    // The same page in a panel: docked, and talking the same way.
+    b.run("open-notes-panel");
+    b.wait_until("the panel is laid out", |s| {
+        s.panels
+            .first()
+            .is_some_and(|p| p["width"] == 320 && p["side"] == "right")
+    });
+    b.wait_until("the panel page's message arrived", |s| {
+        s.message() == Some("panel got hello 1")
+    });
+    b.run("close-notes-panel");
+    b.wait_until("closed", |s| s.panels.is_empty());
 }

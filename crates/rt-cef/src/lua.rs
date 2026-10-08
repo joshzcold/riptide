@@ -133,7 +133,14 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
             Action::Panel { id, source, spec } => crate::panel::show(id, source, spec),
             Action::PanelClose { id } => crate::panel::close(id, true),
             Action::PanelFocus { id } => crate::panel::focus(id),
-            Action::PluginPage { source, id, path } => crate::pages::open(&source, id, &path),
+            Action::PluginPage {
+                source,
+                id,
+                path,
+                title,
+                panel,
+            } => crate::pages::open(&source, id, &path, title, panel),
+            Action::PluginPageClose { source, id } => crate::pages::close(&source, id),
             Action::PluginPageSend {
                 source,
                 id,
