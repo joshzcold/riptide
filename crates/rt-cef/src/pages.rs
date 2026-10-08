@@ -83,7 +83,7 @@ pub fn unregister_all() {
 }
 
 /// `%xx` escapes in a URL path, or `None` if they don't make UTF-8.
-fn percent_decode(path: &str) -> Option<String> {
+pub(crate) fn percent_decode(path: &str) -> Option<String> {
     let bytes = path.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

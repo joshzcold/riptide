@@ -642,7 +642,8 @@ pub enum Command {
         languages: Vec<String>,
     },
     /// Install a Chrome extension from the Web Store (an id or its store
-    /// page) or a local `.crx` file, after showing what it asks for.
+    /// page; empty for the current tab's) or a local `.crx` file, after
+    /// showing what it asks for.
     ExtensionInstall {
         source: String,
     },
@@ -863,7 +864,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "extension-install",
-        "Install a Chrome extension from the Web Store, by id or store page address, or from a .crx file; it loads after :restart",
+        "Install a Chrome extension: the Web Store page you're on, or a store page address, an id or a .crx file; it loads after a restart",
     ),
     spec(
         "extension-remove",
@@ -1947,7 +1948,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             Command::SpellInstall { languages }
         }
         "extension-install" => Command::ExtensionInstall {
-            source: args.required("source")?.to_string(),
+            source: args.rest().trim().to_string(),
         },
         "extension-remove" => Command::ExtensionRemove {
             name: args.rest().trim().to_string(),
@@ -2625,7 +2626,6 @@ mod tests {
             "debug-log-filter",
             "cmd-repeat",
             "cmd-run-with-count",
-            "extension-install",
             "extension-open",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {

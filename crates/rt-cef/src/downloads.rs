@@ -183,6 +183,11 @@ wrap_download_handler! {
             let url = CefString::from(&item.url()).to_string();
             let browser = browser.map(|b| b.identifier());
             let name = sanitize_name(&suggested_name.map(CefString::to_string).unwrap_or_default());
+            // An extension installs instead of saving. Not continuing the
+            // download cancels it; Chromium would delete the file anyway.
+            if crate::extensions::crx_download(&url, &name) {
+                return 1;
+            }
             let (ask, remember, suggest) = shell::with(|s| {
                 let settings = s.engine.settings();
                 (

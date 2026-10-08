@@ -1319,6 +1319,11 @@ Not checked: real autofill with a vault (needs an account), passkeys, `chrome.co
   - **Updates:** checks use the update service's `response=updatecheck` (the XML's `updatecheck status/version`, checked against a real answer). An update's question lists only what it newly asks for, and the same version again changes nothing.
   - **Restarting:** after an install or remove, a "Restart now?" question; no answer keeps the old `:restart` message.
   - **Chrome's own Remove** couldn't be tested: `chrome.management.uninstall` needs a user gesture, and its confirm dialog is native. Since riptide loads extensions from their folders at every start, the docs say to remove them in riptide.
+- ✅ **Installing from the store page** (2026-10-08):
+  - `:extension-install` alone takes the current tab's store page, and a store detail page's load says how to install.
+  - A `.crx` download (the store names them `<ID>_<version>.crx`) is cancelled by not continuing its `BeforeDownloadCallback`; riptide fetches the URL itself (or reads a `file://`) and offers the install with the id from the name. Letting Chromium finish the download doesn't work: it hands the file to its own CRX installer, which deletes it.
+  - The Extensions tab has an Installing card: the steps, and a box for a store page (the `extension-install` UI message only accepts a store page or an id, never a file).
+  - Its limits box links to the guide's Limits section.
 - **Not done:** popups reaching the current tab (needs CEF to put Alloy tabs in `chrome.tabs`), a per-site ad-block switch and element picker built natively, and automatic update checks.
 
 **Recommendation: build MV3 extension support, and keep the native alternatives for what `chrome.tabs` blocks.**

@@ -35,6 +35,45 @@ thread_local! {
     static NAMES: RefCell<Vec<(String, String, String)>> = const { RefCell::new(Vec::new()) };
 }
 
+/// A download that's an extension (`<ID>_<version>.crx`, as the Web Store
+/// names them, or any `.crx`): fetch it and offer to install it. Returns
+/// whether it was one.
+pub fn crx_download(url: &str, name: &str) -> bool {
+    if !name.to_ascii_lowercase().ends_with(".crx") {
+        return false;
+    }
+    let expected = name
+        .split(['_', '.'])
+        .next()
+        .and_then(|stem| extensions::parse_id(&stem.to_ascii_lowercase()));
+    if let Some(path) = url.strip_prefix("file://") {
+        let path = crate::pages::percent_decode(path).unwrap_or_else(|| path.to_string());
+        match std::fs::read(&path) {
+            Ok(bytes) => offer(&bytes, expected.as_deref()),
+            Err(e) => shell::show_message(Level::Error, format!("Can't read {path}: {e}")),
+        }
+        return true;
+    }
+    shell::show_message(Level::Info, "Downloading the extension to install it…");
+    crate::fetch::get(url, move |result| match result {
+        Ok(bytes) => offer(&bytes, expected.as_deref()),
+        Err(e) => shell::show_message(Level::Error, format!("Can't download the extension: {e}")),
+    });
+    true
+}
+
+/// The Web Store asks you to switch to Chrome; say how riptide installs it.
+pub fn store_page_loaded(url: &str) {
+    let store = rt_core::url::host(url) == "chromewebstore.google.com";
+    let current = shell::with(|s| s.tabs.current().is_some_and(|t| t.url == url)).unwrap_or(false);
+    if store && current && extensions::parse_id(url).is_some() {
+        shell::show_message(
+            Level::Info,
+            "A Chrome extension: :extension-install installs it in riptide",
+        );
+    }
+}
+
 fn remember_names(entries: &[Entry]) {
     let names = entries
         .iter()
@@ -353,7 +392,28 @@ fn data_dir() -> Option<PathBuf> {
     shell::with(|s| s.paths.data_dir.clone())
 }
 
+/// The Extensions tab's Install box (a store page or id, checked already).
+pub fn install_from_page(source: &str) {
+    install(source);
+}
+
 fn install(source: &str) {
+    // Without a source: the Web Store page in the current tab.
+    let current;
+    let source = if source.is_empty() {
+        current = shell::with(|s| s.tabs.current().map(|t| t.url.clone()))
+            .flatten()
+            .unwrap_or_default();
+        if extensions::parse_id(&current).is_none() {
+            return shell::show_message(
+                Level::Error,
+                "Open an extension's page on the Chrome Web Store first, or give its page, id or a .crx file",
+            );
+        }
+        current.as_str()
+    } else {
+        source
+    };
     let is_file = source.ends_with(".crx")
         && (source.starts_with('/') || source.starts_with("~/") || source.starts_with("./"));
     if is_file {

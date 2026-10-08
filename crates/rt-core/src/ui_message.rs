@@ -56,6 +56,8 @@ pub enum UiMessage {
     Plugin { name: String, action: PluginAction },
     /// The Extensions tab's buttons; `id` is empty for checking all.
     Extension { id: String, action: ExtensionAction },
+    /// The Extensions tab's Install box: a Web Store page or an id.
+    ExtensionInstall { source: String },
     /// A page's "restart now" button.
     Restart,
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
@@ -319,6 +321,12 @@ struct FloatSize {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ExtensionSource {
+    source: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Extension {
     #[serde(default)]
     id: String,
@@ -447,6 +455,14 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             Ok(UiMessage::Extension { id, action })
         }
         ("settings", "restart") => Ok(UiMessage::Restart),
+        ("settings", "extension-install") => {
+            let ExtensionSource { source } = payload(name, json)?;
+            // Only the Web Store: never a file a page names.
+            if source.len() > 500 || crate::extensions::parse_id(&source).is_none() {
+                return Err(format!("{name}: not a Web Store page or extension id"));
+            }
+            Ok(UiMessage::ExtensionInstall { source })
+        }
         ("settings", "reset") => {
             let SettingName { name: setting } = payload(name, json)?;
             Ok(UiMessage::SettingsReset {
@@ -577,6 +593,45 @@ mod tests {
                 "riptide://settings/",
                 "forget",
                 r#"{"session":"_crashed-1"}"#
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn the_extensions_tab_installs_only_from_the_web_store() {
+        let page = "riptide://settings/";
+        let id = "ddkjiahejlhfcafbddmgiahcphecmpfh";
+        let store = format!("https://chromewebstore.google.com/detail/ublock-origin-lite/{id}");
+        assert_eq!(
+            parse(
+                page,
+                "extension-install",
+                &serde_json::json!({ "source": store }).to_string()
+            ),
+            Ok(UiMessage::ExtensionInstall {
+                source: store.clone()
+            })
+        );
+        for bad in ["/home/a/evil.crx", "https://example.com/x", ""] {
+            let json = serde_json::json!({ "source": bad }).to_string();
+            assert!(parse(page, "extension-install", &json).is_err(), "{bad}");
+        }
+        let json = serde_json::json!({ "id": id, "action": "popup" }).to_string();
+        assert_eq!(
+            parse(page, "extension", &json),
+            Ok(UiMessage::Extension {
+                id: id.into(),
+                action: ExtensionAction::Popup
+            })
+        );
+        let json = serde_json::json!({ "id": "../x", "action": "remove" }).to_string();
+        assert!(parse(page, "extension", &json).is_err());
+        assert!(
+            parse(
+                "https://example.com/",
+                "extension-install",
+                &serde_json::json!({ "source": id }).to_string()
             )
             .is_err()
         );

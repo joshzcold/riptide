@@ -293,3 +293,53 @@ fn manifest_v2_extensions_are_refused() {
     });
     assert!(b.state().prompt.is_none());
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_downloaded_extension_installs_instead_of_saving() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("page.html");
+    // Alone, :extension-install wants a Web Store page.
+    b.run("extension-install");
+    b.wait_until("it says what to do", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("Open an extension's page on the Chrome Web Store first"))
+    });
+
+    // Named as the Web Store names its downloads.
+    let name = format!("{}_1_0.crx", id_of(KEY).to_uppercase());
+    let file = b.scratch().join(&name);
+    std::fs::write(
+        &file,
+        crx(&[(
+            "manifest.json",
+            r#"{ "manifest_version": 3, "name": "Downloaded probe", "version": "1.0" }"#,
+        )]),
+    )
+    .unwrap();
+    b.run(&format!("open file://{}", file.display()));
+    let s = b.wait_until("it asks to install, not where to save", |s| {
+        s.prompt.is_some()
+    });
+    let prompt = s.prompt.unwrap();
+    assert_eq!(prompt["title"], "Install extension", "{prompt}");
+    assert!(
+        prompt["message"]
+            .to_string()
+            .contains("Downloaded probe 1.0")
+    );
+    b.keys("y");
+    b.wait_until("it offers to restart", |s| {
+        s.prompt.as_ref().is_some_and(|p| p["title"] == "Restart")
+    });
+    b.keys("n");
+    b.wait_until("installed", |s| {
+        s.message() == Some("Installed Downloaded probe; :restart loads it")
+    });
+    assert!(b.data_dir().join("extensions").join(id_of(KEY)).is_dir());
+    let leftovers = std::fs::read_dir(b.data_dir().join("extensions/.downloads"))
+        .map(|d| d.count())
+        .unwrap_or(0);
+    assert_eq!(leftovers, 0, "the download is deleted once it's read");
+}

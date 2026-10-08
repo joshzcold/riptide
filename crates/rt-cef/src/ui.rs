@@ -58,6 +58,7 @@ pub fn handle_message(message: UiMessage) {
             }
         }
         UiMessage::Extension { id, action } => crate::extensions::ui_action(&id, action),
+        UiMessage::ExtensionInstall { source } => crate::extensions::install_from_page(&source),
         UiMessage::Restart => {
             if let Some(effects) = crate::shell::with(|s| s.engine.execute_str("restart", None)) {
                 crate::shell::apply(effects);

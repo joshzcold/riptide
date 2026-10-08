@@ -985,6 +985,48 @@ const EXTENSION_LIMITS = [
   "Remove extensions here. Chrome's own Remove only hides one until riptide restarts.",
 ];
 
+// How to install: the steps, and a box for a store page.
+function extensionInstall() {
+  const box = el("div", "card");
+  const body = el("div", "keyrow");
+  body.style.gridTemplateColumns = "minmax(0, 1fr)";
+  const text = el("div");
+  text.append(el("div", "name", "Installing"));
+  const steps = el("ol");
+  const store = el("a", null, "Chrome Web Store");
+  store.href = "https://chromewebstore.google.com/category/extensions";
+  store.target = "_blank";
+  const first = el("li", "desc");
+  first.append("Find the extension on the ", store, ". Ignore its \"Switch to Chrome\" banner.");
+  steps.append(
+    first,
+    el("li", "desc", "On the extension's page, run :extension-install, or click Add to Chrome if the store shows it. Or paste the page's address below."),
+    el("li", "desc", "riptide shows what the extension can do and asks before installing, then offers to restart."),
+  );
+  const row = el("div", "actions");
+  const input = el("input");
+  input.type = "text";
+  input.placeholder = "https://chromewebstore.google.com/detail/…";
+  input.style.flex = "1";
+  input.dataset.key = "extensions:install-source";
+  const button = control({ name: "extensions:install" }, el("button", null, "Install"), "install");
+  const install = () => {
+    const source = input.value.trim();
+    if (!/[a-p]{32}/.test(source)) return fail("extensions", "Paste an extension's Chrome Web Store page, or its id");
+    rt.send("extension-install", JSON.stringify({ source }));
+  };
+  button.addEventListener("click", install);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") install(); });
+  row.style.display = "flex";
+  row.style.gap = ".5rem";
+  row.append(input, button);
+  text.append(steps, row);
+  body.append(text);
+  box.append(body);
+  box.style.marginBottom = ".8rem";
+  return box;
+}
+
 // What works differently from Chrome. Closing it is remembered; the page
 // works without storage too.
 function extensionLimits() {
@@ -1021,7 +1063,8 @@ function renderExtensions() {
   const h2 = el("h2");
   h2.append(icon("extensions"), "Extensions");
   section.append(h2, el("p", "blurb", "Chrome extensions, installed with :extension-install or listed in extensions.load. They load when riptide starts."));
-  section.append(extensionLimits());
+  if (errors.has("extensions")) section.append(el("div", "banner", errors.get("extensions")));
+  section.append(extensionInstall(), extensionLimits());
   const top = el("div", "actions");
   top.style.marginBottom = "10px";
   const topButton = (text, title, click) => {

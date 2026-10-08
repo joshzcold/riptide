@@ -770,6 +770,7 @@ wrap_load_handler! {
                         }
                     }
                     crate::lua::emit("load_finished", &[("url", &url)]);
+                    crate::extensions::store_page_loaded(&url);
                     shell::show_messages_waiting_for_load();
                     return;
                 }

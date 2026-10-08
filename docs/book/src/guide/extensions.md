@@ -4,11 +4,15 @@ riptide runs Chrome extensions that use Manifest V3, such as uBlock Origin Lite,
 
 ## Installing
 
+1. Find the extension on the [Chrome Web Store](https://chromewebstore.google.com/category/extensions). Ignore its "Switch to Chrome" banner; riptide shows a message saying how to install instead.
+2. On the extension's page, run `:extension-install`. If the store offers a download (**Add to Chrome**), that works too: riptide installs the `.crx` file instead of asking where to save it.
+3. riptide shows what the extension asks for, such as "read and change everything on every site you visit", and asks before installing. Extensions load when riptide starts, so it then offers to restart.
+
+`:extension-install` also takes a store page's address or an extension's id from anywhere, or a `.crx` file (`/path/to/file.crx`). The Extensions tab (`:extensions`) has the same steps, and a box to paste a store page into.
+
 ```
 :extension-install https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh
 ```
-
-`:extension-install` takes an extension's Web Store page, its id, or a `.crx` file (`/path/to/file.crx`). It downloads the extension and shows what it asks for, such as "read and change everything on every site you visit", then asks before installing. Extensions load when riptide starts, so it then offers to restart.
 
 Installed extensions keep their Web Store id, so their settings carry over between versions, and desktop apps that talk to them recognise them. They're in `extensions/` in the data folder (`riptide --paths`).
 
@@ -25,7 +29,7 @@ When something changed since riptide started, the tab says so, with a **Restart 
 
 | Command | |
 |---|---|
-| `:extension-install <page, id or file>` | install or update, after showing what it asks for |
+| `:extension-install [page, id or file]` | install or update (the store page you're on, without an argument), after showing what it asks for |
 | `:extension-open <name> [popup\|options]` | open its popup (or else its options) in a tab |
 | `:extension-update [name]` | check every installed extension for updates, or update one |
 | `:extension-remove <name or id>` | delete an installed extension |

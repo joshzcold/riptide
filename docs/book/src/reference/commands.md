@@ -59,7 +59,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
 | `:spell-install` |  | Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE, or pick from a list without a language |
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |
-| `:extension-install` |  | Install a Chrome extension from the Web Store, by id or store page address, or from a .crx file; it loads after :restart |
+| `:extension-install` |  | Install a Chrome extension: the Web Store page you're on, or a store page address, an id or a .crx file; it loads after a restart |
 | `:extension-remove` |  | Delete an installed extension, by name or id; it's gone after :restart |
 | `:extensions` |  | List extensions in :settings, with their popups, options, updates and Remove |
 | `:extension-open` |  | Open an extension's popup, or its options: :extension-open &lt;name&gt; [popup\|options] |
