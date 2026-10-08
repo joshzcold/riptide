@@ -53,11 +53,19 @@ fn paths() -> Option<(PathBuf, PathBuf)> {
     shell::with(|s| (s.paths.config_dir.clone(), s.paths.data_dir.clone()))
 }
 
-/// Where a plugin lives: its own folder, or `<data>/pack/<name>` for one from git.
+/// Where a plugin lives: its own folder, or its `subdir` of `<data>/pack/<name>` for one from git.
 fn folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
     if spec.builtin {
         return builtin_folder(&spec.name);
     }
+    match &spec.dir {
+        Some(dir) => dir.clone(),
+        None => repo_folder(spec, data_dir).join(&spec.subdir),
+    }
+}
+
+/// The git checkout a plugin from git is in: `<data>/pack/<name>`.
+fn repo_folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
     spec.dir
         .clone()
         .unwrap_or_else(|| data_dir.join("pack").join(&spec.name))
@@ -100,7 +108,7 @@ pub fn start() {
     WAITING.with(|w| w.borrow_mut().clear());
     crate::pages::unregister_all();
     for spec in rt_config::lua::plugin_specs() {
-        let dir = folder(&spec, &data_dir);
+        let dir = repo_folder(&spec, &data_dir);
         if spec.dir.is_some() || spec.src.is_empty() {
             prepare(&spec.name);
             continue;
@@ -501,8 +509,10 @@ pub fn page_data() -> serde_json::Value {
                     format!("builtin (riptide {})", env!("CARGO_PKG_VERSION"))
                 } else if spec.src.is_empty() {
                     spec.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_default()
-                } else {
+                } else if spec.subdir.is_empty() {
                     spec.src.clone()
+                } else {
+                    format!("{} ({})", spec.src, spec.subdir)
                 },
                 "git": spec.dir.is_none() && !spec.src.is_empty(),
                 "commit": locked.commit,
@@ -533,7 +543,7 @@ pub fn check_updates(name: Option<&str>) {
         format!("Checking {} plugin(s) for updates…", specs.len()),
     );
     for spec in specs {
-        let dir = folder(&spec, &data_dir);
+        let dir = repo_folder(&spec, &data_dir);
         std::thread::spawn(move || {
             let result = git::head(&dir).and_then(|head| {
                 let latest = git::fetch_latest(&dir)?;
@@ -596,7 +606,7 @@ pub fn apply_update(name: &str) {
     else {
         return;
     };
-    match git::checkout(&folder(&spec, &data_dir), &update.0) {
+    match git::checkout(&repo_folder(&spec, &data_dir), &update.0) {
         Ok(commit) => {
             record(&spec.name, &spec.src, &commit);
             STATUS.with(|s| {
@@ -648,7 +658,7 @@ pub fn remove(name: &str) {
         return;
     };
     if spec.dir.is_none() {
-        let dir = folder(&spec, &data_dir);
+        let dir = repo_folder(&spec, &data_dir);
         if dir.starts_with(data_dir.join("pack"))
             && dir.is_dir()
             && let Err(e) = std::fs::remove_dir_all(&dir)

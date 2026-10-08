@@ -465,3 +465,54 @@ fn plugin_test_runs_the_templates_specs_and_exits_with_the_result() {
     assert!(stdout.contains("1..2\n"), "{stdout}");
     assert!(stdout.contains("# 2 tests, 0 failed"), "{stdout}");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_install_from_a_folder_of_a_repository_of_several() {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-monorepo-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&repo);
+    for (name, word) in [("first", "one"), ("second", "two")] {
+        let module = repo.join(format!("{name}/lua/{name}/init.lua"));
+        std::fs::create_dir_all(module.parent().unwrap()).unwrap();
+        std::fs::write(
+            &module,
+            format!("return {{ setup = function() rt.command('{name}-say', function() rt.notify('{word}') end) end }}"),
+        )
+        .unwrap();
+    }
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "two plugins"]);
+    let src = repo.display().to_string();
+    let b = Browser::launch()
+        .lua(&format!(
+            "rt.pack.add({{ {{ {src:?}, subdir = 'second', opts = {{}} }}, {{ {src:?}, subdir = 'first', opts = {{}} }} }})"
+        ))
+        .start("page.html");
+    b.wait_until("both installed", |s| {
+        s.message().is_some_and(|m| m.contains("Installed plugin"))
+    });
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "first:loaded second:loaded",
+    );
+    b.run("second-say");
+    b.wait_until("the second plugin runs", |s| s.message() == Some("two"));
+    b.run("first-say");
+    b.wait_until("the first plugin runs", |s| s.message() == Some("one"));
+    std::fs::remove_dir_all(&repo).unwrap();
+}

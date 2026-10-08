@@ -165,7 +165,8 @@ local function add_spec(spec)
   elseif src == nil and spec.dir == nil then
     error("a plugin needs a git URL, dir or builtin", 3)
   end
-  local name = spec.builtin or spec.name or rt._plugin_name(src or spec.dir)
+  if spec.subdir ~= nil and src == nil then error("subdir is a folder in a plugin's git repository", 3) end
+  local name = spec.builtin or spec.name or rt._plugin_name(spec.subdir or src or spec.dir)
   local function list(value)
     if value == nil then return {} end
     if type(value) ~= "table" then return { value } end
@@ -180,7 +181,7 @@ local function add_spec(spec)
     end
   end
   rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true,
-    list(spec.event), list(spec.cmd), keys, spec.builtin ~= nil)
+    list(spec.event), list(spec.cmd), keys, spec.builtin ~= nil, spec.subdir)
   pack_specs[name] = spec
 end
 function rt.pack.add(specs)
@@ -583,6 +584,9 @@ pub struct PluginSpec {
     pub keys: Vec<(Mode, String)>,
     /// One of the plugins that ship with riptide, found by name.
     pub builtin: bool,
+    /// The plugin's folder inside its git repository, for a repository of
+    /// several plugins; empty for its root.
+    pub subdir: String,
 }
 
 impl PluginSpec {
@@ -1553,6 +1557,7 @@ type PackSpecArgs = (
     Vec<String>,
     Vec<Vec<String>>,
     bool,
+    Option<String>,
 );
 
 fn mode_arg(mode: Option<String>) -> mlua::Result<Mode> {
@@ -1820,7 +1825,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "_pack_spec",
         lua.create_function(
-            move |_, (name, src, dir, version, trusted, events, commands, keys, builtin): PackSpecArgs| {
+            move |_, (name, src, dir, version, trusted, events, commands, keys, builtin, subdir): PackSpecArgs| {
                 let bad =
                     |what: String| Err(mlua::Error::runtime(format!("plugin {name:?}: {what}")));
                 if !crate::plugins::valid_name(&name) {
@@ -1833,6 +1838,16 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 }
                 if let Some(command) = commands.iter().find(|c| !crate::plugins::valid_name(c)) {
                     return bad(format!("{command:?} isn't a command name"));
+                }
+                // A folder inside the checkout: plain names only, so it can't leave it.
+                let subdir = subdir.unwrap_or_default();
+                let subdir = subdir.trim_matches('/').to_string();
+                if !subdir.is_empty()
+                    && !subdir.split('/').all(|part| {
+                        crate::plugins::valid_name(part) || (part.contains('.') && part != ".." && part != "." && part.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')))
+                    })
+                {
+                    return bad(format!("subdir {subdir:?}: a folder in the repository, like \"plugins/name\""));
                 }
                 let mut parsed = Vec::new();
                 for pair in keys {
@@ -1861,6 +1876,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     commands,
                     keys: parsed,
                     builtin,
+                    subdir,
                 });
                 Ok(())
             },
@@ -2601,7 +2617,19 @@ assert(not pcall(rt.statusbar.widget, "a b", function() end))
                 (Mode::Insert, "<C-l>".to_string())
             ]
         );
+        let error = config(
+            r#"rt.pack.add({ "https://example.com/plugins.git", subdir = "tools/tab-tools" })"#,
+        );
+        assert_eq!(error, None);
+        let specs = plugin_specs();
+        assert_eq!(
+            (specs[0].name.as_str(), specs[0].subdir.as_str()),
+            ("tab-tools", "tools/tab-tools")
+        );
         for bad in [
+            r#"rt.pack.add({ "https://example.com/p.git", subdir = "../up" })"#,
+            r#"rt.pack.add({ "https://example.com/p.git", subdir = "a/../../b" })"#,
+            r#"rt.pack.add({ dir = "/p/x", subdir = "y" })"#,
             r#"rt.pack.add({ dir = "/p/x", event = "nope" })"#,
             r#"rt.pack.add({ dir = "/p/x", cmd = "a b" })"#,
             r#"rt.pack.add({ dir = "/p/x", keys = { { "<Nope>" } } })"#,

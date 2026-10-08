@@ -284,6 +284,7 @@ function rt.store(name) end
 ---@field builtin? string A plugin that ships with riptide, e.g. "passwords".
 ---@field name? string Its name for `require`; by default from the URL or folder.
 ---@field version? string A tag, branch or commit.
+---@field subdir? string The plugin's folder in a repository of several plugins.
 ---@field trusted? boolean Skip the sandbox and allow everything.
 ---@field opts? table Passed to `require(name).setup(opts)` once it loads.
 ---@field config? fun() Run once it loads, instead of `opts`.
