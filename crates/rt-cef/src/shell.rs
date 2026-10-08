@@ -1004,13 +1004,14 @@ pub fn refresh_ui() {
     {
         apply(effects);
     }
+    let widgets = crate::lua::statusbar_widgets();
     let Some(updates) = with(|s| {
         crate::tabs::remember_open_tabs(s);
         let focused = s.active;
         let mut updates = Vec::new();
         for i in 0..s.windows.len() {
             s.active = i;
-            updates.push(collect_ui_update(s, i == focused));
+            updates.push(collect_ui_update(s, i == focused, widgets.get(i)));
         }
         s.active = focused;
         updates
@@ -1084,7 +1085,11 @@ pub fn position_overlay() {
 
 /// What to redraw in the active window. Only the `focused` one (the window
 /// keys go to) shows the mode, command line, messages and overlay.
-fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
+fn collect_ui_update(
+    s: &mut Shell,
+    focused: bool,
+    widgets: Option<&std::collections::BTreeMap<String, String>>,
+) -> UiUpdate {
     let mut scripts = Vec::new();
     let mut status = s.engine.status();
     if !focused {
@@ -1156,6 +1161,7 @@ fn collect_ui_update(s: &mut Shell, focused: bool) -> UiUpdate {
             .and_then(|t| t.browser())
             .map_or(0, |b| crate::adblock::blocked(b.identifier())),
         "widgets": s.engine.settings().list("statusbar.widgets"),
+        "lua_widgets": widgets,
         "back": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_back, |h| h.can_go_back())),
         "forward": current.is_some_and(|t| t.history.as_ref().map_or(t.can_go_forward, |h| h.can_go_forward())),
         "search_match": current.and_then(|t| t.search_match),

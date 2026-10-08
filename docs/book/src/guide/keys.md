@@ -199,6 +199,7 @@ The status bar shows the mode, messages and the command line on the left. On the
 | `sharing` | `[sharing your screen]` (or a window or tab) while any tab shares; `:share-stop` stops it |
 | `clock`, `clock:%a %H:%M` | The time, in an optional strftime format |
 | `text:…` | Fixed text |
+| `lua:<name>` | Text from `config.lua` or a plugin; see [Status bar widgets](../configuration/lua.md#status-bar-widgets) |
 
 ```toml
 statusbar.widgets = ["keypress", "url", "scroll", "tabs", "clock:%H:%M"]

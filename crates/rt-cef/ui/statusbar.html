@@ -108,6 +108,7 @@
     const el = document.createElement("span");
     const text = (t) => { el.textContent = t; return el; };
     if (name.startsWith("text:")) return text(name.slice(5));
+    if (name.startsWith("lua:")) return text(state.lua_widgets?.[name.slice(4)] ?? "");
     if (name === "clock" || name.startsWith("clock:")) {
       el.className = "clock";
       el.dataset.format = name.startsWith("clock:") ? name.slice(6) : "%H:%M";

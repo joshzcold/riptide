@@ -137,6 +137,15 @@ function rt.store(name) end
 ---@field cmd? string|string[] Load when one of these commands runs.
 ---@field keys? string|(string|{ [1]: string, mode?: string })[] Load when one of these keys is pressed.
 
+rt.statusbar = {}
+
+---A status bar widget: `fn` gives its text each time the bar is drawn,
+---where `statusbar.widgets` lists `"lua:<name>"`. It gets 50 ms; one that
+---fails or runs longer is removed. `nil` instead of `fn` removes it.
+---@param name string Letters, digits, `-` and `_`.
+---@param fn? fun(): string|number|nil
+function rt.statusbar.widget(name, fn) end
+
 rt.pack = {}
 
 ---Add plugins: a git URL, a spec, or a list of them. They load once
@@ -635,7 +644,7 @@ function rt.spawn(argv, opts, callback) end
 ---@field padding string Space around the status bar's text, as CSS padding (top right bottom left), e.g. 2px 8px; the bar grows to fit
 ---@field position "top"|"bottom" Where the status bar is
 ---@field show "always"|"never"|"in-mode" When to show the status bar: always, only while typing a command or answering a prompt (never), or also outside normal mode and while a message is shown (in-mode)
----@field widgets string[] What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…
+---@field widgets string[] What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…, lua:<name> (drawn by rt.statusbar.widget)
 
 ---@class rt.c.tabs
 ---@field close_mouse_button "middle"|"right"|"none" Which mouse button closes a tab clicked in the tab bar

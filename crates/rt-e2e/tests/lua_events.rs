@@ -119,3 +119,35 @@ rt.command("greet", function(args) rt.notify("hello " .. args) end, {
         s.message() == Some("hello alice")
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn statusbar_widgets_from_lua_follow_the_page() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+c.statusbar.widgets = { "lua:page", "tabs" }
+rt.statusbar.widget("page", function() return "on " .. rt.url():match("[^/]*$") end)
+"#,
+        )
+        .start("page.html");
+    let text = "document.getElementById('right').innerText";
+    let start = std::time::Instant::now();
+    while !b.eval_bar("statusbar", text).contains("on page.html") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "{}",
+            b.eval_bar("statusbar", text)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.open("second.html");
+    while !b.eval_bar("statusbar", text).contains("on second.html") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "{}",
+            b.eval_bar("statusbar", text)
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

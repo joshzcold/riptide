@@ -268,10 +268,16 @@ fn statusbar_widgets(value: &Value) -> Result<(), String> {
         let known = STATUSBAR_WIDGETS.contains(&widget.as_str())
             || widget == "clock"
             || widget.starts_with("clock:")
-            || widget.starts_with("text:");
+            || widget.starts_with("text:")
+            || widget.strip_prefix("lua:").is_some_and(|name| {
+                !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+            });
         if !known {
             return Err(format!(
-                "unknown widget {widget:?}; use {}, clock[:format] or text:…",
+                "unknown widget {widget:?}; use {}, clock[:format], text:… or lua:<name>",
                 STATUSBAR_WIDGETS.join(", ")
             ));
         }
@@ -1829,7 +1835,7 @@ pub static SETTINGS: &[SettingDef] = &[
             .map(String::from)
             .to_vec()
         ),
-        "What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…",
+        "What the right side of the status bar shows, in order: keypress, downloads, blocked (requests the ad blocker stopped on the page), muted, media, sharing (a screen, window or tab being shared from any tab; :share-stop stops it), zoom, search_match, url, scroll, scroll_raw, history, tabs, progress, clock[:strftime format], text:…, lua:<name> (drawn by rt.statusbar.widget)",
         statusbar_widgets
     ),
     def!(
@@ -2502,7 +2508,7 @@ mod tests {
         let widgets = find("statusbar.widgets").unwrap();
         assert!(
             widgets
-                .from_json(&json!(["url", "clock:%H:%M", "text:hi"]))
+                .from_json(&json!(["url", "clock:%H:%M", "text:hi", "lua:weather"]))
                 .is_ok()
         );
         assert!(widgets.from_json(&json!(["url", "weather"])).is_err());

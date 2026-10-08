@@ -54,6 +54,21 @@ rt.keymap.set("normal", "<Space>r", function()
 end, { desc = "Read later" })
 ```
 
+## Status bar widgets
+
+`rt.statusbar.widget(name, fn)` adds a widget that `statusbar.widgets` shows as `lua:<name>`. The function returns its text each time the bar is drawn, so keep it quick: it gets 50 ms, and one that fails or runs longer is removed with an error.
+
+```lua
+c.statusbar.widgets = { "keypress", "url", "lua:list", "tabs" }
+local list = rt.store("reading-list")
+rt.statusbar.widget("list", function()
+  local urls = list.get("urls") or {}
+  return #urls > 0 and ("📚" .. #urls) or ""
+end)
+```
+
+An empty string hides the widget. What a widget function asks for besides its text, such as `rt.notify`, is ignored; to change a widget on a timer, use `rt.every`, which redraws the bar when it runs.
+
 ## Events
 
 `rt.on(event, [opts], fn)` runs `fn` with a table describing the event:

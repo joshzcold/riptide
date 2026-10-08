@@ -227,6 +227,15 @@ function rt.store(name) end
 ---@field cmd? string|string[] Load when one of these commands runs.
 ---@field keys? string|(string|{{ [1]: string, mode?: string }})[] Load when one of these keys is pressed.
 
+rt.statusbar = {{}}
+
+---A status bar widget: `fn` gives its text each time the bar is drawn,
+---where `statusbar.widgets` lists `"lua:<name>"`. It gets 50 ms; one that
+---fails or runs longer is removed. `nil` instead of `fn` removes it.
+---@param name string Letters, digits, `-` and `_`.
+---@param fn? fun(): string|number|nil
+function rt.statusbar.widget(name, fn) end
+
 rt.pack = {{}}
 
 ---Add plugins: a git URL, a spec, or a list of them. They load once

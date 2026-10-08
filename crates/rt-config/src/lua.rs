@@ -121,6 +121,35 @@ rt._entry[1] = rt._fire
 -- Neovim's name for it.
 rt.notify = rt.message
 
+-- rt.statusbar.widget(name, fn): fn gives the text of "lua:<name>" in
+-- statusbar.widgets each time the bar is drawn; nil removes the widget.
+rt.statusbar = {}
+local widgets = {}
+function rt.statusbar.widget(name, fn)
+  if type(name) ~= "string" or not name:match("^[%w_-]+$") then
+    error("widget names use letters, digits, - and _", 2)
+  end
+  if fn ~= nil and type(fn) ~= "function" then error("rt.statusbar.widget takes a function", 2) end
+  widgets[name] = fn
+end
+-- The texts of the widgets in names; a widget that fails is removed.
+function rt._widget_texts(names)
+  local texts, errors = {}, {}
+  for _, name in ipairs(names) do
+    local fn = widgets[name]
+    if fn then
+      local ok, text = pcall(fn)
+      if ok and (text == nil or type(text) == "string" or type(text) == "number") then
+        texts[name] = text == nil and "" or tostring(text):sub(1, 200)
+      else
+        widgets[name] = nil
+        errors[#errors + 1] = "widget " .. name .. ": " .. (ok and "return a string" or tostring(text))
+      end
+    end
+  end
+  return texts, errors
+end
+
 -- rt.pack.add(spec or list of specs): plugins, loaded once config.lua has
 -- run (after installing or approving them). A spec is a git URL, or a table:
 -- { "url" or src = "url" or dir = "~/folder", name, version, trusted, opts, config,
@@ -484,6 +513,15 @@ fn run_guarded(
     context: &Context,
     f: impl FnOnce(&Lua, &Rc<RefCell<State>>) -> mlua::Result<()>,
 ) -> Result<Vec<Action>, String> {
+    run_limited(CALLBACK_LIMIT, context, f)
+}
+
+/// [`run_guarded`] with its own time limit.
+fn run_limited(
+    limit: std::time::Duration,
+    context: &Context,
+    f: impl FnOnce(&Lua, &Rc<RefCell<State>>) -> mlua::Result<()>,
+) -> Result<Vec<Action>, String> {
     RUNTIME.with(|r| {
         let runtime = r.borrow();
         let Some(rt) = runtime.as_ref() else {
@@ -492,14 +530,14 @@ fn run_guarded(
         rt.state.borrow_mut().context = context.clone();
         // A callback runs on the browser's UI thread: one that doesn't
         // finish (a loop) would freeze the browser, so stop it instead.
-        let deadline = std::time::Instant::now() + CALLBACK_LIMIT;
+        let deadline = std::time::Instant::now() + limit;
         let _ = rt.lua.set_hook(
             mlua::HookTriggers::new().every_nth_instruction(10_000),
             move |_, _| {
                 if std::time::Instant::now() > deadline {
                     Err(mlua::Error::runtime(format!(
-                        "stopped after {} seconds; long work belongs in rt.spawn or a timer",
-                        CALLBACK_LIMIT.as_secs()
+                        "stopped after {} ms; long work belongs in rt.spawn or a timer",
+                        limit.as_millis()
                     )))
                 } else {
                     Ok(mlua::VmState::Continue)
@@ -513,6 +551,30 @@ fn run_guarded(
             .map(|()| actions)
             .map_err(|e| tidy_error(&e.to_string(), &rt.config_dir))
     })
+}
+
+/// Status bar widgets get this long each time the bar is drawn.
+const WIDGET_LIMIT: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// The texts of the `rt.statusbar.widget`s named, and the errors of any
+/// that failed (which are removed). What else they ask for is ignored.
+pub fn widget_texts(
+    names: &[String],
+    context: &Context,
+) -> (std::collections::BTreeMap<String, String>, Vec<String>) {
+    let out = RefCell::new(Default::default());
+    let result = run_limited(WIDGET_LIMIT, context, |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        let texts: mlua::Function = api.get("_widget_texts")?;
+        *out.borrow_mut() = texts.call(names.to_vec())?;
+        Ok(())
+    });
+    let (texts, mut errors): (std::collections::BTreeMap<String, String>, Vec<String>) =
+        out.into_inner();
+    if let Err(e) = result {
+        errors.push(e);
+    }
+    (texts, errors)
 }
 
 /// The plugins `rt.pack.add` asked for, in order.
@@ -1473,6 +1535,49 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 ..SpawnRequest::default()
             })]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn statusbar_widgets_draw_text_and_drop_when_they_fail() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-widgets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.statusbar.widget("where", function() return "at " .. rt.url() end)
+rt.statusbar.widget("count", function() return 3 end)
+rt.statusbar.widget("bad", function() return {} end)
+rt.statusbar.widget("slow", function() while true do end end)
+assert(not pcall(rt.statusbar.widget, "a b", function() end))
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context {
+            url: "https://example.com/".into(),
+            ..Context::default()
+        };
+        let names: Vec<String> = ["where", "count", "bad", "slow", "none"]
+            .map(String::from)
+            .into();
+        let (texts, errors) = widget_texts(&names, &ctx);
+        assert_eq!(
+            texts.get("where").map(String::as_str),
+            Some("at https://example.com/")
+        );
+        assert_eq!(texts.get("count").map(String::as_str), Some("3"));
+        assert_eq!(errors.len(), 2, "{errors:?}");
+        assert!(errors[1].contains("stopped after"), "{errors:?}");
+        // Failed widgets are gone.
+        let (texts, errors) = widget_texts(&names, &ctx);
+        assert_eq!(texts.len(), 2);
+        assert!(errors.is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

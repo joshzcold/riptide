@@ -20,7 +20,11 @@ thread_local! {
 const MAX_DEPTH: u32 = 8;
 
 fn context(count: Option<u32>) -> Context {
-    shell::with(|s| {
+    shell::with(|s| context_of(s, count)).unwrap_or_default()
+}
+
+fn context_of(s: &shell::Shell, count: Option<u32>) -> Context {
+    {
         let tab = s.tabs.current();
         let current = s.tabs.current_index();
         Context {
@@ -40,8 +44,47 @@ fn context(count: Option<u32>) -> Context {
                 })
                 .collect(),
         }
+    }
+}
+
+/// The texts of the `lua:` widgets in `statusbar.widgets`, for each window.
+pub fn statusbar_widgets() -> Vec<std::collections::BTreeMap<String, String>> {
+    let (names, contexts) = shell::with(|s| {
+        let names: Vec<String> = s
+            .engine
+            .settings()
+            .list("statusbar.widgets")
+            .iter()
+            .filter_map(|w| w.strip_prefix("lua:"))
+            .map(String::from)
+            .collect();
+        if names.is_empty() {
+            return (names, Vec::new());
+        }
+        let focused = s.active;
+        let contexts = (0..s.windows.len())
+            .map(|i| {
+                s.active = i;
+                context_of(s, None)
+            })
+            .collect();
+        s.active = focused;
+        (names, contexts)
     })
-    .unwrap_or_default()
+    .unwrap_or_default();
+    let mut failed = Vec::new();
+    let texts = contexts
+        .iter()
+        .map(|context| {
+            let (texts, errors) = lua::widget_texts(&names, context);
+            failed.extend(errors);
+            texts
+        })
+        .collect();
+    for error in failed {
+        shell::show_message(Level::Error, error);
+    }
+    texts
 }
 
 fn carry_out(result: Result<Vec<Action>, String>) {
