@@ -145,7 +145,7 @@
 <header>
   <div class="bar">
     <h1><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</h1>
-    <div class="views" role="tablist"><a href="#settings" data-view="settings" role="tab">Settings</a><a href="#keys" data-view="keys" role="tab">Keys</a><a href="#sites" data-view="sites" role="tab">Sites</a><a href="#plugins" data-view="plugins" role="tab">Plugins</a></div>
+    <div class="views" role="tablist"><a href="#settings" data-view="settings" role="tab">Settings</a><a href="#keys" data-view="keys" role="tab">Keys</a><a href="#sites" data-view="sites" role="tab">Sites</a><a href="#plugins" data-view="plugins" role="tab">Plugins</a><a href="#extensions" data-view="extensions" role="tab">Extensions</a></div>
     <input id="search" type="search" placeholder="Search settings" autocomplete="off" aria-label="Search">
     <label class="toggle"><input id="changed" type="checkbox"> Changed only</label>
   </div>
@@ -181,6 +181,7 @@ const ICONS = {
   other: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
   reset: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6M4 4v4.6h4.6"/>',
   plugins: '<path d="M9 3v4M15 3v4M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/>',
+  extensions: '<path d="M4 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H4z"/>',
   sites: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
 };
 const GROUPS = [
@@ -498,10 +499,11 @@ function render() {
 }
 function draw() {
   for (const a of document.querySelectorAll(".views a")) a.classList.toggle("current", a.dataset.view === view.name);
-  search.placeholder = { keys: "Search keys and commands", sites: "Search sites", plugins: "Search plugins" }[view.name] || "Search settings";
-  changedOnly.parentElement.style.display = view.name === "sites" || view.name === "plugins" ? "none" : "";
+  search.placeholder = { keys: "Search keys and commands", sites: "Search sites", plugins: "Search plugins", extensions: "Search extensions" }[view.name] || "Search settings";
+  changedOnly.parentElement.style.display = ["sites", "plugins", "extensions"].includes(view.name) ? "none" : "";
   if (view.name === "sites") return renderSites();
   if (view.name === "plugins") return renderPlugins();
+  if (view.name === "extensions") return renderExtensions();
   return view.name === "keys" ? renderKeys() : renderSettings();
 }
 function renderSettings() {
@@ -965,17 +967,100 @@ function renderPlugins() {
   if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
 }
 
-// #settings, #keys, #keys/<mode>, #sites or #plugins, or a place in one of them:
+// The Extensions tab.
+const EXTENSION_STATES = {
+  loaded: ["Loaded", "allowed"], new: ["Loads after a restart", ""], changed: ["Changed; restart to load it", ""],
+};
+const extensionAction = (id, action) => rt.send("extension", JSON.stringify({ id, action }));
+
+function renderExtensions() {
+  observer?.disconnect();
+  const focused = document.activeElement?.dataset?.key;
+  const all = page.extensions?.items || [];
+  const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const items = all.filter((x) => words.every((w) => `${x.name} ${x.description} ${x.id}`.toLowerCase().includes(w)));
+  nav.replaceChildren(...items.map((x, i) => {
+    const a = el("a");
+    a.href = `#extension-${i}`;
+    a.append(icon("extensions"), el("span", null, x.name));
+    return a;
+  }));
+  const section = el("section");
+  const h2 = el("h2");
+  h2.append(icon("extensions"), "Extensions");
+  section.append(h2, el("p", "blurb", "Chrome extensions, installed with :extension-install or listed in extensions.load. They load when riptide starts. Popups open in a tab, where they can't act on the page you were on."));
+  const top = el("div", "actions");
+  top.style.marginBottom = "10px";
+  const topButton = (text, title, click) => {
+    const b = control({ name: `extensions:${text}` }, el("button", null, text), text);
+    b.title = title;
+    b.addEventListener("click", click);
+    top.append(b);
+  };
+  if (all.some((x) => x.installed)) topButton("Check for updates", "Ask the Web Store for newer versions; nothing changes yet", () => extensionAction("", "check"));
+  topButton("Chrome's extensions page", "Turn extensions on or off, see their errors and details", () => extensionAction("", "chrome"));
+  section.append(top);
+  const removed = page.extensions?.removed || [];
+  if (page.extensions?.restart) {
+    const banner = el("div", "banner");
+    banner.append(removed.length ? `Removed ${removed.join(", ")}. ` : "", "Restart to apply the changes. ");
+    const b = control({ name: "extensions:restart" }, el("button", null, "Restart now"), "restart");
+    b.addEventListener("click", () => rt.send("restart", "{}"));
+    banner.append(b);
+    section.append(banner);
+  }
+
+  items.forEach((x, i) => {
+    const block = el("div", "card");
+    block.id = `extension-${i}`;
+    const head = el("div", "keyrow");
+    head.style.gridTemplateColumns = "minmax(0, 1fr) auto auto";
+    const about = el("div");
+    about.append(el("div", "name", `${x.name} ${x.version}`));
+    if (x.description) about.append(el("div", "desc", x.description));
+    about.append(el("div", "desc", x.installed ? `Installed · ${x.id}` : `From ${x.folder} · ${x.id}`));
+    const [label, state] = EXTENSION_STATES[x.state] || [x.state, ""];
+    const actions = el("div", "actions");
+    const button = (text, action, title) => {
+      const b = control({ name: `extension:${x.id}:${action}` }, el("button", null, text), action);
+      b.title = title;
+      b.addEventListener("click", () => extensionAction(x.id, action));
+      actions.append(b);
+    };
+    if (x.popup) button("Popup", "popup", `Open ${x.name}'s popup in a tab`);
+    if (x.options) button("Options", "options", `Open ${x.name}'s options in a tab`);
+    if (x.update) button(`Update to ${x.update}`, "update", `Download ${x.name} ${x.update}; you'll see what it asks for first`);
+    if (x.installed) button("Remove", "remove", `Delete ${x.name}; it's gone after a restart`);
+    head.append(about, el("span", `note state ${state}`, label), actions);
+    block.append(head);
+    const asks = el("div", "keyrow");
+    asks.style.gridTemplateColumns = "minmax(0, 1fr)";
+    asks.append(el("div", "desc", x.asks.length ? `Can ${x.asks.join("; ")}` : "Asks for nothing beyond its own pages"));
+    block.append(asks);
+    section.append(block, el("div", "spacer"));
+  });
+  if (!items.length) {
+    const empty = el("p", null, all.length ? "No extension matches." : "No extensions yet. Install one with :extension-install and its Chrome Web Store page.");
+    empty.id = "empty";
+    section.append(empty);
+  }
+  list.replaceChildren(section);
+  if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
+}
+
+// #settings, #keys, #keys/<mode>, #sites, #plugins or #extensions, or a place in one of them:
 // #section-<id> (settings) or #site-<n> (sites).
 function route() {
   const hash = location.hash.slice(1);
   const [name, mode] = hash.split("/");
-  const anchor = /^(section|site|plugin)-/.test(name) ? name : null;
+  const anchor = /^(section|site|plugin|extension)-/.test(name) ? name : null;
   const before = view.name;
   if (name === "sites" || name.startsWith("site-")) {
     view.name = "sites";
   } else if (name === "plugins" || name.startsWith("plugin-")) {
     view.name = "plugins";
+  } else if (name === "extensions" || name.startsWith("extension-")) {
+    view.name = "extensions";
   } else if (name === "keys") {
     view.name = "keys";
     if (mode) view.mode = mode;

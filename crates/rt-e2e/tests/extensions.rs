@@ -85,7 +85,47 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     b.run("close");
     b.wait_until("back to one window", |s| s.windows.len() == 1);
 
+    // :extensions lists it, with buttons for its popup and options.
     b.run("extensions");
+    b.wait_until("the Extensions tab opens", |s| {
+        s.tab().url.ends_with("#extensions") && !s.tab().loading
+    });
+    b.wait_eval(
+        "page.extensions.items.map((x) => `${x.name}|${x.state}|${x.popup}|${x.options}|${x.installed}`).join()",
+        "riptide probe|loaded|true|true|false",
+    );
+    let id = b.eval("page.extensions.items[0].id");
+    b.eval(&format!(
+        "rt.send('extension', JSON.stringify({{ id: '{id}', action: 'popup' }})); ''"
+    ));
+    let popup = format!("chrome-extension://{id}/popup.html");
+    b.wait_until("the popup opens in a tab", |s| s.tab().is_loaded(&popup));
+
+    // :extension-open completes names and opens the options page.
+    b.keys(":extension-open rip<Tab>");
+    b.wait_until("names complete", |s| {
+        s.completion["items"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|i| i["name"] == "riptide probe"))
+    });
+    b.keys("<Escape>");
+    b.run("extension-open riptide probe options");
+    let options = format!("chrome-extension://{id}/options.html");
+    b.wait_until("the options open", |s| s.tab().is_loaded(&options));
+
+    // A folder's extension isn't deleted; the message points to the setting.
+    b.run("extension-remove riptide probe");
+    b.wait_until("it points to the setting", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("take it out of extensions.load"))
+    });
+
+    // The tab's button opens Chrome's own page in a call window.
+    b.run("extensions");
+    b.wait_until("the Extensions tab opens", |s| {
+        s.tab().url.ends_with("#extensions") && !s.tab().loading
+    });
+    b.eval("rt.send('extension', JSON.stringify({ action: 'chrome' })); ''");
     b.wait_until("Chrome's extensions page opens in a call window", |s| {
         s.windows.len() == 2 && s.window().call && s.tab().url.starts_with("chrome://extensions")
     });
@@ -133,6 +173,15 @@ fn extension_install_asks_first_and_loads_after_restart() {
         assert!(message.contains(part), "{part:?} in {message}");
     }
     b.keys("y");
+    let s = b.wait_until("it offers to restart", |s| {
+        s.prompt.as_ref().is_some_and(|p| {
+            p["message"]
+                .to_string()
+                .contains("Installed Packed probe. A restart loads it. Restart now?")
+        })
+    });
+    assert_eq!(s.prompt.unwrap()["title"], "Restart");
+    b.keys("n");
     b.wait_until("installed", |s| {
         s.message() == Some("Installed Packed probe; :restart loads it")
     });
@@ -150,11 +199,57 @@ fn extension_install_asks_first_and_loads_after_restart() {
     b.wait_until("the page loads", |s| s.tab().is_loaded(&page));
     b.wait_eval("document.documentElement.dataset.packed || ''", "yes");
 
+    // The same version again changes nothing; a newer one says what's new.
+    b.run(&format!("extension-install {}", file.display()));
+    b.wait_until("already installed", |s| {
+        s.message() == Some("Packed probe 2.0 is already installed")
+    });
+    let newer = b.scratch().join("newer.crx");
+    std::fs::write(
+        &newer,
+        crx(&[
+            (
+                "manifest.json",
+                &manifest.replace("\"2.0\"", "\"3.0\"").replace(
+                    "[\"nativeMessaging\"]",
+                    "[\"nativeMessaging\", \"history\"]",
+                ),
+            ),
+            (
+                "_locales/en/messages.json",
+                r#"{ "name": { "message": "Packed probe" } }"#,
+            ),
+        ]),
+    )
+    .unwrap();
+    b.run(&format!("extension-install {}", newer.display()));
+    let s = b.wait_until("it asks about the update", |s| s.mode == "yesno");
+    let message = s.prompt.as_ref().unwrap()["message"].to_string();
+    assert!(
+        message.contains("Update Packed probe 2.0 to 3.0?")
+            && message.contains("It now also asks to:")
+            && message.contains("read and change your history")
+            && !message.contains("talk to programs"),
+        "only what's new: {message}"
+    );
+    b.keys("n");
+    b.wait_mode("normal");
+
     b.run("extension-remove packed probe");
+    b.wait_until("it offers to restart", |s| s.mode == "yesno");
+    b.keys("n");
     b.wait_until("removed", |s| {
         s.message() == Some("Removed Packed probe; it's gone after :restart")
     });
     assert!(!dir.exists());
+    b.run("extensions");
+    b.wait_until("the Extensions tab opens", |s| {
+        s.tab().url.ends_with("#extensions") && !s.tab().loading
+    });
+    b.wait_eval(
+        "`${page.extensions.removed.join()}|${page.extensions.restart}|${page.extensions.items.length}`",
+        "Packed probe|true|0",
+    );
 }
 
 #[test]

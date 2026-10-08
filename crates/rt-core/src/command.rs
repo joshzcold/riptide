@@ -650,8 +650,17 @@ pub enum Command {
     ExtensionRemove {
         name: String,
     },
-    /// Chrome's extensions page, in a call window.
+    /// The settings page's Extensions tab.
     Extensions,
+    /// Open an extension's popup or options page in a tab.
+    ExtensionOpen {
+        name: String,
+        page: Option<String>,
+    },
+    /// Check installed extensions for updates, or update one.
+    ExtensionUpdate {
+        name: String,
+    },
     /// Download a URL, or the current page.
     Download {
         url: Option<String>,
@@ -862,7 +871,15 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "extensions",
-        "Show Chrome's extensions page, to turn extensions on or off and see their errors",
+        "List extensions in :settings, with their popups, options, updates and Remove",
+    ),
+    spec(
+        "extension-open",
+        "Open an extension's popup, or its options: :extension-open <name> [popup|options]",
+    ),
+    spec(
+        "extension-update",
+        "Check installed extensions for updates, or update one: :extension-update [name]",
     ),
     spec(
         "open-editor",
@@ -1936,6 +1953,25 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             name: args.rest().trim().to_string(),
         },
         "extensions" => Command::Extensions,
+        "extension-open" => {
+            let rest = args.rest().trim();
+            let (name, page) = match rest.rsplit_once(char::is_whitespace) {
+                Some((name, page)) if matches!(page, "popup" | "options") => {
+                    (name.trim_end().to_string(), Some(page.to_string()))
+                }
+                _ => (rest.to_string(), None),
+            };
+            if name.is_empty() {
+                return Err(CommandError::BadArgs {
+                    command: "extension-open".into(),
+                    message: "name the extension".into(),
+                });
+            }
+            Command::ExtensionOpen { name, page }
+        }
+        "extension-update" => Command::ExtensionUpdate {
+            name: args.rest().trim().to_string(),
+        },
         "history-import" => Command::HistoryImport {
             path: args.optional().map(String::from),
         },
@@ -2590,6 +2626,7 @@ mod tests {
             "cmd-repeat",
             "cmd-run-with-count",
             "extension-install",
+            "extension-open",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

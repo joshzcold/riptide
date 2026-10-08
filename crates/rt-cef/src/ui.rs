@@ -57,6 +57,12 @@ pub fn handle_message(message: UiMessage) {
                 PluginAction::Load => crate::plugins::load_now(&name),
             }
         }
+        UiMessage::Extension { id, action } => crate::extensions::ui_action(&id, action),
+        UiMessage::Restart => {
+            if let Some(effects) = crate::shell::with(|s| s.engine.execute_str("restart", None)) {
+                crate::shell::apply(effects);
+            }
+        }
         UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),
         UiMessage::RecoverForget { session } => crate::recover::forget(&session),
         UiMessage::ColorScheme { dark } => {

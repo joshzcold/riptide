@@ -1311,7 +1311,15 @@ Not checked: real autofill with a vault (needs an account), passkeys, `chrome.co
 - **Native messaging:** hosts in Chromium's, Chrome's, Brave's, Edge's and Vivaldi's `NativeMessagingHosts` (and `/etc/…`) are symlinked into `<data>/NativeMessagingHosts`, only when their `allowed_origins` name an installed extension.
 - **Private windows** run without extensions (checked).
 - **Tests:** unit tests for CRX, ids, base64, manifests and host linking. The e2e `extensions.rs` covers a DNR probe fixture loaded from a folder (start page, content script, worker, block, private window, `:extensions`), install from a CRX the test builds with a throwaway key, plus restart and remove, and the MV2 refusal.
-- **Not done:** popups reaching the current tab (needs CEF to put Alloy tabs in `chrome.tabs`), a per-site ad-block switch and element picker built natively, and updates other than reinstalling.
+- ✅ **Managing them** (2026-10-08):
+  - **The Extensions tab** of `:settings`, which `:extensions` now opens. It's built from `extensions::inventory` (installed folders plus `extensions.load`). A folder's id is `folder_id`: from its `key`, or else the hash of its canonical path, as Chromium does it (checked against chrome://extensions).
+  - **Buttons:** Popup, Options, Remove, Check for updates, Update to …, and Chrome's extensions page (a call window).
+  - **State:** "loaded" when the id and version match what this run started with (`STARTED`), otherwise "new" or "changed", plus a list of removed ones. A restart banner has a Restart now button (`UiMessage::Restart`).
+  - **`:extension-open <name> [popup|options]`** and **`:extension-update [name]`**. Names complete (`CompletionKind::Extension`) from a cached list, since completion runs while the shell is borrowed.
+  - **Updates:** checks use the update service's `response=updatecheck` (the XML's `updatecheck status/version`, checked against a real answer). An update's question lists only what it newly asks for, and the same version again changes nothing.
+  - **Restarting:** after an install or remove, a "Restart now?" question; no answer keeps the old `:restart` message.
+  - **Chrome's own Remove** couldn't be tested: `chrome.management.uninstall` needs a user gesture, and its confirm dialog is native. Since riptide loads extensions from their folders at every start, the docs say to remove them in riptide.
+- **Not done:** popups reaching the current tab (needs CEF to put Alloy tabs in `chrome.tabs`), a per-site ad-block switch and element picker built natively, and automatic update checks.
 
 **Recommendation: build MV3 extension support, and keep the native alternatives for what `chrome.tabs` blocks.**
 - **Extensions:**

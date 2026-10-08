@@ -54,6 +54,10 @@ pub enum UiMessage {
     ClearSite { site: String },
     /// The Plugins tab's buttons for one plugin.
     Plugin { name: String, action: PluginAction },
+    /// The Extensions tab's buttons; `id` is empty for checking all.
+    Extension { id: String, action: ExtensionAction },
+    /// A page's "restart now" button.
+    Restart,
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -77,6 +81,24 @@ pub enum PluginAction {
     Remove,
     /// Load a plugin that waits for an event, command or key now.
     Load,
+}
+
+/// What the Extensions tab asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExtensionAction {
+    /// Open its toolbar popup in a tab.
+    Popup,
+    /// Open its options page in a tab.
+    Options,
+    /// Delete an installed extension.
+    Remove,
+    /// Ask the Web Store for newer versions.
+    Check,
+    /// Install the newer version a check found.
+    Update,
+    /// Chrome's own extensions page.
+    Chrome,
 }
 
 /// Which bar a size is for.
@@ -297,6 +319,14 @@ struct FloatSize {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Extension {
+    #[serde(default)]
+    id: String,
+    action: ExtensionAction,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Plugin {
     name: String,
     action: PluginAction,
@@ -407,6 +437,16 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 action,
             })
         }
+        ("settings", "extension") => {
+            let Extension { id, action } = payload(name, json)?;
+            let all =
+                id.is_empty() && matches!(action, ExtensionAction::Check | ExtensionAction::Chrome);
+            if !all && crate::extensions::parse_id(&id).as_deref() != Some(id.as_str()) {
+                return Err(format!("{name}: bad extension id"));
+            }
+            Ok(UiMessage::Extension { id, action })
+        }
+        ("settings", "restart") => Ok(UiMessage::Restart),
         ("settings", "reset") => {
             let SettingName { name: setting } = payload(name, json)?;
             Ok(UiMessage::SettingsReset {

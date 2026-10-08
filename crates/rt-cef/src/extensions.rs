@@ -5,8 +5,11 @@
 //! store's public key), so their storage and their native messaging hosts'
 //! `allowed_origins` still match.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use cef::*;
@@ -21,6 +24,25 @@ use crate::shell;
 /// Whether this run loaded any extensions.
 static LOADED: AtomicBool = AtomicBool::new(false);
 
+/// What this run loaded: id, version and name, to tell what a restart changes.
+static STARTED: Mutex<Vec<(String, String, String)>> = Mutex::new(Vec::new());
+
+thread_local! {
+    /// Newer versions update checks found, by id.
+    static UPDATES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    /// Name, version and id of each extension, for completion, which runs
+    /// while the shell is busy and can't list them itself.
+    static NAMES: RefCell<Vec<(String, String, String)>> = const { RefCell::new(Vec::new()) };
+}
+
+fn remember_names(entries: &[Entry]) {
+    let names = entries
+        .iter()
+        .map(|e| (e.about.name.clone(), e.about.version.clone(), e.id.clone()))
+        .collect();
+    NAMES.with(|n| *n.borrow_mut() = names);
+}
+
 /// Where `:extension-install` keeps extensions.
 fn installed_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("extensions")
@@ -30,43 +52,176 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-/// The folders to load: installed extensions, then `extensions.load`. Only
-/// folders with a manifest.json; a comma would split Chromium's list.
-pub fn folders(data_dir: &Path, configured: &[String]) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = std::fs::read_dir(installed_dir(data_dir))
+/// An extension riptide loads: installed by `:extension-install`, or a
+/// folder in `extensions.load`.
+pub struct Entry {
+    pub id: String,
+    pub dir: PathBuf,
+    pub installed: bool,
+    pub about: Manifest,
+}
+
+/// A folder's manifest.json and what it says, its name resolved from
+/// `_locales`.
+fn read_folder(dir: &Path) -> Option<(serde_json::Value, Manifest)> {
+    let read = |path: PathBuf| -> Option<serde_json::Value> {
+        let text = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()
+    };
+    let manifest = read(dir.join("manifest.json"))?;
+    let messages = manifest["default_locale"]
+        .as_str()
+        .and_then(|l| read(dir.join("_locales").join(l).join("messages.json")));
+    let about = extensions::read_manifest(&manifest, messages.as_ref());
+    Some((manifest, about))
+}
+
+/// Every extension to load, by name: installed ones, then `extensions.load`.
+/// A folder with a comma is skipped, since it would split Chromium's list.
+pub fn inventory(data_dir: &Path, configured: &[String]) -> Vec<Entry> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(installed_dir(data_dir))
         .into_iter()
         .flatten()
         .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            extensions::parse_id(&p.file_name().unwrap_or_default().to_string_lossy()).is_some()
-        })
-        .collect();
-    out.sort();
+    {
+        let dir = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if extensions::parse_id(&name).as_deref() != Some(name.as_str()) {
+            continue;
+        }
+        if let Some((_, about)) = read_folder(&dir) {
+            out.push(Entry {
+                id: name,
+                dir,
+                installed: true,
+                about,
+            });
+        }
+    }
     for folder in configured {
         let path = match (folder.strip_prefix("~/"), home()) {
             (Some(rest), Some(home)) => home.join(rest),
             _ => PathBuf::from(folder),
         };
-        out.push(path);
+        // Chromium names a folder's extension after its absolute path.
+        let Ok(dir) = path.canonicalize() else {
+            continue;
+        };
+        let Some((manifest, about)) = read_folder(&dir) else {
+            continue;
+        };
+        let id = extensions::folder_id(&dir.to_string_lossy(), manifest["key"].as_str());
+        out.push(Entry {
+            id,
+            dir,
+            installed: false,
+            about,
+        });
     }
-    out.retain(|p| p.join("manifest.json").is_file() && !p.to_string_lossy().contains(','));
+    out.retain(|e| !e.dir.to_string_lossy().contains(','));
+    out.sort_by_key(|e| e.about.name.to_lowercase());
     out
 }
 
 /// The value for `--load-extension`, if there's anything to load.
 pub fn load_switch(data_dir: &Path, configured: &[String]) -> Option<String> {
-    let folders = folders(data_dir, configured);
-    if folders.is_empty() {
+    let entries = inventory(data_dir, configured);
+    if entries.is_empty() {
         return None;
     }
     LOADED.store(true, Ordering::Relaxed);
+    remember_names(&entries);
+    if let Ok(mut started) = STARTED.lock() {
+        *started = entries
+            .iter()
+            .map(|e| (e.id.clone(), e.about.version.clone(), e.about.name.clone()))
+            .collect();
+    }
     link_native_hosts(data_dir, &host_folders(home().as_deref()));
-    let list: Vec<String> = folders
+    let list: Vec<String> = entries
         .iter()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|e| e.dir.to_string_lossy().into_owned())
         .collect();
     Some(list.join(","))
+}
+
+/// The extensions as the settings page shows them.
+fn current() -> Vec<Entry> {
+    shell::with(|s| {
+        inventory(
+            &s.paths.data_dir,
+            s.engine.settings().list("extensions.load"),
+        )
+    })
+    .unwrap_or_default()
+}
+
+/// An extension by id or name (any case).
+fn find(name: &str) -> Option<Entry> {
+    current()
+        .into_iter()
+        .find(|e| e.id == name || e.about.name.eq_ignore_ascii_case(name))
+}
+
+/// For the settings page's Extensions tab.
+pub fn page_data() -> serde_json::Value {
+    let entries = current();
+    remember_names(&entries);
+    let started = STARTED.lock().map(|s| s.clone()).unwrap_or_default();
+    let updates = UPDATES.with(|u| u.borrow().clone());
+    let items: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|e| {
+            let state = match started.iter().find(|(id, ..)| *id == e.id) {
+                Some((_, version, _)) if *version == e.about.version => "loaded",
+                Some(_) => "changed",
+                None => "new",
+            };
+            serde_json::json!({
+                "id": e.id,
+                "name": e.about.name,
+                "version": e.about.version,
+                "description": e.about.description,
+                "installed": e.installed,
+                "folder": (!e.installed).then(|| e.dir.display().to_string()),
+                "asks": e.about.asks,
+                "popup": e.about.popup.is_some(),
+                "options": e.about.options.is_some(),
+                "state": state,
+                "update": updates.get(&e.id).filter(|v| extensions::newer(v, &e.about.version)),
+            })
+        })
+        .collect();
+    let removed: Vec<&String> = started
+        .iter()
+        .filter(|(id, ..)| !entries.iter().any(|e| e.id == *id))
+        .map(|(.., name)| name)
+        .collect();
+    let restart = !removed.is_empty() || items.iter().any(|i| i["state"] != "loaded");
+    serde_json::json!({ "items": items, "removed": removed, "restart": restart })
+}
+
+/// Names for `:extension-open`, `-remove` and `-update`.
+pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
+    let words: Vec<String> = pattern.split_whitespace().map(str::to_lowercase).collect();
+    NAMES.with(|n| {
+        n.borrow()
+            .iter()
+            .filter(|(name, _, id)| {
+                let text = format!("{name} {id}").to_lowercase();
+                words.iter().all(|w| text.contains(w.as_str()))
+            })
+            .map(|(name, version, id)| rt_core::completion::Completion {
+                icon: None,
+                category: "Extensions",
+                name: name.clone(),
+                description: format!("{version} {id}"),
+                time: None,
+                detail: None,
+            })
+            .collect()
+    })
 }
 
 /// Where other Chromium browsers keep native messaging hosts.
@@ -173,10 +328,22 @@ fn reload_stuck() {
 
 pub fn run_command(command: &Command) -> bool {
     match command {
-        // Only Chrome-style views, which call windows have, show chrome:// pages.
-        Command::Extensions => crate::window::create_call("chrome://extensions".into()),
         Command::ExtensionInstall { source } => install(source),
         Command::ExtensionRemove { name } => remove(name),
+        Command::ExtensionOpen { name, page } => open(name, page.as_deref()),
+        Command::ExtensionUpdate { name } if name.is_empty() => check_updates(None),
+        Command::ExtensionUpdate { name } => match find(name) {
+            Some(e) if e.installed => install(&e.id),
+            Some(e) => shell::show_message(
+                Level::Error,
+                format!(
+                    "{} is loaded from {}, not installed",
+                    e.about.name,
+                    e.dir.display()
+                ),
+            ),
+            None => shell::show_message(Level::Error, format!("No extension {name:?}")),
+        },
         _ => return false,
     }
     true
@@ -266,20 +433,58 @@ fn offer(bytes: &[u8], expected: Option<&str>) {
             ),
         );
     }
-    let asks: String = if about.asks.is_empty() {
-        "\n  • nothing beyond its own pages".into()
-    } else {
-        about.asks.iter().map(|a| format!("\n  • {a}")).collect()
+    let list =
+        |asks: &[String]| -> String { asks.iter().map(|a| format!("\n  • {a}")).collect() };
+    let installed = current()
+        .into_iter()
+        .find(|e| e.installed && e.id == package.crx.id);
+    let (title, message) = match installed {
+        Some(old) if old.about.version == about.version => {
+            return shell::show_message(
+                Level::Info,
+                format!("{} {} is already installed", about.name, about.version),
+            );
+        }
+        Some(old) => {
+            let new: Vec<String> = about
+                .asks
+                .iter()
+                .filter(|a| !old.about.asks.contains(a))
+                .cloned()
+                .collect();
+            let asks = if new.is_empty() {
+                "\nIt asks for nothing new.".to_string()
+            } else {
+                format!("\nIt now also asks to:{}", list(&new))
+            };
+            (
+                "Update extension",
+                format!(
+                    "Update {} {} to {}?{asks}",
+                    about.name, old.about.version, about.version
+                ),
+            )
+        }
+        None => {
+            let asks = if about.asks.is_empty() {
+                "\n  • nothing beyond its own pages".to_string()
+            } else {
+                list(&about.asks)
+            };
+            (
+                "Install extension",
+                format!(
+                    "{} {} ({}) asks to:{asks}\nInstall it? It loads after a restart.",
+                    about.name, about.version, package.crx.id
+                ),
+            )
+        }
     };
-    let message = format!(
-        "{} {} ({}) asks to:{asks}\nInstall it? It loads after :restart.",
-        about.name, about.version, package.crx.id
-    );
     crate::prompts::ask(
         None,
         crate::prompts::Scope::Other,
         Topic::Confirm,
-        "Install extension",
+        title,
         message,
         PromptKind::YesNo {
             default: false,
@@ -288,10 +493,11 @@ fn offer(bytes: &[u8], expected: Option<&str>) {
         move |answer| {
             if matches!(answer, PromptAnswer::Yes { .. }) {
                 match unpack(&package) {
-                    Ok(()) => shell::show_message(
-                        Level::Info,
-                        format!("Installed {}; :restart loads it", package.about.name),
-                    ),
+                    Ok(()) => {
+                        UPDATES.with(|u| u.borrow_mut().remove(&package.crx.id));
+                        crate::settings_page::refresh();
+                        ask_restart(format!("Installed {}", package.about.name), "loads it");
+                    }
                     Err(e) => shell::show_message(
                         Level::Error,
                         format!("Can't install {}: {e}", package.about.name),
@@ -343,51 +549,151 @@ fn unpack(package: &Package) -> Result<(), String> {
 }
 
 fn remove(name: &str) {
-    let Some(data_dir) = data_dir() else { return };
     if name.is_empty() {
         return shell::show_message(Level::Error, "Name the extension to remove, or its id");
     }
-    let found = std::fs::read_dir(installed_dir(&data_dir))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|e| e.path())
-        .find(|dir| {
-            let id = dir
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into_owned();
-            id == name || installed_name(dir).is_some_and(|n| n.eq_ignore_ascii_case(name))
-        });
-    let Some(dir) = found else {
+    let Some(entry) = find(name) else {
         return shell::show_message(Level::Error, format!("No installed extension {name:?}"));
     };
-    let label = installed_name(&dir).unwrap_or_else(|| name.to_string());
-    match std::fs::remove_dir_all(&dir) {
-        Ok(()) => shell::show_message(
-            Level::Info,
-            format!("Removed {label}; it's gone after :restart"),
-        ),
+    if !entry.installed {
+        return shell::show_message(
+            Level::Error,
+            format!(
+                "{} is loaded from {}; take it out of extensions.load",
+                entry.about.name,
+                entry.dir.display()
+            ),
+        );
+    }
+    let label = entry.about.name;
+    match std::fs::remove_dir_all(&entry.dir) {
+        Ok(()) => {
+            crate::settings_page::refresh();
+            ask_restart(format!("Removed {label}"), "removes it");
+        }
         Err(e) => shell::show_message(Level::Error, format!("Can't remove {label}: {e}")),
     }
 }
 
-/// An installed extension's name, from its manifest.
-fn installed_name(dir: &Path) -> Option<String> {
-    let read = |path: PathBuf| -> Option<serde_json::Value> {
-        serde_json::from_str(
-            std::fs::read_to_string(path)
-                .ok()?
-                .trim_start_matches('\u{feff}'),
-        )
-        .ok()
+/// Extensions load when riptide starts: offer to restart now.
+fn ask_restart(done: String, what: &'static str) {
+    crate::prompts::ask(
+        None,
+        crate::prompts::Scope::Other,
+        Topic::Confirm,
+        "Restart",
+        format!("{done}. A restart {what}. Restart now?"),
+        PromptKind::YesNo {
+            default: true,
+            remember: Remember::Never,
+        },
+        move |answer| {
+            if matches!(answer, PromptAnswer::Yes { .. }) {
+                if let Some(effects) = shell::with(|s| s.engine.execute_str("restart", None)) {
+                    shell::apply(effects);
+                }
+            } else {
+                let after = if what == "loads it" {
+                    ":restart loads it"
+                } else {
+                    "it's gone after :restart"
+                };
+                shell::show_message(Level::Info, format!("{done}; {after}"));
+            }
+        },
+    );
+}
+
+/// An extension's popup or options page, in a new tab.
+fn open(name: &str, page: Option<&str>) {
+    let Some(entry) = find(name) else {
+        return shell::show_message(Level::Error, format!("No extension {name:?}"));
     };
-    let manifest = read(dir.join("manifest.json"))?;
-    let messages = manifest["default_locale"]
-        .as_str()
-        .and_then(|l| read(dir.join("_locales").join(l).join("messages.json")));
-    Some(extensions::read_manifest(&manifest, messages.as_ref()).name)
+    let path = match page {
+        Some("options") => entry.about.options.clone(),
+        Some(_) => entry.about.popup.clone(),
+        None => entry
+            .about
+            .popup
+            .clone()
+            .or_else(|| entry.about.options.clone()),
+    };
+    let Some(path) = path else {
+        let what = page.unwrap_or("popup or options page");
+        return shell::show_message(Level::Error, format!("{} has no {what}", entry.about.name));
+    };
+    shell::open(
+        rt_core::command::OpenTarget::Tab,
+        true,
+        Some(format!("chrome-extension://{}/{path}", entry.id)),
+    );
+}
+
+/// A Settings page button for one extension.
+pub fn ui_action(id: &str, action: rt_core::ui_message::ExtensionAction) {
+    use rt_core::ui_message::ExtensionAction;
+    match action {
+        ExtensionAction::Popup => open(id, Some("popup")),
+        ExtensionAction::Options => open(id, Some("options")),
+        ExtensionAction::Remove => remove(id),
+        ExtensionAction::Check => check_updates((!id.is_empty()).then_some(id)),
+        ExtensionAction::Update => install(id),
+        ExtensionAction::Chrome => chrome_page(),
+    }
+}
+
+/// Chrome's extensions page, in a call window: only Chrome-style views,
+/// which call windows have, show chrome:// pages.
+fn chrome_page() {
+    crate::window::create_call("chrome://extensions".into());
+}
+
+/// Ask the Web Store whether installed extensions (or one) have newer versions.
+fn check_updates(only: Option<&str>) {
+    let entries: Vec<Entry> = current()
+        .into_iter()
+        .filter(|e| e.installed && only.is_none_or(|id| e.id == id))
+        .collect();
+    if entries.is_empty() {
+        return shell::show_message(Level::Info, "No installed extensions to check");
+    }
+    shell::show_message(Level::Info, "Checking for extension updates…");
+    let left = std::rc::Rc::new(std::cell::Cell::new(entries.len()));
+    let found = std::rc::Rc::new(RefCell::new(Vec::new()));
+    for entry in entries {
+        let url = extensions::update_check_url(
+            &entry.id,
+            &entry.about.version,
+            cef::sys::CHROME_VERSION_MAJOR,
+        );
+        let (left, found) = (left.clone(), found.clone());
+        crate::fetch::get(&url, move |result| {
+            let newer = result
+                .ok()
+                .and_then(|body| extensions::update_check_version(&String::from_utf8_lossy(&body)))
+                .filter(|v| extensions::newer(v, &entry.about.version));
+            if let Some(version) = newer {
+                UPDATES.with(|u| u.borrow_mut().insert(entry.id.clone(), version.clone()));
+                found
+                    .borrow_mut()
+                    .push(format!("{} {version}", entry.about.name));
+            }
+            left.set(left.get() - 1);
+            if left.get() == 0 {
+                let found = found.borrow();
+                let text = if found.is_empty() {
+                    "Extensions are up to date".to_string()
+                } else {
+                    format!(
+                        "Updates: {}; :extension-update <name> installs one",
+                        found.join(", ")
+                    )
+                };
+                shell::show_message(Level::Info, text);
+                crate::settings_page::refresh();
+            }
+        });
+    }
 }
 
 #[cfg(test)]

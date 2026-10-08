@@ -235,6 +235,9 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     if kind == CompletionKind::Spelling {
         return crate::spell::completions(pattern);
     }
+    if kind == CompletionKind::Extension {
+        return crate::extensions::completions(pattern);
+    }
     if matches!(kind, CompletionKind::Tab | CompletionKind::OtherTab) {
         return crate::tabs::completions(pattern, kind == CompletionKind::OtherTab);
     }

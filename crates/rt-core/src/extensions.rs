@@ -179,9 +179,13 @@ pub fn base64(bytes: &[u8]) -> String {
 pub struct Manifest {
     pub name: String,
     pub version: String,
+    pub description: String,
     pub manifest_version: i64,
     /// What it asks for, in words, most powerful first.
     pub asks: Vec<String>,
+    /// Its toolbar popup and options page, as paths inside it.
+    pub popup: Option<String>,
+    pub options: Option<String>,
 }
 
 /// Read manifest.json; `messages` resolves a `__MSG_name__` name from the
@@ -253,12 +257,94 @@ pub fn read_manifest(
         }
     }
     asks.dedup();
+    let page = |value: &serde_json::Value| {
+        value
+            .as_str()
+            .filter(|p| !p.is_empty())
+            .map(|p| p.trim_start_matches('/').to_string())
+    };
     Manifest {
         name: localized(text("name")),
         version: text("version"),
+        description: localized(text("description")),
         manifest_version: manifest["manifest_version"].as_i64().unwrap_or(0),
         asks,
+        popup: page(&manifest["action"]["default_popup"]),
+        options: page(&manifest["options_ui"]["page"]).or_else(|| page(&manifest["options_page"])),
     }
+}
+
+/// The id Chromium gives an extension loaded from a folder: from its
+/// manifest's `key`, or else from the folder's absolute path.
+pub fn folder_id(path: &str, key: Option<&str>) -> String {
+    match key.and_then(base64_decode) {
+        Some(key) => id_from_key(&key),
+        None => id_from_key(path.as_bytes()),
+    }
+}
+
+/// Standard base64 back to bytes; `None` if it isn't base64.
+pub fn base64_decode(text: &str) -> Option<Vec<u8>> {
+    let value = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let bytes: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    let data = bytes
+        .strip_suffix(b"==")
+        .or_else(|| bytes.strip_suffix(b"="))
+        .unwrap_or(&bytes);
+    let mut out = Vec::with_capacity(data.len() * 3 / 4);
+    for chunk in data.chunks(4) {
+        if chunk.len() == 1 {
+            return None;
+        }
+        let mut n = 0u32;
+        for (i, &c) in chunk.iter().enumerate() {
+            n |= value(c)? << (18 - 6 * i);
+        }
+        out.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            out.push(n as u8);
+        }
+    }
+    Some(out)
+}
+
+/// The Web Store's update check for an installed version.
+pub fn update_check_url(id: &str, version: &str, chrome_major: i32) -> String {
+    format!(
+        "https://clients2.google.com/service/update2/crx?response=updatecheck&prodversion={chrome_major}.0\
+         &acceptformat=crx3&x=id%3D{id}%26v%3D{version}%26uc"
+    )
+}
+
+/// The newer version an update check found, if any: its answer has
+/// `<updatecheck status="ok" version="…"/>`, or `status="noupdate"`.
+pub fn update_check_version(xml: &str) -> Option<String> {
+    let tag = &xml[xml.find("<updatecheck")?..];
+    let tag = &tag[..tag.find('>')?];
+    let attr = |name: &str| {
+        let start = tag.find(&format!("{name}=\""))? + name.len() + 2;
+        let rest = &tag[start..];
+        Some(rest[..rest.find('"')?].to_string())
+    };
+    (attr("status")? == "ok").then(|| attr("version")).flatten()
+}
+
+/// Whether version `a` is newer than `b`, comparing dotted numbers.
+pub fn newer(a: &str, b: &str) -> bool {
+    let parts = |v: &str| -> Vec<u64> { v.split('.').map(|p| p.parse().unwrap_or(0)).collect() };
+    parts(a) > parts(b)
 }
 
 /// Permissions worth naming, in Chrome's own words where it has them.
@@ -368,6 +454,40 @@ mod tests {
     }
 
     #[test]
+    fn folder_ids_come_from_the_key_or_the_path() {
+        let key = base64(b"some key");
+        assert_eq!(base64_decode(&key).as_deref(), Some(&b"some key"[..]));
+        assert_eq!(folder_id("/x", Some(&key)), id_from_key(b"some key"));
+        assert_eq!(folder_id("/home/a/ext", None), id_from_key(b"/home/a/ext"));
+        assert_eq!(base64_decode("Zm9v!"), None);
+        for text in ["", "f", "fo", "foo", "foob", "fooba", "foobar"] {
+            assert_eq!(
+                base64_decode(&base64(text.as_bytes())).unwrap(),
+                text.as_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn update_checks_find_newer_versions() {
+        let ok = r#"<?xml version="1.0"?><gupdate><app appid="x"><updatecheck codebase="https://x/y.crx" status="ok" version="2026.10.8"/></app></gupdate>"#;
+        assert_eq!(update_check_version(ok).as_deref(), Some("2026.10.8"));
+        // As the Web Store answers (shortened).
+        let real = r#"<gupdate protocol="2.0"><app appid="d" status="ok"><updatecheck _esbAllowlist="true" codebase="https://x/D.crx" fp="1.6e" hash_sha256="ab" protected="0" size="9672935" status="ok" version="2026.1006.1931"/></app></gupdate>"#;
+        assert_eq!(
+            update_check_version(real).as_deref(),
+            Some("2026.1006.1931")
+        );
+        let none = r#"<gupdate><app appid="x"><updatecheck status="noupdate"/></app></gupdate>"#;
+        assert_eq!(update_check_version(none), None);
+        assert!(update_check_url("x", "1.2", 154).contains("v%3D1.2"));
+        assert!(newer("1.10", "1.9"));
+        assert!(newer("2026.1007.1", "2026.1006.1931"));
+        assert!(!newer("1.0", "1.0"));
+        assert!(!newer("1.0", "1.0.1"));
+    }
+
+    #[test]
     fn base64_matches_the_standard() {
         assert_eq!(base64(b""), "");
         assert_eq!(base64(b"f"), "Zg==");
@@ -388,6 +508,16 @@ mod tests {
         let messages = serde_json::json!({ "extName": { "message": "Locker" } });
         let m = read_manifest(&manifest, Some(&messages));
         assert_eq!(m.name, "Locker");
+        assert_eq!((&m.popup, &m.options), (&None, &None));
+        let pages = serde_json::json!({ "action": { "default_popup": "popup/index.html" }, "options_page": "options.html" });
+        let with_pages = read_manifest(&pages, None);
+        assert_eq!(with_pages.popup.as_deref(), Some("popup/index.html"));
+        assert_eq!(with_pages.options.as_deref(), Some("options.html"));
+        let ui = serde_json::json!({ "options_ui": { "page": "/settings.html" }, "options_page": "old.html" });
+        assert_eq!(
+            read_manifest(&ui, None).options.as_deref(),
+            Some("settings.html")
+        );
         assert_eq!(m.manifest_version, 3);
         assert_eq!(
             m.asks,

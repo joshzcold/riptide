@@ -61,7 +61,9 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |
 | `:extension-install` |  | Install a Chrome extension from the Web Store, by id or store page address, or from a .crx file; it loads after :restart |
 | `:extension-remove` |  | Delete an installed extension, by name or id; it's gone after :restart |
-| `:extensions` |  | Show Chrome's extensions page, to turn extensions on or off and see their errors |
+| `:extensions` |  | List extensions in :settings, with their popups, options, updates and Remove |
+| `:extension-open` |  | Open an extension's popup, or its options: :extension-open &lt;name&gt; [popup\|options] |
+| `:extension-update` |  | Check installed extensions for updates, or update one: :extension-update [name] |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
 | `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |
 | `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |
