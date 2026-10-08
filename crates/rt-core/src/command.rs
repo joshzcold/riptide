@@ -559,10 +559,21 @@ pub enum Command {
     /// Open the settings page's Plugins tab.
     Plugins,
     /// Fetch plugins from git and list their new commits, without updating:
-    /// one plugin, or all of them.
+    /// one plugin's repository, or all of them.
+    PackCheck {
+        name: Option<String>,
+    },
+    /// Fetch plugins from git and move them to their newest commits, then
+    /// reload: one plugin's repository, or all of them.
     PackUpdate {
         name: Option<String>,
     },
+    /// Delete checkouts and lockfile entries no plugin in config.lua uses.
+    PackClean,
+    /// Clean, update everything, and install what's missing.
+    PackSync,
+    /// Put every plugin from git back on its commit in rt-pack-lock.json.
+    PackRestore,
     /// Move focus to the next `rt.ui.panel` in the window, and back to the
     /// page after the last.
     PanelFocus,
@@ -920,8 +931,24 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Show your plugins, their permissions and updates",
     ),
     spec(
+        "pack-check",
+        "Check plugins from git for new commits, to review and update on :plugins: :pack-check [name]",
+    ),
+    spec(
         "pack-update",
-        "Check plugins from git for new commits to review on :plugins: :pack-update [name]",
+        "Update plugins from git to their newest commits, all or one: :pack-update [name]",
+    ),
+    spec(
+        "pack-sync",
+        "Remove plugins no longer in config.lua, update the rest and install what's missing",
+    ),
+    spec(
+        "pack-clean",
+        "Remove the checkouts and lockfile entries of plugins no longer in config.lua",
+    ),
+    spec(
+        "pack-restore",
+        "Put every plugin from git back on its commit in rt-pack-lock.json",
     ),
     spec(
         "panel-focus",
@@ -1851,6 +1878,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         },
         "settings" => Command::Settings,
         "plugins" => Command::Plugins,
+        "pack-check" => Command::PackCheck {
+            name: args.optional().map(String::from),
+        },
+        "pack-sync" => Command::PackSync,
+        "pack-clean" => Command::PackClean,
+        "pack-restore" => Command::PackRestore,
         "pack-update" => Command::PackUpdate {
             name: args.optional().map(String::from),
         },

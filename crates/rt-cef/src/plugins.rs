@@ -79,11 +79,54 @@ fn folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
     }
 }
 
-/// The git checkout a plugin from git is in: `<data>/pack/<name>`.
+/// The git checkout a plugin from git is in: one per repository, shared by
+/// every plugin from it, at `<data>/pack/<repo>-<hash of its URL>`.
 fn repo_folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
-    spec.dir
-        .clone()
-        .unwrap_or_else(|| data_dir.join("pack").join(&spec.name))
+    match &spec.dir {
+        Some(dir) => dir.clone(),
+        None => data_dir.join("pack").join(repo_key(&spec.src)),
+    }
+}
+
+/// A checkout's folder name: the repository's name, and a hash of its URL so
+/// two repositories with the same name don't share one.
+fn repo_key(src: &str) -> String {
+    let hash = src.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    format!("{}-{:08x}", rt_config::plugins::name_from(src), hash as u32)
+}
+
+/// The plugins from git, by repository URL, in config order.
+fn repositories() -> Vec<(String, Vec<PluginSpec>)> {
+    let mut repos: Vec<(String, Vec<PluginSpec>)> = Vec::new();
+    for spec in rt_config::lua::plugin_specs() {
+        if spec.dir.is_some() || spec.src.is_empty() {
+            continue;
+        }
+        match repos.iter_mut().find(|(src, _)| *src == spec.src) {
+            Some((_, members)) => members.push(spec),
+            None => repos.push((spec.src.clone(), vec![spec])),
+        }
+    }
+    repos
+}
+
+/// The repository URL plugin `name` comes from, if it's from git.
+fn repo_of(name: &str) -> Option<String> {
+    rt_config::lua::plugin_specs()
+        .into_iter()
+        .find(|s| s.name == name && s.dir.is_none() && !s.src.is_empty())
+        .map(|s| s.src)
+}
+
+/// The names of the plugins from repository `src`.
+fn members_of(src: &str) -> Vec<String> {
+    rt_config::lua::plugin_specs()
+        .into_iter()
+        .filter(|s| s.dir.is_none() && s.src == src)
+        .map(|s| s.name)
+        .collect()
 }
 
 /// Load every plugin `rt.pack.add` asked for: install or move to its locked
@@ -98,66 +141,87 @@ pub fn start() {
     crate::pages::unregister_all();
     BLOCKED.with(|b| b.borrow_mut().clear());
     for spec in rt_config::lua::plugin_specs() {
-        begin(spec, &lock, &data_dir);
+        if spec.dir.is_some() || spec.src.is_empty() {
+            prepare(&spec.name);
+        }
+    }
+    for (src, members) in repositories() {
+        begin(&src, &members, &lock, &data_dir);
     }
 }
 
-/// Install or check out one plugin from git if need be, then prepare it.
-fn begin(spec: PluginSpec, lock: &Lockfile, data_dir: &Path) {
-    let dir = repo_folder(&spec, data_dir);
-    if spec.dir.is_some() || spec.src.is_empty() {
-        return prepare(&spec.name);
-    }
-    let locked = lock
-        .plugins
-        .get(&spec.name)
-        .map(|l| l.commit.clone())
-        .filter(|c| !c.is_empty());
+/// Install repository `src` or move it to its locked commit if need be, then
+/// prepare `members`, the plugins from it.
+fn begin(src: &str, members: &[PluginSpec], lock: &Lockfile, data_dir: &Path) {
+    let Some(first) = members.first() else { return };
+    let dir = repo_folder(first, data_dir);
+    let names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
+    // One checkout, so one commit; plugins from it agree in the lockfile.
+    let locked = names.iter().find_map(|n| {
+        lock.plugins
+            .get(n)
+            .map(|l| l.commit.clone())
+            .filter(|c| !c.is_empty())
+    });
+    let version = members
+        .iter()
+        .map(|m| m.version.clone())
+        .find(|v| !v.is_empty());
     if !dir.is_dir() {
-        shell::show_message(Level::Info, format!("Installing plugin {}…", spec.name));
-        set_state(&spec.name, "installing", None);
-        let rev = locked.or_else(|| Some(spec.version.clone()).filter(|v| !v.is_empty()));
-        let (name, src) = (spec.name.clone(), spec.src.clone());
+        shell::show_message(
+            Level::Info,
+            format!("Installing plugin {}…", names.join(", ")),
+        );
+        for name in &names {
+            set_state(name, "installing", None);
+        }
+        let rev = locked.or(version);
+        let src = src.to_string();
         std::thread::spawn(move || {
             let result = git::install(&src, &dir, rev.as_deref());
-            finished(name, true, result);
+            finished(src, names, true, result);
         });
         return;
     }
     match (locked, git::head(&dir)) {
         (Some(locked), Ok(head)) if locked != head => {
             // The lockfile moved, e.g. synced from another computer.
-            let name = spec.name.clone();
+            let src = src.to_string();
             std::thread::spawn(move || {
                 let result = git::checkout(&dir, &locked);
-                finished(name, false, result);
+                finished(src, names, false, result);
             });
         }
-        (None, Ok(head)) => {
-            record(&spec.name, &spec.src, &head);
-            prepare(&spec.name);
+        (_, Ok(head)) => {
+            record(src, &names, &head);
+            for name in &names {
+                prepare(name);
+            }
         }
-        (_, Ok(_)) => prepare(&spec.name),
         (_, Err(e)) => {
-            set_state(&spec.name, "failed", Some(e.clone()));
-            shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name));
+            for name in &names {
+                set_state(name, "failed", Some(e.clone()));
+            }
+            shell::show_message(Level::Error, format!("Plugin {}: {e}", names.join(", ")));
         }
     }
 }
 
 /// From the git thread: hand the result to the UI thread.
-fn finished(name: String, installed: bool, result: Result<String, String>) {
+fn finished(src: String, names: Vec<String>, installed: bool, result: Result<String, String>) {
     let (ok, text) = match result {
         Ok(commit) => (true, commit),
         Err(e) => (false, e),
     };
-    let mut task = GitDone::new(name, installed, ok, text);
+    let mut task = GitDone::new(src, names.join("\n"), installed, ok, text);
     post_task(ThreadId::UI, Some(&mut task));
 }
 
 wrap_task! {
     struct GitDone {
-        name: String,
+        src: String,
+        // The plugins from it, one per line.
+        names: String,
         installed: bool,
         ok: bool,
         // The commit, or why git failed.
@@ -166,38 +230,40 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
+            let names: Vec<String> = self.names.lines().map(str::to_string).collect();
             if !self.ok {
-                set_state(&self.name, "failed", Some(self.text.clone()));
-                return shell::show_message(Level::Error, format!("Plugin {}: {}", self.name, self.text));
+                for name in &names {
+                    set_state(name, "failed", Some(self.text.clone()));
+                }
+                return shell::show_message(Level::Error, format!("Plugin {}: {}", names.join(", "), self.text));
             }
-            let src = rt_config::lua::plugin_specs()
-                .into_iter()
-                .find(|s| s.name == self.name)
-                .map(|s| s.src)
-                .unwrap_or_default();
-            record(&self.name, &src, &self.text);
+            record(&self.src, &names, &self.text);
             if self.installed {
                 let short: String = self.text.chars().take(8).collect();
-                shell::show_message(Level::Info, format!("Installed plugin {} ({short})", self.name));
+                shell::show_message(Level::Info, format!("Installed plugin {} ({short})", names.join(", ")));
             }
-            prepare(&self.name);
+            for name in &names {
+                prepare(name);
+            }
         }
     }
 }
 
-/// Pin `name` to `commit` in the lockfile.
-fn record(name: &str, src: &str, commit: &str) {
+/// Pin `names`, the plugins from repository `src`, to `commit` in the lockfile.
+fn record(src: &str, names: &[String], commit: &str) {
     let Some((config_dir, _)) = paths() else {
         return;
     };
     let saved = Lockfile::load(&config_dir).and_then(|mut lock| {
-        let entry = lock.plugins.entry(name.to_string()).or_default();
-        entry.src = src.to_string();
-        entry.commit = commit.to_string();
+        for name in names {
+            let entry = lock.plugins.entry(name.clone()).or_default();
+            entry.src = src.to_string();
+            entry.commit = commit.to_string();
+        }
         lock.save(&config_dir)
     });
     if let Err(e) = saved {
-        shell::show_message(Level::Error, format!("Plugin {name}: {e}"));
+        shell::show_message(Level::Error, format!("Plugin {}: {e}", names.join(", ")));
     }
 }
 
@@ -401,7 +467,11 @@ pub fn refresh_commands() {
 
 pub fn run_command(command: &rt_core::Command) -> bool {
     match command {
-        rt_core::Command::PackUpdate { name } => check_updates(name.as_deref()),
+        rt_core::Command::PackCheck { name } => check_updates(name.as_deref()),
+        rt_core::Command::PackUpdate { name } => update(name.as_deref()),
+        rt_core::Command::PackSync => sync(),
+        rt_core::Command::PackClean => clean(),
+        rt_core::Command::PackRestore => restore(),
         rt_core::Command::PackLoad { name, keys } => {
             if !wake(name) {
                 let loaded =
@@ -470,7 +540,11 @@ fn add_dependency(
     };
     if rt_config::lua::add_plugin_spec(dependency.clone()) {
         let lock = Lockfile::load(config_dir).unwrap_or_default();
-        begin(dependency, &lock, data_dir);
+        if dependency.dir.is_some() {
+            prepare(&dependency.name);
+        } else {
+            begin(&dependency.src.clone(), &[dependency], &lock, data_dir);
+        }
     }
     Ok(())
 }
@@ -642,6 +716,12 @@ pub fn page_data() -> serde_json::Value {
                     format!("{} ({})", spec.src, spec.subdir)
                 },
                 "git": spec.dir.is_none() && !spec.src.is_empty(),
+                // The plugins it shares a checkout with, which update with it.
+                "shares": if spec.dir.is_none() && !spec.src.is_empty() {
+                    members_of(&spec.src).into_iter().filter(|n| *n != spec.name).collect()
+                } else {
+                    Vec::new()
+                },
                 "commit": locked.commit,
                 "trusted": spec.trusted,
                 "approved": locked.approved.describe(),
@@ -654,43 +734,108 @@ pub fn page_data() -> serde_json::Value {
         .collect()
 }
 
-/// Fetch `name` (or every plugin from git) and note what's new; changes nothing.
-pub fn check_updates(name: Option<&str>) {
-    let Some((_, data_dir)) = paths() else { return };
-    let specs: Vec<PluginSpec> = rt_config::lua::plugin_specs()
+/// What to do with a repository after fetching it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum After {
+    /// List its new commits for review.
+    Check,
+    /// Move to its newest commit.
+    Update,
+}
+
+thread_local! {
+    /// Repositories still being fetched, and whether any moved, for one
+    /// reload once the last is done.
+    static FETCHING: std::cell::Cell<(usize, bool)> = const { std::cell::Cell::new((0, false)) };
+}
+
+/// The repositories `name` (or every plugin from git) comes from.
+fn repos_for(name: Option<&str>) -> Vec<(String, Vec<PluginSpec>)> {
+    let wanted = name.map(repo_of);
+    repositories()
         .into_iter()
-        .filter(|s| s.dir.is_none() && !s.src.is_empty())
-        .filter(|s| name.is_none_or(|n| n == s.name))
+        .filter(|(src, _)| {
+            wanted
+                .as_ref()
+                .is_none_or(|w| w.as_deref() == Some(src.as_str()))
+        })
+        .collect()
+}
+
+/// `:pack-check`: fetch and list what's new; changes nothing.
+pub fn check_updates(name: Option<&str>) {
+    fetch(name, After::Check);
+}
+
+/// `:pack-update`: fetch and move to the newest commit, then reload once,
+/// which asks about any new permissions.
+pub fn update(name: Option<&str>) {
+    fetch(name, After::Update);
+}
+
+fn fetch(name: Option<&str>, after: After) {
+    let Some((_, data_dir)) = paths() else { return };
+    // What isn't installed yet installs when the config loads, not here.
+    let repos: Vec<_> = repos_for(name)
+        .into_iter()
+        .filter(|(_, members)| repo_folder(&members[0], &data_dir).is_dir())
         .collect();
-    if specs.is_empty() {
-        return shell::show_message(Level::Info, "No plugins from git to update");
+    if repos.is_empty() {
+        if FETCHING.with(|f| f.get()) == (0, true) {
+            // :pack-sync with nothing installed yet.
+            FETCHING.with(|f| f.set((0, false)));
+            return reload();
+        }
+        let text = match name {
+            Some(name) => format!("Plugin {name} isn't from git"),
+            None => "No plugins from git".to_string(),
+        };
+        return shell::show_message(Level::Info, text);
     }
-    shell::show_message(
-        Level::Info,
-        format!("Checking {} plugin(s) for updates…", specs.len()),
-    );
-    for spec in specs {
-        let dir = repo_folder(&spec, &data_dir);
+    let verb = if after == After::Check {
+        "Checking"
+    } else {
+        "Updating"
+    };
+    let names: Vec<String> = repos
+        .iter()
+        .flat_map(|(_, m)| m.iter().map(|s| s.name.clone()))
+        .collect();
+    shell::show_message(Level::Info, format!("{verb} {}…", names.join(", ")));
+    FETCHING.with(|f| {
+        let (pending, moved) = f.get();
+        f.set((pending + repos.len(), moved));
+    });
+    for (src, members) in repos {
+        let dir = repo_folder(&members[0], &data_dir);
+        let names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
         std::thread::spawn(move || {
             let result = git::head(&dir).and_then(|head| {
                 let latest = git::fetch_latest(&dir)?;
                 let log = git::log(&dir, &head, &latest)?;
+                if after == After::Update && !log.is_empty() {
+                    git::checkout(&dir, &latest)?;
+                }
                 Ok((latest, log))
             });
             let (latest, log) = match result {
                 Ok((latest, log)) => (latest, log.join("\n")),
                 Err(e) => (String::new(), format!("error: {e}")),
             };
-            let mut task = UpdateChecked::new(spec.name, latest, log);
+            let mut task = Fetched::new(src, names.join("\n"), after == After::Update, latest, log);
             post_task(ThreadId::UI, Some(&mut task));
         });
     }
 }
 
 wrap_task! {
-    struct UpdateChecked {
-        name: String,
-        // The newest commit; empty if checking failed.
+    struct Fetched {
+        src: String,
+        // The plugins from it, one per line.
+        names: String,
+        // Moved to `latest` already.
+        updated: bool,
+        // The newest commit; empty if fetching failed.
         latest: String,
         // The new commits, one per line, or "error: …".
         log: String,
@@ -698,53 +843,165 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
-            if self.latest.is_empty() {
-                shell::show_message(Level::Error, format!("Plugin {}: {}", self.name, self.log.trim_start_matches("error: ")));
-                return;
-            }
+            let names: Vec<String> = self.names.lines().map(str::to_string).collect();
+            let label = names.join(", ");
             let log: Vec<String> = self.log.lines().map(str::to_string).filter(|l| !l.is_empty()).collect();
-            let text = if log.is_empty() {
-                format!("Plugin {} is up to date", self.name)
+            let moved = !self.latest.is_empty() && self.updated && !log.is_empty();
+            if self.latest.is_empty() {
+                shell::show_message(Level::Error, format!("Plugin {label}: {}", self.log.trim_start_matches("error: ")));
+            } else if moved {
+                record(&self.src, &names, &self.latest);
+                shell::show_message(Level::Info, format!("Updated {label}: {} new commit(s)", log.len()));
+            } else if log.is_empty() {
+                shell::show_message(Level::Info, format!("{label}: up to date"));
             } else {
-                format!("Plugin {} has {} new commit(s); review them on :plugins", self.name, log.len())
-            };
+                shell::show_message(Level::Info, format!("{label}: {} new commit(s); review them on :plugins", log.len()));
+            }
+            // Every plugin from the repository shows the same update.
             STATUS.with(|s| {
                 let mut all = s.borrow_mut();
-                let status = all.entry(self.name.clone()).or_default();
-                status.update = (!log.is_empty()).then(|| (self.latest.clone(), log));
+                for name in &names {
+                    let status = all.entry(name.clone()).or_default();
+                    status.update = (!self.updated && !log.is_empty()).then(|| (self.latest.clone(), log.clone()));
+                }
             });
-            shell::show_message(Level::Info, text);
             crate::settings_page::refresh();
+            let (pending, any) = FETCHING.with(|f| {
+                let (pending, any) = f.get();
+                let next = (pending.saturating_sub(1), any || moved);
+                f.set(next);
+                next
+            });
+            if pending == 0 {
+                FETCHING.with(|f| f.set((0, false)));
+                if any {
+                    reload();
+                }
+            }
         }
     }
 }
 
-/// Move `name` to the update found by [`check_updates`], then reload, which
-/// asks about any new permissions.
+/// The Plugins tab's Update: move `name`'s repository to the commit its check
+/// listed (the one reviewed, not whatever is newest now), then reload.
 pub fn apply_update(name: &str) {
-    let Some((_, data_dir)) = paths() else { return };
+    if apply_reviewed(name) {
+        reload();
+    }
+}
+
+/// The Plugins tab's Update all: every reviewed update, then one reload.
+pub fn apply_all_updates() {
+    let names: Vec<String> = STATUS.with(|s| {
+        s.borrow()
+            .iter()
+            .filter(|(_, st)| st.update.is_some())
+            .map(|(n, _)| n.clone())
+            .collect()
+    });
+    let mut moved = false;
+    for name in names {
+        // A repository's other plugins were moved with the first.
+        if STATUS.with(|s| s.borrow().get(&name).is_some_and(|st| st.update.is_some())) {
+            moved |= apply_reviewed(&name);
+        }
+    }
+    if moved {
+        reload();
+    } else {
+        shell::show_message(Level::Info, "No updates to apply; check for updates first");
+    }
+}
+
+fn apply_reviewed(name: &str) -> bool {
+    let Some((_, data_dir)) = paths() else {
+        return false;
+    };
     let Some(update) = STATUS.with(|s| s.borrow().get(name).and_then(|st| st.update.clone()))
     else {
-        return shell::show_message(Level::Error, format!("Check {name} for updates first"));
+        shell::show_message(Level::Error, format!("Check {name} for updates first"));
+        return false;
     };
     let Some(spec) = rt_config::lua::plugin_specs()
         .into_iter()
         .find(|s| s.name == name)
     else {
-        return;
+        return false;
     };
+    let names = members_of(&spec.src);
     match git::checkout(&repo_folder(&spec, &data_dir), &update.0) {
         Ok(commit) => {
-            record(&spec.name, &spec.src, &commit);
+            record(&spec.src, &names, &commit);
             STATUS.with(|s| {
-                if let Some(status) = s.borrow_mut().get_mut(name) {
-                    status.update = None;
+                let mut all = s.borrow_mut();
+                for member in &names {
+                    if let Some(status) = all.get_mut(member) {
+                        status.update = None;
+                    }
                 }
             });
-            shell::show_message(Level::Info, format!("Updated {name}; reloading the config"));
-            reload();
+            shell::show_message(Level::Info, format!("Updated {}", names.join(", ")));
+            true
         }
-        Err(e) => shell::show_message(Level::Error, format!("Plugin {name}: {e}")),
+        Err(e) => {
+            shell::show_message(Level::Error, format!("Plugin {name}: {e}"));
+            false
+        }
+    }
+}
+
+/// `:pack-restore`: every plugin from git back on its commit in
+/// rt-pack-lock.json, e.g. after pulling your dotfiles. Reloading does it.
+pub fn restore() {
+    shell::show_message(Level::Info, "Restoring the plugins in rt-pack-lock.json");
+    reload();
+}
+
+/// `:pack-clean`: delete checkouts no plugin in config.lua uses any more,
+/// and their lockfile entries.
+pub fn clean() {
+    let Some((config_dir, data_dir)) = paths() else {
+        return;
+    };
+    let specs = rt_config::lua::plugin_specs();
+    let used: Vec<PathBuf> = specs.iter().map(|s| repo_folder(s, &data_dir)).collect();
+    let pack = data_dir.join("pack");
+    let mut removed = Vec::new();
+    for entry in std::fs::read_dir(&pack).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() && !used.contains(&path) && path.starts_with(&pack) {
+            match std::fs::remove_dir_all(&path) {
+                Ok(()) => removed.push(entry.file_name().to_string_lossy().into_owned()),
+                Err(e) => shell::show_message(Level::Error, format!("{}: {e}", path.display())),
+            }
+        }
+    }
+    let _ = Lockfile::load(&config_dir).and_then(|mut lock| {
+        lock.plugins
+            .retain(|name, _| specs.iter().any(|s| &s.name == name));
+        lock.save(&config_dir)
+    });
+    let text = if removed.is_empty() {
+        "Nothing to clean".to_string()
+    } else {
+        format!("Removed {}", removed.join(", "))
+    };
+    shell::show_message(Level::Info, text);
+    crate::settings_page::refresh();
+}
+
+/// `:pack-sync`: clean, then update everything; reloading installs what's missing.
+pub fn sync() {
+    clean();
+    if repositories().is_empty() {
+        reload();
+    } else {
+        // Reload even when nothing moved, so missing plugins install.
+        FETCHING.with(|f| {
+            let (pending, _) = f.get();
+            f.set((pending, true));
+        });
+        update(None);
     }
 }
 
@@ -771,7 +1028,8 @@ pub fn revoke(name: &str) {
     }
 }
 
-/// Delete `name`'s installed copy and its lockfile entry. Only a copy riptide
+/// Delete `name`'s lockfile entry, and its checkout unless another plugin
+/// in config.lua comes from the same repository. Only a checkout riptide
 /// installed (under `<data>/pack`) is deleted; it comes back at the next
 /// start unless it's also taken out of config.lua.
 pub fn remove(name: &str) {
@@ -784,7 +1042,8 @@ pub fn remove(name: &str) {
     else {
         return;
     };
-    if spec.dir.is_none() {
+    let shared = spec.dir.is_none() && members_of(&spec.src).len() > 1;
+    if spec.dir.is_none() && !shared {
         let dir = repo_folder(&spec, &data_dir);
         if dir.starts_with(data_dir.join("pack"))
             && dir.is_dir()

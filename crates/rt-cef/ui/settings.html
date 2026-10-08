@@ -917,8 +917,33 @@ function renderPlugins() {
   const section = el("section");
   const h2 = el("h2");
   h2.append(icon("plugins"), "Plugins");
-  section.append(h2, el("p", "blurb", "Plugins added with rt.pack.add in config.lua. Ones from git stay on the commit in rt-pack-lock.json until you check for updates, read what changed, and update."));
+  section.append(h2, el("p", "blurb", "Plugins added with rt.pack.add in config.lua. Ones from git stay on the commit in rt-pack-lock.json until you check for updates, read what changed, and update; plugins from one repository update together."));
   if (errors.has("plugins")) section.append(el("div", "banner", errors.get("plugins")));
+
+  // Every plugin at once, as the :pack-* commands do.
+  const all = page.plugins || [];
+  if (all.some((p) => p.git)) {
+    const bar = el("div", "card");
+    const row = el("div", "keyrow");
+    row.style.gridTemplateColumns = "minmax(0, 1fr) auto";
+    const pending = all.filter((p) => p.update).length;
+    row.append(el("div", "desc", pending ? `${pending} plugin(s) have updates to review below` : "Check for updates to review them here before they're applied"));
+    const actions = el("div", "actions");
+    const packButton = (text, action, title) => {
+      const b = control({ name: `plugins:${action}` }, el("button", null, text), action);
+      b.title = title;
+      b.addEventListener("click", () => rt.send("pack", JSON.stringify({ action })));
+      actions.append(b);
+    };
+    packButton("Check all", "check-all", "Fetch every plugin from git and list the new commits (:pack-check)");
+    if (pending) packButton(`Update all (${pending})`, "update-all", "Apply every update listed below, then reload");
+    packButton("Sync", "sync", "Remove plugins no longer in config.lua, update the rest to their newest commits, and install what's missing (:pack-sync)");
+    packButton("Restore", "restore", "Put every plugin back on its commit in rt-pack-lock.json (:pack-restore)");
+    packButton("Clean", "clean", "Remove checkouts of plugins no longer in config.lua (:pack-clean)");
+    row.append(actions);
+    bar.append(row);
+    section.append(bar, el("div", "spacer"));
+  }
 
   plugins.forEach((plugin, i) => {
     const block = el("div", "card");
@@ -949,6 +974,7 @@ function renderPlugins() {
     const perms = wide(el("div", "keyrow"));
     perms.append(el("div", "desc", plugin.trusted ? "Trusted: runs without the sandbox" : plugin.approved.length ? `Approved: ${plugin.approved.join(", ")}` : "No permissions approved"));
     if (plugin.triggers.length) perms.append(el("div", "desc", `Loads on ${plugin.triggers.join(", ")}`));
+    if (plugin.shares?.length) perms.append(el("div", "desc", `Updates together with ${plugin.shares.join(", ")}, from the same repository`));
     block.append(perms);
     if (plugin.update) {
       const row = wide(el("div", "keyrow"));

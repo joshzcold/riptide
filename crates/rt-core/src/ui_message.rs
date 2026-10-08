@@ -54,6 +54,8 @@ pub enum UiMessage {
     ClearSite { site: String },
     /// The Plugins tab's buttons for one plugin.
     Plugin { name: String, action: PluginAction },
+    /// The Plugins tab's buttons for every plugin.
+    Pack { action: PackAction },
     /// The Extensions tab's buttons; `id` is empty for checking all.
     Extension { id: String, action: ExtensionAction },
     /// The Extensions tab's Install box: a Web Store page or an id.
@@ -71,6 +73,22 @@ pub enum UiMessage {
     },
     /// The recover page: delete a crash's session.
     RecoverForget { session: String },
+}
+
+/// What the Plugins tab asks for every plugin.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PackAction {
+    /// Fetch every repository and list new commits.
+    CheckAll,
+    /// Apply every update a check listed.
+    UpdateAll,
+    /// Clean, update everything and install what's missing.
+    Sync,
+    /// Back to the commits in rt-pack-lock.json.
+    Restore,
+    /// Remove checkouts config.lua no longer uses.
+    Clean,
 }
 
 /// What the Plugins tab asks for.
@@ -346,6 +364,12 @@ struct Extension {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Pack {
+    action: PackAction,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Plugin {
     name: String,
     action: PluginAction,
@@ -436,6 +460,10 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let site =
                 site(&text).ok_or_else(|| format!("{text:?} isn't a site, e.g. example.com"))?;
             Ok(UiMessage::ClearSite { site })
+        }
+        ("settings", "pack") => {
+            let Pack { action } = payload(name, json)?;
+            Ok(UiMessage::Pack { action })
         }
         ("settings", "plugin") => {
             let Plugin {
@@ -809,6 +837,13 @@ mod tests {
         );
         assert!(parse(page, "plugin", r#"{"name": "../x", "action": "remove"}"#).is_err());
         assert!(parse(page, "plugin", r#"{"name": "hello", "action": "run"}"#).is_err());
+        assert_eq!(
+            parse(page, "pack", r#"{"action": "update-all"}"#),
+            Ok(UiMessage::Pack {
+                action: PackAction::UpdateAll
+            })
+        );
+        assert!(parse(page, "pack", r#"{"action": "delete-everything"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
         assert!(

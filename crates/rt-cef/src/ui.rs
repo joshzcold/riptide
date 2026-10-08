@@ -48,6 +48,16 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::FloatSize { id, width, height } => crate::float::set_size(id, width, height),
         UiMessage::PanelClick { id, line } => crate::panel::click(id, line),
         UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
+        UiMessage::Pack { action } => {
+            use rt_core::ui_message::PackAction;
+            match action {
+                PackAction::CheckAll => crate::plugins::check_updates(None),
+                PackAction::UpdateAll => crate::plugins::apply_all_updates(),
+                PackAction::Sync => crate::plugins::sync(),
+                PackAction::Restore => crate::plugins::restore(),
+                PackAction::Clean => crate::plugins::clean(),
+            }
+        }
         UiMessage::Plugin { name, action } => {
             use rt_core::ui_message::PluginAction;
             match action {

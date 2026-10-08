@@ -51,18 +51,24 @@ Its permissions are still asked for at startup, so a key or command never stops 
 
 ## Versions and the lockfile
 
-`rt-pack-lock.json` in the config folder pins each plugin from git to the commit installed, so a plugin never changes on its own and the same config gives the same plugins on every computer. Keep it with your dotfiles: on another computer, riptide installs exactly the pinned commits, and if the lockfile moves a plugin to another commit, riptide checks that one out at the next start. Git runs without asking for passwords, so a private repository fails with a message instead of waiting.
+`rt-pack-lock.json` in the config folder pins each plugin from git to the commit installed, along with the permissions you approved, so a plugin never changes on its own and the same config gives the same plugins on every computer. Keep it with your dotfiles: on another computer, riptide installs exactly the pinned commits, and if the lockfile moves a plugin to another commit, riptide checks that one out at the next start, or straight away with `:pack-restore`. Plugins from one repository share a checkout, so they're always on the same commit and update together. Git runs without asking for passwords, so a private repository fails with a message instead of waiting.
+
+| Command | Plugins tab | Does |
+|---|---|---|
+| `:pack-check [name]` | **Check all**, **Check for updates** | fetches and lists each plugin's new commits; nothing changes yet |
+| | **Update**, **Update all** | moves to the commits a check listed, the ones you read |
+| `:pack-update [name]` | | fetches and moves straight to the newest commits |
+| `:pack-sync` | **Sync** | cleans, updates everything and installs what's missing |
+| `:pack-restore` | **Restore** | puts every plugin back on its commit in `rt-pack-lock.json` |
+| `:pack-clean` | **Clean** | deletes checkouts and lockfile entries of plugins no longer in `config.lua` |
+
+Every update is recorded in `rt-pack-lock.json` and reloads your config once; if a new version asks for more permissions, you're asked about those first.
 
 ## The plugins page
 
-`:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't) and the permissions you approved.
+`:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't) and the permissions you approved, with the buttons above.
 
-Updating is a review, never automatic:
-
-1. `:pack-update` (or `:pack-update <name>`, or **Check for updates** on the page) fetches plugins from git and lists their new commits. Nothing changes yet.
-2. Read the commits on the page, then press **Update** to move to them. riptide records the new commit in `rt-pack-lock.json` and reloads your config; if the new version asks for more permissions, you're asked about those first.
-
-**Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's installed copy and its lockfile entry; take it out of `config.lua` too, or it's installed again at the next start.
+To review before updating, press **Check all** (or `:pack-check`), read each plugin's new commits on the page, then press **Update** on one or **Update all**. **Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's lockfile entry and its checkout, unless another plugin uses it; take it out of `config.lua` too, or it's installed again at the next start.
 
 ## Permissions
 

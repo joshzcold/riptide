@@ -123,6 +123,17 @@ fn versioned_repo(path: &std::path::Path) -> (String, String) {
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
 fn plugins_install_from_git_and_follow_the_lockfile() {
+    // The repository's checkout: one per repository, named after it.
+    let checkout = |b: &Browser| -> Option<std::path::PathBuf> {
+        std::fs::read_dir(b.data_dir().join("pack"))
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("rt-e2e-plugin-repo"))
+            })
+    };
     let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-repo-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&repo);
     let (first, second) = versioned_repo(&repo);
@@ -142,8 +153,9 @@ fn plugins_install_from_git_and_follow_the_lockfile() {
     let lock = std::fs::read_to_string(b.config_dir().join("rt-pack-lock.json")).unwrap();
     assert!(lock.contains(&second), "{lock}");
     assert!(
-        b.data_dir()
-            .join("pack/versioned/lua/versioned/init.lua")
+        checkout(&b)
+            .unwrap()
+            .join("lua/versioned/init.lua")
             .exists()
     );
     drop(b);
@@ -165,10 +177,10 @@ fn plugins_install_from_git_and_follow_the_lockfile() {
     b.wait_until("the pinned version runs", |s| s.message() == Some("v1"));
 
     // Checking lists the new commit on the Plugins tab; nothing moves until Update.
-    b.run("pack-update");
+    b.run("pack-check");
     b.wait_until("the check found v2", |s| {
         s.message()
-            .is_some_and(|m| m.contains("versioned has 1 new commit"))
+            .is_some_and(|m| m.contains("versioned: 1 new commit"))
     });
     b.run("plugins");
     let button = r#"document.querySelector('[data-key="plugin:versioned:update#update"]')"#;
@@ -200,13 +212,40 @@ fn plugins_install_from_git_and_follow_the_lockfile() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
+    let version = |b: &Browser| -> Option<String> {
+        b.run("which-version");
+        b.wait_until("a version", |s| s.message().is_some())
+            .message()
+            .map(str::to_string)
+    };
+    let wait_version = |b: &Browser, wanted: &str| {
+        let start = std::time::Instant::now();
+        while version(b).as_deref() != Some(wanted) {
+            assert!(start.elapsed() < rt_e2e::TIMEOUT, "never on {wanted}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    };
+
+    // Restore puts it back on the lockfile's commit, e.g. after a dotfiles pull.
+    let text = std::fs::read_to_string(&lock)
+        .unwrap()
+        .replace(&second, &first);
+    std::fs::write(&lock, text).unwrap();
+    b.run("pack-restore");
+    wait_version(&b, "v1");
+
+    // :pack-update moves it straight to the newest commit and records it.
+    b.run("pack-update");
+    wait_version(&b, "v2");
+    assert!(std::fs::read_to_string(&lock).unwrap().contains(&second));
+
     // Remove deletes the installed copy and its lockfile entry.
     b.eval(r#"document.querySelector('[data-key="plugin:versioned:remove#remove"]').click(), ''"#);
     b.wait_until("removed", |s| {
         s.message()
             .is_some_and(|m| m.starts_with("Removed versioned"))
     });
-    assert!(!b.data_dir().join("pack/versioned").exists());
+    assert!(checkout(&b).is_none());
     assert!(
         !std::fs::read_to_string(&lock)
             .unwrap()
@@ -480,6 +519,85 @@ fn plugins_install_from_a_folder_of_a_repository_of_several() {
     b.wait_until("the second plugin runs", |s| s.message() == Some("two"));
     b.run("first-say");
     b.wait_until("the first plugin runs", |s| s.message() == Some("one"));
+
+    // One checkout for the repository, one commit for both in the lockfile.
+    let pack = b.data_dir().join("pack");
+    let checkouts = || -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(&pack)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(checkouts().len(), 1, "{:?}", checkouts());
+
+    // A new commit shows on both after Check all; Update all moves them together.
+    std::fs::write(
+        repo.join("first/plugin/first.lua"),
+        "rt.command('first-say', function() rt.notify('one, newer') end)",
+    )
+    .unwrap();
+    git(&["commit", "--quiet", "-am", "first says more"]);
+    b.run("plugins");
+    b.wait_eval(
+        "String(!!document.querySelector('[data-key=\"plugins:check-all#check-all\"]'))",
+        "true",
+    );
+    b.eval("document.querySelector('[data-key=\"plugins:check-all#check-all\"]').click(), ''");
+    b.wait_eval(
+        "page.plugins.filter((p) => p.update).map((p) => p.name).sort().join(' ')",
+        "first second",
+    );
+    b.eval("document.querySelector('[data-key=\"plugins:update-all#update-all\"]').click(), ''");
+    let start = std::time::Instant::now();
+    loop {
+        b.run("first-say");
+        if b.wait_until("an answer", |s| s.message().is_some())
+            .message()
+            == Some("one, newer")
+        {
+            break;
+        }
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "Update all didn't load the new commit"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let lock = std::fs::read_to_string(b.config_dir().join("rt-pack-lock.json")).unwrap();
+    let lock: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(
+        lock["plugins"]["first"]["commit"],
+        lock["plugins"]["second"]["commit"]
+    );
+
+    // Clean removes checkouts config.lua doesn't use, such as an old one.
+    std::fs::create_dir_all(pack.join("stale-0000")).unwrap();
+    b.run("pack-clean");
+    b.wait_until("cleaned", |s| {
+        s.message().is_some_and(|m| m.contains("stale-0000"))
+    });
+    assert_eq!(checkouts().len(), 1, "{:?}", checkouts());
+
+    // Sync installs what's missing: here the checkout itself.
+    let checkout = pack.join(&checkouts()[0]);
+    std::fs::remove_dir_all(&checkout).unwrap();
+    b.run("pack-sync");
+    let start = std::time::Instant::now();
+    while !checkout.join("first/plugin/first.lua").exists() {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "sync didn't install it again"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "first:loaded second:loaded",
+    );
     std::fs::remove_dir_all(&repo).unwrap();
 }
 

@@ -74,7 +74,11 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:history` |  | Show the browsing history: :history [-t] |
 | `:settings` |  | Open the settings page, to browse and change every setting |
 | `:plugins` |  | Show your plugins, their permissions and updates |
-| `:pack-update` |  | Check plugins from git for new commits to review on :plugins: :pack-update [name] |
+| `:pack-check` |  | Check plugins from git for new commits, to review and update on :plugins: :pack-check [name] |
+| `:pack-update` |  | Update plugins from git to their newest commits, all or one: :pack-update [name] |
+| `:pack-sync` |  | Remove plugins no longer in config.lua, update the rest and install what's missing |
+| `:pack-clean` |  | Remove the checkouts and lockfile entries of plugins no longer in config.lua |
+| `:pack-restore` |  | Put every plugin from git back on its commit in rt-pack-lock.json |
 | `:panel-focus` |  | Focus the next panel a plugin opened, then the page again; Escape also returns to the page |
 | `:pack-load` |  | Load a plugin that waits for an event, command or key now: :pack-load &lt;name&gt; |
 | `:recover` |  | Show the tabs open at each recent crash, to reopen some or all of them |
