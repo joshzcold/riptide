@@ -327,6 +327,13 @@ function page_for(source)
       if type(fn) ~= "function" then error("rt.page.selection takes a function", 2) end
       rt._page(source, "selection", { fn = page_result(fn) })
     end,
+    hint = function(opts)
+      if type(opts) ~= "table" or type(opts.selector) ~= "string" or #opts.selector > 1000
+        or type(opts.action) ~= "function" then
+        error("rt.page.hint takes { selector = \"css\", action = function(element) }", 2)
+      end
+      rt._page(source, "hint", { selector = opts.selector, fn = page_result(opts.action) })
+    end,
   }
 end
 rt.ui = ui_for(nil)
@@ -724,6 +731,8 @@ pub enum PageRequest {
     Css(String),
     /// The selected text goes to callback `callback`.
     Selection { callback: u32 },
+    /// Hint the elements `selector` matches; the picked one goes to `callback`.
+    Hint { selector: String, callback: u32 },
 }
 
 // Debug output never shows what's typed or filled.
@@ -738,6 +747,9 @@ impl std::fmt::Debug for PageRequest {
             Self::Eval { callback, .. } => write!(f, "Eval {{ callback: {callback}, .. }}"),
             Self::Css(_) => f.write_str("Css(..)"),
             Self::Selection { callback } => write!(f, "Selection {{ callback: {callback} }}"),
+            Self::Hint { selector, callback } => {
+                write!(f, "Hint {{ selector: {selector:?}, callback: {callback} }}")
+            }
         }
     }
 }
@@ -2235,7 +2247,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                         }
                     }
                     "css" => PageRequest::Css(text("a stylesheet")?),
-                    "eval" | "selection" => {
+                    "eval" | "selection" | "hint" => {
                         let Value::Table(opts) = &arg else {
                             return Err(mlua::Error::runtime("rt.page: bad arguments"));
                         };
@@ -2247,13 +2259,16 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                         };
                         let api: mlua::Table = lua.globals().get("rt")?;
                         api.get::<mlua::Table>("_answers")?.set(id, callback)?;
-                        if kind == "eval" {
-                            PageRequest::Eval {
+                        match kind.as_str() {
+                            "eval" => PageRequest::Eval {
                                 code: opts.get("code")?,
                                 callback: id,
-                            }
-                        } else {
-                            PageRequest::Selection { callback: id }
+                            },
+                            "hint" => PageRequest::Hint {
+                                selector: opts.get("selector")?,
+                                callback: id,
+                            },
+                            _ => PageRequest::Selection { callback: id },
                         }
                     }
                     _ => return Err(mlua::Error::runtime("rt.page: unknown action")),

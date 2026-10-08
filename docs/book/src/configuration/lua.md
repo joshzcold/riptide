@@ -149,6 +149,7 @@ rt.ui.input({ prompt = "Passphrase", secret = true }, function(text) --[[ nil if
 | `rt.page.eval(code, fn)` | evaluates a JavaScript expression and calls `fn(value)` with its value, or `fn(nil, why)` |
 | `rt.page.css(css)` | adds a stylesheet to the page until it next loads |
 | `rt.page.selection(fn)` | calls `fn(text)` with the selected text |
+| `rt.page.hint({ selector, action })` | hints the elements a CSS selector matches and calls `action({ url, text })` with the one you pick, instead of clicking it |
 
 `eval` runs in the page's own world: the page can see the code and change what it returns, so treat the value as the page's word.
 

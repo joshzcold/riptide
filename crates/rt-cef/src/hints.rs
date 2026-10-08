@@ -77,7 +77,11 @@ pub fn request(request: HintRequest) {
     };
     let groups =
         shell::with(|s| rt_core::settings::hint_selectors(s.engine.settings())).unwrap_or_default();
-    let Some(selectors) = groups.get(&request.group) else {
+    let lua_selectors = request.lua.as_ref().map(|l| l.selector.clone());
+    let Some(selectors) = lua_selectors
+        .as_ref()
+        .or_else(|| groups.get(&request.group))
+    else {
         let names: Vec<&str> = groups.keys().map(String::as_str).collect();
         return shell::show_message(
             Level::Error,
@@ -90,7 +94,13 @@ pub fn request(request: HintRequest) {
     };
     let selectors = serde_json::to_string(selectors).unwrap_or_default();
     let code = format!("{HINTS_JS}; window.__rtHints.collect({selectors})");
-    let frames = all_frames(&browser);
+    let mut frames = all_frames(&browser);
+    // A plugin's hints only look in frames of sites it may act on.
+    if let Some(lua) = &request.lua {
+        frames.retain(|f| {
+            crate::page::may_hint(&CefString::from(&f.url()).to_string(), lua.pages.as_deref())
+        });
+    }
     let gathering = Rc::new(RefCell::new(Gathering {
         browser: browser.identifier(),
         request: Some(request),

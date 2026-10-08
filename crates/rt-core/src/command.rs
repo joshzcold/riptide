@@ -1366,6 +1366,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 Some(t) => t.parse::<HintTarget>().map_err(|e| args.error(e))?,
                 None => HintTarget::Normal,
             };
+            if target == HintTarget::Lua {
+                return Err(args.error("the lua target is for rt.page.hint"));
+            }
             let fill = args.rest();
             if matches!(
                 target,
@@ -1379,6 +1382,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
                 target,
                 rapid,
                 fill: (!fill.is_empty()).then(|| fill.to_string()),
+                lua: None,
             })
         }
         "yank" => {
@@ -2256,7 +2260,8 @@ mod tests {
                 group: "all".into(),
                 target: HintTarget::Normal,
                 rapid: false,
-                fill: None
+                fill: None,
+                lua: None,
             })
         );
         assert_eq!(
@@ -2265,7 +2270,8 @@ mod tests {
                 group: "links".into(),
                 target: HintTarget::TabBg,
                 rapid: true,
-                fill: None
+                fill: None,
+                lua: None,
             })
         );
         assert_eq!(
@@ -2274,7 +2280,8 @@ mod tests {
                 group: "links".into(),
                 target: HintTarget::Fill,
                 rapid: false,
-                fill: Some(":open -t {hint-url}".into())
+                fill: Some(":open -t {hint-url}".into()),
+                lua: None,
             })
         );
         assert!(matches!(
@@ -2293,6 +2300,8 @@ mod tests {
         assert!(
             matches!(parse("hint code"), Ok(Command::Hint(HintRequest { group, .. })) if group == "code")
         );
+        // Only rt.page.hint can give the lua target its callback.
+        assert!(parse("hint all lua").is_err());
         assert!(matches!(
             parse("hint links explode"),
             Err(CommandError::BadArgs { .. })

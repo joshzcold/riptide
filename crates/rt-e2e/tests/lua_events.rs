@@ -277,3 +277,34 @@ end)
             .is_some_and(|m| m.starts_with("selection \"") && m.len() > 12)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn page_hints_hand_the_picked_element_to_lua() {
+    let b = Browser::launch()
+        .lua(
+            r##"
+rt.command("t-hint", function()
+  rt.page.hint({ selector = "#f, #b", action = function(el, err)
+    rt.notify("picked " .. tostring(err or el.text) .. " " .. tostring(el and el.url))
+  end })
+end)
+"##,
+        )
+        .start("page.html");
+    b.run("t-hint");
+    let s = b.wait_until("only the selector's elements are hinted", |s| {
+        s.mode == "hint" && s.hints.len() == 2
+    });
+    let button = s
+        .hints
+        .iter()
+        .find(|h| h.text == "b")
+        .expect("the button is hinted");
+    b.keys(&button.label);
+    b.wait_until("the action got the element", |s| {
+        s.message() == Some("picked b nil")
+    });
+    // The page itself wasn't clicked.
+    assert_eq!(b.state().tab().title, "ready");
+}

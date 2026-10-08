@@ -628,6 +628,7 @@ pub fn apply(effects: Vec<Effect>) {
             }
             Effect::ShowHints { labels } => hints::show(&labels),
             Effect::FilterHints { typed } => hints::filter(&typed),
+            Effect::LuaHint { hint, url, text } => crate::page::hint_chosen(hint, url, text),
             Effect::FollowHint { index, url, target } => {
                 with(|s| s.hint_followed_at = Some(std::time::Instant::now()));
                 hints::follow(index, url, target)

@@ -78,11 +78,28 @@ fn answer(plugin: Option<&str>, callback: u32, result: Result<String, String>) {
     crate::lua::carry_out_for(plugin.unwrap_or("config.lua"), result);
 }
 
+/// The element an `rt.page.hint` picked: its URL and text go to Lua.
+pub fn hint_chosen(hint: rt_core::hints::LuaHint, url: Option<String>, text: String) {
+    let element = serde_json::json!({ "url": url, "text": text });
+    answer(
+        hint.plugin.as_deref(),
+        hint.callback,
+        Ok(element.to_string()),
+    );
+}
+
+/// Whether a frame at `url` may be hinted for a plugin with `pages`.
+pub fn may_hint(url: &str, pages: Option<&[String]>) -> bool {
+    url.is_empty() || url == "about:blank" || allowed(url, pages)
+}
+
 pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRequest) {
     let who = plugin.map_or_else(|| "config.lua".to_string(), |p| format!("Plugin {p}"));
     // A refused eval or selection answers its callback with why, instead of a message.
     let callback = match &request {
-        PageRequest::Eval { callback, .. } | PageRequest::Selection { callback } => Some(*callback),
+        PageRequest::Eval { callback, .. }
+        | PageRequest::Selection { callback }
+        | PageRequest::Hint { callback, .. } => Some(*callback),
         _ => None,
     };
     let refuse = |why: String| match callback {
@@ -127,6 +144,25 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
             }
         }
         PageRequest::Css(css) => crate::adblock::inject_css(&browser, &css),
+        PageRequest::Hint { selector, callback } => {
+            use rt_core::hints::{HintRequest, HintTarget, LuaHint};
+            let request = HintRequest {
+                group: String::new(),
+                target: HintTarget::Lua,
+                rapid: false,
+                fill: None,
+                lua: Some(LuaHint {
+                    selector,
+                    callback,
+                    plugin: plugin.map(str::to_string),
+                    pages: pages.map(<[String]>::to_vec),
+                }),
+            };
+            shell::apply(vec![rt_core::engine::Effect::Run {
+                command: rt_core::Command::Hint(request),
+                count: None,
+            }]);
+        }
         PageRequest::Eval { code, callback } => {
             // An expression, its value as JSON; it runs in the page's own world.
             let code = format!("JSON.stringify(({code}\n) ?? null)");

@@ -75,6 +75,8 @@ pub enum HintTarget {
     Spawn,
     /// Run a userscript with `RIPTIDE_URL` set to the URL.
     Userscript,
+    /// Hand the element to a Lua function (`rt.page.hint`).
+    Lua,
 }
 
 macro_rules! names {
@@ -112,6 +114,7 @@ names!(HintTarget {
     Download => "download",
     Spawn => "spawn",
     Userscript => "userscript",
+    Lua => "lua",
 });
 
 /// A parsed `:hint` command.
@@ -124,6 +127,19 @@ pub struct HintRequest {
     pub rapid: bool,
     /// Command text for the `fill` target.
     pub fill: Option<String>,
+    /// For the `lua` target: what to hint and whom to tell.
+    pub lua: Option<LuaHint>,
+}
+
+/// An `rt.page.hint`: its selector, its callback, and where it may look.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LuaHint {
+    pub selector: String,
+    pub callback: u32,
+    /// The plugin, or `None` for config.lua.
+    pub plugin: Option<String>,
+    /// The plugin's `pages` permission; frames of other sites aren't hinted.
+    pub pages: Option<Vec<String>>,
 }
 
 /// One hintable element as reported by the page.
@@ -555,6 +571,7 @@ mod tests {
             target: HintTarget::Normal,
             rapid: false,
             fill: None,
+            lua: None,
         };
         let items = vec![HintItem::default(); 5];
         // Labels: [a, bc, ba, ca, bb]
@@ -575,6 +592,7 @@ mod tests {
             target: HintTarget::Normal,
             rapid: false,
             fill: None,
+            lua: None,
         };
         let item = |text: &str| HintItem {
             url: None,
@@ -610,6 +628,7 @@ mod tests {
             target: HintTarget::Normal,
             rapid: false,
             fill: None,
+            lua: None,
         };
         let item = |text: &str| HintItem {
             url: None,

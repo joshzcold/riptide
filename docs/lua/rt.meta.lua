@@ -354,6 +354,15 @@ function rt.page.css(css) end
 ---@param fn fun(text: string|nil, err: string|nil)
 function rt.page.selection(fn) end
 
+---@class rt.HintedElement
+---@field url string|nil Its link, if it has one.
+---@field text string Its text, lowercased.
+
+---Hint the elements `selector` matches, in frames of sites the plugin may act
+---on, and hand the one you pick to `action`; nothing is clicked.
+---@param opts { selector: string, action: fun(element: rt.HintedElement|nil, err: string|nil) }
+function rt.page.hint(opts) end
+
 rt.json = {}
 
 ---Parse JSON; `null` becomes nil.

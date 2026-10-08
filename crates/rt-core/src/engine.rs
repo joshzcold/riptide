@@ -38,6 +38,12 @@ pub enum Effect {
         url: Option<String>,
         target: HintTarget,
     },
+    /// An `rt.page.hint` element was picked: its URL and text go to Lua.
+    LuaHint {
+        hint: crate::hints::LuaHint,
+        url: Option<String>,
+        text: String,
+    },
     /// Delete what this completion stands for (`:completion-item-del`).
     DeleteCompletion(Completion),
     /// Put text on the clipboard, or the primary selection.
@@ -1144,6 +1150,7 @@ impl Engine {
             return;
         };
         let url = session.items[index].url.clone();
+        let text = session.items[index].text.clone();
         let request = session.request.clone();
         if request.rapid {
             effects.push(Effect::FilterHints {
@@ -1191,6 +1198,11 @@ impl Engine {
                     self.show_message(Level::Error, "hint userscript: bad script name");
                 }
             },
+            (HintTarget::Lua, _) => {
+                if let Some(hint) = request.lua {
+                    effects.push(Effect::LuaHint { hint, url, text });
+                }
+            }
             (target, _) => effects.push(Effect::FollowHint { index, url, target }),
         }
     }
@@ -2908,6 +2920,7 @@ mod tests {
             target,
             rapid,
             fill: fill.map(String::from),
+            lua: None,
         }
     }
 
