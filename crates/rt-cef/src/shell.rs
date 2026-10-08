@@ -655,6 +655,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::downloads::run_command(&command, count)
         || crate::adblock::run_command(&command)
         || crate::spell::run_command(&command)
+        || crate::extensions::run_command(&command)
         || crate::spawn::run_command(&command, count)
         || crate::marks::run_command(&command)
         || crate::caret::run_command(&command, count)

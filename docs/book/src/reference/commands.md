@@ -59,6 +59,9 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
 | `:spell-install` |  | Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE, or pick from a list without a language |
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |
+| `:extension-install` |  | Install a Chrome extension from the Web Store, by id or store page address, or from a .crx file; it loads after :restart |
+| `:extension-remove` |  | Delete an installed extension, by name or id; it's gone after :restart |
+| `:extensions` |  | Show Chrome's extensions page, to turn extensions on or off and see their errors |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
 | `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |
 | `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |

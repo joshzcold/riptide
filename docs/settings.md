@@ -125,6 +125,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `downloads.remove_finished` | integer | `-1` | Take finished downloads off the list after this many milliseconds; -1 keeps them |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
 | `editor.remove_file` | boolean | `true` | Delete the temporary file after the editor closes; false keeps it, e.g. to recover text |
+| `extensions.load` | string[] | `[]` | Folders of unpacked Chrome extensions to load, besides the ones :extension-install installs (after a restart) |
 | `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to |
 | `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |
 | `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line |

@@ -8,6 +8,7 @@ pub mod completion;
 pub mod config;
 pub mod dictionaries;
 pub mod engine;
+pub mod extensions;
 pub mod help;
 pub mod hints;
 pub mod html;

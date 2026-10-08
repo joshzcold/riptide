@@ -641,6 +641,17 @@ pub enum Command {
     SpellInstall {
         languages: Vec<String>,
     },
+    /// Install a Chrome extension from the Web Store (an id or its store
+    /// page) or a local `.crx` file, after showing what it asks for.
+    ExtensionInstall {
+        source: String,
+    },
+    /// Delete an installed extension, by name or id.
+    ExtensionRemove {
+        name: String,
+    },
+    /// Chrome's extensions page, in a call window.
+    Extensions,
     /// Download a URL, or the current page.
     Download {
         url: Option<String>,
@@ -840,6 +851,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "spawn",
         "Run a program: :spawn [-u] [-v] [-m] [-o] [-d] <cmd> [args]; -u runs a userscript",
+    ),
+    spec(
+        "extension-install",
+        "Install a Chrome extension from the Web Store, by id or store page address, or from a .crx file; it loads after :restart",
+    ),
+    spec(
+        "extension-remove",
+        "Delete an installed extension, by name or id; it's gone after :restart",
+    ),
+    spec(
+        "extensions",
+        "Show Chrome's extensions page, to turn extensions on or off and see their errors",
     ),
     spec(
         "open-editor",
@@ -1902,6 +1925,13 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             let languages: Vec<String> = args.rest().split_whitespace().map(String::from).collect();
             Command::SpellInstall { languages }
         }
+        "extension-install" => Command::ExtensionInstall {
+            source: args.required("source")?.to_string(),
+        },
+        "extension-remove" => Command::ExtensionRemove {
+            name: args.rest().trim().to_string(),
+        },
+        "extensions" => Command::Extensions,
         "history-import" => Command::HistoryImport {
             path: args.optional().map(String::from),
         },
@@ -2550,6 +2580,7 @@ mod tests {
             "debug-log-filter",
             "cmd-repeat",
             "cmd-run-with-count",
+            "extension-install",
         ];
         for spec in COMMANDS.iter().filter(|s| !needs_args.contains(&s.name)) {
             assert!(parse(spec.name).is_ok(), "{} failed to parse", spec.name);

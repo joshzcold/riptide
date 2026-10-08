@@ -13,6 +13,7 @@
 - [Pages: dark mode, spell checking, DRM](guide/pages.md)
 - [Programs, userscripts and Greasemonkey](guide/scripts.md)
 - [Passwords](guide/passwords.md)
+- [Extensions](guide/extensions.md)
 - [From the terminal](guide/terminal.md)
 
 # Configuration

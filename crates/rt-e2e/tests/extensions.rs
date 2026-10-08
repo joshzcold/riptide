@@ -1,0 +1,182 @@
+//! Chrome extensions: loaded from `extensions.load` folders, and installed
+//! from a CRX file with `:extension-install`.
+#![cfg(unix)]
+
+use std::io::Write;
+
+use rt_e2e::Browser;
+use sha2::{Digest, Sha256};
+
+/// A throwaway RSA public key (DER); its private half was never kept.
+const KEY: &[u8] = include_bytes!("../pages/extensions/test-key.der");
+
+fn id_of(key: &[u8]) -> String {
+    Sha256::digest(key)[..16]
+        .iter()
+        .flat_map(|b| [b >> 4, b & 0xf])
+        .map(|n| char::from(b'a' + n))
+        .collect()
+}
+
+fn field(number: u64, value: &[u8]) -> Vec<u8> {
+    fn varint(mut n: u64, out: &mut Vec<u8>) {
+        loop {
+            let byte = (n & 0x7f) as u8;
+            n >>= 7;
+            if n == 0 {
+                return out.push(byte);
+            }
+            out.push(byte | 0x80);
+        }
+    }
+    let mut out = Vec::new();
+    varint((number << 3) | 2, &mut out);
+    varint(value.len() as u64, &mut out);
+    out.extend_from_slice(value);
+    out
+}
+
+/// A CRX3 file holding the files given, signed (in name only) by [`KEY`].
+fn crx(files: &[(&str, &str)]) -> Vec<u8> {
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (name, text) in files {
+        zip.start_file(*name, options).unwrap();
+        zip.write_all(text.as_bytes()).unwrap();
+    }
+    let zip = zip.finish().unwrap().into_inner();
+    let proof = [field(1, KEY), field(2, b"signature")].concat();
+    let crx_id = &Sha256::digest(KEY)[..16];
+    let header = [field(2, &proof), field(10000, &field(1, crx_id))].concat();
+    let mut out = b"Cr24".to_vec();
+    out.extend(3u32.to_le_bytes());
+    out.extend(u32::try_from(header.len()).unwrap().to_le_bytes());
+    out.extend(header);
+    out.extend(zip);
+    out
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn extensions_from_folders_run_in_tabs_and_block() {
+    // The start page loads although Chromium is still reading the rules.
+    let b = Browser::launch()
+        .toml("extensions.load = [\"{pages}/extensions/probe\"]\n")
+        .start("page.html");
+    b.wait_eval("document.documentElement.dataset.probe || ''", "content");
+    b.wait_eval("document.documentElement.dataset.probeWorker || ''", "pong");
+    b.eval(
+        "window.__f = ''; fetch('/blocked-by-probe').then(r => __f = 'loaded ' + r.status, () => __f = 'blocked'); ''",
+    );
+    b.wait_eval("String(window.__f)", "blocked");
+
+    // Private windows run without them.
+    let page = b.url("page.html");
+    b.run(&format!("open -p {page}"));
+    b.wait_until("the private window loads", |s| {
+        s.windows.len() == 2 && s.window().private && s.tab().is_loaded(&page)
+    });
+    b.wait_painted();
+    assert_eq!(
+        b.eval("document.documentElement.dataset.probe || 'none'"),
+        "none"
+    );
+    b.run("close");
+    b.wait_until("back to one window", |s| s.windows.len() == 1);
+
+    b.run("extensions");
+    b.wait_until("Chrome's extensions page opens in a call window", |s| {
+        s.windows.len() == 2 && s.window().call && s.tab().url.starts_with("chrome://extensions")
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn extension_install_asks_first_and_loads_after_restart() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("page.html");
+    let manifest = r#"{
+  "manifest_version": 3,
+  "name": "__MSG_name__",
+  "default_locale": "en",
+  "version": "2.0",
+  "content_scripts": [{ "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_start" }],
+  "permissions": ["nativeMessaging"]
+}"#;
+    let file = b.scratch().join("packed.crx");
+    std::fs::write(
+        &file,
+        crx(&[
+            ("manifest.json", manifest),
+            (
+                "_locales/en/messages.json",
+                r#"{ "name": { "message": "Packed probe" } }"#,
+            ),
+            (
+                "content.js",
+                "document.documentElement.dataset.packed = 'yes';",
+            ),
+        ]),
+    )
+    .unwrap();
+
+    b.run(&format!("extension-install {}", file.display()));
+    let s = b.wait_until("it asks first", |s| s.mode == "yesno");
+    let message = s.prompt.as_ref().unwrap()["message"].to_string();
+    for part in [
+        "Packed probe 2.0",
+        "read and change everything on every site you visit",
+        "talk to programs on your computer",
+    ] {
+        assert!(message.contains(part), "{part:?} in {message}");
+    }
+    b.keys("y");
+    b.wait_until("installed", |s| {
+        s.message() == Some("Installed Packed probe; :restart loads it")
+    });
+    let dir = b.data_dir().join("extensions").join(id_of(KEY));
+    let installed = std::fs::read_to_string(dir.join("manifest.json")).unwrap();
+    assert!(
+        installed.contains("\"key\""),
+        "the store's key keeps its id: {installed}"
+    );
+
+    b.run("quit");
+    b.wait_exit();
+    let page = b.url("page.html");
+    b.restart_with(&[&page]);
+    b.wait_until("the page loads", |s| s.tab().is_loaded(&page));
+    b.wait_eval("document.documentElement.dataset.packed || ''", "yes");
+
+    b.run("extension-remove packed probe");
+    b.wait_until("removed", |s| {
+        s.message() == Some("Removed Packed probe; it's gone after :restart")
+    });
+    assert!(!dir.exists());
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn manifest_v2_extensions_are_refused() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("page.html");
+    let file = b.scratch().join("old.crx");
+    std::fs::write(
+        &file,
+        crx(&[(
+            "manifest.json",
+            r#"{ "manifest_version": 2, "name": "Old", "version": "1" }"#,
+        )]),
+    )
+    .unwrap();
+    b.run(&format!("extension-install {}", file.display()));
+    b.wait_until("refused", |s| {
+        s.message().is_some_and(|m| {
+            m.contains("Old is a Manifest V2 extension, which Chromium no longer runs")
+        })
+    });
+    assert!(b.state().prompt.is_none());
+}

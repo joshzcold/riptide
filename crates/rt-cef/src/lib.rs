@@ -12,6 +12,7 @@ mod crash;
 mod dialogs;
 mod downloads;
 mod eval;
+mod extensions;
 mod favicons;
 mod fetch;
 mod fileselect;
@@ -111,7 +112,12 @@ wrap_app! {
                     let name = CefString::from(*name);
                     match value {
                         // Keep features the user passed on the command line.
-                        Some(value) if matches!(name.to_string().as_str(), "enable-features" | "disable-features") => {
+                        Some(value)
+                            if matches!(
+                                name.to_string().as_str(),
+                                "enable-features" | "disable-features" | "load-extension"
+                            ) =>
+                        {
                             append_to_list_switch(command_line, &name.to_string(), value)
                         }
                         Some(value) => command_line.append_switch_with_value(Some(&name), Some(&CefString::from(value.as_str()))),
@@ -393,6 +399,10 @@ pub fn run() -> i32 {
         }
         if settings.bool("content.prefers_reduced_motion") {
             switches.push(("force-prefers-reduced-motion", None));
+        }
+        if let Some(folders) = extensions::load_switch(&data_dir, settings.list("extensions.load"))
+        {
+            switches.push(("load-extension", Some(folders)));
         }
         switches
     };

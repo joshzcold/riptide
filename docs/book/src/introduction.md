@@ -11,6 +11,7 @@
 - **Hints:** for links, inputs, images, yanking and downloads, including number hints, iframes from any site and shadow DOM.
 - **Privacy:** an Adblock Plus engine (EasyList and EasyPrivacy), Google background calls turned off, the Chromium sandbox where Linux allows it, and per-site permissions and certificate decisions.
 - **Configuration:** `config.toml`, or `config.lua` with full scripting (functions on keys, custom commands, event hooks). Live `:set`, per-site settings, and a generated `:help` page.
+- **Extensions and plugins:** Chrome (Manifest V3) extensions from the Web Store, such as uBlock Origin Lite and Bitwarden, sandboxed Lua plugins, and a builtin plugin that fills logins from your password manager.
 - **Scripts and data:** userscripts, Greasemonkey scripts, `:open-editor`, and qutebrowser's quickmark, bookmark and history formats (`:history-import`).
 - **Page tools:** zoom (`+` `-` `=`), DevTools (`wi`), print or save as PDF, fullscreen, view source (`gf`), `:jseval`, tab muting, `:messages`, and `.` to repeat the last command.
 - **Everything else:** sessions with crash recovery, history and downloads pages, spell checking with keyboard-driven fixes, dark mode, opt-in Widevine, and handing commands to a running browser from the terminal (`riptide ':open -t x'`).

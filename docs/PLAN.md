@@ -182,7 +182,7 @@ Commands are registered with a derive macro so each one declares its name, args,
 - [x] `:spawn` external commands (M9)
 - [x] `:open-editor` (edit text field in `$EDITOR`) (M9)
 - [ ] Lua plugins as capable as Neovim's: installed and pinned from git, lazy-loaded, hooking events, keys and commands, drawing floats, pickers and panels, with a plugins page and a plugin authoring guide (M27)
-- [ ] Chrome (MV3) extensions such as uBlock Origin Lite and password managers: investigated 2026-10-07, they run in riptide's tabs; loading, install and `:extensions` still to build (M28)
+- [x] Chrome (MV3) extensions such as uBlock Origin Lite and password managers: `:extension-install` from the Web Store, `extensions.load`, `:extensions` (M28, 2026-10-08)
 
 ### Session / state
 - [x] Sessions (save / load / `auto_save.session`, `:wq`)
@@ -1263,7 +1263,7 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 4. Pages: ✅ (2026-10-07) `rt.page.type`/`key`/`fill_login` and `rt.json`. They are `Action::Page`, never a command line, so nothing lands in history, `.` or `:messages`, and `PageRequest`'s Debug hides the text. A plugin's copy carries its name; Rust checks its `pages` against the tab, and for type/key also the focused frame, when the action runs, and never acts on riptide://, chrome:// or devtools pages. `fill_login` refuses once the tab's host differs from the one asked for. ✅ (2026-10-08) Plugin pages in tabs: `rt.ui.page({ path, on_message })` opens `riptide://<name>.plugin/<path>?page=<id>` (`pages.rs`), served from the loaded plugin's `pages/` only (percent-decoded, `..` refused, canonicalized and checked against the folder), with a CSP of `script-src 'self'`, `frame-src` from `frames` and `connect-src` from `network` (`https:` when trusted). Pages get `rt.send(name, json)`; the browser routes by the frame's own URL to that plugin's `on_message` for the handle the `page=` names, and `page:send` dispatches an `rtmessage` event. Unit test `pages_are_served_from_their_folder_only`, e2e `plugin_pages_talk_to_their_own_plugin_only`. Still to do: pages in panels and floats (they need a tab's request context and key handling), `rt.page.eval`/`css`/`selection`, custom hints.
 5. Docs and ecosystem: the guide, generated reference, `:help` integration, template, example plugins, the test runner.
 
-### M28 — Browser extensions (investigated 2026-10-07; MV3 works in riptide's tabs, see Findings)
+### M28 — Browser extensions ✅ built 2026-10-08 (investigated 2026-10-07)
 
 **Question:** what would it take to run extensions such as uBlock Origin and password managers (Bitwarden, 1Password, KeePassXC-Browser, Proton Pass)? Nothing is built until the investigation answers the questions below.
 
@@ -1299,6 +1299,19 @@ Not scheduled. H.264/AAC require building CEF/Chromium from source with `proprie
 | Startup | **Bug:** with an MV3 extension that has `declarativeNetRequest` rules, a page opened during startup (a command-line URL; session restore is likely the same) never starts loading. `:reload` frees it, and pages opened later are fine. Chromium probably holds early navigations until rulesets load, and the release never reaches Alloy views. |
 
 Not checked: real autofill with a vault (needs an account), passkeys, `chrome.commands` shortcuts, private windows, and installing from the Web Store page.
+
+**Built (2026-10-08):**
+- **Loading:** `--load-extension` gets `<data>/extensions/<id>/` plus `extensions.load` (restart-only). `rt-cef/src/extensions.rs` builds the list; folders with a comma are skipped, since that would split Chromium's list.
+- **`:extension-install <store page | id | /path.crx>`:**
+  - It fetches the CRX from the update service (`prodversion` = `CHROME_VERSION_MAJOR`) and reads it with `rt_core::extensions::parse_crx`. The key must hash to the signed id and to the id asked for. Signatures aren't verified, and HTTPS from Google is the trust.
+  - It refuses MV2, then asks with the manifest's asks in words (`read_manifest`, `_locales` names).
+  - It unzips through `enclosed_name` into `<id>.partial`, then renames into place. manifest.json gets the store's `key`, so the id stays the store's: checked with uBlock Origin Lite from the real store, which blocks after `:restart`.
+- **`:extension-remove <name|id>`, `:extensions`:** the latter opens `chrome://extensions` in a call window (`window::create_call`), the only kind of view that shows chrome:// pages.
+- **Startup stall fix:** `extensions::after_startup` checks at 1.5 s and 4 s for tabs that have no document and riptide never saw load (CEF reports them as loading), and reloads them.
+- **Native messaging:** hosts in Chromium's, Chrome's, Brave's, Edge's and Vivaldi's `NativeMessagingHosts` (and `/etc/…`) are symlinked into `<data>/NativeMessagingHosts`, only when their `allowed_origins` name an installed extension.
+- **Private windows** run without extensions (checked).
+- **Tests:** unit tests for CRX, ids, base64, manifests and host linking. The e2e `extensions.rs` covers a DNR probe fixture loaded from a folder (start page, content script, worker, block, private window, `:extensions`), install from a CRX the test builds with a throwaway key, plus restart and remove, and the MV2 refusal.
+- **Not done:** popups reaching the current tab (needs CEF to put Alloy tabs in `chrome.tabs`), a per-site ad-block switch and element picker built natively, and updates other than reinstalling.
 
 **Recommendation: build MV3 extension support, and keep the native alternatives for what `chrome.tabs` blocks.**
 - **Extensions:**

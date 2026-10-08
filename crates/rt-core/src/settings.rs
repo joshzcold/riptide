@@ -1358,6 +1358,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Delete the temporary file after the editor closes; false keeps it, e.g. to recover text"
     ),
     def!(
+        "extensions.load",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Folders of unpacked Chrome extensions to load, besides the ones :extension-install installs (after a restart)"
+    ),
+    def!(
         "fileselect.folder.command",
         Kind::List,
         Value::List(vec![
@@ -2154,6 +2160,7 @@ pub const RESTART_REQUIRED: &[&str] = &[
     "content.prefers_reduced_motion",
     "content.webgl",
     "content.widevine",
+    "extensions.load",
     "input.media_keys",
     "input.spatial_navigation",
     "scrolling.bar",
