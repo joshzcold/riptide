@@ -2,7 +2,7 @@
 
 ## Content blocking
 
-Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (EasyList and EasyPrivacy by default; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup. Hosts files (lines like `0.0.0.0 ads.example.com`, as in [StevenBlack's lists](https://github.com/StevenBlack/hosts)) work in the same setting; riptide recognizes them and blocks each listed host:
+Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (by default EasyList, EasyPrivacy, and uBlock Origin's own lists: uBlock filters, Privacy, Quick fixes and Unbreak, as uBlock Origin enables them; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup. Hosts files (lines like `0.0.0.0 ads.example.com`, as in [StevenBlack's lists](https://github.com/StevenBlack/hosts)) work in the same setting; riptide recognizes them and blocks each listed host:
 
 ```toml
 "content.blocking.adblock.lists" = [
@@ -17,8 +17,24 @@ The status bar shows how many requests were blocked on the current page, e.g. `�
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
 - Top-level pages are never blocked, so a bad rule can't make a site unreachable. Their tracking parameters are taken out, though (`$removeparam`): `?utm_source=mail&id=7` loads as `?id=7`.
 - Element-hiding rules (`##.ad`, `example.com##.sponsored`) are applied once a page loads: the site-specific ones, and the generic ones for the classes and ids the page uses, checked again 2 and 6 seconds later for ads that arrive late.
-- Scriptlet rules (`example.com##+js(set-constant, adsEnabled, false)`) run in the page before its own scripts, which is how lists defeat anti-adblock walls and in-player video ads. `$redirect` rules answer a blocked request with a harmless stand-in (an empty script, a 1×1 image), so the page carries on as if it had loaded. Both use uBlock Origin's scriptlets and stand-ins, built into riptide.
-- Not supported yet: procedural element hiding (`:has-text()`, `:upward()` and the like), and element hiding inside frames.
+- Scriptlet rules (`example.com##+js(set-constant, adsEnabled, false)`) run in the page before its own scripts, which is how lists defeat anti-adblock walls and in-player video ads. `$redirect` rules answer a blocked request with a harmless stand-in (an empty script, a 1×1 image), so the page carries on as if it had loaded. Both use uBlock Origin's scriptlets and stand-ins, built into riptide. As in uBlock Origin, the "trusted" scriptlets, which can click page elements or set arbitrary values, only run for rules from uBlock Origin's own lists.
+
+If you set `content.blocking.adblock.lists` yourself before uBlock Origin's lists became defaults, add them to get most of the scriptlet rules:
+
+```toml
+"content.blocking.adblock.lists" = [
+  "https://easylist.to/easylist/easylist.txt",
+  "https://easylist.to/easylist/easyprivacy.txt",
+  "https://ublockorigin.github.io/uAssets/filters/filters.min.txt",
+  "https://ublockorigin.github.io/uAssets/filters/privacy.min.txt",
+  "https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt",
+  "https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt",
+]
+```
+
+Run `:adblock-update` after changing the lists.
+
+Not supported yet: procedural element hiding (`:has-text()`, `:upward()` and the like), and element hiding inside frames.
 
 ## Network traffic
 

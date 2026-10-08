@@ -1015,8 +1015,12 @@ pub static SETTINGS: &[SettingDef] = &[
         Value::List(vec![
             "https://easylist.to/easylist/easylist.txt".to_string(),
             "https://easylist.to/easylist/easyprivacy.txt".to_string(),
+            "https://ublockorigin.github.io/uAssets/filters/filters.min.txt".to_string(),
+            "https://ublockorigin.github.io/uAssets/filters/privacy.min.txt".to_string(),
+            "https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt".to_string(),
+            "https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt".to_string(),
         ]),
-        "Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists)"
+        "Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists); uBlock Origin's own lists may use its trusted scriptlets"
     ),
     def!(
         "content.blocking.enabled",

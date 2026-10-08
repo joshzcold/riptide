@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use adblock::Engine;
 use adblock::lists::{FilterFormat, FilterSet, ParseOptions};
 use adblock::request::Request;
-use adblock::resources::Resource;
+use adblock::resources::{PermissionMask, Resource};
 
 pub struct Blocker {
     engine: Engine,
@@ -32,6 +32,22 @@ fn resources() -> Vec<Resource> {
         tracing::error!("the built-in adblock resources don't parse: {e}");
         Vec::new()
     })
+}
+
+/// The permission bit uBlock Origin's trusted scriptlets need
+/// (`scripts/adblock-resources.mjs` sets it).
+const TRUSTED: u8 = 1;
+
+/// Whether a list may use trusted scriptlets: uBlock Origin's own lists,
+/// as uBlock Origin itself trusts them. Others could run arbitrary code.
+pub fn trusted_list(url: &str) -> bool {
+    [
+        "https://ublockorigin.github.io/uAssets/",
+        "https://ublockorigin.pages.dev/",
+        "https://raw.githubusercontent.com/uBlockOrigin/uAssets/",
+    ]
+    .iter()
+    .any(|prefix| url.starts_with(prefix))
 }
 
 /// What to do with a request.
@@ -93,9 +109,15 @@ impl Blocker {
     /// Compile filter list texts. Returns the blocker and the number of rules
     /// (lines that aren't comments or headers).
     pub fn from_lists<'a>(lists: impl IntoIterator<Item = &'a str>) -> (Self, usize) {
+        Self::from_sources(lists.into_iter().map(|text| (false, text)))
+    }
+
+    /// [`Blocker::from_lists`] with each list marked trusted or not: a
+    /// trusted list may use uBlock Origin's trusted scriptlets.
+    pub fn from_sources<'a>(lists: impl IntoIterator<Item = (bool, &'a str)>) -> (Self, usize) {
         let mut set = FilterSet::new(false);
         let mut rules = 0;
-        for text in lists {
+        for (trusted, text) in lists {
             let hosts = is_hosts_file(text);
             rules += text
                 .lines()
@@ -110,6 +132,11 @@ impl Blocker {
             };
             let options = ParseOptions {
                 format,
+                permissions: if trusted {
+                    PermissionMask::from_bits(TRUSTED)
+                } else {
+                    PermissionMask::default()
+                },
                 ..ParseOptions::default()
             };
             set.add_filter_list(text.to_string(), options);
@@ -216,9 +243,14 @@ impl Store {
     }
 
     /// Texts of the lists that have been downloaded, in `urls` order.
-    pub fn read_lists(&self, urls: &[String]) -> Vec<String> {
+    pub fn read_lists(&self, urls: &[String]) -> Vec<(bool, String)> {
         urls.iter()
-            .filter_map(|u| std::fs::read_to_string(self.list_path(u)).ok())
+            .filter_map(|u| {
+                Some((
+                    trusted_list(u),
+                    std::fs::read_to_string(self.list_path(u)).ok()?,
+                ))
+            })
             .collect()
     }
 
@@ -228,7 +260,7 @@ impl Store {
         if texts.is_empty() {
             return None;
         }
-        let (blocker, rules) = Blocker::from_lists(texts.iter().map(String::as_str));
+        let (blocker, rules) = Blocker::from_sources(texts.iter().map(|(t, s)| (*t, s.as_str())));
         if let Err(e) = std::fs::write(self.cache_path(), blocker.serialize()) {
             tracing::warn!("can't cache the adblock engine: {e}");
         }
@@ -373,6 +405,23 @@ mod tests {
                 .contains("setConstant(")
         );
         assert!(UBO_VERSION.trim().starts_with("1."), "{UBO_VERSION}");
+    }
+
+    #[test]
+    fn only_ubos_own_lists_run_trusted_scriptlets() {
+        let rule = "news.example.org##+js(trusted-set-constant, rtLevel, 3)";
+        let url = "https://news.example.org/";
+        let (untrusted, _) = Blocker::from_sources([(false, rule)]);
+        assert!(untrusted.cosmetic(url).script.is_empty());
+        let (trusted, _) = Blocker::from_sources([(true, rule)]);
+        assert!(trusted.cosmetic(url).script.contains("trustedSetConstant("));
+        assert!(trusted_list(
+            "https://ublockorigin.github.io/uAssets/filters/filters.min.txt"
+        ));
+        assert!(!trusted_list("https://easylist.to/easylist/easylist.txt"));
+        assert!(!trusted_list(
+            "https://ublockorigin.github.io.evil.net/x.txt"
+        ));
     }
 
     #[test]

@@ -15,12 +15,11 @@ const base64 = (text) => Buffer.from(text).toString("base64");
 const resources = [];
 
 // Scriptlets: uBlock Origin registers each as { name, aliases, fn,
-// dependencies, requiresTrust }. Ones needing a trusted list are left out:
-// riptide doesn't mark any list as trusted.
+// dependencies, requiresTrust }. Ones needing a trusted list get permission
+// bit 1, which riptide gives only uBlock Origin's own lists.
 const { builtinScriptlets } = await import(pathToFileURL(join(dir, "js/resources/scriptlets.js")).href);
 const names = new Set(builtinScriptlets.map((s) => s.name));
 for (const s of builtinScriptlets) {
-  if (s.requiresTrust) continue;
   const helper = !s.name.endsWith(".js");
   const missing = (s.dependencies || []).filter((d) => !names.has(d));
   if (missing.length) throw new Error(`${s.name}: unknown dependencies ${missing}`);
@@ -30,6 +29,7 @@ for (const s of builtinScriptlets) {
     kind: { mime: helper ? "fn/javascript" : "application/javascript" },
     content: base64(s.fn.toString()),
     dependencies: s.dependencies || [],
+    ...(s.requiresTrust ? { permission: 1 } : {}),
   });
 }
 

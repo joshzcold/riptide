@@ -628,7 +628,7 @@ function rt.json.encode(value) end
 ---@field whitelist string[] Sites where nothing is blocked, as host names; a host also covers its subdomains
 
 ---@class rt.c.content.blocking.adblock
----@field lists string[] Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists)
+---@field lists string[] Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists); uBlock Origin's own lists may use its trusted scriptlets
 
 ---@class rt.c.content.cache
 ---@field size integer Disk cache size in bytes; 0 lets Chromium choose (takes effect after a restart)
