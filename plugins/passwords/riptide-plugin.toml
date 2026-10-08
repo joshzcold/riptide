@@ -1,0 +1,8 @@
+name = "passwords"
+description = "Fill logins from pass, gopass, rbw, the Bitwarden CLI or KeePassXC"
+
+[permissions]
+# Runs your password manager's command line tool.
+spawn = true
+# Fills login forms on the site you're on, and only that site.
+pages = ["*"]

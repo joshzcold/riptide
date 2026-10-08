@@ -1,0 +1,17 @@
+<!doctype html>
+<title>login</title>
+<!-- A search box outside the form, which filling must leave alone. -->
+<input id="search" type="text" name="q">
+<form id="form">
+  <input id="user" name="username" autocomplete="username">
+  <input id="pass" type="password" name="password">
+  <button>Sign in</button>
+</form>
+<script>
+  // window.__submitted: "user/password" once the form is submitted.
+  window.__submitted = "";
+  document.getElementById("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    window.__submitted = `${e.target.username.value}/${e.target.password.value}`;
+  });
+</script>

@@ -20,6 +20,7 @@ A spec is a git URL, or a table:
 | `"url"` or `src` | Where to clone it from. riptide installs it into `<data>/pack/<name>` the first time, in the background. |
 | `version` | A tag, branch or commit to install; by default the newest commit. |
 | `dir` | A folder on your computer instead (`~/` works), for writing your own. |
+| `builtin` | A plugin that ships with riptide, such as `"passwords"` ([Passwords](../guide/passwords.md)). It updates with riptide, and still asks for its permissions. |
 | `name` | Its name, which `require` uses; by default the URL's or folder's last part, without a `riptide-` prefix or a `.nvim`-style suffix. |
 | `opts` | Passed to `require(name).setup(opts)` once it loads. |
 | `config` | A function run once it loads, instead of `opts`. |

@@ -128,6 +128,7 @@ function rt.store(name) end
 ---@field [1]? string A git URL, the same as `src`.
 ---@field src? string A git URL to install it from.
 ---@field dir? string A folder on your computer instead.
+---@field builtin? string A plugin that ships with riptide, e.g. "passwords".
 ---@field name? string Its name for `require`; by default from the URL or folder.
 ---@field version? string A tag, branch or commit.
 ---@field trusted? boolean Skip the sandbox and allow everything.

@@ -55,9 +55,38 @@ fn paths() -> Option<(PathBuf, PathBuf)> {
 
 /// Where a plugin lives: its own folder, or `<data>/pack/<name>` for one from git.
 fn folder(spec: &PluginSpec, data_dir: &Path) -> PathBuf {
+    if spec.builtin {
+        return builtin_folder(&spec.name);
+    }
     spec.dir
         .clone()
         .unwrap_or_else(|| data_dir.join("pack").join(&spec.name))
+}
+
+/// A plugin that ships with riptide: `plugins/<name>` next to the
+/// executable, which is where every package puts it, or in the checkout a
+/// cargo build in `target/` came from. A name not found gives the first
+/// place, so the error names where it was looked for.
+fn builtin_folder(name: &str) -> PathBuf {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.canonicalize().ok())
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+        .unwrap_or_default();
+    let shipped = exe_dir.join("plugins").join(name);
+    if !rt_config::plugins::valid_name(name) {
+        return shipped;
+    }
+    let checkout = exe_dir
+        .parent()
+        .filter(|p| p.file_name().is_some_and(|n| n == "target"))
+        .and_then(Path::parent)
+        .map(|repo| repo.join("plugins").join(name));
+    [Some(shipped.clone()), checkout]
+        .into_iter()
+        .flatten()
+        .find(|dir| dir.join("riptide-plugin.toml").is_file())
+        .unwrap_or(shipped)
 }
 
 /// Load every plugin `rt.pack.add` asked for: install or move to its locked
@@ -181,15 +210,16 @@ fn prepare(name: &str) {
         return;
     };
     let dir = folder(&spec, &data_dir);
+    let failed = |why: String| {
+        set_state(&spec.name, "error", Some(why.clone()));
+        shell::show_message(Level::Error, format!("Plugin {}: {why}", spec.name));
+    };
     if !dir.is_dir() {
-        return shell::show_message(
-            Level::Error,
-            format!("Plugin {}: {} doesn't exist", spec.name, dir.display()),
-        );
+        return failed(format!("{} doesn't exist", dir.display()));
     }
     let manifest = match Manifest::read(&dir) {
         Ok(manifest) => manifest,
-        Err(e) => return shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name)),
+        Err(e) => return failed(e.to_string()),
     };
     let wanted = manifest.permissions;
     let approved = Lockfile::load(&config_dir)
@@ -420,7 +450,9 @@ pub fn page_data() -> serde_json::Value {
             serde_json::json!({
                 "name": spec.name,
                 "description": description,
-                "src": if spec.src.is_empty() {
+                "src": if spec.builtin {
+                    format!("builtin (riptide {})", env!("CARGO_PKG_VERSION"))
+                } else if spec.src.is_empty() {
                     spec.dir.as_ref().map(|d| d.display().to_string()).unwrap_or_default()
                 } else {
                     spec.src.clone()
