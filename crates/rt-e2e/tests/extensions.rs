@@ -186,7 +186,7 @@ fn extension_install_asks_first_and_loads_after_restart() {
         "Packed probe 2.0",
         "read and change everything on every site you visit",
         "talk to programs on your computer",
-        "Its popup opens in a tab and can't act on the page you're on.",
+        "Blocking and anything it does inside pages work. Its popup opens as a tab",
     ] {
         assert!(message.contains(part), "{part:?} in {message}");
     }
