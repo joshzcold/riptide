@@ -24,7 +24,7 @@ jobs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -61,11 +61,11 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.sha }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: dist-*
           path: dist
@@ -80,7 +80,7 @@ jobs:
             echo
             scripts/git-cliff.sh --unreleased --strip all 2>/dev/null | sed 's/^## Unreleased$/## Changes since the last release/'
           } > notes.md
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.tar.gz

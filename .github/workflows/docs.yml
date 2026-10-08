@@ -19,7 +19,7 @@ jobs:
     name: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the book
         run: scripts/mdbook.sh build docs/book
       - name: Check external links
@@ -28,7 +28,7 @@ jobs:
         with:
           args: --include-fragments --no-progress --exclude-path '404\.html$' 'docs/book/book/**/*.html'
           fail: true
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'schedule'
         with:
           path: docs/book/book
@@ -46,4 +46,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
