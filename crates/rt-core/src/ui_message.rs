@@ -71,6 +71,8 @@ pub enum PluginAction {
     Revoke,
     /// Delete its installed copy and lockfile entry.
     Remove,
+    /// Load a plugin that waits for an event, command or key now.
+    Load,
 }
 
 /// Which bar a size is for.

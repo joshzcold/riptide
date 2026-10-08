@@ -563,6 +563,12 @@ pub enum Command {
     PackUpdate {
         name: Option<String>,
     },
+    /// Load a plugin that waits for an event, command or key now, then
+    /// press `keys` again if a key loaded it.
+    PackLoad {
+        name: String,
+        keys: Option<String>,
+    },
     /// Show the browsing history page, in a new tab with `tab`.
     History {
         tab: bool,
@@ -872,6 +878,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "pack-update",
         "Check plugins from git for new commits to review on :plugins: :pack-update [name]",
+    ),
+    spec(
+        "pack-load",
+        "Load a plugin that waits for an event, command or key now: :pack-load <name>",
     ),
     spec(
         "recover",
@@ -1792,6 +1802,14 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "pack-update" => Command::PackUpdate {
             name: args.optional().map(String::from),
         },
+        "pack-load" => {
+            let name = args.required("name")?.to_string();
+            let keys = args.rest();
+            Command::PackLoad {
+                name,
+                keys: (!keys.is_empty()).then(|| keys.to_string()),
+            }
+        }
         "tab-select" => Command::TabSelect {
             target: args.rest().to_string(),
         },
@@ -2483,6 +2501,7 @@ mod tests {
     #[test]
     fn every_spec_parses() {
         let needs_args = [
+            "pack-load",
             "scroll",
             "scroll-page",
             "mode-enter",

@@ -28,6 +28,17 @@ thread_local! {
         std::cell::RefCell::new(Default::default());
 }
 
+/// A plugin approved and waiting for one of its events, commands or keys.
+struct Waiting {
+    spec: PluginSpec,
+    dir: PathBuf,
+    permissions: Permissions,
+}
+
+thread_local! {
+    static WAITING: std::cell::RefCell<Vec<Waiting>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn set_state(name: &str, state: &'static str, error: Option<String>) {
     STATUS.with(|s| {
         let mut all = s.borrow_mut();
@@ -56,6 +67,8 @@ pub fn start() {
         return;
     };
     let lock = Lockfile::load(&config_dir).unwrap_or_default();
+    // The config was just applied: the old placeholders went with it.
+    WAITING.with(|w| w.borrow_mut().clear());
     for spec in rt_config::lua::plugin_specs() {
         let dir = folder(&spec, &data_dir);
         if spec.dir.is_some() || spec.src.is_empty() {
@@ -185,7 +198,7 @@ fn prepare(name: &str) {
         .unwrap_or_default();
     let needed = wanted.beyond(&approved);
     if spec.trusted || needed.is_empty() {
-        load(&spec.name, &dir, &wanted, spec.trusted);
+        ready(spec, dir, wanted);
     } else {
         set_state(&spec.name, "waiting", None);
         ask(spec.name, dir, wanted, needed, config_dir);
@@ -227,9 +240,139 @@ fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, con
             if let Err(e) = saved {
                 shell::show_message(Level::Error, format!("Plugin {name}: {e}"));
             }
-            load(&name, &dir, &wanted, false);
+            if let Some(spec) = rt_config::lua::plugin_specs()
+                .into_iter()
+                .find(|s| s.name == name)
+            {
+                ready(spec, dir, wanted);
+            }
         },
     );
+}
+
+/// Approved: load it now, or wait for its event, command or keys.
+fn ready(spec: PluginSpec, dir: PathBuf, permissions: Permissions) {
+    if !spec.is_lazy() {
+        return load(&spec.name, &dir, &permissions, spec.trusted);
+    }
+    let name = spec.name.clone();
+    for (mode, keys) in &spec.keys {
+        let command = format!("pack-load {name} {keys}");
+        if let Some(Err(e)) = shell::with(|s| s.engine.bind_from_lua(*mode, keys, &command)) {
+            shell::show_message(Level::Error, format!("Plugin {name}: {keys}: {e}"));
+        }
+    }
+    WAITING.with(|w| {
+        w.borrow_mut().push(Waiting {
+            spec,
+            dir,
+            permissions,
+        })
+    });
+    set_state(&name, "lazy", None);
+    refresh_commands();
+}
+
+/// Load `name` if it's waiting. True if it was.
+fn wake(name: &str) -> bool {
+    let Some(waiting) = WAITING.with(|w| {
+        let mut all = w.borrow_mut();
+        let at = all.iter().position(|p| p.spec.name == name)?;
+        Some(all.remove(at))
+    }) else {
+        return false;
+    };
+    // The plugin binds its own keys as it loads.
+    for (mode, keys) in &waiting.spec.keys {
+        let _ = shell::with(|s| s.engine.unbind_from_lua(*mode, keys));
+    }
+    load(
+        name,
+        &waiting.dir,
+        &waiting.permissions,
+        waiting.spec.trusted,
+    );
+    true
+}
+
+/// The Plugins tab's "Load now".
+pub fn load_now(name: &str) {
+    if !wake(name) {
+        shell::show_message(Level::Error, format!("Plugin {name} isn't waiting to load"));
+    }
+}
+
+/// Before an event's hooks run: load the plugins waiting for it.
+pub fn on_event(event: &str) {
+    let names: Vec<String> = WAITING.with(|w| {
+        w.borrow()
+            .iter()
+            .filter(|p| p.spec.events.iter().any(|e| e == event))
+            .map(|p| p.spec.name.clone())
+            .collect()
+    });
+    for name in names {
+        wake(&name);
+    }
+}
+
+/// Before a command from Lua runs: load the plugin waiting for it.
+pub fn on_command(command: &str) {
+    let name = WAITING.with(|w| {
+        w.borrow()
+            .iter()
+            .find(|p| p.spec.commands.iter().any(|c| c == command))
+            .map(|p| p.spec.name.clone())
+    });
+    if let Some(name) = name {
+        wake(&name);
+    }
+}
+
+/// The commands from Lua, and the ones waiting plugins will define.
+fn refresh_commands() {
+    let mut commands = rt_config::lua::user_commands();
+    WAITING.with(|w| {
+        for waiting in w.borrow().iter() {
+            for command in &waiting.spec.commands {
+                if !commands.iter().any(|(n, _)| n == command) {
+                    let desc = format!("Loads the plugin {}", waiting.spec.name);
+                    commands.push((command.clone(), desc));
+                }
+            }
+        }
+    });
+    shell::with(|s| s.engine.set_user_commands(commands));
+}
+
+pub fn run_command(command: &rt_core::Command) -> bool {
+    match command {
+        rt_core::Command::PackUpdate { name } => check_updates(name.as_deref()),
+        rt_core::Command::PackLoad { name, keys } => {
+            if !wake(name) {
+                let loaded =
+                    STATUS.with(|s| s.borrow().get(name).is_some_and(|st| st.state == "loaded"));
+                if !loaded || keys.is_none() {
+                    shell::show_message(
+                        Level::Error,
+                        format!("Plugin {name} isn't waiting to load"),
+                    );
+                    return true;
+                }
+            }
+            // A key loaded it: press it again, now that the plugin has bound it.
+            let replay = keys
+                .as_deref()
+                .and_then(|k| rt_core::key::Key::parse_sequence(k).ok());
+            if let Some(effects) =
+                replay.and_then(|keys| shell::with(|s| s.engine.replay_keys(&keys)))
+            {
+                shell::apply(effects);
+            }
+        }
+        _ => return false,
+    }
+    true
 }
 
 fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
@@ -241,9 +384,21 @@ fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
     }
     crate::lua::carry_out_for(name, result);
     // Commands it defined complete and run like the others.
-    let commands = rt_config::lua::user_commands();
-    shell::with(|s| s.engine.set_user_commands(commands));
+    refresh_commands();
     shell::refresh_ui();
+}
+
+/// What makes a lazy plugin load, in words: `:cmd`, `<Space>p`, `tab_opened`.
+fn triggers(spec: &PluginSpec) -> Vec<String> {
+    let commands = spec.commands.iter().map(|c| format!(":{c}"));
+    let keys = spec.keys.iter().map(|(mode, keys)| match mode {
+        rt_core::Mode::Normal => keys.clone(),
+        mode => format!("{keys} ({mode})"),
+    });
+    commands
+        .chain(keys)
+        .chain(spec.events.iter().cloned())
+        .collect()
 }
 
 /// Every plugin for the plugins page: its spec, lockfile entry and status.
@@ -274,6 +429,7 @@ pub fn page_data() -> serde_json::Value {
                 "commit": locked.commit,
                 "trusted": spec.trusted,
                 "approved": locked.approved.describe(),
+                "triggers": triggers(&spec),
                 "state": if state.state.is_empty() { "pending" } else { state.state },
                 "error": state.error,
                 "update": state.update.map(|(commit, log)| serde_json::json!({ "commit": commit, "log": log })),

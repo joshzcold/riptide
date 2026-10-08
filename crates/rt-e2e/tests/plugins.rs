@@ -214,3 +214,52 @@ fn plugins_install_from_git_and_follow_the_lockfile() {
     );
     std::fs::remove_dir_all(&repo).unwrap();
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn lazy_plugins_load_on_their_command_key_or_event() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/bycmd/lua/bycmd/init.lua",
+            "return { setup = function() rt.command('bycmd-hi', function(args) rt.notify('hi ' .. args) end) end }",
+        )
+        .file(
+            "scratch-plugins/bykey/lua/bykey/init.lua",
+            "return { setup = function() rt.keymap.set('normal', 'zx', function() rt.notify('zx pressed') end) end }",
+        )
+        .file(
+            "scratch-plugins/byevent/lua/byevent/init.lua",
+            "return { setup = function() rt.on('setting_changed', function(e) rt.notify('saw ' .. e.name) end) end }",
+        )
+        .lua(
+            r#"
+local dir = rt.config_dir .. "/../scratch-plugins/"
+rt.pack.add({
+  { dir = dir .. "bycmd", cmd = "bycmd-hi", opts = {} },
+  { dir = dir .. "bykey", keys = "zx", opts = {} },
+  { dir = dir .. "byevent", event = "setting_changed", opts = {} },
+})
+"#,
+        )
+        .start("page.html");
+    b.run("plugins");
+    b.wait_eval("page.plugins.map((p) => p.state).join()", "lazy,lazy,lazy");
+
+    // The command that loads it runs once it's loaded, with its arguments.
+    b.run("bycmd-hi there");
+    b.wait_until("the command ran", |s| s.message() == Some("hi there"));
+
+    // The key that loads it is pressed again for the plugin's own binding.
+    b.run("tab-close");
+    b.keys("zx");
+    b.wait_until("the key ran", |s| s.message() == Some("zx pressed"));
+
+    // The event that loads it reaches its hooks too.
+    b.run("set zoom.default 125");
+    b.wait_until("the event reached it", |s| {
+        s.message() == Some("saw zoom.default")
+    });
+
+    let auto = std::fs::read_to_string(b.config_dir().join("autoconfig.toml")).unwrap_or_default();
+    assert!(!auto.contains("zx"), "a plugin's binding was saved: {auto}");
+}

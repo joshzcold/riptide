@@ -644,6 +644,7 @@ fn run_command(command: Command, count: Option<u32>) {
     if tabs::run_command(&command, count)
         || crate::help::run_command(&command)
         || crate::settings_page::run_command(&command)
+        || crate::plugins::run_command(&command)
         || storage::run_command(&command)
         || crate::downloads::run_command(&command, count)
         || crate::adblock::run_command(&command)

@@ -124,6 +124,26 @@ function rt.notify(text, level) end
 ---@return { get: fun(key: string): any, set: fun(key: string, value: any), all: fun(): table, clear: fun() }
 function rt.store(name) end
 
+---@class rt.PluginSpec
+---@field [1]? string A git URL, the same as `src`.
+---@field src? string A git URL to install it from.
+---@field dir? string A folder on your computer instead.
+---@field name? string Its name for `require`; by default from the URL or folder.
+---@field version? string A tag, branch or commit.
+---@field trusted? boolean Skip the sandbox and allow everything.
+---@field opts? table Passed to `require(name).setup(opts)` once it loads.
+---@field config? fun() Run once it loads, instead of `opts`.
+---@field event? rt.Event|rt.Event[] Load when one of these events fires.
+---@field cmd? string|string[] Load when one of these commands runs.
+---@field keys? string|(string|{ [1]: string, mode?: string })[] Load when one of these keys is pressed.
+
+rt.pack = {}
+
+---Add plugins: a git URL, a spec, or a list of them. They load once
+---`config.lua` has run, or with `event`, `cmd` or `keys` only when needed.
+---@param specs string|rt.PluginSpec|(string|rt.PluginSpec)[]
+function rt.pack.add(specs) end
+
 ---Remove a hook by the id `rt.on` returned, or every hook in a group.
 ---@param id integer|string
 function rt.off(id) end

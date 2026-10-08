@@ -50,6 +50,7 @@ pub fn handle_message(message: UiMessage) {
                 PluginAction::Update => crate::plugins::apply_update(&name),
                 PluginAction::Revoke => crate::plugins::revoke(&name),
                 PluginAction::Remove => crate::plugins::remove(&name),
+                PluginAction::Load => crate::plugins::load_now(&name),
             }
         }
         UiMessage::RecoverReopen { session, tabs } => crate::recover::reopen(&session, &tabs),

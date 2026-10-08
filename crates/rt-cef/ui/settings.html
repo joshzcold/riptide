@@ -892,7 +892,7 @@ function renderSites() {
 
 // The Plugins tab.
 const PLUGIN_STATES = {
-  loaded: ["Loaded", "allowed"], installing: ["Installing", ""], waiting: ["Waiting for approval", ""],
+  loaded: ["Loaded", "allowed"], lazy: ["Loads when needed", ""], installing: ["Installing", ""], waiting: ["Waiting for approval", ""],
   refused: ["Not approved", "blocked"], failed: ["Failed", "blocked"], pending: ["Not loaded", ""],
 };
 const pluginAction = (name, action) => rt.send("plugin", JSON.stringify({ name, action }));
@@ -931,6 +931,7 @@ function renderPlugins() {
       b.addEventListener("click", () => pluginAction(plugin.name, action));
       actions.append(b);
     };
+    if (plugin.state === "lazy") button("Load now", "load", `Load ${plugin.name} without waiting`);
     if (plugin.git) button("Check for updates", "check", `Fetch ${plugin.name} and list new commits; nothing changes yet`);
     if (plugin.update) button(`Update (${plugin.update.log.length})`, "update", `Move ${plugin.name} to ${plugin.update.commit.slice(0, 12)} and reload`);
     if (plugin.approved.length && !plugin.trusted) button("Revoke", "revoke", `Forget the permissions you approved for ${plugin.name}; it asks again`);
@@ -941,6 +942,7 @@ function renderPlugins() {
     if (plugin.error) block.append(wide(el("div", "keyrow", plugin.error)));
     const perms = wide(el("div", "keyrow"));
     perms.append(el("div", "desc", plugin.trusted ? "Trusted: runs without the sandbox" : plugin.approved.length ? `Approved: ${plugin.approved.join(", ")}` : "No permissions approved"));
+    if (plugin.triggers.length) perms.append(el("div", "desc", `Loads on ${plugin.triggers.join(", ")}`));
     block.append(perms);
     if (plugin.update) {
       const row = wide(el("div", "keyrow"));

@@ -82,10 +82,6 @@ pub fn run_command(command: &Command) -> bool {
     let url = match command {
         Command::Settings => URL.to_string(),
         Command::Plugins => format!("{URL}#plugins"),
-        Command::PackUpdate { name } => {
-            crate::plugins::check_updates(name.as_deref());
-            return true;
-        }
         _ => return false,
     };
     refresh();

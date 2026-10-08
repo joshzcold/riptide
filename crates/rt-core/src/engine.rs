@@ -1927,6 +1927,38 @@ impl Engine {
         }
     }
 
+    /// A binding from Lua: like `:bind`, but not saved, because `config.lua`
+    /// and plugins make their bindings again at each start.
+    pub fn bind_from_lua(&mut self, mode: Mode, keys: &str, command: &str) -> Result<(), String> {
+        crate::key::Key::parse_sequence(keys).map_err(|e| e.to_string())?;
+        self.check_command(command)?;
+        self.keymap
+            .bind(mode, keys, command)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Like `:unbind`, but not saved; see [`Self::bind_from_lua`].
+    pub fn unbind_from_lua(&mut self, mode: Mode, keys: &str) -> Result<(), String> {
+        self.keymap
+            .unbind(mode, keys)
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Press `keys` again, as a macro does: after a lazy plugin loaded and
+    /// bound the keys that loaded it.
+    pub fn replay_keys(&mut self, keys: &[Key]) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        for &key in keys {
+            let outcome = self.dispatch_key(key);
+            effects.extend(outcome.effects);
+            if !outcome.consumed {
+                effects.push(Effect::PassKey(key));
+            }
+        }
+        effects
+    }
+
     /// Reject bindings to unknown commands up front instead of at key press.
     pub fn check_command(&self, line: &str) -> Result<(), String> {
         for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {

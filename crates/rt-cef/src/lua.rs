@@ -75,6 +75,21 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 post_delayed_task(ThreadId::UI, Some(&mut task), i64::from(ms));
             }
             Action::Spawn(request) => crate::spawn::run_for_lua(request),
+            Action::Bind {
+                mode,
+                keys,
+                command,
+            } => {
+                if let Some(Err(e)) = shell::with(|s| s.engine.bind_from_lua(mode, &keys, &command))
+                {
+                    shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));
+                }
+            }
+            Action::Unbind { mode, keys } => {
+                if let Some(Err(e)) = shell::with(|s| s.engine.unbind_from_lua(mode, &keys)) {
+                    shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));
+                }
+            }
             Action::Open { url, target } => {
                 let target = match target {
                     lua::OpenTarget::Current => rt_core::command::OpenTarget::Current,
@@ -94,7 +109,10 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     match command {
         Command::LuaCall { id } => carry_out(lua::call(*id, &context(count))),
-        Command::User { name, args } => carry_out(lua::run_command(name, args, &context(count))),
+        Command::User { name, args } => {
+            crate::plugins::on_command(name);
+            carry_out(lua::run_command(name, args, &context(count)));
+        }
         _ => return false,
     }
     true
@@ -107,6 +125,7 @@ pub fn current_context() -> Context {
 
 /// Run the `rt.on(event, fn)` hooks.
 pub fn emit(event: &str, fields: &[(&str, &str)]) {
+    crate::plugins::on_event(event);
     carry_out(lua::emit(event, fields, &context(None)));
 }
 

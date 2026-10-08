@@ -123,7 +123,8 @@ rt.notify = rt.message
 
 -- rt.pack.add(spec or list of specs): plugins, loaded once config.lua has
 -- run (after installing or approving them). A spec is a git URL, or a table:
--- { "url" or src = "url" or dir = "~/folder", name, version, trusted, opts, config }.
+-- { "url" or src = "url" or dir = "~/folder", name, version, trusted, opts, config,
+--   event, cmd, keys }; event, cmd and keys make it wait for one of them to load.
 rt.pack = {}
 local pack_specs = {}
 local function add_spec(spec)
@@ -131,7 +132,21 @@ local function add_spec(spec)
   local src = spec.src or spec[1]
   if src == nil and spec.dir == nil then error("a plugin needs a git URL or dir", 3) end
   local name = spec.name or rt._plugin_name(src or spec.dir)
-  rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true)
+  local function list(value)
+    if value == nil then return {} end
+    if type(value) ~= "table" then return { value } end
+    return value
+  end
+  local keys = {}
+  for _, k in ipairs(list(spec.keys)) do
+    if type(k) == "table" then
+      keys[#keys + 1] = { k[1], k.mode or "normal" }
+    else
+      keys[#keys + 1] = { k, "normal" }
+    end
+  end
+  rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true,
+    list(spec.event), list(spec.cmd), keys)
   pack_specs[name] = spec
 end
 function rt.pack.add(specs)
@@ -310,6 +325,18 @@ pub struct PluginSpec {
     pub version: String,
     /// Run without the sandbox, with all permissions.
     pub trusted: bool,
+    /// Load only once one of these events fires, commands runs or keys are
+    /// pressed; with none of them, load at startup.
+    pub events: Vec<String>,
+    pub commands: Vec<String>,
+    pub keys: Vec<(Mode, String)>,
+}
+
+impl PluginSpec {
+    /// Whether it waits for an event, command or key to load.
+    pub fn is_lazy(&self) -> bool {
+        !(self.events.is_empty() && self.commands.is_empty() && self.keys.is_empty())
+    }
 }
 
 #[derive(Clone)]
@@ -355,6 +382,14 @@ pub enum Action {
     Timer { id: u32, ms: u32 },
     /// `rt.spawn`: run a program; [`spawned`] hands the result to `callback`.
     Spawn(SpawnRequest),
+    /// `rt.bind` after loading: bind for this run only, never saved.
+    Bind {
+        mode: Mode,
+        keys: String,
+        command: String,
+    },
+    /// `rt.unbind` after loading, never saved.
+    Unbind { mode: Mode, keys: String },
 }
 
 /// Where `rt.open` opens a URL.
@@ -864,6 +899,19 @@ fn tidy_error(error: &str, config_dir: &Path) -> String {
     }
 }
 
+/// `rt._pack_spec`'s arguments: name, src, dir, version, trusted, events,
+/// commands and `{ keys, mode }` pairs.
+type PackSpecArgs = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    Vec<String>,
+    Vec<String>,
+    Vec<Vec<String>>,
+);
+
 fn mode_arg(mode: Option<String>) -> mlua::Result<Mode> {
     match mode {
         None => Ok(Mode::Normal),
@@ -1002,8 +1050,11 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 let mut state = s.borrow_mut();
                 if state.loaded {
                     // From a callback: the same as typing :bind.
-                    let line = format!("bind --mode {mode} {keys} {command}");
-                    state.actions.push(Action::Run(line));
+                    state.actions.push(Action::Bind {
+                        mode,
+                        keys,
+                        command: command.clone(),
+                    });
                 } else {
                     state.ops.push(ConfigOp::Bind {
                         mode,
@@ -1125,18 +1176,29 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "_pack_spec",
         lua.create_function(
-            move |_,
-                  (name, src, dir, version, trusted): (
-                String,
-                String,
-                Option<String>,
-                Option<String>,
-                bool,
-            )| {
+            move |_, (name, src, dir, version, trusted, events, commands, keys): PackSpecArgs| {
+                let bad =
+                    |what: String| Err(mlua::Error::runtime(format!("plugin {name:?}: {what}")));
                 if !crate::plugins::valid_name(&name) {
                     return Err(mlua::Error::runtime(format!(
                         "plugin name {name:?}: use letters, digits, - and _ (set name = \"…\")"
                     )));
+                }
+                if let Some(event) = events.iter().find(|e| !EVENTS.iter().any(|(n, _)| n == e)) {
+                    return bad(format!("no event {event:?}"));
+                }
+                if let Some(command) = commands.iter().find(|c| !crate::plugins::valid_name(c)) {
+                    return bad(format!("{command:?} isn't a command name"));
+                }
+                let mut parsed = Vec::new();
+                for pair in keys {
+                    let [keys, mode]: [String; 2] = pair
+                        .try_into()
+                        .map_err(|_| mlua::Error::runtime("keys: { \"<keys>\", mode = \"…\" }"))?;
+                    if let Err(e) = Key::parse_sequence(&keys) {
+                        return bad(format!("keys {keys:?}: {e}"));
+                    }
+                    parsed.push((mode_arg(Some(mode))?, keys));
                 }
                 let mut state = s.borrow_mut();
                 if state.specs.iter().any(|spec| spec.name == name) {
@@ -1151,6 +1213,9 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     dir,
                     version: version.unwrap_or_default(),
                     trusted,
+                    events,
+                    commands,
+                    keys: parsed,
                 });
                 Ok(())
             },
@@ -1332,8 +1397,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             let mode = mode_arg(mode)?;
             let mut state = s.borrow_mut();
             if state.loaded {
-                let line = format!("unbind --mode {mode} {keys}");
-                state.actions.push(Action::Run(line));
+                state.actions.push(Action::Unbind { mode, keys });
             } else {
                 state.ops.push(ConfigOp::Unbind { mode, keys });
             }
@@ -1409,6 +1473,45 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 ..SpawnRequest::default()
             })]
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn lazy_plugins_name_their_events_commands_and_keys() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-lazy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = |text: &str| {
+            std::fs::write(dir.join("config.lua"), text).unwrap();
+            let paths = Paths::resolve(Some(&dir)).unwrap();
+            run(&dir.join("config.lua"), &paths, Settings::default()).1
+        };
+        let error = config(
+            r#"rt.pack.add({
+  { dir = "/p/eager" },
+  { dir = "/p/lazy", event = "tab_opened", cmd = { "lazy-go" }, keys = { "<Space>l", { "<C-l>", mode = "insert" } } },
+})"#,
+        );
+        assert_eq!(error, None);
+        let specs = plugin_specs();
+        assert!(!specs[0].is_lazy());
+        assert!(specs[1].is_lazy());
+        assert_eq!(specs[1].events, ["tab_opened"]);
+        assert_eq!(specs[1].commands, ["lazy-go"]);
+        assert_eq!(
+            specs[1].keys,
+            [
+                (Mode::Normal, "<Space>l".to_string()),
+                (Mode::Insert, "<C-l>".to_string())
+            ]
+        );
+        for bad in [
+            r#"rt.pack.add({ dir = "/p/x", event = "nope" })"#,
+            r#"rt.pack.add({ dir = "/p/x", cmd = "a b" })"#,
+            r#"rt.pack.add({ dir = "/p/x", keys = { { "<Nope>" } } })"#,
+        ] {
+            assert!(config(bad).is_some(), "{bad}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1509,7 +1612,11 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
         // The plugin's own rt was changed, not everyone's.
         assert_eq!(
             run_command("still", "", &ctx).unwrap(),
-            [Action::Run("bind --mode normal zq reload".into())]
+            [Action::Bind {
+                mode: Mode::Normal,
+                keys: "zq".into(),
+                command: "reload".into()
+            }]
         );
         // The user's require finds a loaded plugin's module, the same one.
         let error =
@@ -1659,7 +1766,11 @@ rt.command("late-bind", function() rt.keymap.set("normal", "zz", "reload") end)
         // A binding made from a callback becomes a :bind.
         assert_eq!(
             run_command("late-bind", "", &Context::default()).unwrap(),
-            [Action::Run("bind --mode normal zz reload".into())]
+            [Action::Bind {
+                mode: Mode::Normal,
+                keys: "zz".into(),
+                command: "reload".into()
+            }]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

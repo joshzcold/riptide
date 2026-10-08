@@ -2,8 +2,6 @@
 
 Plugins add commands, key bindings, hooks and more, written in Lua like `config.lua`. They work like Neovim's: a plugin is a folder with `lua/<name>/init.lua`, and you set it up from `config.lua`.
 
-Loading on demand is coming.
-
 ## Adding a plugin
 
 ```lua
@@ -26,8 +24,29 @@ A spec is a git URL, or a table:
 | `opts` | Passed to `require(name).setup(opts)` once it loads. |
 | `config` | A function run once it loads, instead of `opts`. |
 | `trusted = true` | Skip the sandbox and give it everything, as Neovim does. Only for code you vouch for. |
+| `event`, `cmd`, `keys` | Load it only when needed; see below. |
 
 Plugins load after `config.lua` has run, so set them up with `opts` or `config` rather than calling `require` straight away.
+
+## Loading when needed
+
+A plugin with `event`, `cmd` or `keys` loads only once you need it, which keeps startup quick:
+
+```lua
+rt.pack.add({
+  { "https://github.com/someone/reading-list", cmd = { "read-later", "reading-list" }, opts = {} },
+  { dir = "~/code/tab-tools", keys = { "<Space>t", { "<C-t>", mode = "insert" } }, opts = {} },
+  { dir = "~/code/history-sync", event = "window_closed", opts = {} },
+})
+```
+
+| Key | Loads it |
+|---|---|
+| `cmd` | when you run one of these commands; it then runs with your arguments |
+| `keys` | when you press one of these keys (normal mode unless a `mode` is given); the keys are pressed again for the plugin's own binding |
+| `event` | before the first of these events' hooks run, so the plugin's hooks see it too |
+
+Its permissions are still asked for at startup, so a key or command never stops to ask. The Plugins tab lists what each one waits for, and **Load now** or `:pack-load <name>` loads it straight away.
 
 ## Versions and the lockfile
 
