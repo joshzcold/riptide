@@ -369,7 +369,7 @@ pub fn on_command(command: &str) {
 }
 
 /// The commands from Lua, and the ones waiting plugins will define.
-fn refresh_commands() {
+pub fn refresh_commands() {
     let mut commands = rt_config::lua::user_commands();
     WAITING.with(|w| {
         for waiting in w.borrow().iter() {
@@ -381,7 +381,11 @@ fn refresh_commands() {
             }
         }
     });
-    shell::with(|s| s.engine.set_user_commands(commands));
+    shell::with(|s| {
+        if s.engine.user_commands() != commands.as_slice() {
+            s.engine.set_user_commands(commands);
+        }
+    });
 }
 
 pub fn run_command(command: &rt_core::Command) -> bool {

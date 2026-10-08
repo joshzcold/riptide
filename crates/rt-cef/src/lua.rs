@@ -94,6 +94,9 @@ fn carry_out(result: Result<Vec<Action>, String>) {
 /// Carry out what Lua asked for; `source` names it in errors (a plugin's
 /// errors already say which file).
 pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
+    // A callback may have added a command (rt.command); the engine has to
+    // know it before running anything, the new command included.
+    crate::plugins::refresh_commands();
     let actions = match result {
         Ok(actions) => actions,
         Err(e) if source == "config.lua" => {

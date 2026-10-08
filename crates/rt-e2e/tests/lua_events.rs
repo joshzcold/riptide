@@ -308,3 +308,21 @@ end)
     // The page itself wasn't clicked.
     assert_eq!(b.state().tab().title, "ready");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn commands_added_after_loading_can_run() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+-- Added and run in one callback, as a plugin's setup() can.
+rt.keymap.set("normal", "zc", function()
+  rt.command("late-cmd", function() rt.notify("late ran") end)
+  rt.run("late-cmd")
+end)
+"#,
+        )
+        .start("page.html");
+    b.keys("zc");
+    b.wait_until("the new command ran", |s| s.message() == Some("late ran"));
+}
