@@ -82,6 +82,60 @@ pub fn register(registrar: &mut SchemeRegistrar) {
 pub fn install() {
     let mut factory = RtSchemeFactory::new();
     register_scheme_handler_factory(Some(&CefString::from(SCHEME)), None, Some(&mut factory));
+    if TEST_PAGES.get().is_some() {
+        let mut pages = RtTestPagesFactory::new();
+        register_scheme_handler_factory(
+            Some(&CefString::from("http")),
+            Some(&CefString::from(TEST_HOST)),
+            Some(&mut pages),
+        );
+    }
+}
+
+/// `riptide --plugin-test`: the plugin's `test/` folder, which its specs
+/// open as ordinary web pages at `http://plugin-test.localhost/<path>`.
+pub static TEST_PAGES: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+pub const TEST_HOST: &str = "plugin-test.localhost";
+
+/// A file under [`TEST_PAGES`] for a request path, never outside it.
+fn test_page(path: &str) -> Option<(Arc<[u8]>, &'static str)> {
+    let dir = TEST_PAGES.get()?;
+    let path = path.split(['?', '#']).next()?.trim_start_matches('/');
+    let path = crate::pages::percent_decode(path)?;
+    if path
+        .split('/')
+        .any(|part| part.is_empty() || part == ".." || part == ".")
+    {
+        return None;
+    }
+    let file = dir.join(&path);
+    let body = std::fs::read(&file).ok()?;
+    Some((Arc::from(body), crate::pages::mime(&file)))
+}
+
+wrap_scheme_handler_factory! {
+    struct RtTestPagesFactory {}
+
+    impl SchemeHandlerFactory {
+        fn create(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _scheme_name: Option<&CefString>,
+            request: Option<&mut Request>,
+        ) -> Option<ResourceHandler> {
+            let url = request.map(|r| CefString::from(&r.url()).to_string()).unwrap_or_default();
+            let path = url.split_once(TEST_HOST).map_or("", |(_, rest)| rest);
+            let (body, mime, status) = match test_page(path) {
+                Some((body, mime)) => (body, mime, 200),
+                None => (Arc::from(&b"Not found"[..]), "text/plain", 404),
+            };
+            // Test pages are the author's own: no restrictions.
+            let csp = "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'".to_string();
+            Some(RtResource::new(body, mime, csp, status, Arc::new(AtomicUsize::new(0))))
+        }
+    }
 }
 
 wrap_scheme_handler_factory! {

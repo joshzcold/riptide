@@ -100,7 +100,7 @@ pub(crate) fn percent_decode(path: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-fn mime(path: &Path) -> &'static str {
+pub(crate) fn mime(path: &Path) -> &'static str {
     match path
         .extension()
         .and_then(|e| e.to_str())

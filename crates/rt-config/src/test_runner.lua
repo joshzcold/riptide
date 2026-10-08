@@ -155,6 +155,8 @@ local env = setmetatable({
   -- Press riptide keys, or run a command; both happen once the test waits.
   keys = function(keys) rt._keys(keys); wait(0) end,
   run = function(line) rt.run(line); wait(0) end,
+  -- A file in the plugin's test/ folder, as a web page.
+  page = function(path) return "http://plugin-test.localhost/" .. path end,
   messages = function() return messages end,
   last_message = function() return messages[#messages] end,
   clear_messages = function() messages = {} end,

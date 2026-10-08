@@ -73,12 +73,14 @@ function M.setup(user_opts)
     "Fill only the username saved for this site")
   rt.command("password-fill-password", function() fill("password") end,
     "Fill only the password saved for this site")
-  if backend.forget then
-    rt.command("password-lock", function()
+  rt.command("password-lock", function()
+    if backend.forget then
       backend.forget()
       rt.notify("passwords: locked; the next fill asks for the password again")
-    end, "Forget the password manager's unlocked session")
-  end
+    else
+      rt.notify("passwords: " .. name .. " keeps no session here; its own agent locks it")
+    end
+  end, "Forget the password manager's unlocked session (bw, keepassxc)")
 
   local keys = opts.keys
   if keys == nil then

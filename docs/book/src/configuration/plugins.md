@@ -169,6 +169,8 @@ end)
 | `keys("<Space>r")`, `run("open x")` | press riptide keys or run a command |
 | `wait(ms)`, `wait_until(fn, timeout)`, `wait_for(event, { pattern, timeout })` | let the browser work; `wait_for` returns the event |
 | `messages()`, `last_message()`, `clear_messages()` | what `rt.notify` showed, the plugin's included |
+| `page("login.html")` | the address of a file in the plugin's `test/` folder, served as an ordinary web page (`http://plugin-test.localhost/…`) |
+| `plugin_test.dir` | the plugin's folder, e.g. for `opts.command = plugin_test.dir .. "/test/bin/fake-tool"` |
 
 Each test gets 10 seconds. `test/config.lua`, if there is one, replaces the default `rt.pack.add({ dir = DIR, opts = {} })`, to pass other options. [`examples/plugin-template`](https://github.com/joshzcold/riptide/tree/main/examples/plugin-template) is a plugin to start from, with a spec and a GitHub workflow that runs it.
 

@@ -272,6 +272,9 @@ fn early_cli() -> Result<(Cli, Paths), i32> {
             eprintln!("riptide: --plugin-test: {e}");
             return Err(2);
         }
+        if let Ok(dir) = plugin.canonicalize() {
+            let _ = scheme::TEST_PAGES.set(dir.join("test"));
+        }
         cli.basedir = Some(base);
     }
     let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {
