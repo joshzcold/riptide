@@ -146,4 +146,6 @@ rt.send("ready", JSON.stringify({}));
 
 Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
 
-The [Lua page](lua.md) describes the API; errors name the plugin's file and line, e.g. `reading-list/lua/reading-list/init.lua:7: …`.
+`:help <name>` shows a plugin's description, permissions and its `doc/<name>.md` (or `README.md`), as text.
+
+The [Lua page](lua.md) describes the API, and `:help rt.ui.float` (any `rt.` function) shows one function; errors name the plugin's file and line, e.g. `reading-list/lua/reading-list/init.lua:7: …`.

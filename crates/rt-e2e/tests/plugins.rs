@@ -398,3 +398,45 @@ end)"#,
             .is_some_and(|m| m.starts_with("peek may not act on 127.0.0.1"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn help_covers_the_lua_api_and_each_plugins_readme() {
+    let b = Browser::launch()
+        .file("scratch-plugins/helpful/plugin/helpful.lua", "")
+        .file(
+            "scratch-plugins/helpful/riptide-plugin.toml",
+            "description = \"Helps out\"\n",
+        )
+        .file(
+            "scratch-plugins/helpful/README.md",
+            "# helpful\n\n<script>window.readmeRan = 1</script> Use :helpful-go.",
+        )
+        .lua(r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/helpful" })"#)
+        .start("page.html");
+    b.run("help rt.ui.float");
+    b.wait_until("the help page is at rt.ui.float", |s| {
+        s.tab().url == "riptide://help/#lua-rt.ui.float"
+    });
+    b.wait_eval(
+        "document.getElementById('lua-rt.ui.float')?.textContent.includes('box of text') ? 'yes' : 'no'",
+        "yes",
+    );
+    b.run("help helpful");
+    b.wait_until("the help page is at the plugin", |s| {
+        s.tab().url == "riptide://help/#plugin-helpful"
+    });
+    b.wait_eval(
+        "document.getElementById('plugin-helpful')?.textContent.includes('Use :helpful-go.') ? 'yes' : 'no'",
+        "yes",
+    );
+    // The README is text, never markup.
+    assert_eq!(b.eval("String(window.readmeRan)"), "undefined");
+
+    b.keys(":help rt.ui.fl");
+    b.wait_until("Lua functions complete", |s| {
+        s.completion["items"]
+            .as_array()
+            .is_some_and(|items| items.iter().any(|i| i["name"] == "rt.ui.float"))
+    });
+}

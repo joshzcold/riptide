@@ -71,6 +71,69 @@ fn write_class(out: &mut String, path: &str, node: &Node) {
     }
 }
 
+/// One function of the Lua API, for `:help rt.ui.float`.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ApiEntry {
+    /// `rt.ui.float`, or `rt.Float:update` for a handle's method.
+    pub name: String,
+    /// `rt.ui.float(opts)`.
+    pub signature: String,
+    pub doc: String,
+    /// `name type description` per parameter, and the return type.
+    pub params: Vec<String>,
+}
+
+/// Every `rt.*` function and handle method in the type stubs, with their docs.
+pub fn api() -> Vec<ApiEntry> {
+    let text = generate();
+    let mut entries = Vec::new();
+    let mut doc: Vec<String> = Vec::new();
+    let mut params: Vec<String> = Vec::new();
+    let mut class: Option<String> = None;
+    let mut locals: std::collections::HashMap<String, String> = Default::default();
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("---@class ") {
+            class = rest.split_whitespace().next().map(str::to_string);
+        } else if let Some(rest) = line.strip_prefix("---@param ") {
+            params.push(rest.to_string());
+        } else if let Some(rest) = line.strip_prefix("---@return ") {
+            params.push(format!("returns {rest}"));
+        } else if line.starts_with("---@") {
+        } else if let Some(rest) = line.strip_prefix("---") {
+            doc.push(rest.trim().to_string());
+        } else if let Some(rest) = line.strip_prefix("local ") {
+            if let (Some(name), Some(class)) = (rest.split_whitespace().next(), class.take()) {
+                locals.insert(name.to_string(), class);
+            }
+        } else if let Some(rest) = line.strip_prefix("function ") {
+            let signature = rest.trim_end_matches(" end").to_string();
+            let head = signature.split('(').next().unwrap_or_default();
+            let name = match head.split_once(':') {
+                Some((table, method)) => match locals.get(table) {
+                    Some(class) => format!("{class}:{method}"),
+                    None => head.to_string(),
+                },
+                None => head.to_string(),
+            };
+            let signature = signature.replacen(head, &name, 1);
+            if name.starts_with("rt.") && !name.starts_with("rt._") {
+                entries.push(ApiEntry {
+                    name,
+                    signature,
+                    doc: doc.join(" ").trim().to_string(),
+                    params: std::mem::take(&mut params),
+                });
+            }
+            doc.clear();
+            params.clear();
+        } else {
+            doc.clear();
+            params.clear();
+        }
+    }
+    entries
+}
+
 pub fn generate() -> String {
     let mut root = Node::default();
     for def in SETTINGS {
@@ -479,6 +542,27 @@ mod tests {
     const CHECKED_IN: &str = "../../docs/lua/rt.meta.lua";
 
     /// Regenerate with `UPDATE_LUA_TYPES=1 cargo test -p rt-config`.
+    #[test]
+    fn api_lists_functions_and_handle_methods_with_their_docs() {
+        let api = api();
+        let float = api
+            .iter()
+            .find(|e| e.name == "rt.ui.float")
+            .expect("rt.ui.float");
+        assert_eq!(float.signature, "rt.ui.float(opts)");
+        assert!(float.doc.contains("box of text"), "{float:?}");
+        assert!(
+            float
+                .params
+                .iter()
+                .any(|p| p.starts_with("opts rt.FloatOpts")),
+            "{float:?}"
+        );
+        assert!(api.iter().any(|e| e.name == "rt.Float:update"));
+        assert!(api.iter().any(|e| e.name == "rt.on"));
+        assert!(api.iter().all(|e| !e.name.starts_with("rt._")));
+    }
+
     #[test]
     fn checked_in_types_are_current() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CHECKED_IN);

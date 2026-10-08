@@ -18,6 +18,10 @@ pub struct HelpData {
     pub modes: Vec<ModeHelp>,
     /// `(label, value)` rows for the version section.
     pub info: Vec<(String, String)>,
+    /// The Lua API, from the type stubs.
+    pub lua: Vec<serde_json::Value>,
+    /// The plugins `config.lua` adds, with their README.
+    pub plugins: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -174,6 +178,8 @@ pub fn build(
         settings,
         modes,
         info,
+        lua: Vec::new(),
+        plugins: Vec::new(),
     }
 }
 
@@ -195,11 +201,10 @@ pub fn anchor(topic: Option<&str>) -> Result<Option<String>, String> {
         return Ok(Some(format!("set-{topic}")));
     }
     match topic {
-        "commands" | "settings" | "bindings" | "modes" | "hints" | "config" | "lua" | "version" => {
-            Ok(Some(topic.to_string()))
-        }
+        "commands" | "settings" | "bindings" | "modes" | "hints" | "config" | "lua" | "lua-api"
+        | "plugins" | "version" => Ok(Some(topic.to_string())),
         _ => Err(format!(
-            "No help for {topic:?} (try a :command, a setting or a section)"
+            "No help for {topic:?} (try a :command, a setting, rt.<function>, a plugin or a section)"
         )),
     }
 }

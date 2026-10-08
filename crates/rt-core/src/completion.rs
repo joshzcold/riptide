@@ -39,6 +39,8 @@ pub enum CompletionKind {
     OtherTab,
     /// Extensions, for `:extension-open`, `-remove` and `-update`.
     Extension,
+    /// `:help` topics: commands, settings, sections, Lua functions and plugins.
+    HelpTopic,
     /// The arguments of a command from config.lua; the pattern is the
     /// command's name, a tab, then what's typed after it.
     UserArgs,
@@ -109,7 +111,11 @@ fn skipped_letters(name: &str, typed: &str) -> Option<usize> {
 
 /// The items whose name contains `typed`, best matches first and otherwise
 /// in their original order.
-fn ranked<T>(items: impl IntoIterator<Item = T>, typed: &str, name: impl Fn(&T) -> &str) -> Vec<T> {
+pub fn ranked<T>(
+    items: impl IntoIterator<Item = T>,
+    typed: &str,
+    name: impl Fn(&T) -> &str,
+) -> Vec<T> {
     let mut ranked: Vec<(u8, T)> = items
         .into_iter()
         .filter_map(|item| Some((rank(name(&item), typed)?, item)))
@@ -330,6 +336,7 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
         "session-load" | "session-delete" | "session-save" => CompletionKind::Session,
         "spell-replace" => CompletionKind::Spelling,
+        "help" => CompletionKind::HelpTopic,
         "tab-select" => CompletionKind::Tab,
         "tab-take" => CompletionKind::OtherTab,
         "extension-open" | "extension-remove" | "extension-update" => CompletionKind::Extension,

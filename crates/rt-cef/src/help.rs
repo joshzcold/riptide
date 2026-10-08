@@ -130,22 +130,91 @@ pub fn refresh() {
                 SANDBOX.get().cloned().unwrap_or_default(),
             ),
         ];
-        let data = rt_core::help::build(
+        let mut data = rt_core::help::build(
             s.engine.keymap(),
             s.engine.settings(),
             &sources,
             info,
             s.engine.user_commands(),
         );
+        data.lua = rt_config::lua_types::api()
+            .into_iter()
+            .filter_map(|entry| serde_json::to_value(entry).ok())
+            .collect();
         // `</` would end the inline <script> early.
         let json = serde_json::to_string(&data)
             .unwrap_or_else(|_| "null".into())
             .replace("</", "<\\/");
         TEMPLATE.replace("/*RT_DATA*/null", &json)
     });
+    // Plugins' READMEs are read outside the shell borrow, then added.
+    let plugins = serde_json::to_string(&crate::plugins::help_entries())
+        .unwrap_or_else(|_| "[]".into())
+        .replace("</", "<\\/");
+    let html = html.map(|h| h.replace("/*RT_PLUGINS*/[]", &plugins));
     if let (Some(html), Ok(mut page)) = (html, PAGE.write()) {
         *page = Some(Arc::from(html.into_bytes()));
     }
+}
+
+/// `rt.ui.float` or a plugin's name: their place on the help page.
+fn extra_anchor(topic: &str) -> Option<String> {
+    if rt_config::lua_types::api().iter().any(|e| e.name == topic) {
+        return Some(format!("lua-{topic}"));
+    }
+    rt_config::lua::plugin_specs()
+        .iter()
+        .any(|s| s.name == topic)
+        .then(|| format!("plugin-{topic}"))
+}
+
+/// `:help` topics matching `pattern`.
+pub fn completions(pattern: &str) -> Vec<rt_core::completion::Completion> {
+    let pattern = pattern
+        .trim_start_matches("-t ")
+        .trim_start_matches("--tab ");
+    let item = |category: &'static str, name: String, description: String| {
+        rt_core::completion::Completion {
+            icon: None,
+            time: None,
+            detail: None,
+            category,
+            name,
+            description,
+        }
+    };
+    let mut topics: Vec<(&'static str, String, String)> = Vec::new();
+    topics.extend(
+        rt_core::command::COMMANDS
+            .iter()
+            .filter(|c| !c.hidden)
+            .map(|c| {
+                (
+                    "Commands",
+                    format!(":{}", c.name),
+                    c.description.to_string(),
+                )
+            }),
+    );
+    topics.extend(
+        rt_core::settings::SETTINGS
+            .iter()
+            .map(|d| ("Settings", d.name.to_string(), d.description.to_string())),
+    );
+    topics.extend(
+        rt_config::lua_types::api()
+            .into_iter()
+            .map(|e| ("Lua API", e.name, e.doc)),
+    );
+    topics.extend(
+        rt_config::lua::plugin_specs()
+            .into_iter()
+            .map(|s| ("Plugins", s.name, String::new())),
+    );
+    rt_core::completion::ranked(topics, pattern, |(_, name, _)| name.as_str())
+        .into_iter()
+        .map(|(category, name, description)| item(category, name, description))
+        .collect()
 }
 
 pub fn run_command(command: &Command) -> bool {
@@ -219,7 +288,11 @@ pub fn run_command(command: &Command) -> bool {
         }
         _ => return false,
     };
-    let anchor = match rt_core::help::anchor(topic) {
+    let anchor = match topic.map(str::trim).and_then(extra_anchor) {
+        Some(anchor) => Ok(Some(anchor)),
+        None => rt_core::help::anchor(topic),
+    };
+    let anchor = match anchor {
         Ok(anchor) => anchor,
         Err(e) => {
             shell::show_message(Level::Error, e);

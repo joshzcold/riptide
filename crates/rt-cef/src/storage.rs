@@ -232,6 +232,9 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
             .map(|(name, desc)| item("Arguments", &name, &desc))
             .collect();
     }
+    if kind == CompletionKind::HelpTopic {
+        return crate::help::completions(pattern);
+    }
     if kind == CompletionKind::Spelling {
         return crate::spell::completions(pattern);
     }

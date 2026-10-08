@@ -60,7 +60,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 | `/` `?` then `n` `N` | Find text in the page forward / backward, then go to the next / previous match. Matches highlight as you type (`search.incremental`); case is ignored unless the text has a capital (`search.ignore_case`). `:search` with no text clears it. |
 | `v` / `V` | Caret mode: move with `h` `j` `k` `l` `w` `b` `e` `0` `$` `gg` `G`, and between blocks with `[` `]` (start of the previous/next) and `{` `}` (end of the previous/next). Select with `v` (or `V` for lines), drop the selection with `Ctrl-Space`, swap the ends with `o`, yank with `y` (`Y`: to the primary selection), leave with `Escape` |
 | `qa` … `q` / `@a` | Record a macro into register `a` / replay it (`@@` repeats the last one, `3@a` runs it three times). Keys typed into pages are replayed too. |
-| `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help bindings` jump to an entry; `/` searches. |
+| `F1`, `:help [topic]` | Help: every command, setting (with its current value and where it was set) and key binding, generated from the running browser. `:help :open`, `:help hints.chars`, `:help rt.ui.float`, `:help <plugin>` and `:help bindings` jump to an entry, and `:help ` completes them; `/` searches. |
 | `:version` | Version, git commit, CEF/Chromium versions, paths and loaded config files |
 | `:history [-t]` | Browsing history by day, with a search box |
 | `:history-import [path]` | Import qutebrowser's `history.sqlite` (default: qutebrowser's data directory); importing twice adds nothing new |

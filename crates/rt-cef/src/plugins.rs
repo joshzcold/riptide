@@ -436,6 +436,49 @@ fn triggers(spec: &PluginSpec) -> Vec<String> {
 }
 
 /// Every plugin for the plugins page: its spec, lockfile entry and status.
+/// The most of a plugin's README the help page shows.
+const README_LIMIT: usize = 200_000;
+
+/// Each plugin for `:help <plugin>`: what it is, what it may do, and its
+/// `doc/<name>.md` or README.
+pub fn help_entries() -> Vec<serde_json::Value> {
+    let Some((_, data_dir)) = paths() else {
+        return Vec::new();
+    };
+    rt_config::lua::plugin_specs()
+        .into_iter()
+        .map(|spec| {
+            let dir = folder(&spec, &data_dir);
+            let manifest = Manifest::read(&dir).ok();
+            let readme = [
+                dir.join("doc").join(format!("{}.md", spec.name)),
+                dir.join("README.md"),
+                dir.join("README"),
+            ]
+            .iter()
+            .find_map(|path| std::fs::read_to_string(path).ok())
+            .map(|mut text| {
+                if text.len() > README_LIMIT {
+                    let mut end = README_LIMIT;
+                    while !text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    text.truncate(end);
+                }
+                text
+            })
+            .unwrap_or_default();
+            serde_json::json!({
+                "name": spec.name,
+                "description": manifest.as_ref().and_then(|m| m.description.clone()).unwrap_or_default(),
+                "permissions": manifest.map(|m| m.permissions.describe()).unwrap_or_default(),
+                "trusted": spec.trusted,
+                "readme": readme,
+            })
+        })
+        .collect()
+}
+
 pub fn page_data() -> serde_json::Value {
     let Some((config_dir, data_dir)) = paths() else {
         return serde_json::json!([]);
