@@ -138,6 +138,30 @@ end
 return M
 ```
 
+### Options
+
+A plugin lists its options in `riptide-plugin.toml`, and the Plugins tab shows a form for them; for a plugin added there, **Save options** keeps them in `plugins.toml` and reloads it, so `setup(opts)` gets them. For one from `config.lua`, the tab shows them and they go in `rt.pack.add`'s `opts`.
+
+```toml
+[[option]]
+name = "database"
+type = "path"          # string (the default), path, number, bool, choice or secret
+description = "Your .kdbx file"
+required = true
+
+[[option]]
+name = "remember"
+type = "number"
+default = 0            # shown in the form; the plugin applies it when unset
+
+[[option]]
+name = "password"
+type = "secret"
+description = "The database password, so it doesn't ask"
+```
+
+A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring. On Linux without a keyring service, saving a secret says so and the plugin can ask instead.
+
 ### Dependencies
 
 A plugin that builds on another lists it in `riptide-plugin.toml`:

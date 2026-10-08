@@ -458,6 +458,16 @@ function Page:send(name, data) end
 ---Close its panel, or the tabs showing it.
 function Page:close() end
 
+rt.secret = {{}}
+
+---One of this plugin's secret options (`type = "secret"` in its
+---riptide-plugin.toml), from the OS keyring where the Plugins tab keeps it:
+---`fn(value)`, `fn(nil)` when it isn't set, or `fn(nil, why)`. Only plugins
+---have secret options, and each reads only its own.
+---@param option string
+---@param fn fun(value: string|nil, err: string|nil)
+function rt.secret.get(option, fn) end
+
 ---Open one of this plugin's pages in a tab or a panel. Only plugins have pages.
 ---@param opts? rt.PageOpts
 ---@return rt.Page

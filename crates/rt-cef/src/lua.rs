@@ -144,6 +144,11 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 panel,
             } => crate::pages::open(&source, id, &path, title, panel),
             Action::PluginPageClose { source, id } => crate::pages::close(&source, id),
+            Action::Secret {
+                plugin,
+                option,
+                callback,
+            } => crate::plugins::read_secret(plugin, option, callback),
             Action::Keys(keys) => {
                 let keys = rt_core::key::Key::parse_sequence(&keys).unwrap_or_default();
                 if let Some(effects) = shell::with(|s| s.engine.replay_keys(&keys)) {

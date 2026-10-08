@@ -719,10 +719,9 @@ pub fn page_data() -> serde_json::Value {
         .map(|spec| {
             let locked = lock.plugins.get(&spec.name).cloned().unwrap_or_default();
             let state = status.get(&spec.name).cloned().unwrap_or_default();
-            let description = Manifest::read(&folder(&spec, &data_dir))
-                .ok()
-                .and_then(|m| m.description)
-                .unwrap_or_default();
+            let manifest = Manifest::read(&folder(&spec, &data_dir)).unwrap_or_default();
+            let description = manifest.description.clone().unwrap_or_default();
+            let options = options_data(&spec, &manifest, &config_dir, &data_dir);
             serde_json::json!({
                 "name": spec.name,
                 "description": description,
@@ -735,6 +734,7 @@ pub fn page_data() -> serde_json::Value {
                 },
                 "git": spec.dir.is_none() && !spec.src.is_empty(),
                 "added": spec.added,
+                "options": options,
                 // The plugins it shares a checkout with, which update with it.
                 "shares": if spec.dir.is_none() && !spec.src.is_empty() {
                     members_of(&spec.src).into_iter().filter(|n| *n != spec.name).collect()
@@ -1057,6 +1057,130 @@ fn apply_reviewed(name: &str) -> bool {
             false
         }
     }
+}
+
+/// Plugin `name`'s spec and manifest, if it's in the config.
+fn spec_and_manifest(name: &str) -> Option<(PluginSpec, Manifest)> {
+    let (_, data_dir) = paths()?;
+    let spec = rt_config::lua::plugin_specs()
+        .into_iter()
+        .find(|s| s.name == name)?;
+    let manifest = Manifest::read(&folder(&spec, &data_dir)).ok()?;
+    Some((spec, manifest))
+}
+
+/// `rt.secret.get` from `plugin`: only an option its manifest declares secret.
+pub fn read_secret(plugin: String, option: String, callback: u32) {
+    let declared = spec_and_manifest(&plugin).is_some_and(|(_, manifest)| {
+        manifest
+            .options
+            .iter()
+            .any(|o| o.name == option && o.kind == rt_config::plugins::OptionKind::Secret)
+    });
+    crate::secrets::get(plugin, option, declared, callback);
+}
+
+/// The Plugins tab's Save: `values` for plugin `name`'s options, each checked
+/// against its manifest, into its `opts` in plugins.toml; then reload.
+pub fn save_options(name: &str, values: &serde_json::Map<String, serde_json::Value>) {
+    let Some((config_dir, _)) = paths() else {
+        return;
+    };
+    let Some((spec, manifest)) = spec_and_manifest(name) else {
+        return;
+    };
+    if !spec.added {
+        return shell::show_message(
+            Level::Error,
+            format!("{name} is set up in config.lua; change its options there"),
+        );
+    }
+    let mut checked = Vec::new();
+    for (key, value) in values {
+        let Some(option) = manifest.options.iter().find(|o| &o.name == key) else {
+            return shell::show_message(Level::Error, format!("{name} has no option {key:?}"));
+        };
+        match option.check(value) {
+            Ok(value) => checked.push((key.clone(), value)),
+            Err(e) => return shell::show_message(Level::Error, format!("{name}: {e}")),
+        }
+    }
+    let saved = rt_config::plugins::PluginsFile::load(&config_dir).and_then(|mut file| {
+        let entry = file
+            .find_mut(name)
+            .ok_or_else(|| format!("{name} isn't in plugins.toml"))?;
+        // Keys the manifest doesn't know (added by hand) stay.
+        let opts = entry.opts.get_or_insert_with(Default::default);
+        for (key, value) in checked {
+            match value {
+                Some(value) => opts.insert(key, value),
+                None => opts.remove(&key),
+            };
+        }
+        if opts.is_empty() {
+            entry.opts = None;
+        }
+        file.save(&config_dir)
+    });
+    match saved {
+        Ok(()) => {
+            shell::show_message(Level::Info, format!("Saved {name}'s options; reloading"));
+            reload();
+        }
+        Err(e) => shell::show_message(Level::Error, e),
+    }
+}
+
+/// The Plugins tab's secret field: into the OS keyring, or out of it with `None`.
+pub fn save_secret(name: &str, option: &str, value: Option<String>) {
+    let Some((_, data_dir)) = paths() else { return };
+    let declared = spec_and_manifest(name).is_some_and(|(_, manifest)| {
+        manifest
+            .options
+            .iter()
+            .any(|o| o.name == option && o.kind == rt_config::plugins::OptionKind::Secret)
+    });
+    if !declared {
+        return shell::show_message(
+            Level::Error,
+            format!("{option} isn't one of {name}'s secret options"),
+        );
+    }
+    crate::secrets::store(data_dir, name.to_string(), option.to_string(), value);
+}
+
+/// Plugin `spec`'s options for the Plugins tab: each declared one with its
+/// value from plugins.toml (secrets only say whether they're set).
+fn options_data(
+    spec: &PluginSpec,
+    manifest: &Manifest,
+    config_dir: &Path,
+    data_dir: &Path,
+) -> serde_json::Value {
+    let file = rt_config::plugins::PluginsFile::load(config_dir).unwrap_or_default();
+    let opts = file
+        .plugins
+        .iter()
+        .find(|p| p.plugin_name() == spec.name)
+        .and_then(|p| p.opts.clone())
+        .unwrap_or_default();
+    manifest
+        .options
+        .iter()
+        .map(|option| {
+            let secret = option.kind == rt_config::plugins::OptionKind::Secret;
+            serde_json::json!({
+                "name": option.name,
+                "type": option.kind,
+                "description": option.description,
+                "required": option.required,
+                "choices": option.choices,
+                "default": option.default,
+                "value": if secret { None } else { opts.get(&option.name).cloned() },
+                "set": secret && crate::secrets::is_set(data_dir, &spec.name, &option.name),
+            })
+        })
+        .collect()
 }
 
 /// `:pack-add` and the Plugins tab's Add: a plugin from git into

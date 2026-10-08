@@ -58,6 +58,18 @@ pub enum UiMessage {
     Pack { action: PackAction },
     /// The Plugins tab's Add: a plugin from git, by URL and folder.
     PackAdd { src: String, subdir: String },
+    /// The Plugins tab saved a plugin's options (checked against its
+    /// manifest when applied).
+    PluginOptions {
+        name: String,
+        values: serde_json::Map<String, serde_json::Value>,
+    },
+    /// The Plugins tab saved (or, with `None`, cleared) a secret option.
+    PluginSecret {
+        name: String,
+        option: String,
+        value: Option<SecretText>,
+    },
     /// The Extensions tab's buttons; `id` is empty for checking all.
     Extension { id: String, action: ExtensionAction },
     /// The Extensions tab's Install box: a Web Store page or an id.
@@ -127,6 +139,18 @@ pub enum ExtensionAction {
     Update,
     /// Chrome's own extensions page.
     Chrome,
+}
+
+/// A secret typed on the Plugins tab: its Debug output hides it, so a
+/// logged message can't show it.
+#[derive(Clone, PartialEq, Eq, Deserialize)]
+#[serde(transparent)]
+pub struct SecretText(pub String);
+
+impl std::fmt::Debug for SecretText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SecretText(..)")
+    }
 }
 
 /// Which bar a size is for.
@@ -368,6 +392,30 @@ struct Extension {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct PluginOptions {
+    name: String,
+    values: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PluginSecret {
+    name: String,
+    option: String,
+    value: Option<SecretText>,
+}
+
+/// A plugin's or option's name, as riptide-plugin.toml allows.
+fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 100
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PackAdd {
     src: String,
     #[serde(default)]
@@ -502,6 +550,41 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let site =
                 site(&text).ok_or_else(|| format!("{text:?} isn't a site, e.g. example.com"))?;
             Ok(UiMessage::ClearSite { site })
+        }
+        ("settings", "plugin-options") => {
+            let PluginOptions {
+                name: plugin,
+                values,
+            } = payload(name, json)?;
+            if !plain_name(&plugin) || values.len() > 100 || !values.keys().all(|k| plain_name(k)) {
+                return Err(format!("{name}: bad plugin or option name"));
+            }
+            Ok(UiMessage::PluginOptions {
+                name: plugin,
+                values,
+            })
+        }
+        ("settings", "plugin-secret") => {
+            // Never in an error: the payload holds the secret.
+            let PluginSecret {
+                name: plugin,
+                option,
+                value,
+            } = serde_json::from_str(json).map_err(|_| format!("{name}: not a secret option"))?;
+            if !plain_name(&plugin) || !plain_name(&option) {
+                return Err(format!("{name}: bad plugin or option name"));
+            }
+            if value
+                .as_ref()
+                .is_some_and(|v| v.0.is_empty() || v.0.len() > 4096)
+            {
+                return Err(format!("{name}: empty or too long"));
+            }
+            Ok(UiMessage::PluginSecret {
+                name: plugin,
+                option,
+                value,
+            })
         }
         ("settings", "pack-add") => {
             let PackAdd { src, subdir } = payload(name, json)?;
@@ -898,6 +981,37 @@ mod tests {
             })
         );
         assert!(parse(page, "pack", r#"{"action": "delete-everything"}"#).is_err());
+        // A secret's value never shows in Debug output or an error.
+        let message = parse(
+            page,
+            "plugin-secret",
+            r#"{"name": "vault", "option": "token", "value": "hunter2"}"#,
+        )
+        .unwrap();
+        assert!(!format!("{message:?}").contains("hunter2"));
+        let error = parse(
+            page,
+            "plugin-secret",
+            r#"{"name": "vault", "option": "token", "value": "hunter2", "x": 1}"#,
+        )
+        .unwrap_err();
+        assert!(!error.contains("hunter2"), "{error}");
+        assert!(
+            parse(
+                page,
+                "plugin-secret",
+                r#"{"name": "vault", "option": "../x", "value": "y"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            parse(
+                page,
+                "plugin-options",
+                r#"{"name": "vault", "values": {"server": "x"}}"#
+            )
+            .is_ok()
+        );
         assert_eq!(
             parse(
                 page,

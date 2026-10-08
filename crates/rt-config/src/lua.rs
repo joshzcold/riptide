@@ -207,7 +207,7 @@ local SAFE = {
 }
 local GATED = { spawn = "spawn", run = "commands", set = "settings", get = "settings" }
 -- Defined further down, with rt.ui and rt.page.
-local ui_for, page_for
+local ui_for, page_for, secret_for
 local function copy(t)
   local out = {}
   for k, v in pairs(t) do out[k] = v end
@@ -258,6 +258,7 @@ function rt._sandbox(name, permissions, require_fn)
   api.ui.float = rt._float_for(name)
   api.ui.panel = rt._panel_for(name)
   api.ui.page = rt._page_for(name)
+  api.secret = secret_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
   else
@@ -332,8 +333,22 @@ function page_for(source)
     end,
   }
 end
+-- rt.secret.get(option, fn): one of the plugin's own secret options, from
+-- the OS keyring; fn gets (value), (nil) when it isn't set, or (nil, why).
+function secret_for(source)
+  return {
+    get = function(option, fn)
+      if source == nil then error("rt.secret: only plugins have secret options", 2) end
+      if type(option) ~= "string" or type(fn) ~= "function" then
+        error("rt.secret.get takes an option's name and a function", 2)
+      end
+      rt._secret(source, option, page_result(fn))
+    end,
+  }
+end
 rt.ui = ui_for(nil)
 rt.page = page_for(nil)
+rt.secret = secret_for(nil)
 
 -- rt.store(name): data kept between runs, saved on every change.
 local stores = {}
@@ -693,6 +708,13 @@ pub enum Action {
     PluginPageClose { source: String, id: u32 },
     /// The plugin test runner presses riptide keys.
     Keys(String),
+    /// `rt.secret.get`: plugin `plugin`'s secret `option` goes to callback
+    /// `callback` (in `rt._answers`). Only names here, never the value.
+    Secret {
+        plugin: String,
+        option: String,
+        callback: u32,
+    },
     /// The plugin test runner is done: quit with this exit code.
     Exit(i32),
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
@@ -2324,6 +2346,32 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     source,
                     prompt,
                     ask,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_secret",
+        lua.create_function(
+            move |lua, (plugin, option, callback): (String, String, mlua::Function)| {
+                if !crate::plugins::valid_name(&option) {
+                    return Err(mlua::Error::runtime(format!(
+                        "rt.secret.get: {option:?} isn't an option's name"
+                    )));
+                }
+                let id = {
+                    let mut state = s.borrow_mut();
+                    state.next_callback += 1;
+                    state.next_callback - 1
+                };
+                let api: mlua::Table = lua.globals().get("rt")?;
+                api.get::<mlua::Table>("_answers")?.set(id, callback)?;
+                s.borrow_mut().actions.push(Action::Secret {
+                    plugin,
+                    option,
+                    callback: id,
                 });
                 Ok(())
             },

@@ -49,6 +49,12 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::PanelClick { id, line } => crate::panel::click(id, line),
         UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
         UiMessage::PackAdd { src, subdir } => crate::plugins::add(&src, &subdir),
+        UiMessage::PluginOptions { name, values } => crate::plugins::save_options(&name, &values),
+        UiMessage::PluginSecret {
+            name,
+            option,
+            value,
+        } => crate::plugins::save_secret(&name, &option, value.map(|v| v.0)),
         UiMessage::Pack { action } => {
             use rt_core::ui_message::PackAction;
             match action {

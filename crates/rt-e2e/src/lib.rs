@@ -585,6 +585,8 @@ fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
         // Not the desktop's session bus: tests must not pop up notifications
         // or talk to services on the user's screen.
         .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+        // Plugins' secrets in memory, never the desktop's keyring.
+        .env("RIPTIDE_SECRET_STORE", "memory")
         // Stand-ins from `Launch::command` come first.
         .env(
             "PATH",

@@ -101,7 +101,7 @@ impl Permissions {
 }
 
 /// `riptide-plugin.toml`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Manifest {
     pub name: Option<String>,
@@ -109,6 +109,74 @@ pub struct Manifest {
     pub permissions: Permissions,
     /// Plugins it needs loaded first, by name; it may `require` their modules.
     pub dependencies: Vec<String>,
+    /// Its options, which the Plugins tab can edit, in order.
+    #[serde(rename = "option")]
+    pub options: Vec<OptionSpec>,
+}
+
+/// One `[[option]]` in `riptide-plugin.toml`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OptionSpec {
+    pub name: String,
+    #[serde(rename = "type", default)]
+    pub kind: OptionKind,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<toml::Value>,
+    /// The values a `choice` may take.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<String>,
+}
+
+/// What an option holds. A `secret` lives in the OS keyring, never in a file,
+/// and the plugin reads it with `rt.secret.get`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OptionKind {
+    #[default]
+    String,
+    Path,
+    Number,
+    Bool,
+    Choice,
+    Secret,
+}
+
+impl OptionSpec {
+    /// `value` from the Plugins tab, checked against this option's type.
+    /// `None` clears it (back to the default).
+    pub fn check(&self, value: &serde_json::Value) -> Result<Option<toml::Value>, String> {
+        let bad = |what: &str| Err(format!("{}: {what}", self.name));
+        Ok(Some(match (self.kind, value) {
+            (_, serde_json::Value::Null) => return Ok(None),
+            (OptionKind::String | OptionKind::Path, serde_json::Value::String(s)) => {
+                if s.is_empty() {
+                    return Ok(None);
+                }
+                if s.len() > 4096 || s.chars().any(char::is_control) {
+                    return bad("too long, or has control characters");
+                }
+                toml::Value::String(s.clone())
+            }
+            (OptionKind::Number, serde_json::Value::Number(n)) => match (n.as_i64(), n.as_f64()) {
+                (Some(i), _) => toml::Value::Integer(i),
+                (None, Some(f)) if f.is_finite() => toml::Value::Float(f),
+                _ => return bad("not a number"),
+            },
+            (OptionKind::Bool, serde_json::Value::Bool(b)) => toml::Value::Boolean(*b),
+            (OptionKind::Choice, serde_json::Value::String(s)) if self.choices.contains(s) => {
+                toml::Value::String(s.clone())
+            }
+            (OptionKind::Choice, _) => return bad(&format!("one of {}", self.choices.join(", "))),
+            // Secrets go to the keyring, never into plugins.toml.
+            (OptionKind::Secret, _) => return bad("a secret, kept in the keyring"),
+            (kind, _) => return bad(&format!("not a {kind:?}").to_lowercase()),
+        }))
+    }
 }
 
 impl Manifest {
@@ -121,6 +189,27 @@ impl Manifest {
                     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
                 if let Some(bad) = manifest.dependencies.iter().find(|d| !valid_name(d)) {
                     return Err(format!("{}: {bad:?} isn't a plugin name", path.display()));
+                }
+                let mut seen = std::collections::HashSet::new();
+                for option in &manifest.options {
+                    let problem = if !valid_name(&option.name) {
+                        Some("isn't a name")
+                    } else if !seen.insert(option.name.as_str()) {
+                        Some("is there twice")
+                    } else if option.kind == OptionKind::Secret && option.default.is_some() {
+                        Some("is a secret, so it can't have a default")
+                    } else if option.kind == OptionKind::Choice && option.choices.is_empty() {
+                        Some("is a choice with no choices")
+                    } else {
+                        None
+                    };
+                    if let Some(problem) = problem {
+                        return Err(format!(
+                            "{}: option {:?} {problem}",
+                            path.display(),
+                            option.name
+                        ));
+                    }
                 }
                 Ok(manifest)
             }
@@ -270,6 +359,11 @@ impl PluginsFile {
         }
         self.plugins.push(spec);
         true
+    }
+
+    /// The `[[plugin]]` named `name`.
+    pub fn find_mut(&mut self, name: &str) -> Option<&mut FileSpec> {
+        self.plugins.iter_mut().find(|p| p.plugin_name() == name)
     }
 
     /// Take out the plugin named `name`; false if it isn't here.
@@ -514,6 +608,60 @@ mod tests {
         )
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("../up"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn manifests_declare_options_that_check_their_values() {
+        let dir = std::env::temp_dir().join(format!("rt-plugin-options-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let write = |text: &str| std::fs::write(dir.join("riptide-plugin.toml"), text).unwrap();
+        write(
+            "[[option]]\nname = \"database\"\ntype = \"path\"\nrequired = true\n\n\
+             [[option]]\nname = \"remember\"\ntype = \"number\"\ndefault = 0\n\n\
+             [[option]]\nname = \"submit\"\ntype = \"bool\"\n\n\
+             [[option]]\nname = \"mode\"\ntype = \"choice\"\nchoices = [\"a\", \"b\"]\n\n\
+             [[option]]\nname = \"password\"\ntype = \"secret\"\n",
+        );
+        let options = Manifest::read(&dir).unwrap().options;
+        let names: Vec<&str> = options.iter().map(|o| o.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["database", "remember", "submit", "mode", "password"]
+        );
+        let [database, remember, submit, mode, password] = &options[..] else {
+            unreachable!()
+        };
+        use serde_json::json;
+        assert_eq!(
+            database.check(&json!("~/x.kdbx")).unwrap(),
+            Some(toml::Value::String("~/x.kdbx".into()))
+        );
+        assert_eq!(database.check(&json!("")).unwrap(), None);
+        assert_eq!(
+            remember.check(&json!(300)).unwrap(),
+            Some(toml::Value::Integer(300))
+        );
+        assert!(remember.check(&json!("300")).is_err());
+        assert_eq!(
+            submit.check(&json!(true)).unwrap(),
+            Some(toml::Value::Boolean(true))
+        );
+        assert!(mode.check(&json!("c")).is_err());
+        assert_eq!(mode.check(&json!(null)).unwrap(), None);
+        // A secret never becomes a plain option.
+        assert!(password.check(&json!("hunter2")).is_err());
+        for bad in [
+            "[[option]]\nname = \"x\"\n\n[[option]]\nname = \"x\"\n",
+            "[[option]]\nname = \"p\"\ntype = \"secret\"\ndefault = \"pw\"\n",
+            "[[option]]\nname = \"c\"\ntype = \"choice\"\n",
+            "[[option]]\nname = \"../x\"\n",
+            "[[option]]\nname = \"x\"\ntype = \"blob\"\n",
+        ] {
+            write(bad);
+            assert!(Manifest::read(&dir).is_err(), "{bad}");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

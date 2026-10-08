@@ -903,6 +903,91 @@ const PLUGIN_STATES = {
 };
 const pluginAction = (name, action) => rt.send("plugin", JSON.stringify({ name, action }));
 
+// A plugin's options from its riptide-plugin.toml: editable for plugins added
+// here (saved to plugins.toml), shown for ones from config.lua. Secrets go to
+// the OS keyring; the page only ever learns whether one is set.
+function pluginOptions(plugin, wide) {
+  const rows = [];
+  const values = {};
+  const editable = plugin.added;
+  for (const option of plugin.options) {
+    const row = el("div", "keyrow");
+    row.style.gridTemplateColumns = "minmax(0, 1fr) minmax(12rem, 20rem)";
+    const about = el("div");
+    about.append(el("div", "name", option.name + (option.required ? " (required)" : "")));
+    if (option.description) about.append(el("div", "desc", option.description));
+    const key = (id) => control({ name: `option:${plugin.name}:${option.name}` }, id === "button" ? el("button") : el("input"), id);
+    let input;
+    // A default is shown, not saved: only what you set goes to plugins.toml.
+    const current = option.value ?? null;
+    const shownDefault = option.default == null ? "" : String(option.default);
+    if (option.type === "secret") {
+      const box = el("div", "actions");
+      input = key("input");
+      input.type = "password";
+      input.autocomplete = "off";
+      input.placeholder = option.set ? "set; type to replace" : "not set";
+      input.setAttribute("aria-label", option.name);
+      const save = key("button");
+      save.textContent = "Save";
+      save.title = "Keep it in your OS keyring, never in a file";
+      save.addEventListener("click", () => {
+        if (!input.value) return fail("plugins", `Type ${option.name} first`);
+        rt.send("plugin-secret", JSON.stringify({ name: plugin.name, option: option.name, value: input.value }));
+        input.value = "";
+      });
+      box.append(input, save);
+      if (option.set) {
+        const clear = control({ name: `option:${plugin.name}:${option.name}` }, el("button", null, "Clear"), "clear");
+        clear.title = "Take it out of the keyring";
+        clear.addEventListener("click", () => rt.send("plugin-secret", JSON.stringify({ name: plugin.name, option: option.name, value: null })));
+        box.append(clear);
+      }
+      row.append(about, box);
+      rows.push(row);
+      continue;
+    }
+    if (option.type === "bool") {
+      input = key("input");
+      input.type = "checkbox";
+      input.checked = (current ?? option.default) === true;
+      values[option.name] = () => input.checked;
+    } else if (option.type === "choice") {
+      input = control({ name: `option:${plugin.name}:${option.name}` }, el("select"), "input");
+      input.append(el("option", null, shownDefault ? `(${shownDefault})` : ""), ...option.choices.map((c) => el("option", null, c)));
+      input.options[0].value = "";
+      input.value = current ?? "";
+      values[option.name] = () => input.value || null;
+    } else {
+      input = key("input");
+      input.type = option.type === "number" ? "number" : "text";
+      input.value = current ?? "";
+      input.placeholder = shownDefault || (option.type === "path" ? "~/…" : "");
+      values[option.name] = () => (input.value === "" ? null : option.type === "number" ? Number(input.value) : input.value);
+    }
+    input.setAttribute("aria-label", option.name);
+    input.disabled = !editable;
+    row.append(about, input);
+    rows.push(row);
+  }
+  const foot = wide(el("div", "keyrow"));
+  if (editable && Object.keys(values).length) {
+    const save = control({ name: `options:${plugin.name}` }, el("button", null, "Save options"), "save");
+    save.title = "Save them in plugins.toml and reload the plugin";
+    save.addEventListener("click", () => {
+      const out = {};
+      for (const [name, read] of Object.entries(values)) out[name] = read();
+      rt.send("plugin-options", JSON.stringify({ name: plugin.name, values: out }));
+    });
+    foot.append(save);
+    rows.push(foot);
+  } else if (!editable && Object.keys(values).length) {
+    foot.append(el("div", "desc", "Set in config.lua: these go in rt.pack.add's opts there."));
+    rows.push(foot);
+  }
+  return rows;
+}
+
 function renderPlugins() {
   observer?.disconnect();
   const focused = document.activeElement?.dataset?.key;
@@ -1025,6 +1110,7 @@ function renderPlugins() {
     perms.append(el("div", "desc", plugin.added ? "Added here (plugins.toml)" : "From config.lua"));
     if (plugin.shares?.length) perms.append(el("div", "desc", `Updates together with ${plugin.shares.join(", ")}, from the same repository`));
     block.append(perms);
+    if (plugin.options?.length) block.append(...pluginOptions(plugin, wide));
     if (plugin.update) {
       const row = wide(el("div", "keyrow"));
       const box = el("div");

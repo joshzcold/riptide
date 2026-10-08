@@ -40,6 +40,7 @@ mod renderer;
 mod scheme;
 mod screenshot;
 mod search;
+mod secrets;
 mod settings_page;
 mod shell;
 #[cfg(unix)]

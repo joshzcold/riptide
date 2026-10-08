@@ -776,3 +776,161 @@ fn plugins_are_added_from_the_catalog_and_kept_in_plugins_toml() {
     assert!(!toml().contains("alpha"), "{}", toml());
     std::fs::remove_dir_all(&repo).unwrap();
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugin_options_are_edited_on_the_tab_and_secrets_kept_out_of_files() {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-options-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&repo);
+    std::fs::create_dir_all(repo.join("vault/lua/vault")).unwrap();
+    std::fs::write(
+        repo.join("vault/riptide-plugin.toml"),
+        r#"description = "Talks to a vault"
+
+[[option]]
+name = "server"
+description = "Where it is"
+required = true
+
+[[option]]
+name = "port"
+type = "number"
+default = 443
+
+[[option]]
+name = "mode"
+type = "choice"
+choices = ["fast", "safe"]
+
+[[option]]
+name = "token"
+type = "secret"
+description = "Your API token"
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join("vault/lua/vault/init.lua"),
+        r#"local M = {}
+function M.setup(opts)
+  rt.command("vault-show", function()
+    rt.notify("server " .. tostring(opts.server) .. ":" .. tostring(opts.port) .. " " .. tostring(opts.mode))
+  end)
+  rt.command("vault-token", function()
+    rt.secret.get("token", function(v, err) rt.notify("token " .. tostring(err or v)) end)
+  end)
+  rt.command("vault-other", function()
+    rt.secret.get("server", function(v, err) rt.notify("other " .. tostring(err or v)) end)
+  end)
+end
+return M"#,
+    )
+    .unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "vault"]);
+    let url = format!("file://{}", repo.display());
+    let b = Browser::start("page.html");
+    b.run(&format!("pack-add {url} vault"));
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).join(' ')",
+        "vault:loaded",
+    );
+
+    // Options: typed in the form, saved to plugins.toml, given to setup().
+    let set = |key: &str, js: &str| {
+        b.eval(&format!(
+            "(() => {{ const e = document.querySelector('[data-key=\"{key}\"]'); {js}; return ''; }})()"
+        ));
+    };
+    set("option:vault:server#input", "e.value = 'vault.example.com'");
+    set("option:vault:mode#input", "e.value = 'safe'");
+    set("options:vault#save", "e.click()");
+    let toml = || std::fs::read_to_string(b.config_dir().join("plugins.toml")).unwrap();
+    let start = std::time::Instant::now();
+    while !toml().contains("vault.example.com") {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "options weren't saved: {}",
+            toml()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let say = |command: &str, wanted: &str| {
+        let start = std::time::Instant::now();
+        loop {
+            b.run(command);
+            if b.wait_until("an answer", |s| s.message().is_some())
+                .message()
+                == Some(wanted)
+            {
+                break;
+            }
+            assert!(
+                start.elapsed() < rt_e2e::TIMEOUT,
+                "{command} never said {wanted:?}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    };
+    say("vault-show", "server vault.example.com:nil safe");
+
+    // A secret goes to the keyring (here the test's memory store), and only
+    // the plugin's own declared secret can be read.
+    say("vault-token", "token nil");
+    b.run("plugins");
+    b.wait_eval(
+        "String(!!document.querySelector('[data-key=\"option:vault:token#input\"]'))",
+        "true",
+    );
+    set("option:vault:token#input", "e.value = 's3cret-token'");
+    set("option:vault:token#button", "e.click()");
+    b.wait_eval(
+        "String(page.plugins[0].options.find((o) => o.name === 'token').set)",
+        "true",
+    );
+    say("vault-token", "token s3cret-token");
+    say(
+        "vault-other",
+        "other server isn't one of vault's secret options",
+    );
+
+    // Nowhere on disk: config, data, plugins.toml, the lockfile.
+    let mut leaks = Vec::new();
+    let mut stack = vec![b.config_dir().parent().unwrap().to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if std::fs::read(&path)
+                .is_ok_and(|bytes| bytes.windows(12).any(|w| w == b"s3cret-token"))
+            {
+                leaks.push(path);
+            }
+        }
+    }
+    assert!(leaks.is_empty(), "the secret was written to {leaks:?}");
+
+    set("option:vault:token#clear", "e.click()");
+    b.wait_eval(
+        "String(page.plugins[0].options.find((o) => o.name === 'token').set)",
+        "false",
+    );
+    say("vault-token", "token nil");
+    std::fs::remove_dir_all(&repo).unwrap();
+}

@@ -22,7 +22,7 @@ Debug builds (and release builds with `--features test-control`) answer test req
 | `eval` | Runs JavaScript in a tab and returns its string result. |
 | `evalbar` | Runs JavaScript in the window's `tabbar`, `statusbar` or `completion` overlay page (`Browser::eval_bar`). |
 
-`crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
+`crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. Its browsers run without the desktop's session bus and keep plugins' secrets in memory (`RIPTIDE_SECRET_STORE=memory`), so a test never touches your keyring. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
 
 ```rust
 #[test]

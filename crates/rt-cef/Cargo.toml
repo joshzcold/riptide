@@ -19,6 +19,7 @@ rt-config.workspace = true
 rt-storage.workspace = true
 cef.workspace = true
 arboard.workspace = true
+keyring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zip.workspace = true
