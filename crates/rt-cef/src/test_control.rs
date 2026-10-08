@@ -174,6 +174,7 @@ mod enabled {
                 "current_window": s.active,
                 "windows": windows,
                 "floats": crate::float::test_state(),
+                "panels": crate::panel::test_state(),
             })
         })
         .unwrap_or(Value::Null)

@@ -260,6 +260,7 @@ function rt._sandbox(name, permissions, require_fn)
   api.ui = copy(rt.ui)
   api.ui.select, api.ui.input = own.select, own.input
   api.ui.float = rt._float_for(name)
+  api.ui.panel = rt._panel_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
   else
@@ -401,6 +402,58 @@ function rt._float_closed(id)
   if float and float.opts.on_close then float.opts.on_close() end
 end
 rt.ui.float = rt._float_for(nil)
+
+-- rt.ui.panel(opts): lines beside or below the page; see rt.meta.lua.
+local panels, last_panel = {}, 0
+local function panel_spec(opts)
+  local spec = {}
+  for _, key in ipairs({ "title", "lines", "side", "size" }) do spec[key] = opts[key] end
+  spec.keys = {}
+  for key, fn in pairs(opts.keys or {}) do
+    if type(key) ~= "string" or type(fn) ~= "function" then error("keys maps key names to functions", 3) end
+    spec.keys[#spec.keys + 1] = key
+  end
+  return spec
+end
+function rt._panel_for(source)
+  return function(opts)
+    if type(opts) ~= "table" then error("rt.ui.panel takes a table", 2) end
+    last_panel = last_panel + 1
+    local id = last_panel
+    local handle = { id = id }
+    panels[id] = { opts = opts, handle = handle }
+    function handle:update(changes)
+      local panel = panels[id]
+      if not panel then return end
+      local merged = {}
+      for k, v in pairs(panel.opts) do merged[k] = v end
+      for k, v in pairs(changes or {}) do merged[k] = v end
+      panel.opts = merged
+      rt._panel(id, source or "", panel_spec(merged))
+    end
+    function handle:close()
+      if panels[id] then
+        panels[id] = nil
+        rt._panel_close(id)
+      end
+    end
+    function handle:focus() if panels[id] then rt._panel_focus(id) end end
+    function handle:is_open() return panels[id] ~= nil end
+    rt._panel(id, source or "", panel_spec(opts))
+    return handle
+  end
+end
+function rt._panel_key(id, key, line)
+  local panel = panels[id]
+  local fn = panel and panel.opts.keys and panel.opts.keys[key]
+  if fn then fn(panel.handle, line) end
+end
+function rt._panel_closed(id)
+  local panel = panels[id]
+  panels[id] = nil
+  if panel and panel.opts.on_close then panel.opts.on_close() end
+end
+rt.ui.panel = rt._panel_for(nil)
 "##;
 
 /// The events `rt.on` takes, with what each one's table carries.
@@ -555,6 +608,16 @@ pub enum Action {
     },
     /// A float's `close`.
     FloatClose { id: u32 },
+    /// `rt.ui.panel` or a panel's `update`.
+    Panel {
+        id: u32,
+        source: String,
+        spec: PanelSpec,
+    },
+    /// A panel's `close`.
+    PanelClose { id: u32 },
+    /// A panel's `focus`: its keys work until Escape.
+    PanelFocus { id: u32 },
 }
 
 /// What `rt.ui` asks.
@@ -600,7 +663,7 @@ impl std::fmt::Debug for PageRequest {
 pub struct FloatSpec {
     pub title: String,
     /// Each line's chunks: text and an optional highlight group from [`FLOAT_GROUPS`].
-    pub lines: Vec<Vec<(String, Option<String>)>>,
+    pub lines: Lines,
     /// The widest it gets, in characters.
     pub width: u32,
     /// One of [`FLOAT_POSITIONS`].
@@ -620,79 +683,153 @@ pub const FLOAT_POSITIONS: &[&str] = &["center", "top", "bottom", "top-right", "
 
 const FLOAT_MAX_LINES: usize = 500;
 
+/// Text lines for a float or panel: each a list of `(text, highlight)` chunks.
+pub type Lines = Vec<Vec<(String, Option<String>)>>;
+
+/// `opts.lines` for `what` (`rt.ui.float`), at most `max` lines.
+fn lines_from_lua(what: &str, table: &mlua::Table, max: usize) -> mlua::Result<Lines> {
+    let bad = |text: String| mlua::Error::runtime(format!("{what}: {text}"));
+    let shape = "a line is a string or a list of { text, highlight }";
+    let chunk = |value: mlua::Value| -> mlua::Result<(String, Option<String>)> {
+        match value {
+            mlua::Value::String(s) => Ok((s.to_str()?.to_string(), None)),
+            mlua::Value::Table(t) => {
+                let text: String = t.get(1)?;
+                let group: Option<String> = t.get(2)?;
+                if let Some(g) = &group
+                    && !FLOAT_GROUPS.contains(&g.as_str())
+                {
+                    return Err(bad(format!(
+                        "no highlight {g:?}; use {}",
+                        FLOAT_GROUPS.join(", ")
+                    )));
+                }
+                Ok((text, group))
+            }
+            _ => Err(bad(shape.into())),
+        }
+    };
+    let mut lines = Vec::new();
+    let raw: Option<mlua::Table> = table.get("lines")?;
+    for line in raw.iter().flat_map(|t| t.sequence_values::<mlua::Value>()) {
+        match line? {
+            mlua::Value::String(s) => {
+                for text in s.to_str()?.split('\n') {
+                    lines.push(vec![(text.to_string(), None)]);
+                }
+            }
+            mlua::Value::Table(chunks) => {
+                let line = chunks
+                    .sequence_values::<mlua::Value>()
+                    .map(|c| chunk(c?))
+                    .collect::<mlua::Result<_>>()?;
+                lines.push(line);
+            }
+            _ => return Err(bad(shape.into())),
+        }
+        if lines.len() > max {
+            return Err(bad(format!("at most {max} lines")));
+        }
+    }
+    Ok(lines)
+}
+
+/// `opts.keys`' names (the prelude passes the names, keeping the functions): each one key.
+fn keys_from_lua(what: &str, table: &mlua::Table) -> mlua::Result<Vec<String>> {
+    let mut keys = Vec::new();
+    for key in table.get::<Vec<String>>("keys")? {
+        match Key::parse_sequence(&key) {
+            Ok(seq) if seq.len() == 1 => keys.push(key),
+            _ => {
+                return Err(mlua::Error::runtime(format!(
+                    "{what}: {key:?} isn't one key"
+                )));
+            }
+        }
+    }
+    Ok(keys)
+}
+
 impl FloatSpec {
     fn from_lua(table: &mlua::Table) -> mlua::Result<Self> {
-        let bad = |what: &str| Err(mlua::Error::runtime(format!("rt.ui.float: {what}")));
+        let what = "rt.ui.float";
         let title: Option<String> = table.get("title")?;
         let width: Option<u32> = table.get("width")?;
         let position: Option<String> = table.get("position")?;
         let position = position.unwrap_or_else(|| "center".into());
         if !FLOAT_POSITIONS.contains(&position.as_str()) {
-            return bad(&format!(
-                "position is one of {}",
+            return Err(mlua::Error::runtime(format!(
+                "{what}: position is one of {}",
                 FLOAT_POSITIONS.join(", ")
-            ));
-        }
-        let timeout: Option<u32> = table.get("timeout")?;
-        let mut keys = Vec::new();
-        for key in table.get::<Vec<String>>("keys")? {
-            match Key::parse_sequence(&key) {
-                Ok(seq) if seq.len() == 1 => keys.push(key),
-                _ => return bad(&format!("{key:?} isn't one key")),
-            }
-        }
-        let mut lines = Vec::new();
-        let chunk = |value: mlua::Value| -> mlua::Result<(String, Option<String>)> {
-            match value {
-                mlua::Value::String(s) => Ok((s.to_str()?.to_string(), None)),
-                mlua::Value::Table(t) => {
-                    let text: String = t.get(1)?;
-                    let group: Option<String> = t.get(2)?;
-                    if let Some(g) = &group
-                        && !FLOAT_GROUPS.contains(&g.as_str())
-                    {
-                        return Err(mlua::Error::runtime(format!(
-                            "rt.ui.float: no highlight {g:?}; use {}",
-                            FLOAT_GROUPS.join(", ")
-                        )));
-                    }
-                    Ok((text, group))
-                }
-                _ => Err(mlua::Error::runtime(
-                    "rt.ui.float: a line is a string or a list of { text, highlight }",
-                )),
-            }
-        };
-        let raw: Option<mlua::Table> = table.get("lines")?;
-        for line in raw.iter().flat_map(|t| t.sequence_values::<mlua::Value>()) {
-            match line? {
-                mlua::Value::String(s) => {
-                    for text in s.to_str()?.split('\n') {
-                        lines.push(vec![(text.to_string(), None)]);
-                    }
-                }
-                mlua::Value::Table(chunks) => {
-                    let line = chunks
-                        .sequence_values::<mlua::Value>()
-                        .map(|c| chunk(c?))
-                        .collect::<mlua::Result<_>>()?;
-                    lines.push(line);
-                }
-                _ => return bad("a line is a string or a list of { text, highlight }"),
-            }
-            if lines.len() > FLOAT_MAX_LINES {
-                return bad(&format!("at most {FLOAT_MAX_LINES} lines"));
-            }
+            )));
         }
         Ok(Self {
             title: title.unwrap_or_default(),
-            lines,
+            lines: lines_from_lua(what, table, FLOAT_MAX_LINES)?,
             width: width.unwrap_or(60).clamp(10, 200),
             position,
-            timeout,
-            keys,
+            timeout: table.get("timeout")?,
+            keys: keys_from_lua(what, table)?,
         })
     }
+}
+
+/// What `rt.ui.panel` draws: a list of lines beside or below the page.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct PanelSpec {
+    pub title: String,
+    pub lines: Lines,
+    /// `left`, `right` or `bottom`.
+    pub side: String,
+    /// Its width beside the page, or height below it, in pixels.
+    pub size: u32,
+    /// The keys it takes while focused; `j`/`k` move its cursor.
+    pub keys: Vec<String>,
+}
+
+pub const PANEL_SIDES: &[&str] = &["left", "right", "bottom"];
+
+const PANEL_MAX_LINES: usize = 5000;
+
+impl PanelSpec {
+    fn from_lua(table: &mlua::Table) -> mlua::Result<Self> {
+        let what = "rt.ui.panel";
+        let side: Option<String> = table.get("side")?;
+        let side = side.unwrap_or_else(|| "left".into());
+        if !PANEL_SIDES.contains(&side.as_str()) {
+            return Err(mlua::Error::runtime(format!(
+                "{what}: side is one of {}",
+                PANEL_SIDES.join(", ")
+            )));
+        }
+        let size: Option<u32> = table.get("size")?;
+        let default = if side == "bottom" { 200 } else { 300 };
+        Ok(Self {
+            title: table.get::<Option<String>>("title")?.unwrap_or_default(),
+            lines: lines_from_lua(what, table, PANEL_MAX_LINES)?,
+            side,
+            size: size.unwrap_or(default).clamp(80, 2000),
+            keys: keys_from_lua(what, table)?,
+        })
+    }
+}
+
+/// A key pressed while panel `id` is focused, its cursor on `line` (from 1).
+pub fn panel_key(id: u32, key: &str, line: u32, context: &Context) -> Result<Vec<Action>, String> {
+    let key = key.to_string();
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_panel_key")?
+            .call::<()>((id, key, line))
+    })
+}
+
+/// Panel `id` was closed by riptide (its window closed): its `on_close`.
+pub fn panel_closed(id: u32, context: &Context) -> Result<Vec<Action>, String> {
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_panel_closed")?.call::<()>(id)
+    })
 }
 
 /// A key pressed while float `id` takes keys: call its function.
@@ -1624,6 +1761,33 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
     let s = state.clone();
     api.set(
+        "_panel",
+        lua.create_function(move |_, (id, source, spec): (u32, String, mlua::Table)| {
+            let spec = PanelSpec::from_lua(&spec)?;
+            s.borrow_mut()
+                .actions
+                .push(Action::Panel { id, source, spec });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_panel_close",
+        lua.create_function(move |_, id: u32| {
+            s.borrow_mut().actions.push(Action::PanelClose { id });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_panel_focus",
+        lua.create_function(move |_, id: u32| {
+            s.borrow_mut().actions.push(Action::PanelFocus { id });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
         "_float_close",
         lua.create_function(move |_, id: u32| {
             s.borrow_mut().actions.push(Action::FloatClose { id });
@@ -2081,6 +2245,60 @@ rt.command("bad-key", function() rt.ui.float({{ keys = {{ ["ab"] = function() en
             actions
                 .iter()
                 .any(|a| matches!(a, Action::Float { source, .. } if source == "painter")),
+            "{actions:?}"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn panels_take_a_side_and_size_and_carry_their_plugins_name() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-panels-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("plugins/tree/plugin")).unwrap();
+        std::fs::write(
+            dir.join("plugins/tree/plugin/tree.lua"),
+            "rt.ui.panel({ side = 'right', lines = { 'a' } })",
+        )
+        .unwrap();
+        let dir_text = dir.display().to_string();
+        std::fs::write(
+            dir.join("config.lua"),
+            format!(
+                r#"
+rt.pack.add({{ dir = "{dir_text}/plugins/tree" }})
+rt.command("open-panel", function()
+  local p = rt.ui.panel({{ side = "bottom", size = 150, lines = {{ "x" }}, keys = {{ ["<Return>"] = function() end }} }})
+  p:focus()
+end)
+rt.command("bad-side", function() rt.ui.panel({{ side = "top" }}) end)
+"#
+            ),
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context::default();
+        let actions = run_command("open-panel", "", &ctx).unwrap();
+        let [
+            Action::Panel { id, source, spec },
+            Action::PanelFocus { id: focused },
+        ] = actions.as_slice()
+        else {
+            panic!("{actions:?}");
+        };
+        assert_eq!((source.as_str(), id), ("", focused));
+        assert_eq!((spec.side.as_str(), spec.size), ("bottom", 150));
+        assert_eq!(spec.keys, ["<Return>"]);
+        assert!(run_command("bad-side", "", &ctx).is_err());
+        let none = crate::plugins::Permissions::default();
+        let actions = load_plugin("tree", &dir.join("plugins/tree"), &none, false, &ctx).unwrap();
+        assert!(
+            actions.iter().any(
+                |a| matches!(a, Action::Panel { source, spec, .. } if source == "tree" && spec.side == "right" && spec.size == 300)
+            ),
             "{actions:?}"
         );
         std::fs::remove_dir_all(&dir).unwrap();

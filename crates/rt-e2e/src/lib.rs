@@ -38,6 +38,9 @@ pub struct State {
     /// `rt.ui.float`s open: id, source, title, text and placed.
     #[serde(default)]
     pub floats: Vec<Value>,
+    /// `rt.ui.panel`s open: id, source, side, title, lines, cursor, focused, width and height.
+    #[serde(default)]
+    pub panels: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

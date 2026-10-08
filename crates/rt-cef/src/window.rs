@@ -588,12 +588,17 @@ wrap_browser_view_delegate! {
     }
 
     impl ViewDelegate {
-        fn preferred_size(&self, _view: Option<&mut View>) -> Size {
-            bar_size(self.role)
+        fn preferred_size(&self, view: Option<&mut View>) -> Size {
+            match view {
+                Some(view) if self.role == Role::Panel => {
+                    crate::panel::size_for(view).unwrap_or(Size { width: 1, height: 1 })
+                }
+                _ => bar_size(self.role),
+            }
         }
 
-        fn minimum_size(&self, _view: Option<&mut View>) -> Size {
-            bar_size(self.role)
+        fn minimum_size(&self, view: Option<&mut View>) -> Size {
+            self.preferred_size(view)
         }
 
         fn on_layout_changed(&self, _view: Option<&mut View>, _new_bounds: Option<&Rect>) {

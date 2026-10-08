@@ -563,6 +563,9 @@ pub enum Command {
     PackUpdate {
         name: Option<String>,
     },
+    /// Move focus to the next `rt.ui.panel` in the window, and back to the
+    /// page after the last.
+    PanelFocus,
     /// Load a plugin that waits for an event, command or key now, then
     /// press `keys` again if a key loaded it.
     PackLoad {
@@ -878,6 +881,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "pack-update",
         "Check plugins from git for new commits to review on :plugins: :pack-update [name]",
+    ),
+    spec(
+        "panel-focus",
+        "Focus the next panel a plugin opened, then the page again; Escape also returns to the page",
     ),
     spec(
         "pack-load",
@@ -1802,6 +1809,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "pack-update" => Command::PackUpdate {
             name: args.optional().map(String::from),
         },
+        "panel-focus" => Command::PanelFocus,
         "pack-load" => {
             let name = args.required("name")?.to_string();
             let keys = args.rest();

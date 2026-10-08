@@ -178,6 +178,31 @@ end, { desc = "Show the reading list" })
 
 A plugin's floats show its name in the corner, so a float can't pass for riptide's own question.
 
+## Panels
+
+`rt.ui.panel(opts)` keeps lines beside the page (`side = "left"` or `"right"`) or below it (`"bottom"`): a tab tree, a reading list, notes. It takes the same `title` and `lines` as a float, plus `size` in pixels, and returns a handle with `update`, `close`, `focus` and `is_open`. Each side of a window holds one panel; a new one replaces it.
+
+A panel takes keys only while it has focus: `:panel-focus` (or `focus()`) gives it focus, `j`/`k` move its cursor, and its `keys` functions get the cursor's line. `Escape` returns to the page, and clicking a line focuses the panel there.
+
+```lua
+local function tab_lines()
+  local lines = {}
+  for i, tab in ipairs(rt.tabs()) do
+    lines[i] = { { tostring(i) .. " ", "key" }, { tab.title, tab.current and "accent" or nil } }
+  end
+  return lines
+end
+local tree = rt.ui.panel({
+  title = "Tabs",
+  lines = tab_lines(),
+  keys = { ["<Return>"] = function(_, line) rt.run("tab-select " .. line) end },
+})
+for _, event in ipairs({ "tab_opened", "tab_closed", "tab_selected", "title_changed" }) do
+  rt.on(event, function() tree:update({ lines = tab_lines() }) end)
+end
+rt.keymap.set("normal", "<Space>t", function() tree:focus() end, { desc = "Focus the tab tree" })
+```
+
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh

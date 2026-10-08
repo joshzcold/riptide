@@ -7,6 +7,7 @@ pub const TABBAR_HTML: &str = include_str!("../ui/tabbar.html");
 pub const STATUSBAR_HTML: &str = include_str!("../ui/statusbar.html");
 pub const COMPLETION_HTML: &str = include_str!("../ui/completion.html");
 pub const FLOAT_HTML: &str = include_str!("../ui/float.html");
+pub const PANEL_HTML: &str = include_str!("../ui/panel.html");
 pub const CRASHED_HTML: &str = include_str!("../ui/crashed.html");
 
 pub const TABBAR_URL: &str = "riptide://ui/tabbar.html";
@@ -44,6 +45,7 @@ pub fn handle_message(message: UiMessage) {
             crate::settings_page::unset_site(&pattern, &name)
         }
         UiMessage::FloatSize { id, width, height } => crate::float::set_size(id, width, height),
+        UiMessage::PanelClick { id, line } => crate::panel::click(id, line),
         UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
         UiMessage::Plugin { name, action } => {
             use rt_core::ui_message::PluginAction;

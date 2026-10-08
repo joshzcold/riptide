@@ -130,6 +130,9 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
             }
             Action::Float { id, source, spec } => crate::float::show(id, source, spec),
             Action::FloatClose { id } => crate::float::close(id, true),
+            Action::Panel { id, source, spec } => crate::panel::show(id, source, spec),
+            Action::PanelClose { id } => crate::panel::close(id, true),
+            Action::PanelFocus { id } => crate::panel::focus(id),
             Action::Unbind { mode, keys } => {
                 if let Some(Err(e)) = shell::with(|s| s.engine.unbind_from_lua(mode, &keys)) {
                     shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));

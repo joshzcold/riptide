@@ -20,6 +20,8 @@ pub enum UiMessage {
     PromptKey { key: String },
     /// The tab bar's or status bar's natural height for its font and padding.
     BarHeight { bar: Bar, height: u32 },
+    /// A click on a line of an `rt.ui.panel`.
+    PanelClick { id: u32, line: u32 },
     /// An `rt.ui.float`'s page measured its content.
     FloatSize { id: u32, width: u32, height: u32 },
     /// The overlay's row height for its fonts.
@@ -257,6 +259,13 @@ struct UnsetSite {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct PanelClick {
+    id: u32,
+    line: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct FloatSize {
     id: u32,
     width: u32,
@@ -446,6 +455,10 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 return Err(format!("{name}: size {width}x{height} out of range"));
             }
             Ok(UiMessage::FloatSize { id, width, height })
+        }
+        ("panel.html", "click") => {
+            let PanelClick { id, line } = payload(name, json)?;
+            Ok(UiMessage::PanelClick { id, line })
         }
         ("completion.html", "prompt-key") => {
             let PromptKey { key } = payload(name, json)?;

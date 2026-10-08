@@ -36,6 +36,8 @@ pub enum Role {
     Crashed,
     /// An `rt.ui.float`.
     Float,
+    /// An `rt.ui.panel`.
+    Panel,
 }
 
 wrap_client! {
@@ -457,7 +459,7 @@ fn handle_key_event(event: &KeyEvent) -> bool {
     let Some(key) = vk::translate(raw) else {
         return false;
     };
-    if crate::float::forward_key(&key) {
+    if crate::float::forward_key(&key) || crate::panel::forward_key(&key) {
         shell::with(|s| s.suppress_char = true);
         return true;
     }
@@ -761,6 +763,12 @@ wrap_load_handler! {
                 Role::Float => {
                     if let Some(browser) = &browser {
                         crate::float::ready(browser.identifier());
+                    }
+                    return;
+                }
+                Role::Panel => {
+                    if let Some(browser) = &browser {
+                        crate::panel::ready(browser.identifier());
                     }
                     return;
                 }

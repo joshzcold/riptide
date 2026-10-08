@@ -462,6 +462,7 @@ pub fn load_config() -> Vec<String> {
 /// Put config that was already read into the engine.
 pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
     crate::float::close_all();
+    crate::panel::close_all();
     let user_commands = rt_config::lua::user_commands();
     let errors = with(|s| {
         s.engine.reset_config();
@@ -646,6 +647,10 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::help::run_command(&command)
         || crate::settings_page::run_command(&command)
         || crate::plugins::run_command(&command)
+        || (matches!(command, Command::PanelFocus) && {
+            crate::panel::focus_next();
+            true
+        })
         || storage::run_command(&command)
         || crate::downloads::run_command(&command, count)
         || crate::adblock::run_command(&command)

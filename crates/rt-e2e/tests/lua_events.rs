@@ -197,3 +197,43 @@ end)
         s.floats.is_empty() && s.message() == Some("closed")
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn panels_dock_beside_the_page_and_take_keys_when_focused() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.command("show-panel", function()
+  rt.ui.panel({
+    title = "List",
+    size = 250,
+    lines = { "one", "two", "three" },
+    keys = { ["<Return>"] = function(p, line) rt.notify("picked " .. line) end },
+  })
+end)
+"#,
+        )
+        .start("page.html");
+    b.run("show-panel");
+    let s = b.wait_until("the panel is laid out", |s| {
+        s.panels.first().is_some_and(|p| p["width"] == 250)
+    });
+    assert_eq!(s.panels[0]["side"], "left");
+    assert_eq!(s.panels[0]["focused"], false);
+
+    // Unfocused, j belongs to the page.
+    b.keys("j");
+    b.run("panel-focus");
+    b.wait_until("focused", |s| s.panels[0]["focused"] == true);
+    b.keys("j");
+    b.wait_until("the cursor moved once", |s| s.panels[0]["cursor"] == 2);
+    b.keys("<Return>");
+    b.wait_until("Return ran on the cursor's line", |s| {
+        s.message() == Some("picked 2")
+    });
+    b.keys("<Escape>");
+    b.wait_until("Escape went back to the page", |s| {
+        s.panels[0]["focused"] == false
+    });
+}

@@ -70,6 +70,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:settings` |  | Open the settings page, to browse and change every setting |
 | `:plugins` |  | Show your plugins, their permissions and updates |
 | `:pack-update` |  | Check plugins from git for new commits to review on :plugins: :pack-update [name] |
+| `:panel-focus` |  | Focus the next panel a plugin opened, then the page again; Escape also returns to the page |
 | `:pack-load` |  | Load a plugin that waits for an event, command or key now: :pack-load &lt;name&gt; |
 | `:recover` |  | Show the tabs open at each recent crash, to reopen some or all of them |
 | `:crash-report` |  | Show the newest crash report, to check and send as a GitHub issue or by email |

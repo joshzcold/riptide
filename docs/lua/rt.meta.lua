@@ -268,6 +268,31 @@ function Float:is_open() end
 ---@return rt.Float
 function rt.ui.float(opts) end
 
+---@class rt.PanelOpts
+---@field title? string
+---@field lines? (string|(string|{ [1]: string, [2]: rt.Highlight })[])[] Text, or chunks of text with highlights; never HTML.
+---@field side? "left"|"right"|"bottom" Default left.
+---@field size? integer Width beside the page, or height below it, in pixels (default 300, or 200 below).
+---@field keys? table<string, fun(panel: rt.Panel, line: integer)> Keys it takes while focused, with the cursor's line; j/k move the cursor and Escape returns to the page.
+---@field on_close? fun() Called when riptide closes it (its window closing, another panel taking its side).
+
+---@class rt.Panel
+---@field id integer
+local Panel = {}
+---Redraw with these options changed.
+---@param changes rt.PanelOpts
+function Panel:update(changes) end
+function Panel:close() end
+---Give it the keyboard until Escape.
+function Panel:focus() end
+---@return boolean
+function Panel:is_open() end
+
+---Lines beside or below the page, one panel per side of a window. A plugin's panels show its name.
+---@param opts rt.PanelOpts
+---@return rt.Panel
+function rt.ui.panel(opts) end
+
 ---The current tab's page. Plugins need the `pages` permission for the site,
 ---checked when the action runs; nothing acts on riptide's own pages, and what's
 ---typed or filled is never logged or kept in history.
