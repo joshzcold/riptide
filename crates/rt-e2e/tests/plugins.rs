@@ -287,7 +287,7 @@ fn builtin_plugins_ship_with_riptide_and_still_ask() {
     b.wait_eval(
         "page.plugins.map((p) => `${p.name}|${p.src}|${p.git}|${p.state}`).join(' ')",
         &format!(
-            "passwords|builtin (riptide {version})|false|loaded no-such-plugin|builtin (riptide {version})|false|error"
+            "passwords|builtin (riptide {version})|false|loaded no-such-plugin|builtin (riptide {version})|false|failed"
         ),
     );
     let lock = std::fs::read_to_string(b.config_dir().join("rt-pack-lock.json")).unwrap();

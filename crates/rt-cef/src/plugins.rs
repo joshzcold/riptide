@@ -211,7 +211,7 @@ fn prepare(name: &str) {
     };
     let dir = folder(&spec, &data_dir);
     let failed = |why: String| {
-        set_state(&spec.name, "error", Some(why.clone()));
+        set_state(&spec.name, "failed", Some(why.clone()));
         shell::show_message(Level::Error, format!("Plugin {}: {why}", spec.name));
     };
     if !dir.is_dir() {
