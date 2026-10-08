@@ -120,7 +120,7 @@ function rt.notify(text, level) end
 ---Data kept between runs under `name` (letters, digits, `-`, `_`), saved
 ---as JSON in the data folder on every change. Values are strings, numbers,
 ---booleans and tables of those.
----@param name string
+---@param name? string Required in config.lua; in a plugin, its stores are its own and `name` defaults to "data".
 ---@return { get: fun(key: string): any, set: fun(key: string, value: any), all: fun(): table, clear: fun() }
 function rt.store(name) end
 

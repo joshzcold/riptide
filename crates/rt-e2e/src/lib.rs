@@ -625,7 +625,7 @@ pub fn sqlite(db: &Path, query: &str) -> String {
 }
 
 /// The browser under test: `RIPTIDE_BIN`, or the workspace's debug build.
-fn binary() -> PathBuf {
+pub fn binary() -> PathBuf {
     let path = std::env::var_os("RIPTIDE_BIN").map_or_else(
         || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/riptide"),
         PathBuf::from,

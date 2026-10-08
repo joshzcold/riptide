@@ -8,6 +8,8 @@ pub struct Cli {
     pub basedir: Option<PathBuf>,
     pub print_paths: bool,
     pub lua_types: bool,
+    /// Test the plugin in this folder in a throwaway profile.
+    pub plugin_test: Option<PathBuf>,
     /// Where URLs open: tab, tab-bg, window or current.
     pub target: Option<String>,
     pub help: bool,
@@ -24,6 +26,7 @@ Options:
   --basedir DIR   Keep config in DIR/config and browser data in DIR/data
   --paths         Print the config and data directories, then exit
   --lua-types     Print lua-language-server definitions for config.lua
+  --plugin-test DIR  Run the test/*_spec.lua files of the plugin in DIR
   --target WHERE  Open URLs in a running browser as: tab, tab-bg, window, current
   --no-sandbox    Run without Chromium's sandbox (not recommended)
 
@@ -46,6 +49,10 @@ impl Cli {
                 }
                 "--paths" => cli.print_paths = true,
                 "--lua-types" => cli.lua_types = true,
+                "--plugin-test" => {
+                    let dir = args.next().ok_or("--plugin-test needs a plugin's folder")?;
+                    cli.plugin_test = Some(PathBuf::from(dir));
+                }
                 "--target" => {
                     let target = args
                         .next()

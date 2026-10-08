@@ -541,6 +541,9 @@ wrap_window_delegate! {
             if save && let Err(e) = storage::save_session(&storage::default_session()) {
                 tracing::warn!("could not save session: {e}");
             }
+            // Floats and panels hold browsers too; the window waits for every one.
+            crate::float::close_window(id);
+            crate::panel::close_window(id);
             let hosts: Vec<BrowserHost> = shell::with(|s| {
                 let index = s.window_index(id)?;
                 Some(s.windows[index].tabs.iter().filter_map(|t| t.browser()?.host()).collect())

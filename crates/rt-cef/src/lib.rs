@@ -239,6 +239,9 @@ fn path_string(path: &Path) -> CefString {
     CefString::from(path.to_string_lossy().as_ref())
 }
 
+/// The process's exit code: 0 unless `riptide --plugin-test` saw a failure.
+pub(crate) static EXIT_CODE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
 /// Answer `--help`, `--version`, `--paths` and `--lua-types` without CEF.
 /// Returns `Err(exit code)` when the process should stop here.
 fn early_cli() -> Result<(Cli, Paths), i32> {
@@ -260,6 +263,16 @@ fn early_cli() -> Result<(Cli, Paths), i32> {
     if cli.version {
         println!("{}", help::version_line());
         return Err(0);
+    }
+    let mut cli = cli;
+    if let Some(plugin) = &cli.plugin_test {
+        // Its own profile each run, so it never touches yours or a running browser.
+        let base = std::env::temp_dir().join(format!("riptide-plugin-test-{}", std::process::id()));
+        if let Err(e) = rt_config::plugin_test::prepare(plugin, &base) {
+            eprintln!("riptide: --plugin-test: {e}");
+            return Err(2);
+        }
+        cli.basedir = Some(base);
     }
     let paths = Paths::resolve(cli.basedir.as_deref()).map_err(|e| {
         eprintln!("riptide: {e}");
@@ -451,7 +464,13 @@ pub fn run() -> i32 {
     if RESTART.load(std::sync::atomic::Ordering::SeqCst) {
         restart(&cli);
     }
-    0
+    if cli.plugin_test.is_some()
+        && let Some(base) = &cli.basedir
+        && base.starts_with(std::env::temp_dir())
+    {
+        let _ = std::fs::remove_dir_all(base);
+    }
+    EXIT_CODE.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Start the browser again with the same directories, restoring the session

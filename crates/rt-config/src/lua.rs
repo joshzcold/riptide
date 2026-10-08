@@ -692,6 +692,10 @@ pub enum Action {
     },
     /// A page handle's `close`.
     PluginPageClose { source: String, id: u32 },
+    /// The plugin test runner presses riptide keys.
+    Keys(String),
+    /// The plugin test runner is done: quit with this exit code.
+    Exit(i32),
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
     PluginPageSend {
         source: String,
@@ -1911,6 +1915,23 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 Ok(())
             },
         )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_keys",
+        lua.create_function(move |_, keys: String| {
+            Key::parse_sequence(&keys).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+            s.borrow_mut().actions.push(Action::Keys(keys));
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_exit",
+        lua.create_function(move |_, code: i32| {
+            s.borrow_mut().actions.push(Action::Exit(code));
+            Ok(())
+        })?,
     )?;
     let s = state.clone();
     api.set(

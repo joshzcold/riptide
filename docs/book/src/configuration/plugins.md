@@ -146,6 +146,31 @@ rt.send("ready", JSON.stringify({}));
 
 Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
 
+### Testing
+
+`riptide --plugin-test DIR` runs the plugin in `DIR` in a throwaway profile, with the permissions its manifest asks for already approved, and runs its `test/*_spec.lua` files. It prints [TAP](https://testanything.org/) and exits with 1 if a test failed, so it works in CI under `xvfb-run`:
+
+```lua
+-- test/reading_list_spec.lua
+describe("reading-list", function()
+  it("saves the page", function()
+    keys("<Space>r")
+    wait_until(function() return last_message() end)
+    assert.matches("^Saved", last_message())
+  end)
+end)
+```
+
+| In a spec | |
+|---|---|
+| `describe(name, fn)`, `it(name, fn)`, `before_each(fn)` | group and name tests |
+| `assert(v)`, `assert.equals(expected, actual)`, `assert.same` (deep), `assert.truthy`, `assert.falsy`, `assert.matches(pattern, s)`, `assert.has_error(fn, pattern)` | checks |
+| `keys("<Space>r")`, `run("open x")` | press riptide keys or run a command |
+| `wait(ms)`, `wait_until(fn, timeout)`, `wait_for(event, { pattern, timeout })` | let the browser work; `wait_for` returns the event |
+| `messages()`, `last_message()`, `clear_messages()` | what `rt.notify` showed, the plugin's included |
+
+Each test gets 10 seconds. `test/config.lua`, if there is one, replaces the default `rt.pack.add({ dir = DIR, opts = {} })`, to pass other options. [`examples/plugin-template`](https://github.com/joshzcold/riptide/tree/main/examples/plugin-template) is a plugin to start from, with a spec and a GitHub workflow that runs it.
+
 `:help <name>` shows a plugin's description, permissions and its `doc/<name>.md` (or `README.md`), as text.
 
 The [Lua page](lua.md) describes the API, and `:help rt.ui.float` (any `rt.` function) shows one function; errors name the plugin's file and line, e.g. `reading-list/lua/reading-list/init.lua:7: …`.

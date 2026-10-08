@@ -141,6 +141,18 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 panel,
             } => crate::pages::open(&source, id, &path, title, panel),
             Action::PluginPageClose { source, id } => crate::pages::close(&source, id),
+            Action::Keys(keys) => {
+                let keys = rt_core::key::Key::parse_sequence(&keys).unwrap_or_default();
+                if let Some(effects) = shell::with(|s| s.engine.replay_keys(&keys)) {
+                    shell::apply(effects);
+                }
+            }
+            Action::Exit(code) => {
+                crate::EXIT_CODE.store(code, std::sync::atomic::Ordering::SeqCst);
+                if let Some(effects) = shell::with(|s| s.engine.execute_str("quit", None)) {
+                    shell::apply(effects);
+                }
+            }
             Action::PluginPageSend {
                 source,
                 id,

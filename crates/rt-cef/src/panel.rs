@@ -202,6 +202,20 @@ pub fn close(id: u32, by_lua: bool) {
     }
 }
 
+/// Window `window` is closing: close its panels, without their `on_close`.
+pub fn close_window(window: u32) {
+    let ids: Vec<u32> = PANELS.with(|p| {
+        p.borrow()
+            .iter()
+            .filter(|p| p.window == window)
+            .map(|p| p.id)
+            .collect()
+    });
+    for id in ids {
+        close(id, true);
+    }
+}
+
 /// The config was loaded again: its panels' functions are gone.
 pub fn close_all() {
     let ids: Vec<u32> = PANELS.with(|p| p.borrow().iter().map(|p| p.id).collect());

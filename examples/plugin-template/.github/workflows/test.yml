@@ -1,0 +1,15 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install riptide
+        run: |
+          url=$(curl -fsSL https://api.github.com/repos/joshzcold/riptide/releases/latest \
+            | grep -o 'https://[^"]*linux-x86_64.tar.gz' | head -n1)
+          curl -fsSL "$url" | tar -xz
+          echo "$PWD/$(ls -d riptide-*/ | head -n1)" >> "$GITHUB_PATH"
+      - name: Test
+        run: xvfb-run -a riptide --plugin-test .

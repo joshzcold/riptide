@@ -440,3 +440,28 @@ fn help_covers_the_lua_api_and_each_plugins_readme() {
             .is_some_and(|items| items.iter().any(|i| i["name"] == "rt.ui.float"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugin_test_runs_the_templates_specs_and_exits_with_the_result() {
+    // A browser only for its display; the test runner starts its own.
+    let b = Browser::start("page.html");
+    let template =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugin-template");
+    let out = std::process::Command::new(rt_e2e::binary())
+        .arg("--plugin-test")
+        .arg(&template)
+        .env("DISPLAY", format!(":{}", b.display()))
+        .env("XDG_RUNTIME_DIR", b.scratch().join("plugin-test-run"))
+        .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(stdout.contains("1..2\n"), "{stdout}");
+    assert!(stdout.contains("# 2 tests, 0 failed"), "{stdout}");
+}

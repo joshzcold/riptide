@@ -1,0 +1,6 @@
+# What the plugin is, and what it may do. riptide shows the permissions and
+# asks before it loads; this one needs none.
+name = "reading-list"
+description = "Save pages to read later"
+
+[permissions]

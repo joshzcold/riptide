@@ -175,6 +175,20 @@ fn prune() {
     }
 }
 
+/// Window `window` is closing: close its floats, without their `on_close`.
+pub fn close_window(window: u32) {
+    let ids: Vec<u32> = FLOATS.with(|f| {
+        f.borrow()
+            .iter()
+            .filter(|f| f.window == window)
+            .map(|f| f.id)
+            .collect()
+    });
+    for id in ids {
+        close(id, true);
+    }
+}
+
 /// The config was loaded again: its floats' functions are gone.
 pub fn close_all() {
     let ids: Vec<u32> = FLOATS.with(|f| f.borrow().iter().map(|f| f.id).collect());
