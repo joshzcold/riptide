@@ -70,6 +70,20 @@ pub fn prepare(plugin: &Path, basedir: &Path) -> Result<(), String> {
             ..Locked::default()
         },
     );
+    // Its dependencies beside it are the author's too.
+    for dependency in &manifest.dependencies {
+        let dir = plugin.parent().map(|p| p.join(dependency));
+        if let Some(dir) = dir.filter(|d| d.is_dir()) {
+            let theirs = Manifest::read(&dir)?;
+            lock.plugins.insert(
+                dependency.clone(),
+                Locked {
+                    approved: theirs.permissions,
+                    ..Locked::default()
+                },
+            );
+        }
+    }
     lock.save(&config_dir)?;
     let specs: Vec<String> = specs
         .iter()

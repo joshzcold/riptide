@@ -434,14 +434,20 @@ fn plugins_install_from_a_folder_of_a_repository_of_several() {
     let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-monorepo-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&repo);
     for (name, word) in [("first", "one"), ("second", "two")] {
-        let module = repo.join(format!("{name}/lua/{name}/init.lua"));
-        std::fs::create_dir_all(module.parent().unwrap()).unwrap();
+        let script = repo.join(format!("{name}/plugin/{name}.lua"));
+        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
         std::fs::write(
-            &module,
-            format!("return {{ setup = function() rt.command('{name}-say', function() rt.notify('{word}') end) end }}"),
+            &script,
+            format!("rt.command('{name}-say', function() rt.notify('{word}') end)"),
         )
         .unwrap();
     }
+    // second needs first, which riptide adds from the same repository.
+    std::fs::write(
+        repo.join("second/riptide-plugin.toml"),
+        "dependencies = [\"first\"]\n",
+    )
+    .unwrap();
     let git = |args: &[&str]| {
         let ok = std::process::Command::new("git")
             .args(args)
@@ -460,9 +466,7 @@ fn plugins_install_from_a_folder_of_a_repository_of_several() {
     git(&["commit", "--quiet", "-m", "two plugins"]);
     let src = repo.display().to_string();
     let b = Browser::launch()
-        .lua(&format!(
-            "rt.pack.add({{ {{ {src:?}, subdir = 'second', opts = {{}} }}, {{ {src:?}, subdir = 'first', opts = {{}} }} }})"
-        ))
+        .lua(&format!("rt.pack.add({{ {src:?}, subdir = 'second' }})"))
         .start("page.html");
     b.wait_until("both installed", |s| {
         s.message().is_some_and(|m| m.contains("Installed plugin"))
@@ -477,4 +481,52 @@ fn plugins_install_from_a_folder_of_a_repository_of_several() {
     b.run("first-say");
     b.wait_until("the first plugin runs", |s| s.message() == Some("one"));
     std::fs::remove_dir_all(&repo).unwrap();
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_bring_their_dependencies_which_load_first() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/core/lua/core/init.lua",
+            "local M = { names = {} }\nfunction M.register(name) table.insert(M.names, name) end\nreturn M",
+        )
+        .file(
+            "scratch-plugins/core/plugin/core.lua",
+            "rt.command('core-list', function() rt.notify('backends: ' .. table.concat(require('core').names, ',')) end)",
+        )
+        .file(
+            "scratch-plugins/backend/riptide-plugin.toml",
+            "dependencies = [\"core\"]\n",
+        )
+        .file(
+            "scratch-plugins/backend/plugin/backend.lua",
+            "require('core').register('one')",
+        )
+        .file(
+            "scratch-plugins/orphan/riptide-plugin.toml",
+            "dependencies = [\"nowhere\"]\n",
+        )
+        .file("scratch-plugins/orphan/plugin/orphan.lua", "")
+        .lua(
+            r#"
+local dir = rt.config_dir .. "/../scratch-plugins/"
+-- Only the backend: its dependency comes from the folder beside it.
+rt.pack.add({ { dir = dir .. "backend" }, { dir = dir .. "orphan" } })
+"#,
+        )
+        .start("page.html");
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "backend:loaded core:loaded orphan:failed",
+    );
+    b.run("core-list");
+    b.wait_until("the backend registered with the core", |s| {
+        s.message() == Some("backends: one")
+    });
+    assert!(
+        b.eval("page.plugins.find((p) => p.name === 'orphan').error")
+            .contains("nowhere")
+    );
 }

@@ -1122,6 +1122,23 @@ pub fn widget_texts(
     (texts, errors)
 }
 
+/// Add a plugin another needs (its `dependencies`) and config.lua didn't
+/// list. False if one by that name is there already.
+pub fn add_plugin_spec(spec: PluginSpec) -> bool {
+    RUNTIME.with(|r| {
+        let runtime = r.borrow();
+        let Some(rt) = runtime.as_ref() else {
+            return false;
+        };
+        let mut state = rt.state.borrow_mut();
+        if state.specs.iter().any(|s| s.name == spec.name) {
+            return false;
+        }
+        state.specs.push(spec);
+        true
+    })
+}
+
 /// The plugins `rt.pack.add` asked for, in order.
 pub fn plugin_specs() -> Vec<PluginSpec> {
     RUNTIME.with(|r| {
@@ -1140,9 +1157,14 @@ pub fn load_plugin(
     dir: &Path,
     permissions: &crate::plugins::Permissions,
     trusted: bool,
+    dependencies: &[String],
     context: &Context,
 ) -> Result<Vec<Action>, String> {
     let (name, dir, permissions) = (name.to_string(), dir.to_path_buf(), permissions.clone());
+    // Its own modules and its dependencies': calling another plugin's code
+    // borrows that plugin's permissions, so only declared ones may be used.
+    let mut reachable = vec![name.clone()];
+    reachable.extend(dependencies.iter().cloned());
     run_guarded(context, move |lua, state| {
         if state.borrow().plugins.iter().any(|p| p.name == name) {
             return Ok(());
@@ -1152,9 +1174,9 @@ pub fn load_plugin(
         } else {
             let s = state.clone();
             let require = lua.create_function(move |lua, module: String| {
-                plugin_module(lua, &s, &module)?.ok_or_else(|| {
+                plugin_module(lua, &s, &module, Some(&reachable))?.ok_or_else(|| {
                     mlua::Error::runtime(format!(
-                        "module {module:?} not found; plugins can require their own modules and other plugins'"
+                        "module {module:?} not found; a plugin can require its own modules and those of the plugins its riptide-plugin.toml lists in dependencies"
                     ))
                 })
             })?;
@@ -1196,18 +1218,30 @@ fn plugin_module(
     lua: &Lua,
     state: &Rc<RefCell<State>>,
     module: &str,
+    reachable: Option<&[String]>,
 ) -> mlua::Result<Option<Value>> {
+    let may_use = |owner: &str| reachable.is_none_or(|names| names.iter().any(|n| n == owner));
     let cache: mlua::Table = lua.named_registry_value("rt_plugin_modules")?;
+    let owners: mlua::Table =
+        match lua.named_registry_value::<Option<mlua::Table>>("rt_plugin_module_owners")? {
+            Some(owners) => owners,
+            None => {
+                let owners = lua.create_table()?;
+                lua.set_named_registry_value("rt_plugin_module_owners", owners.clone())?;
+                owners
+            }
+        };
     let cached: Value = cache.get(module)?;
     if !cached.is_nil() {
-        return Ok(Some(cached));
+        let owner: String = owners.get::<Option<String>>(module)?.unwrap_or_default();
+        return Ok(may_use(&owner).then_some(cached));
     }
     let path = module.replace('.', "/");
     if path.split('/').any(|part| part.is_empty() || part == "..") {
         return Ok(None);
     }
     let plugins = state.borrow().plugins.clone();
-    for plugin in plugins {
+    for plugin in plugins.into_iter().filter(|p| may_use(&p.name)) {
         for relative in [format!("lua/{path}.lua"), format!("lua/{path}/init.lua")] {
             let Ok(source) = std::fs::read_to_string(plugin.dir.join(&relative)) else {
                 continue;
@@ -1223,6 +1257,7 @@ fn plugin_module(
                 value
             };
             cache.set(module, value.clone())?;
+            owners.set(module, plugin.name.clone())?;
             return Ok(Some(value));
         }
     }
@@ -1486,7 +1521,7 @@ fn searcher(
             }
         }
         // Then the loaded plugins' modules, run in their own globals.
-        if let Some(value) = plugin_module(lua, &state, &module)? {
+        if let Some(value) = plugin_module(lua, &state, &module, None)? {
             let loader = lua.create_function(move |_, ()| Ok(value.clone()))?;
             return Ok(mlua::Value::Function(loader));
         }
@@ -2471,8 +2506,15 @@ rt.command("bad-key", function() rt.ui.float({{ keys = {{ ["ab"] = function() en
         }
         // A plugin's float says whose it is, whatever it passes.
         let none = crate::plugins::Permissions::default();
-        let actions =
-            load_plugin("painter", &dir.join("plugins/painter"), &none, false, &ctx).unwrap();
+        let actions = load_plugin(
+            "painter",
+            &dir.join("plugins/painter"),
+            &none,
+            false,
+            &[],
+            &ctx,
+        )
+        .unwrap();
         assert!(
             actions
                 .iter()
@@ -2526,7 +2568,8 @@ rt.command("bad-side", function() rt.ui.panel({{ side = "top" }}) end)
         assert_eq!(spec.keys, ["<Return>"]);
         assert!(run_command("bad-side", "", &ctx).is_err());
         let none = crate::plugins::Permissions::default();
-        let actions = load_plugin("tree", &dir.join("plugins/tree"), &none, false, &ctx).unwrap();
+        let actions =
+            load_plugin("tree", &dir.join("plugins/tree"), &none, false, &[], &ctx).unwrap();
         assert!(
             actions.iter().any(
                 |a| matches!(a, Action::Panel { source, spec, .. } if source == "tree" && spec.side == "right" && spec.size == 300)
@@ -2631,6 +2674,69 @@ assert(not pcall(rt.statusbar.widget, "a b", function() end))
     }
 
     #[test]
+    fn plugins_require_only_their_own_and_their_dependencies_modules() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-deps-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for (name, code) in [
+            ("core", "return { hello = function() return 'core' end }"),
+            ("backend", "return require('core').hello()"),
+            ("stranger", "return require('core').hello()"),
+        ] {
+            let module = dir.join(format!("plugins/{name}/lua/{name}/init.lua"));
+            std::fs::create_dir_all(module.parent().unwrap()).unwrap();
+            std::fs::write(module, code).unwrap();
+        }
+        std::fs::write(dir.join("config.lua"), "").unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context::default();
+        let none = crate::plugins::Permissions::default();
+        let plugin = |name: &str| dir.join("plugins").join(name);
+        load_plugin("core", &plugin("core"), &none, false, &[], &ctx).unwrap();
+        load_plugin(
+            "backend",
+            &plugin("backend"),
+            &none,
+            false,
+            &["core".into()],
+            &ctx,
+        )
+        .unwrap();
+        load_plugin("stranger", &plugin("stranger"), &none, false, &[], &ctx).unwrap();
+        let require_from = |name: &str| -> Result<String, String> {
+            run_guarded(&ctx, |lua, state| {
+                let env = state
+                    .borrow()
+                    .plugins
+                    .iter()
+                    .find(|p| p.name == name)
+                    .unwrap()
+                    .env
+                    .clone();
+                let require: mlua::Function = env.get("require")?;
+                let value: String = require.call(name)?;
+                lua.globals().set("answer", value)
+            })?;
+            RUNTIME.with(|r| {
+                let r = r.borrow();
+                let rt = r.as_ref().unwrap();
+                rt.lua
+                    .globals()
+                    .get::<String>("answer")
+                    .map_err(|e| e.to_string())
+            })
+        };
+        assert_eq!(require_from("backend").unwrap(), "core");
+        // Its module was loaded once (by backend), and stays the dependents' alone.
+        let err = require_from("stranger").unwrap_err();
+        assert!(err.contains("dependencies"), "{err}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn plugins_run_sandboxed_with_their_permissions() {
         let dir = std::env::temp_dir().join(format!("rt-lua-plugins-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2711,7 +2817,7 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
         };
         let demo = specs[0].dir.clone().unwrap();
         assert_eq!(
-            texts(load_plugin("demo", &demo, &none, false, &ctx).unwrap()),
+            texts(load_plugin("demo", &demo, &none, false, &[], &ctx).unwrap()),
             ["demo loaded"]
         );
         assert_eq!(
@@ -2736,12 +2842,19 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
             }]
         );
         // The user's require finds a loaded plugin's module, the same one.
-        let error =
-            load_plugin("boom", specs[1].dir.as_ref().unwrap(), &none, false, &ctx).unwrap_err();
+        let error = load_plugin(
+            "boom",
+            specs[1].dir.as_ref().unwrap(),
+            &none,
+            false,
+            &[],
+            &ctx,
+        )
+        .unwrap_err();
         assert!(error.starts_with("boom/plugin/boom.lua:1:"), "{error}");
         let free = specs[2].dir.clone().unwrap();
         assert_eq!(
-            texts(load_plugin("free", &free, &none, true, &ctx).unwrap()),
+            texts(load_plugin("free", &free, &none, true, &[], &ctx).unwrap()),
             ["trusted"]
         );
         // Permissions open what they name.
@@ -2756,7 +2869,15 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
         );
         assert_eq!(
             texts(
-                load_plugin("granted", &dir.join("plugins/granted"), &files, false, &ctx).unwrap()
+                load_plugin(
+                    "granted",
+                    &dir.join("plugins/granted"),
+                    &files,
+                    false,
+                    &[],
+                    &ctx
+                )
+                .unwrap()
             ),
             ["true true false"]
         );
@@ -2782,7 +2903,15 @@ rt.command("filler-ask", function()
 end)
 "#,
         );
-        load_plugin("filler", &dir.join("plugins/filler"), &pages, false, &ctx).unwrap();
+        load_plugin(
+            "filler",
+            &dir.join("plugins/filler"),
+            &pages,
+            false,
+            &[],
+            &ctx,
+        )
+        .unwrap();
         let fill = run_command("filler-fill", "", &ctx).unwrap();
         let refused = texts(fill.clone()).join("");
         assert!(

@@ -82,7 +82,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 
 Your answer is kept in `rt-pack-lock.json` in the config folder, so it's asked once; a new version that asks for more asks again, for the new permissions only. Saying no leaves the plugin unloaded. To be asked again, press **Revoke** on `:plugins`, or delete its entry in `rt-pack-lock.json`.
 
-In the sandbox, `load` only runs text in the plugin's own globals, `require` only finds plugins' modules (not your config's), and a plugin's changes to its `rt` table don't affect anyone else. Every callback, a plugin's included, is stopped after 2 seconds.
+In the sandbox, `load` only runs text in the plugin's own globals, `require` only finds the plugin's own modules and those of the plugins it lists in `dependencies` (not your config's, nor other plugins'), and a plugin's changes to its `rt` table don't affect anyone else. Every callback, a plugin's included, is stopped after 2 seconds.
 
 ## Writing a plugin
 
@@ -117,6 +117,16 @@ function M.setup(opts)
 end
 return M
 ```
+
+### Dependencies
+
+A plugin that builds on another lists it in `riptide-plugin.toml`:
+
+```toml
+dependencies = ["passwords"]
+```
+
+It loads once its dependencies have, and may `require` their modules; their functions run with their own permissions, not the dependent's. You don't have to add a dependency yourself: riptide installs it from the same repository (the folder beside it, for one from `subdir`) or from the folder beside a `dir` plugin, and asks for its permissions as usual. Add it to `rt.pack.add` only to pass it options. A plugin whose dependency is refused or fails doesn't load, and `:plugins` says why.
 
 ### Pages
 

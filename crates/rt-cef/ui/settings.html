@@ -899,7 +899,7 @@ function renderSites() {
 // The Plugins tab.
 const PLUGIN_STATES = {
   loaded: ["Loaded", "allowed"], lazy: ["Loads when needed", ""], installing: ["Installing", ""], waiting: ["Waiting for approval", ""],
-  refused: ["Not approved", "blocked"], failed: ["Failed", "blocked"], pending: ["Not loaded", ""],
+  refused: ["Not approved", "blocked"], blocked: ["Waiting for a plugin", ""], failed: ["Failed", "blocked"], pending: ["Not loaded", ""],
 };
 const pluginAction = (name, action) => rt.send("plugin", JSON.stringify({ name, action }));
 

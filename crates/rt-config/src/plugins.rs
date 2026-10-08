@@ -105,6 +105,8 @@ pub struct Manifest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub permissions: Permissions,
+    /// Plugins it needs loaded first, by name; it may `require` their modules.
+    pub dependencies: Vec<String>,
 }
 
 impl Manifest {
@@ -112,7 +114,14 @@ impl Manifest {
     pub fn read(dir: &Path) -> Result<Manifest, String> {
         let path = dir.join("riptide-plugin.toml");
         match std::fs::read_to_string(&path) {
-            Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Ok(text) => {
+                let manifest: Manifest =
+                    toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+                if let Some(bad) = manifest.dependencies.iter().find(|d| !valid_name(d)) {
+                    return Err(format!("{}: {bad:?} isn't a plugin name", path.display()));
+                }
+                Ok(manifest)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Manifest::default()),
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
@@ -362,6 +371,18 @@ mod tests {
         )
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("root"));
+        std::fs::write(
+            dir.join("riptide-plugin.toml"),
+            "dependencies = [\"passwords\"]\n",
+        )
+        .unwrap();
+        assert_eq!(Manifest::read(&dir).unwrap().dependencies, ["passwords"]);
+        std::fs::write(
+            dir.join("riptide-plugin.toml"),
+            "dependencies = [\"../up\"]\n",
+        )
+        .unwrap();
+        assert!(Manifest::read(&dir).unwrap_err().contains("../up"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -33,6 +33,20 @@ struct Waiting {
     spec: PluginSpec,
     dir: PathBuf,
     permissions: Permissions,
+    dependencies: Vec<String>,
+}
+
+/// An approved plugin held back until the plugins it depends on have loaded.
+struct Blocked {
+    name: String,
+    dir: PathBuf,
+    permissions: Permissions,
+    trusted: bool,
+    dependencies: Vec<String>,
+}
+
+thread_local! {
+    static BLOCKED: std::cell::RefCell<Vec<Blocked>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 thread_local! {
@@ -47,6 +61,10 @@ fn set_state(name: &str, state: &'static str, error: Option<String>) {
         status.error = error;
     });
     crate::settings_page::refresh();
+    // Plugins waiting for this one won't load now.
+    if state == "failed" {
+        retry_blocked();
+    }
 }
 
 fn paths() -> Option<(PathBuf, PathBuf)> {
@@ -78,46 +96,51 @@ pub fn start() {
     // The config was just applied: the old placeholders went with it.
     WAITING.with(|w| w.borrow_mut().clear());
     crate::pages::unregister_all();
+    BLOCKED.with(|b| b.borrow_mut().clear());
     for spec in rt_config::lua::plugin_specs() {
-        let dir = repo_folder(&spec, &data_dir);
-        if spec.dir.is_some() || spec.src.is_empty() {
-            prepare(&spec.name);
-            continue;
-        }
-        let locked = lock
-            .plugins
-            .get(&spec.name)
-            .map(|l| l.commit.clone())
-            .filter(|c| !c.is_empty());
-        if !dir.is_dir() {
-            shell::show_message(Level::Info, format!("Installing plugin {}…", spec.name));
-            set_state(&spec.name, "installing", None);
-            let rev = locked.or_else(|| Some(spec.version.clone()).filter(|v| !v.is_empty()));
-            let (name, src) = (spec.name.clone(), spec.src.clone());
+        begin(spec, &lock, &data_dir);
+    }
+}
+
+/// Install or check out one plugin from git if need be, then prepare it.
+fn begin(spec: PluginSpec, lock: &Lockfile, data_dir: &Path) {
+    let dir = repo_folder(&spec, data_dir);
+    if spec.dir.is_some() || spec.src.is_empty() {
+        return prepare(&spec.name);
+    }
+    let locked = lock
+        .plugins
+        .get(&spec.name)
+        .map(|l| l.commit.clone())
+        .filter(|c| !c.is_empty());
+    if !dir.is_dir() {
+        shell::show_message(Level::Info, format!("Installing plugin {}…", spec.name));
+        set_state(&spec.name, "installing", None);
+        let rev = locked.or_else(|| Some(spec.version.clone()).filter(|v| !v.is_empty()));
+        let (name, src) = (spec.name.clone(), spec.src.clone());
+        std::thread::spawn(move || {
+            let result = git::install(&src, &dir, rev.as_deref());
+            finished(name, true, result);
+        });
+        return;
+    }
+    match (locked, git::head(&dir)) {
+        (Some(locked), Ok(head)) if locked != head => {
+            // The lockfile moved, e.g. synced from another computer.
+            let name = spec.name.clone();
             std::thread::spawn(move || {
-                let result = git::install(&src, &dir, rev.as_deref());
-                finished(name, true, result);
+                let result = git::checkout(&dir, &locked);
+                finished(name, false, result);
             });
-            continue;
         }
-        match (locked, git::head(&dir)) {
-            (Some(locked), Ok(head)) if locked != head => {
-                // The lockfile moved, e.g. synced from another computer.
-                let name = spec.name.clone();
-                std::thread::spawn(move || {
-                    let result = git::checkout(&dir, &locked);
-                    finished(name, false, result);
-                });
-            }
-            (None, Ok(head)) => {
-                record(&spec.name, &spec.src, &head);
-                prepare(&spec.name);
-            }
-            (_, Ok(_)) => prepare(&spec.name),
-            (_, Err(e)) => {
-                set_state(&spec.name, "failed", Some(e.clone()));
-                shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name));
-            }
+        (None, Ok(head)) => {
+            record(&spec.name, &spec.src, &head);
+            prepare(&spec.name);
+        }
+        (_, Ok(_)) => prepare(&spec.name),
+        (_, Err(e)) => {
+            set_state(&spec.name, "failed", Some(e.clone()));
+            shell::show_message(Level::Error, format!("Plugin {}: {e}", spec.name));
         }
     }
 }
@@ -201,6 +224,12 @@ fn prepare(name: &str) {
         Ok(manifest) => manifest,
         Err(e) => return failed(e.to_string()),
     };
+    let dependencies = manifest.dependencies;
+    for dependency in &dependencies {
+        if let Err(why) = add_dependency(&spec, dependency, &config_dir, &data_dir) {
+            return failed(why);
+        }
+    }
     let wanted = manifest.permissions;
     let approved = Lockfile::load(&config_dir)
         .ok()
@@ -208,15 +237,22 @@ fn prepare(name: &str) {
         .unwrap_or_default();
     let needed = wanted.beyond(&approved);
     if spec.trusted || needed.is_empty() {
-        ready(spec, dir, wanted);
+        ready(spec, dir, wanted, dependencies);
     } else {
         set_state(&spec.name, "waiting", None);
-        ask(spec.name, dir, wanted, needed, config_dir);
+        ask(spec.name, dir, wanted, needed, config_dir, dependencies);
     }
 }
 
 /// Ask whether `name` may do what it asks; yes saves that and loads it.
-fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, config_dir: PathBuf) {
+fn ask(
+    name: String,
+    dir: PathBuf,
+    wanted: Permissions,
+    needed: Permissions,
+    config_dir: PathBuf,
+    dependencies: Vec<String>,
+) {
     let list: String = needed
         .describe()
         .iter()
@@ -241,6 +277,8 @@ fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, con
                     format!("Didn't load {name}: its permissions weren't approved"),
                 );
                 set_state(&name, "refused", None);
+                // Plugins that needed it won't load either.
+                retry_blocked();
                 return;
             }
             let saved = Lockfile::load(&config_dir).and_then(|mut lock| {
@@ -254,16 +292,16 @@ fn ask(name: String, dir: PathBuf, wanted: Permissions, needed: Permissions, con
                 .into_iter()
                 .find(|s| s.name == name)
             {
-                ready(spec, dir, wanted);
+                ready(spec, dir, wanted, dependencies);
             }
         },
     );
 }
 
 /// Approved: load it now, or wait for its event, command or keys.
-fn ready(spec: PluginSpec, dir: PathBuf, permissions: Permissions) {
+fn ready(spec: PluginSpec, dir: PathBuf, permissions: Permissions, dependencies: Vec<String>) {
     if !spec.is_lazy() {
-        return load(&spec.name, &dir, &permissions, spec.trusted);
+        return load(&spec.name, &dir, &permissions, spec.trusted, dependencies);
     }
     let name = spec.name.clone();
     for (mode, keys) in &spec.keys {
@@ -277,6 +315,7 @@ fn ready(spec: PluginSpec, dir: PathBuf, permissions: Permissions) {
             spec,
             dir,
             permissions,
+            dependencies,
         })
     });
     set_state(&name, "lazy", None);
@@ -301,6 +340,7 @@ fn wake(name: &str) -> bool {
         &waiting.dir,
         &waiting.permissions,
         waiting.spec.trusted,
+        waiting.dependencies,
     );
     true
 }
@@ -389,9 +429,122 @@ pub fn run_command(command: &rt_core::Command) -> bool {
     true
 }
 
-fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
+/// A plugin `spec` depends on that config.lua didn't add: the folder of that
+/// name beside it, in its git repository or on disk, installed and loaded
+/// like the others.
+fn add_dependency(
+    spec: &PluginSpec,
+    name: &str,
+    config_dir: &Path,
+    data_dir: &Path,
+) -> Result<(), String> {
+    if rt_config::lua::plugin_specs()
+        .iter()
+        .any(|s| s.name == name)
+    {
+        return Ok(());
+    }
+    let needs = format!("needs the plugin {name}; add it with rt.pack.add");
+    let dependency = if let Some(dir) = &spec.dir {
+        let sibling = dir
+            .parent()
+            .map(|p| p.join(name))
+            .filter(|d| d.is_dir())
+            .ok_or(needs)?;
+        PluginSpec {
+            name: name.to_string(),
+            dir: Some(sibling),
+            ..PluginSpec::default()
+        }
+    } else if !spec.src.is_empty() && !spec.subdir.is_empty() {
+        let subdir = Path::new(&spec.subdir).with_file_name(name);
+        PluginSpec {
+            name: name.to_string(),
+            src: spec.src.clone(),
+            subdir: subdir.to_string_lossy().into_owned(),
+            version: spec.version.clone(),
+            ..PluginSpec::default()
+        }
+    } else {
+        return Err(needs);
+    };
+    if rt_config::lua::add_plugin_spec(dependency.clone()) {
+        let lock = Lockfile::load(config_dir).unwrap_or_default();
+        begin(dependency, &lock, data_dir);
+    }
+    Ok(())
+}
+
+/// Whether `name`'s dependencies have loaded: `Ok(true)` yes, `Ok(false)`
+/// not yet, `Err` one never will.
+fn dependencies_loaded(name: &str, dependencies: &[String]) -> Result<bool, String> {
+    let mut all = true;
+    for dependency in dependencies {
+        // A dependency waiting for its event or keys loads now.
+        wake(dependency);
+        let state = STATUS.with(|s| s.borrow().get(dependency).map(|st| st.state));
+        match state {
+            Some("loaded") => {}
+            Some("failed" | "refused") => {
+                return Err(format!("needs the plugin {dependency}, which didn't load"));
+            }
+            _ => {
+                let circular = BLOCKED.with(|b| {
+                    b.borrow()
+                        .iter()
+                        .any(|p| &p.name == dependency && p.dependencies.iter().any(|d| d == name))
+                });
+                if circular {
+                    return Err(format!(
+                        "it and the plugin {dependency} depend on each other"
+                    ));
+                }
+                all = false;
+            }
+        }
+    }
+    Ok(all)
+}
+
+/// Load the plugins that were waiting for others which have now loaded, and
+/// fail the ones whose dependencies never will.
+fn retry_blocked() {
+    let blocked = BLOCKED.with(|b| std::mem::take(&mut *b.borrow_mut()));
+    for p in blocked {
+        load(&p.name, &p.dir, &p.permissions, p.trusted, p.dependencies);
+    }
+}
+
+fn load(
+    name: &str,
+    dir: &Path,
+    permissions: &Permissions,
+    trusted: bool,
+    dependencies: Vec<String>,
+) {
+    match dependencies_loaded(name, &dependencies) {
+        Ok(true) => {}
+        Ok(false) => {
+            let waits = format!("waits for {}", dependencies.join(", "));
+            BLOCKED.with(|b| {
+                b.borrow_mut().push(Blocked {
+                    name: name.to_string(),
+                    dir: dir.to_path_buf(),
+                    permissions: permissions.clone(),
+                    trusted,
+                    dependencies,
+                })
+            });
+            return set_state(name, "blocked", Some(waits));
+        }
+        Err(why) => {
+            shell::show_message(Level::Error, format!("Plugin {name}: {why}"));
+            return set_state(name, "failed", Some(why));
+        }
+    }
     let context = crate::lua::current_context();
-    let result = rt_config::lua::load_plugin(name, dir, permissions, trusted, &context);
+    let result =
+        rt_config::lua::load_plugin(name, dir, permissions, trusted, &dependencies, &context);
     match &result {
         Ok(_) => {
             crate::pages::register(name, dir, permissions, trusted);
@@ -403,6 +556,7 @@ fn load(name: &str, dir: &Path, permissions: &Permissions, trusted: bool) {
     // Commands it defined complete and run like the others.
     refresh_commands();
     shell::refresh_ui();
+    retry_blocked();
 }
 
 /// What makes a lazy plugin load, in words: `:cmd`, `<Space>p`, `tab_opened`.
