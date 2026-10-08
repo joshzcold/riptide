@@ -160,6 +160,8 @@ type = "secret"
 description = "The database password, so it doesn't ask"
 ```
 
+A riptide older than the plugin ignores keys it doesn't know, such as `[[option]]` before 0.4, with a warning in its log; it still refuses a permission it doesn't know.
+
 A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring. On Linux without a keyring service, saving a secret says so and the plugin can ask instead.
 
 ### Dependencies

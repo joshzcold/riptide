@@ -100,9 +100,11 @@ impl Permissions {
     }
 }
 
-/// `riptide-plugin.toml`.
+/// `riptide-plugin.toml`. Keys a newer riptide added are ignored with a
+/// warning, so plugins can use them without breaking older riptides; the
+/// permissions stay strict, so an unknown one is refused, never ignored.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct Manifest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -112,11 +114,13 @@ pub struct Manifest {
     /// Its options, which the Plugins tab can edit, in order.
     #[serde(rename = "option")]
     pub options: Vec<OptionSpec>,
+    /// Keys this riptide doesn't know.
+    #[serde(flatten)]
+    pub unknown: BTreeMap<String, toml::Value>,
 }
 
-/// One `[[option]]` in `riptide-plugin.toml`.
+/// One `[[option]]` in `riptide-plugin.toml`; keys it doesn't know are ignored.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct OptionSpec {
     pub name: String,
     #[serde(rename = "type", default)]
@@ -187,6 +191,14 @@ impl Manifest {
             Ok(text) => {
                 let manifest: Manifest =
                     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+                if !manifest.unknown.is_empty() {
+                    let keys: Vec<&str> = manifest.unknown.keys().map(String::as_str).collect();
+                    tracing::warn!(
+                        "{}: ignoring {}, for a newer riptide",
+                        path.display(),
+                        keys.join(", ")
+                    );
+                }
                 if let Some(bad) = manifest.dependencies.iter().find(|d| !valid_name(d)) {
                     return Err(format!("{}: {bad:?} isn't a plugin name", path.display()));
                 }
@@ -596,6 +608,15 @@ mod tests {
         )
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("root"));
+        // A key from a newer riptide loads; an unknown permission doesn't.
+        std::fs::write(
+            dir.join("riptide-plugin.toml"),
+            "homepage = \"https://example.com\"\n[permissions]\nspawn = true\n",
+        )
+        .unwrap();
+        let newer = Manifest::read(&dir).unwrap();
+        assert!(newer.permissions.spawn);
+        assert!(newer.unknown.contains_key("homepage"));
         std::fs::write(
             dir.join("riptide-plugin.toml"),
             "dependencies = [\"passwords\"]\n",
