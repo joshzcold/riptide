@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: var(--rt-prompts-bg, #0b2a3f);
+    --fg: var(--rt-prompts-fg, #e9f7f6);
+    --accent: var(--rt-prompts-border, #d9b44a);
+    --key-bg: var(--rt-prompts-key-bg, #3a3420);
+    --muted: var(--rt-completion-description-fg, #8fb3c4);
+    --match: var(--rt-completion-match-fg, #d9b44a);
+    --url: var(--rt-statusbar-https-fg, #2ec4b6);
+    --info: var(--rt-statusbar-https-fg, #2ec4b6);
+    --warning: var(--rt-messages-warning-bg, #a8651a);
+    --error: var(--rt-messages-error-bg, #b8323f);
+    --font: var(--rt-font-prompts, 10pt "DejaVu Sans Mono", "Monospace", monospace);
+  }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  /* Its natural size, whatever the view's size before it's placed. */
+  #box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: max-content;
+    box-sizing: border-box;
+    min-width: 12ch;
+    background: var(--bg);
+    color: var(--fg);
+    font: var(--font);
+    line-height: 1.5;
+    border: 1px solid var(--accent);
+    border-left-width: 3px;
+    padding: .3rem .6rem;
+    user-select: none;
+    cursor: default;
+  }
+  #head { display: flex; gap: 1ch; justify-content: space-between; align-items: baseline; }
+  #title { color: var(--accent); font-weight: bold; }
+  #source { color: var(--muted); font-size: .85em; }
+  #head:empty, #title:empty, #source:empty { display: none; }
+  .line { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 1.5em; }
+  .hl-title { color: var(--accent); font-weight: bold; }
+  .hl-muted { color: var(--muted); }
+  .hl-accent { color: var(--accent); }
+  .hl-match { color: var(--match); font-weight: bold; }
+  .hl-url { color: var(--url); }
+  .hl-info { color: var(--info); }
+  .hl-warning { color: var(--warning); font-weight: bold; }
+  .hl-error { color: var(--error); font-weight: bold; }
+  .hl-key { background: var(--key-bg); color: var(--accent); padding: 0 .35rem; border-radius: 3px; }
+  #hint { color: var(--muted); font-size: .85em; margin-top: .2rem; }
+</style>
+</head>
+<body>
+<div id="box"><div id="head"><span id="title"></span><span id="source"></span></div><div id="lines"></div><div id="hint"></div></div>
+<script>
+  addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false, capture: true });
+  const $ = (id) => document.getElementById(id);
+  let floatId = 0;
+
+  // ui.css from the config directory, after the page's own styles.
+  let appliedCss = null;
+  function applyCss(css) {
+    if (css === undefined || css === appliedCss) return;
+    appliedCss = css;
+    let style = $("user-css");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "user-css";
+      document.head.append(style);
+    }
+    style.textContent = css;
+  }
+
+  function applyTheme(theme) {
+    for (const [token, color] of Object.entries(theme || {})) {
+      document.documentElement.style.setProperty(`--rt-${token}`, color);
+    }
+  }
+
+  // Text only: chunks become spans with textContent, never HTML.
+  function line(chunks) {
+    const div = document.createElement("div");
+    div.className = "line";
+    for (const [text, group] of chunks) {
+      const span = document.createElement("span");
+      if (group) span.className = `hl-${group}`;
+      span.textContent = text;
+      div.append(span);
+    }
+    return div;
+  }
+
+  let reported = "";
+  function measure() {
+    const rect = $("box").getBoundingClientRect();
+    const size = { id: floatId, width: Math.ceil(rect.width), height: Math.ceil(rect.height) };
+    const json = JSON.stringify(size);
+    if (json === reported) return;
+    reported = json;
+    rt.send("size", json);
+  }
+
+  window.rtFloat = (state) => {
+    floatId = state.id;
+    applyTheme(state.theme);
+    applyCss(state.css);
+    $("box").style.maxWidth = `${state.width}ch`;
+    $("title").textContent = state.title;
+    // A plugin's float says whose it is, so it can't pass for riptide's own.
+    $("source").textContent = state.source ? `plugin ${state.source}` : "";
+    $("lines").replaceChildren(...state.lines.map(line));
+    $("hint").textContent = state.keys ? "Esc closes" : "";
+    measure();
+  };
+  new ResizeObserver(() => floatId && measure()).observe($("box"));
+</script>
+</body>
+</html>

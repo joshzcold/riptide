@@ -254,6 +254,7 @@ function rt._sandbox(name, permissions, require_fn)
   local own = ui_for(name)
   api.ui = copy(rt.ui)
   api.ui.select, api.ui.input = own.select, own.input
+  api.ui.float = rt._float_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
   else
@@ -342,6 +343,59 @@ end
 function rt.keymap.del(mode, keys)
   for _, m in ipairs(modes_of(mode)) do rt.unbind(keys, m) end
 end
+
+-- rt.ui.float(opts): a box of text over the page; see rt.meta.lua. A
+-- plugin's floats carry its name, so they can't pass for riptide's own.
+local floats, last_float = {}, 0
+local function float_spec(opts)
+  local spec = {}
+  for _, key in ipairs({ "title", "lines", "width", "position", "timeout" }) do spec[key] = opts[key] end
+  spec.keys = {}
+  for key, fn in pairs(opts.keys or {}) do
+    if type(key) ~= "string" or type(fn) ~= "function" then error("keys maps key names to functions", 3) end
+    spec.keys[#spec.keys + 1] = key
+  end
+  return spec
+end
+function rt._float_for(source)
+  return function(opts)
+    if type(opts) ~= "table" then error("rt.ui.float takes a table", 2) end
+    last_float = last_float + 1
+    local id = last_float
+    local handle = { id = id }
+    local current = opts
+    floats[id] = { opts = opts, handle = handle }
+    function handle:update(changes)
+      if not floats[id] then return end
+      local merged = {}
+      for k, v in pairs(current) do merged[k] = v end
+      for k, v in pairs(changes or {}) do merged[k] = v end
+      current = merged
+      floats[id].opts = merged
+      rt._float(id, source or "", float_spec(merged))
+    end
+    function handle:close()
+      if floats[id] then
+        floats[id] = nil
+        rt._float_close(id)
+      end
+    end
+    function handle:is_open() return floats[id] ~= nil end
+    rt._float(id, source or "", float_spec(opts))
+    return handle
+  end
+end
+function rt._float_key(id, key)
+  local float = floats[id]
+  local fn = float and float.opts.keys and float.opts.keys[key]
+  if fn then fn(float.handle) end
+end
+function rt._float_closed(id)
+  local float = floats[id]
+  floats[id] = nil
+  if float and float.opts.on_close then float.opts.on_close() end
+end
+rt.ui.float = rt._float_for(nil)
 "##;
 
 /// The events `rt.on` takes, with what each one's table carries.
@@ -485,6 +539,15 @@ pub enum Action {
         pages: Option<Vec<String>>,
         request: PageRequest,
     },
+    /// `rt.ui.float` or a float's `update`: show float `id`. `source` is the
+    /// plugin that drew it, empty for `config.lua`.
+    Float {
+        id: u32,
+        source: String,
+        spec: FloatSpec,
+    },
+    /// A float's `close`.
+    FloatClose { id: u32 },
 }
 
 /// What `rt.ui` asks.
@@ -523,6 +586,124 @@ impl std::fmt::Debug for PageRequest {
             }
         }
     }
+}
+
+/// What `rt.ui.float` draws: text in lines of highlighted chunks, never HTML.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct FloatSpec {
+    pub title: String,
+    /// Each line's chunks: text and an optional highlight group from [`FLOAT_GROUPS`].
+    pub lines: Vec<Vec<(String, Option<String>)>>,
+    /// The widest it gets, in characters.
+    pub width: u32,
+    /// One of [`FLOAT_POSITIONS`].
+    pub position: String,
+    /// Close by itself after this many milliseconds.
+    pub timeout: Option<u32>,
+    /// The keys it takes while it's the newest float with keys.
+    pub keys: Vec<String>,
+}
+
+/// Highlight groups a float's text can use; the theme gives their colours.
+pub const FLOAT_GROUPS: &[&str] = &[
+    "title", "muted", "accent", "match", "url", "key", "info", "warning", "error",
+];
+
+pub const FLOAT_POSITIONS: &[&str] = &["center", "top", "bottom", "top-right", "bottom-right"];
+
+const FLOAT_MAX_LINES: usize = 500;
+
+impl FloatSpec {
+    fn from_lua(table: &mlua::Table) -> mlua::Result<Self> {
+        let bad = |what: &str| Err(mlua::Error::runtime(format!("rt.ui.float: {what}")));
+        let title: Option<String> = table.get("title")?;
+        let width: Option<u32> = table.get("width")?;
+        let position: Option<String> = table.get("position")?;
+        let position = position.unwrap_or_else(|| "center".into());
+        if !FLOAT_POSITIONS.contains(&position.as_str()) {
+            return bad(&format!(
+                "position is one of {}",
+                FLOAT_POSITIONS.join(", ")
+            ));
+        }
+        let timeout: Option<u32> = table.get("timeout")?;
+        let mut keys = Vec::new();
+        for key in table.get::<Vec<String>>("keys")? {
+            match Key::parse_sequence(&key) {
+                Ok(seq) if seq.len() == 1 => keys.push(key),
+                _ => return bad(&format!("{key:?} isn't one key")),
+            }
+        }
+        let mut lines = Vec::new();
+        let chunk = |value: mlua::Value| -> mlua::Result<(String, Option<String>)> {
+            match value {
+                mlua::Value::String(s) => Ok((s.to_str()?.to_string(), None)),
+                mlua::Value::Table(t) => {
+                    let text: String = t.get(1)?;
+                    let group: Option<String> = t.get(2)?;
+                    if let Some(g) = &group
+                        && !FLOAT_GROUPS.contains(&g.as_str())
+                    {
+                        return Err(mlua::Error::runtime(format!(
+                            "rt.ui.float: no highlight {g:?}; use {}",
+                            FLOAT_GROUPS.join(", ")
+                        )));
+                    }
+                    Ok((text, group))
+                }
+                _ => Err(mlua::Error::runtime(
+                    "rt.ui.float: a line is a string or a list of { text, highlight }",
+                )),
+            }
+        };
+        let raw: Option<mlua::Table> = table.get("lines")?;
+        for line in raw.iter().flat_map(|t| t.sequence_values::<mlua::Value>()) {
+            match line? {
+                mlua::Value::String(s) => {
+                    for text in s.to_str()?.split('\n') {
+                        lines.push(vec![(text.to_string(), None)]);
+                    }
+                }
+                mlua::Value::Table(chunks) => {
+                    let line = chunks
+                        .sequence_values::<mlua::Value>()
+                        .map(|c| chunk(c?))
+                        .collect::<mlua::Result<_>>()?;
+                    lines.push(line);
+                }
+                _ => return bad("a line is a string or a list of { text, highlight }"),
+            }
+            if lines.len() > FLOAT_MAX_LINES {
+                return bad(&format!("at most {FLOAT_MAX_LINES} lines"));
+            }
+        }
+        Ok(Self {
+            title: title.unwrap_or_default(),
+            lines,
+            width: width.unwrap_or(60).clamp(10, 200),
+            position,
+            timeout,
+            keys,
+        })
+    }
+}
+
+/// A key pressed while float `id` takes keys: call its function.
+pub fn float_key(id: u32, key: &str, context: &Context) -> Result<Vec<Action>, String> {
+    let key = key.to_string();
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_float_key")?
+            .call::<()>((id, key))
+    })
+}
+
+/// Float `id` was closed by riptide (Escape, its timeout, its window): its `on_close`.
+pub fn float_closed(id: u32, context: &Context) -> Result<Vec<Action>, String> {
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_float_closed")?.call::<()>(id)
+    })
 }
 
 /// Where `rt.open` opens a URL.
@@ -1423,6 +1604,26 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
 
     let s = state.clone();
     api.set(
+        "_float",
+        lua.create_function(move |_, (id, source, spec): (u32, String, mlua::Table)| {
+            let spec = FloatSpec::from_lua(&spec)?;
+            s.borrow_mut()
+                .actions
+                .push(Action::Float { id, source, spec });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_float_close",
+        lua.create_function(move |_, id: u32| {
+            s.borrow_mut().actions.push(Action::FloatClose { id });
+            Ok(())
+        })?,
+    )?;
+
+    let s = state.clone();
+    api.set(
         "_timer",
         lua.create_function(move |_, (id, ms): (u32, f64)| {
             let ms = ms.clamp(0.0, f64::from(u32::MAX)) as u32;
@@ -1805,6 +2006,73 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
                 argv: vec!["notify-send".into(), "hi there".into()],
                 ..SpawnRequest::default()
             })]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn floats_carry_checked_text_and_their_plugins_name() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-floats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("plugins/painter/plugin")).unwrap();
+        std::fs::write(
+            dir.join("plugins/painter/plugin/painter.lua"),
+            "rt.ui.float({ lines = { 'from a plugin' } })",
+        )
+        .unwrap();
+        let dir_text = dir.display().to_string();
+        std::fs::write(
+            dir.join("config.lua"),
+            format!(
+                r#"
+rt.pack.add({{ dir = "{dir_text}/plugins/painter" }})
+rt.command("draw", function()
+  rt.ui.float({{ title = "T", lines = {{ "a\nb", {{ {{ "c", "error" }}, "d" }} }}, position = "top", keys = {{ q = function() end }} }})
+end)
+rt.command("bad-position", function() rt.ui.float({{ position = "left" }}) end)
+rt.command("bad-highlight", function() rt.ui.float({{ lines = {{ {{ {{ "x", "<b>" }} }} }} }}) end)
+rt.command("bad-key", function() rt.ui.float({{ keys = {{ ["ab"] = function() end }} }}) end)
+"#
+            ),
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context::default();
+        let actions = run_command("draw", "", &ctx).unwrap();
+        let [Action::Float { source, spec, .. }] = actions.as_slice() else {
+            panic!("{actions:?}");
+        };
+        assert_eq!(source, "");
+        assert_eq!(spec.title, "T");
+        assert_eq!(spec.position, "top");
+        assert_eq!(spec.keys, ["q"]);
+        assert_eq!(
+            spec.lines,
+            [
+                vec![("a".to_string(), None)],
+                vec![("b".to_string(), None)],
+                vec![
+                    ("c".to_string(), Some("error".to_string())),
+                    ("d".to_string(), None)
+                ],
+            ]
+        );
+        for bad in ["bad-position", "bad-highlight", "bad-key"] {
+            assert!(run_command(bad, "", &ctx).is_err(), "{bad}");
+        }
+        // A plugin's float says whose it is, whatever it passes.
+        let none = crate::plugins::Permissions::default();
+        let actions =
+            load_plugin("painter", &dir.join("plugins/painter"), &none, false, &ctx).unwrap();
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::Float { source, .. } if source == "painter")),
+            "{actions:?}"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

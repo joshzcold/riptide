@@ -331,6 +331,32 @@ function rt.ui.select(items, opts, on_choice) end
 ---@param on_confirm fun(text: string|nil)
 function rt.ui.input(opts, on_confirm) end
 
+---@alias rt.Highlight "title"|"muted"|"accent"|"match"|"url"|"key"|"info"|"warning"|"error"
+
+---@class rt.FloatOpts
+---@field title? string
+---@field lines? (string|(string|{{ [1]: string, [2]: rt.Highlight }})[])[] Text, or chunks of text with highlights; never HTML.
+---@field width? integer The widest it gets, in characters (10–200, default 60).
+---@field position? "center"|"top"|"bottom"|"top-right"|"bottom-right"
+---@field timeout? integer Close by itself after this many milliseconds.
+---@field keys? table<string, fun(float: rt.Float)> Keys it takes in normal mode while it's the newest float with keys; Escape closes it.
+---@field on_close? fun() Called when riptide closes it (Escape, its timeout).
+
+---@class rt.Float
+---@field id integer
+local Float = {{}}
+---Redraw with these options changed.
+---@param changes rt.FloatOpts
+function Float:update(changes) end
+function Float:close() end
+---@return boolean
+function Float:is_open() end
+
+---A box of text over the page. A plugin's floats show its name.
+---@param opts rt.FloatOpts
+---@return rt.Float
+function rt.ui.float(opts) end
+
 ---The current tab's page. Plugins need the `pages` permission for the site,
 ---checked when the action runs; nothing acts on riptide's own pages, and what's
 ---typed or filled is never logged or kept in history.

@@ -149,6 +149,35 @@ rt.ui.input({ prompt = "Passphrase", secret = true }, function(text) --[[ nil if
 
 They never go through a command line, so what's typed isn't kept in the command history or `:messages`. They don't act on riptide's own pages, and a plugin needs the `pages` permission for the site.
 
+## Floats
+
+`rt.ui.float(opts)` draws a box of text over the page, beside whatever else is on screen, and returns a handle with `update(changes)`, `close()` and `is_open()`. Lines are text, or lists of `{ text, highlight }` chunks coloured by the theme (`title`, `muted`, `accent`, `match`, `url`, `key`, `info`, `warning`, `error`); they're never HTML.
+
+```lua
+local list = rt.store("reading-list")
+rt.keymap.set("normal", "<Space>l", function()
+  local lines = {}
+  for i, url in ipairs(list.get("urls") or {}) do
+    lines[#lines + 1] = { { tostring(i), "key" }, { " " .. url, "url" } }
+  end
+  rt.ui.float({
+    title = "Reading list",
+    lines = lines,
+    keys = { c = function(f) list.clear(); f:close() end },
+  })
+end, { desc = "Show the reading list" })
+```
+
+| Option | |
+|---|---|
+| `position` | `center` (the default), `top`, `bottom`, `top-right` or `bottom-right` of the page |
+| `width` | the widest it gets, in characters (default 60) |
+| `timeout` | close by itself after this many milliseconds, for a notice |
+| `keys` | functions for keys pressed in normal mode while it's the newest float with keys; `Escape` closes it |
+| `on_close` | runs when riptide closes it: `Escape`, its timeout or its window closing |
+
+A plugin's floats show its name in the corner, so a float can't pass for riptide's own question.
+
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh

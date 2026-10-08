@@ -461,6 +461,7 @@ pub fn load_config() -> Vec<String> {
 
 /// Put config that was already read into the engine.
 pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
+    crate::float::close_all();
     let user_commands = rt_config::lua::user_commands();
     let errors = with(|s| {
         s.engine.reset_config();
@@ -1070,6 +1071,7 @@ fn apply_ui_update(update: UiUpdate) {
 
 /// Re-anchor the completion overlay after the window is resized.
 pub fn position_overlay() {
+    crate::float::reposition();
     let Some(Some((overlay, rows))) = with(|s| {
         let overlay = s.overlay.clone()?;
         Some((overlay, s.last_overlay_rows))

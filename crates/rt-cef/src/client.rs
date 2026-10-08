@@ -34,6 +34,8 @@ pub enum Role {
     Completion,
     /// The notice shown in place of a tab whose renderer died.
     Crashed,
+    /// An `rt.ui.float`.
+    Float,
 }
 
 wrap_client! {
@@ -455,6 +457,10 @@ fn handle_key_event(event: &KeyEvent) -> bool {
     let Some(key) = vk::translate(raw) else {
         return false;
     };
+    if crate::float::forward_key(&key) {
+        shell::with(|s| s.suppress_char = true);
+        return true;
+    }
     if crate::settings_page::forward_key(&key) {
         shell::with(|s| s.suppress_char = true);
         return true;
@@ -752,6 +758,12 @@ wrap_load_handler! {
                 Role::Statusbar => shell::with(|s| s.statusbar_ready = true),
                 Role::Completion => shell::with(|s| s.completion_ready = true),
                 Role::Crashed => return,
+                Role::Float => {
+                    if let Some(browser) = &browser {
+                        crate::float::ready(browser.identifier());
+                    }
+                    return;
+                }
             };
             shell::refresh_ui();
         }

@@ -20,6 +20,8 @@ pub enum UiMessage {
     PromptKey { key: String },
     /// The tab bar's or status bar's natural height for its font and padding.
     BarHeight { bar: Bar, height: u32 },
+    /// An `rt.ui.float`'s page measured its content.
+    FloatSize { id: u32, width: u32, height: u32 },
     /// The overlay's row height for its fonts.
     RowHeight { height: u32 },
     /// Whether pages are asked for dark colors, for `ui.theme = auto`.
@@ -89,6 +91,7 @@ impl UiMessage {
             self,
             UiMessage::BarHeight { .. }
                 | UiMessage::RowHeight { .. }
+                | UiMessage::FloatSize { .. }
                 | UiMessage::ColorScheme { .. }
         )
     }
@@ -250,6 +253,14 @@ fn bind_message(name: &str, json: &str) -> Result<(crate::mode::Mode, String, St
 struct UnsetSite {
     pattern: String,
     name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FloatSize {
+    id: u32,
+    width: u32,
+    height: u32,
 }
 
 #[derive(Deserialize)]
@@ -428,6 +439,13 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 return Err(format!("{name}: row height {row_height} out of range"));
             }
             Ok(UiMessage::RowHeight { height: row_height })
+        }
+        ("float.html", "size") => {
+            let FloatSize { id, width, height } = payload(name, json)?;
+            if !(1..=10_000).contains(&width) || !(1..=10_000).contains(&height) {
+                return Err(format!("{name}: size {width}x{height} out of range"));
+            }
+            Ok(UiMessage::FloatSize { id, width, height })
         }
         ("completion.html", "prompt-key") => {
             let PromptKey { key } = payload(name, json)?;

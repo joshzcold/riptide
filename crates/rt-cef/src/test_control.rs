@@ -173,6 +173,7 @@ mod enabled {
                 "prompt": s.engine.prompt_view(),
                 "current_window": s.active,
                 "windows": windows,
+                "floats": crate::float::test_state(),
             })
         })
         .unwrap_or(Value::Null)

@@ -35,6 +35,9 @@ pub struct State {
     /// The hints on screen in hint mode.
     #[serde(default)]
     pub hints: Vec<Hint>,
+    /// `rt.ui.float`s open: id, source, title, text and placed.
+    #[serde(default)]
+    pub floats: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

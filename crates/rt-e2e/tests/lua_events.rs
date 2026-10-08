@@ -151,3 +151,49 @@ rt.statusbar.widget("page", function() return "on " .. rt.url():match("[^/]*$") 
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn floats_show_text_take_their_keys_and_close() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.command("show-float", function()
+  local f = rt.ui.float({
+    title = "Hello",
+    lines = { "first line", { { "second ", "muted" }, { "line", "accent" } } },
+    keys = {
+      u = function(self) self:update({ lines = { "updated" } }) end,
+      x = function(self) rt.notify("x pressed"); self:close() end,
+    },
+    on_close = function() rt.notify("closed") end,
+  })
+end)
+"#,
+        )
+        .start("page.html");
+    b.run("show-float");
+    let s = b.wait_until("the float is placed", |s| {
+        s.floats.first().is_some_and(|f| f["placed"] == true)
+    });
+    assert_eq!(s.floats[0]["title"], "Hello");
+    assert_eq!(s.floats[0]["text"], "first line\nsecond line");
+    assert_eq!(s.floats[0]["source"], "");
+
+    b.keys("u");
+    b.wait_until("u updated it", |s| {
+        s.floats.first().is_some_and(|f| f["text"] == "updated")
+    });
+    b.keys("x");
+    b.wait_until("x ran and closed it", |s| {
+        s.floats.is_empty() && s.message() == Some("x pressed")
+    });
+
+    // Escape closes one and runs its on_close.
+    b.run("show-float");
+    b.wait_until("shown again", |s| s.floats.len() == 1);
+    b.keys("<Escape>");
+    b.wait_until("Escape closed it", |s| {
+        s.floats.is_empty() && s.message() == Some("closed")
+    });
+}
