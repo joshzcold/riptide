@@ -429,6 +429,21 @@ function rt.page.key(keys) end
 ---@param login rt.Login
 function rt.page.fill_login(login) end
 
+---Evaluate a JavaScript expression in the page and get its value, as JSON
+---turns it into Lua: `fn(value)`, or `fn(nil, why)`. It runs in the page's
+---own world, so the page can see it and change what it returns.
+---@param code string An expression; wrap statements in `(() => {{ … }})()`.
+---@param fn fun(value: any, err: string|nil)
+function rt.page.eval(code, fn) end
+
+---Add a stylesheet to the page, until it next loads.
+---@param css string
+function rt.page.css(css) end
+
+---The page's selected text: `fn(text)`, or `fn(nil, why)`.
+---@param fn fun(text: string|nil, err: string|nil)
+function rt.page.selection(fn) end
+
 rt.json = {{}}
 
 ---Parse JSON; `null` becomes nil.

@@ -303,11 +303,30 @@ function ui_for(source)
 end
 
 -- rt.page: the current tab's page, as `source` (nil for config.lua).
+-- The browser answers with JSON, {"ok": value} or {"error": why}; fn gets
+-- (value) or (nil, why).
+local function page_result(fn)
+  return function(json)
+    local ok, answer = pcall(rt.json.decode, json or "")
+    if not ok or type(answer) ~= "table" then return fn(nil, "the page's answer wasn't JSON") end
+    if answer.error ~= nil then return fn(nil, tostring(answer.error)) end
+    return fn(answer.ok)
+  end
+end
 function page_for(source)
   return {
     type = function(text) rt._page(source, "type", text) end,
     key = function(keys) rt._page(source, "key", keys) end,
     fill_login = function(login) rt._page(source, "fill_login", login) end,
+    eval = function(code, fn)
+      if type(code) ~= "string" or type(fn) ~= "function" then error("rt.page.eval takes code and a function", 2) end
+      rt._page(source, "eval", { code = code, fn = page_result(fn) })
+    end,
+    css = function(css) rt._page(source, "css", css) end,
+    selection = function(fn)
+      if type(fn) ~= "function" then error("rt.page.selection takes a function", 2) end
+      rt._page(source, "selection", { fn = page_result(fn) })
+    end,
   }
 end
 rt.ui = ui_for(nil)
@@ -698,6 +717,13 @@ pub enum PageRequest {
         password: Option<String>,
         submit: bool,
     },
+    /// Evaluate a JavaScript expression in the page; its JSON value goes to
+    /// callback `callback` (in `rt._answers`).
+    Eval { code: String, callback: u32 },
+    /// Add a stylesheet to the page.
+    Css(String),
+    /// The selected text goes to callback `callback`.
+    Selection { callback: u32 },
 }
 
 // Debug output never shows what's typed or filled.
@@ -709,6 +735,9 @@ impl std::fmt::Debug for PageRequest {
             Self::FillLogin { host, submit, .. } => {
                 write!(f, "FillLogin {{ host: {host:?}, submit: {submit}, .. }}")
             }
+            Self::Eval { callback, .. } => write!(f, "Eval {{ callback: {callback}, .. }}"),
+            Self::Css(_) => f.write_str("Css(..)"),
+            Self::Selection { callback } => write!(f, "Selection {{ callback: {callback} }}"),
         }
     }
 }
@@ -2172,7 +2201,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "_page",
         lua.create_function(
-            move |_, (plugin, kind, arg): (Option<String>, String, Value)| {
+            move |lua, (plugin, kind, arg): (Option<String>, String, Value)| {
                 // Errors never echo the argument: it may be a password.
                 let text = |what: &str| match &arg {
                     Value::String(t) => Ok(t.to_str()?.to_string()),
@@ -2203,6 +2232,28 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                             username: login.get("username")?,
                             password: login.get("password")?,
                             submit: login.get::<Option<bool>>("submit")?.unwrap_or(false),
+                        }
+                    }
+                    "css" => PageRequest::Css(text("a stylesheet")?),
+                    "eval" | "selection" => {
+                        let Value::Table(opts) = &arg else {
+                            return Err(mlua::Error::runtime("rt.page: bad arguments"));
+                        };
+                        let callback: mlua::Function = opts.get("fn")?;
+                        let id = {
+                            let mut state = s.borrow_mut();
+                            state.next_callback += 1;
+                            state.next_callback - 1
+                        };
+                        let api: mlua::Table = lua.globals().get("rt")?;
+                        api.get::<mlua::Table>("_answers")?.set(id, callback)?;
+                        if kind == "eval" {
+                            PageRequest::Eval {
+                                code: opts.get("code")?,
+                                callback: id,
+                            }
+                        } else {
+                            PageRequest::Selection { callback: id }
                         }
                     }
                     _ => return Err(mlua::Error::runtime("rt.page: unknown action")),

@@ -237,3 +237,43 @@ end)
         s.panels[0]["focused"] == false
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn page_eval_css_and_selection_answer_lua() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+local function show(prefix) return function(v, err) rt.notify(prefix .. " " .. tostring(err or rt.json.encode(v))) end end
+rt.command("t-eval", function() rt.page.eval("({ title: document.title, n: 1 + 1 })", show("eval")) end)
+rt.command("t-bad", function() rt.page.eval("nope(", show("bad")) end)
+rt.command("t-css", function() rt.page.css("body { color: rgb(1, 2, 3) }") end)
+rt.command("t-color", function() rt.page.eval("getComputedStyle(document.body).color", show("color")) end)
+rt.command("t-select", function()
+  rt.page.eval("(getSelection().selectAllChildren(document.querySelector('h1') || document.body), 0)", function()
+    rt.page.selection(show("selection"))
+  end)
+end)
+"#,
+        )
+        .start("page.html");
+    b.run("t-eval");
+    b.wait_until("eval answered", |s| {
+        s.message() == Some(r#"eval {"n":2,"title":"ready"}"#)
+    });
+    b.run("t-bad");
+    b.wait_until("a syntax error comes back as an error", |s| {
+        s.message()
+            .is_some_and(|m| m.starts_with("bad ") && !m.contains("null"))
+    });
+    b.run("t-css");
+    b.run("t-color");
+    b.wait_until("the stylesheet applied", |s| {
+        s.message() == Some(r#"color "rgb(1, 2, 3)""#)
+    });
+    b.run("t-select");
+    b.wait_until("the selection came back", |s| {
+        s.message()
+            .is_some_and(|m| m.starts_with("selection \"") && m.len() > 12)
+    });
+}

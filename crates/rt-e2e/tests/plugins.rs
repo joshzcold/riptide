@@ -372,3 +372,29 @@ rt.send("hello", JSON.stringify({ n: 1 }));"#,
     b.run("close-notes-panel");
     b.wait_until("closed", |s| s.panels.is_empty());
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn page_eval_is_refused_on_sites_outside_the_pages_permission() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/peek/plugin/peek.lua",
+            r#"rt.command("peek", function()
+  rt.page.eval("document.title", function(v, err) rt.notify("peek " .. tostring(err or v)) end)
+end)"#,
+        )
+        .file(
+            "scratch-plugins/peek/riptide-plugin.toml",
+            "[permissions]\npages = [\"*.example.org\"]\n",
+        )
+        .lua(r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/peek" })"#)
+        .start("page.html");
+    b.wait_until("peek asks", |s| s.mode == "yesno");
+    b.keys("y");
+    b.wait_mode("normal");
+    b.run("peek");
+    b.wait_until("the callback heard why", |s| {
+        s.message()
+            .is_some_and(|m| m.starts_with("peek may not act on 127.0.0.1"))
+    });
+}

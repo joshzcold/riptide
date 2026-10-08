@@ -56,9 +56,39 @@ fn allowed(url: &str, pages: Option<&[String]>) -> bool {
     !own && pages.is_none_or(|pages| pages.iter().any(|p| rt_core::url::pattern_matches(p, url)))
 }
 
+/// The most of a page's answer handed to Lua.
+const MAX_ANSWER: usize = 1 << 20;
+
+/// Hand an `eval` or `selection` answer to Lua callback `callback`, as JSON
+/// `{"ok": value}` or `{"error": why}`.
+fn answer(plugin: Option<&str>, callback: u32, result: Result<String, String>) {
+    let envelope = match result {
+        Ok(text) if text.len() > MAX_ANSWER => {
+            serde_json::json!({ "error": "the answer is too big" })
+        }
+        // The page wrote this JSON, so it's parsed rather than trusted.
+        Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(value) => serde_json::json!({ "ok": value }),
+            Err(_) => serde_json::json!({ "error": "the page's answer wasn't JSON" }),
+        },
+        Err(why) => serde_json::json!({ "error": why }),
+    };
+    let context = crate::lua::current_context();
+    let result = rt_config::lua::answered(callback, Some(envelope.to_string()), &context);
+    crate::lua::carry_out_for(plugin.unwrap_or("config.lua"), result);
+}
+
 pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRequest) {
     let who = plugin.map_or_else(|| "config.lua".to_string(), |p| format!("Plugin {p}"));
-    let refuse = |why: String| shell::show_message(Level::Error, format!("{who}: {why}"));
+    // A refused eval or selection answers its callback with why, instead of a message.
+    let callback = match &request {
+        PageRequest::Eval { callback, .. } | PageRequest::Selection { callback } => Some(*callback),
+        _ => None,
+    };
+    let refuse = |why: String| match callback {
+        Some(callback) => answer(plugin, callback, Err(why)),
+        None => shell::show_message(Level::Error, format!("{who}: {why}")),
+    };
     let Some((url, browser)) = shell::with(|s| {
         let tab = s.tabs.current()?;
         Some((tab.url.clone(), tab.browser()?))
@@ -93,8 +123,25 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
             match request {
                 PageRequest::Type(text) => crate::actions::insert_text(&text),
                 PageRequest::Key(keys) => crate::actions::fake_keys(&keys, false),
-                PageRequest::FillLogin { .. } => {}
+                _ => {}
             }
+        }
+        PageRequest::Css(css) => crate::adblock::inject_css(&browser, &css),
+        PageRequest::Eval { code, callback } => {
+            // An expression, its value as JSON; it runs in the page's own world.
+            let code = format!("JSON.stringify(({code}\n) ?? null)");
+            let plugin = plugin.map(str::to_string);
+            crate::eval::eval(&browser, &code, move |result| {
+                answer(plugin.as_deref(), callback, result)
+            });
+        }
+        PageRequest::Selection { callback } => {
+            let plugin = plugin.map(str::to_string);
+            crate::eval::eval(
+                &browser,
+                "JSON.stringify(String(getSelection()))",
+                move |result| answer(plugin.as_deref(), callback, result),
+            );
         }
         PageRequest::FillLogin {
             host,
