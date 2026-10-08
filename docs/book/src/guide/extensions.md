@@ -46,25 +46,41 @@ extensions.load = ["~/code/my-extension"]
 
 ## What works
 
-Content scripts, background workers and blocking rules work in every tab. So do extensions' options pages, their messages to the pages they run in, and what they show inside a page, such as an autofill menu on a login field.
+Blocking, and changes an extension makes to every page (such as dark mode or hiding page elements), work in every tab. So do extensions' options pages and settings.
+
+What doesn't work is anything that needs the extension to know which site you're on. riptide's tabs aren't Chrome's, so to an extension you're never "on" a site. See the first row of [Limits](#limits), and [Password managers](#password-managers).
 
 ## Limits
 
 | Limit | What to do instead |
 |---|---|
-| **Popup buttons for "this site" don't reach the page.** Blocking and anything an extension does inside pages, such as a password manager's menu in a login field, work as in Chrome. But a popup opens as a tab (**Popup** or `:extension-open`), and extensions can't see riptide's tabs as "the current tab", so buttons that act on the site you're on don't reach it: uBlock Origin Lite's per-site switch, filtering level and element picker, or a password manager's "fill this page". | For logins, the [passwords plugin](passwords.md) fills them with a key. Settings that don't depend on the current page, such as filter lists and the default blocking level, work from the popup or options. |
+| **Extensions can't tell which site you're on.** Anything that depends on it doesn't work: uBlock Origin Lite's per-site switch, filtering level and element picker, and password managers' login suggestions. Popups open as a tab (**Popup** or `:extension-open`). | Settings that don't depend on the site, such as filter lists and the default blocking level, work from the popup or options. For logins, see [Password managers](#password-managers). |
 | **Only Manifest V3.** Chromium no longer runs Manifest V2 extensions, such as the original uBlock Origin, and riptide refuses to install them. Firefox add-ons don't run either. | uBlock Origin Lite, or riptide's own ad blocker (`content.blocking`). |
 | **Changes need a restart.** Extensions load when riptide starts. | Accept the "Restart now?" question, or use **Restart now** on the Extensions tab. |
 | **No automatic updates.** | Press **Check for updates** on the Extensions tab, or run `:extension-update`. |
 | **Not in private windows.** | Use a normal window. |
 | **Chrome's own Remove only hides an extension until the next start**, because riptide loads it from its folder each time. | **Remove** on the Extensions tab, or `:extension-remove`. |
 | **Desktop apps are linked at startup.** riptide only finds a password manager's desktop app if the app set itself up for another Chromium browser first. | Turn on the app's browser integration for Chromium or Chrome, then restart riptide. |
-| **Not tested yet:** extensions' keyboard shortcuts, passkeys, and autofill against a real vault. | Please report what you find. |
+| **Not tested yet:** extensions' keyboard shortcuts and passkeys. | Please report what you find. |
 
 ### What an install checks
 
 riptide downloads extensions over HTTPS from Google, and checks that the file's key gives the extension id you asked for. It doesn't check the Web Store's signature on the file. A `.crx` file you install from disk has no id to check, so only install files you trust. Either way, you see what the extension asks for before anything is installed.
 
-## Password managers' desktop apps
+## Password managers
+
+Password manager extensions install, unlock and sync, but they can't fill logins. To suggest a login, a password manager asks which site you're on, and in riptide the answer is always "none". So its menu in a login field says "No items to show", and its "fill this page" button does nothing. Your vault is fine; the extension just never learns which site's logins to offer.
+
+To fill logins, use the [passwords plugin](passwords.md) instead. It reads the same vault through your password manager's command line tool, finds the logins for the site you're on, and fills them with `<Space>pp`:
+
+| Password manager | Use the passwords plugin with |
+|---|---|
+| Bitwarden | `rbw` or the Bitwarden CLI (`bw`) |
+| KeePassXC | `keepassxc-cli` |
+| pass, gopass | `pass` or `gopass` |
+
+1Password and Proton Pass have no backend in the passwords plugin yet.
+
+### Desktop apps
 
 KeePassXC-Browser and 1Password talk to their desktop app through a "native messaging host" that the app installs for other browsers. When riptide starts, it links the hosts it finds for Chromium, Chrome, Brave, Edge and Vivaldi into its data folder. It only links a host that allows one of your installed extensions. In KeePassXC, turn on browser integration for Chromium.

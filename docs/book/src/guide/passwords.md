@@ -1,6 +1,6 @@
 # Passwords
 
-The `passwords` plugin ships with riptide and fills logins from your password manager's command line tool. Turn it on in `config.lua`:
+The `passwords` plugin ships with riptide and fills logins from your password manager's command line tool. Password manager [extensions](extensions.md#password-managers) can't fill logins in riptide, so this is the way to use Bitwarden, KeePassXC or pass here. Turn it on in `config.lua`:
 
 ```lua
 rt.pack.add({ builtin = "passwords", opts = { backend = "pass" } })

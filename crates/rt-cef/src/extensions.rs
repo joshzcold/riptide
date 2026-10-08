@@ -540,7 +540,7 @@ fn offer(bytes: &[u8], expected: Option<&str>) {
                     package.crx.id,
                     // What it shows in its popup can't reach the page you're on.
                     popup = if about.popup.is_some() {
-                        "\nBlocking and anything it does inside pages work. Its popup opens as a tab, so popup buttons for \"this site\" (per-site switches, \"fill this page\") don't reach the page you're on."
+                        "\nBlocking works. Anything that needs to know which site you're on doesn't, such as per-site switches or a password manager's login suggestions. Its popup opens as a tab."
                     } else {
                         ""
                     },

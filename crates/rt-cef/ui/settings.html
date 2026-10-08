@@ -977,7 +977,8 @@ const EXTENSION_STATES = {
 };
 const extensionAction = (id, action) => rt.send("extension", JSON.stringify({ id, action }));
 const EXTENSION_LIMITS = [
-  "Blocking and anything an extension does inside pages work as in Chrome. Popups open as a tab, so their buttons for \"this site\" (per-site switches, \"fill this page\") don't reach the page you were on. For logins, the passwords plugin fills them with a key.",
+  "Blocking works, but extensions can't tell which site you're on, so anything that depends on it doesn't: per-site switches, and password managers' login suggestions. Popups open as a tab.",
+  "Password managers install and unlock but can't fill logins. Use the passwords plugin instead: it fills from Bitwarden (rbw or bw), KeePassXC or pass with a key.",
   "Only Manifest V3 extensions run. The original uBlock Origin and Firefox add-ons don't.",
   "Changes load after a restart.",
   "Updates aren't automatic: use Check for updates, or :extension-update.",

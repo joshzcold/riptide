@@ -97,7 +97,7 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     // What works differently from Chrome is on the tab, open the first time.
     b.wait_eval(
         "`${document.querySelector('details.limits').open}|${document.querySelectorAll('.limits li').length}`",
-        "true|6",
+        "true|7",
     );
     let id = b.eval("page.extensions.items[0].id");
     b.eval(&format!(
@@ -186,7 +186,7 @@ fn extension_install_asks_first_and_loads_after_restart() {
         "Packed probe 2.0",
         "read and change everything on every site you visit",
         "talk to programs on your computer",
-        "Blocking and anything it does inside pages work. Its popup opens as a tab",
+        "Anything that needs to know which site you're on doesn't",
     ] {
         assert!(message.contains(part), "{part:?} in {message}");
     }
