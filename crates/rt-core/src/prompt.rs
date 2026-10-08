@@ -16,6 +16,25 @@ pub enum PromptKind {
     YesNo { default: bool, remember: Remember },
     /// Information only; any accept dismisses it.
     Alert,
+    /// Pick one of `items` with its key (see [`select_key`]); the answer is
+    /// the item's index as text. Return picks the first.
+    Select { items: Vec<String> },
+}
+
+/// The keys that pick a [`PromptKind::Select`] item, in order.
+const SELECT_KEYS: &str = "123456789abcdefghijklmnopqrstuvwxyz";
+
+/// The most items a [`PromptKind::Select`] can offer.
+pub const SELECT_MAX: usize = SELECT_KEYS.len();
+
+/// The key that picks item `index` of a [`PromptKind::Select`].
+pub fn select_key(index: usize) -> Option<char> {
+    SELECT_KEYS.chars().nth(index)
+}
+
+/// The item a key picks, if `key` is one of the first `count` item keys.
+pub fn select_index(key: char, count: usize) -> Option<usize> {
+    SELECT_KEYS.find(key).filter(|&i| i < count.min(SELECT_MAX))
 }
 
 /// Whether and where a yes/no answer is kept, which decides the key hint.
@@ -179,6 +198,18 @@ impl Prompt {
                 }
             }
             PromptKind::Alert => vec![option("<Return>", "Return or Escape", "close")],
+            PromptKind::Select { ref items } => {
+                let mut options: Vec<PromptOption> = items
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, item)| {
+                        let key = select_key(i)?.to_string();
+                        Some(option(&key, &key, item))
+                    })
+                    .collect();
+                options.push(option("<Escape>", "Escape", "cancel"));
+                options
+            }
         };
         if self.download {
             options.insert(

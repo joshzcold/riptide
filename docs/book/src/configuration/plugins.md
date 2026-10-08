@@ -65,7 +65,7 @@ Updating is a review, never automatic:
 
 ## Permissions
 
-Plugins run in a sandbox. Without asking, a plugin can react to events, bind keys to its functions, add commands, use timers, show messages, open URLs and keep its own data (`rt.store`, which other plugins can't read). Anything more is a permission it lists in its `riptide-plugin.toml`, and the first time it loads, riptide shows them and asks you:
+Plugins run in a sandbox. Without asking, a plugin can react to events, bind keys to its functions, add commands, use timers, show messages, ask you questions (`rt.ui`, which names the plugin asking), open URLs and keep its own data (`rt.store`, which other plugins can't read). Anything more is a permission it lists in its `riptide-plugin.toml`, and the first time it loads, riptide shows them and asks you:
 
 | Permission | Lets it |
 |---|---|
@@ -76,7 +76,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 | `clipboard` | read and write the clipboard |
 | `keys` | see every key you press |
 | `network = ["host", …]` | connect to these hosts |
-| `pages = ["*.example.com", …]` | read and change pages on these sites |
+| `pages = ["*.example.com", …]` | type and fill logins into pages on these sites (`rt.page`); `["*"]` is every site |
 | `frames = ["host", …]` | show these sites inside its own pages |
 
 Your answer is kept in `rt-pack-lock.json` in the config folder, so it's asked once; a new version that asks for more asks again, for the new permissions only. Saying no leaves the plugin unloaded. To be asked again, press **Revoke** on `:plugins`, or delete its entry in `rt-pack-lock.json`.

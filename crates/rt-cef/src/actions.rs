@@ -21,13 +21,7 @@ pub fn run_command(command: &Command) -> bool {
             );
         }
         Command::FakeKey { keys, global } => fake_keys(keys, *global),
-        Command::InsertText { text } => {
-            let code = format!(
-                "document.execCommand('insertText', false, {})",
-                serde_json::to_string(text).unwrap_or_default()
-            );
-            focused_js(&code);
-        }
+        Command::InsertText { text } => insert_text(text),
         Command::ClickElement { filter, value } => click(*filter, value),
         Command::ScrollToAnchor { name } => {
             let name = serde_json::to_string(name).unwrap_or_default();
@@ -57,7 +51,16 @@ pub fn run_command(command: &Command) -> bool {
     true
 }
 
-fn fake_keys(keys: &str, global: bool) {
+/// Type `text` into the focused field of the current tab.
+pub fn insert_text(text: &str) {
+    let code = format!(
+        "document.execCommand('insertText', false, {})",
+        serde_json::to_string(text).unwrap_or_default()
+    );
+    focused_js(&code);
+}
+
+pub fn fake_keys(keys: &str, global: bool) {
     let keys = match Key::parse_sequence(keys) {
         Ok(keys) => keys,
         Err(e) => return shell::show_message(Level::Error, e.to_string()),

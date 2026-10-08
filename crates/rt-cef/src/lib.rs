@@ -24,6 +24,7 @@ mod lua;
 mod marks;
 mod navigate;
 mod notifications;
+mod page;
 mod permissions;
 mod plugins;
 mod privacy;

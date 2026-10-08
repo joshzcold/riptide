@@ -204,6 +204,9 @@
       }
       parts.push(options);
       if (p.always) parts.push(div("prompt-always", p.always));
+    } else if (p.kind === "select") {
+      // A docked picker lists its items a row each.
+      for (const option of p.options) parts.push(div("prompt-hint", `${option.keys}  ${option.label}`));
     } else {
       parts.push(div("prompt-hint", p.hint));
     }

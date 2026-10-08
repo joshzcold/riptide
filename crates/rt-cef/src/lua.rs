@@ -133,6 +133,41 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                     shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));
                 }
             }
+            Action::Ask {
+                id,
+                source,
+                prompt,
+                ask,
+            } => {
+                let kind = match ask {
+                    lua::Ask::Select(items) => rt_core::prompt::PromptKind::Select { items },
+                    lua::Ask::Input { default, secret } => rt_core::prompt::PromptKind::Text {
+                        default,
+                        masked: secret,
+                        path: false,
+                    },
+                };
+                crate::prompts::ask(
+                    None,
+                    crate::prompts::Scope::Other,
+                    rt_core::prompt::Topic::Confirm,
+                    source,
+                    prompt,
+                    kind,
+                    move |answer| {
+                        let text = match answer {
+                            rt_core::prompt::PromptAnswer::Text(text) => Some(text),
+                            _ => None,
+                        };
+                        carry_out(lua::answered(id, text, &context(None)));
+                    },
+                );
+            }
+            Action::Page {
+                plugin,
+                pages,
+                request,
+            } => crate::page::carry_out(plugin.as_deref(), pages.as_deref(), request),
             Action::Open { url, target } => {
                 let target = match target {
                     lua::OpenTarget::Current => rt_core::command::OpenTarget::Current,

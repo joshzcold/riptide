@@ -602,6 +602,7 @@ impl Engine {
             PromptKind::Text { .. } => ("text", self.prompt_editor.text().to_string()),
             PromptKind::YesNo { .. } => ("yesno", String::new()),
             PromptKind::Alert => ("alert", String::new()),
+            PromptKind::Select { .. } => ("select", String::new()),
         };
         Some(PromptView {
             title: prompt.title.clone(),
@@ -682,6 +683,11 @@ impl Engine {
                 false => PromptAnswer::No { remember: save },
             },
             PromptKind::Alert => PromptAnswer::Ok,
+            PromptKind::Select { ref items } => match value {
+                Some(false) => PromptAnswer::Cancelled,
+                _ if items.is_empty() => PromptAnswer::Cancelled,
+                _ => PromptAnswer::Text("0".into()),
+            },
         };
         self.answer_prompt(answer, effects);
     }
@@ -1191,6 +1197,16 @@ impl Engine {
 
     /// Prompts swallow every key so nothing reaches the page meanwhile.
     fn handle_prompt(&mut self, key: Key) -> KeyOutcome {
+        // Under a picker, typed keys only pick items, so y and n can't answer it.
+        if let Some(PromptKind::Select { items }) = self.active_prompt().map(|p| &p.kind)
+            && let Some(c) = key.text()
+        {
+            let mut effects = Vec::new();
+            if let Some(index) = crate::prompt::select_index(c, items.len()) {
+                self.answer_prompt(PromptAnswer::Text(index.to_string()), &mut effects);
+            }
+            return consumed(effects);
+        }
         if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
             let cmd = cmd.to_string();
             return consumed(self.execute_str(&cmd, None));
@@ -3606,6 +3622,40 @@ mod tests {
         assert_eq!(
             answers(&press(&mut e, "<Return>")),
             vec![(1, PromptAnswer::Ok)]
+        );
+        assert_eq!(e.mode(), Mode::Normal);
+    }
+
+    #[test]
+    fn a_picker_takes_an_items_key_and_ignores_other_letters() {
+        let mut e = engine();
+        let items = vec!["alice".to_string(), "bob".to_string()];
+        e.push_prompt(prompt(
+            1,
+            PromptKind::Select {
+                items: items.clone(),
+            },
+        ));
+        let view = e.prompt_view().unwrap();
+        assert_eq!(view.kind, "select");
+        let keys: Vec<&str> = view.options.iter().map(|o| o.key.as_str()).collect();
+        assert_eq!(keys, ["1", "2", "<Escape>"]);
+        assert!(
+            answers(&press(&mut e, "y")).is_empty(),
+            "y doesn't answer a picker"
+        );
+        assert!(
+            answers(&press(&mut e, "3")).is_empty(),
+            "there's no third item"
+        );
+        assert_eq!(
+            answers(&press(&mut e, "2")),
+            vec![(1, PromptAnswer::Text("1".into()))]
+        );
+        e.push_prompt(prompt(2, PromptKind::Select { items }));
+        assert_eq!(
+            answers(&press(&mut e, "<Return>")),
+            vec![(2, PromptAnswer::Text("0".into()))]
         );
         assert_eq!(e.mode(), Mode::Normal);
     }

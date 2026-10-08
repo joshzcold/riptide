@@ -1648,6 +1648,8 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     match floating_prompt_box(s) {
         // One button per option instead of the one-line hint.
         Some(_) => text_rows + prompt.options.len(),
+        // A docked picker lists its items a row each.
+        None if prompt.kind == "select" => text_rows + prompt.options.len(),
         None => text_rows + 1,
     }
 }

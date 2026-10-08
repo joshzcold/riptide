@@ -306,6 +306,67 @@ function rt.message(text, level) end
 ---@param callback? fun(result: rt.SpawnResult) called when it exits
 function rt.spawn(argv, opts, callback) end
 
+rt.ui = {{}}
+
+---@class rt.SelectOpts
+---@field prompt? string the question shown above the items
+---@field format? fun(item: any): string how to show an item; tostring by default
+
+---Pick one of `items` in the prompt area, like `vim.ui.select`: each item has
+---a key (1-9, then a-z; at most 35 items), and Return picks the first.
+---`on_choice` gets the item and its index, or nil when cancelled.
+---@param items any[]
+---@param opts? rt.SelectOpts
+---@param on_choice fun(item: any|nil, index: integer|nil)
+function rt.ui.select(items, opts, on_choice) end
+
+---@class rt.InputOpts
+---@field prompt? string the question
+---@field default? string text to start with
+---@field secret? boolean mask what's typed, for passwords
+
+---Ask for text in the prompt area, like `vim.ui.input`. `on_confirm` gets
+---the text, or nil when cancelled.
+---@param opts? rt.InputOpts
+---@param on_confirm fun(text: string|nil)
+function rt.ui.input(opts, on_confirm) end
+
+---The current tab's page. Plugins need the `pages` permission for the site,
+---checked when the action runs; nothing acts on riptide's own pages, and what's
+---typed or filled is never logged or kept in history.
+rt.page = {{}}
+
+---Type text into the focused field, as `:insert-text` does.
+---@param text string
+function rt.page.type(text) end
+
+---Press keys in the page, as `:fake-key` does, e.g. `"<Tab>"`.
+---@param keys string
+function rt.page.key(keys) end
+
+---@class rt.Login
+---@field host string the site the login is for; nothing is filled if the tab has moved on to another
+---@field username? string
+---@field password? string
+---@field submit? boolean submit the form once it's filled
+
+---Fill the page's login form: the focused field's form, or the first with a
+---password field.
+---@param login rt.Login
+function rt.page.fill_login(login) end
+
+rt.json = {{}}
+
+---Parse JSON; `null` becomes nil.
+---@param text string
+---@return any
+function rt.json.decode(text) end
+
+---Write a value as JSON.
+---@param value any
+---@return string
+function rt.json.encode(value) end
+
 "#
     );
     write_class(&mut out, "", &root);

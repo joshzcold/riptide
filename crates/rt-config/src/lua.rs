@@ -205,6 +205,8 @@ local SAFE = {
   "rawset", "select", "setmetatable", "getmetatable", "tonumber", "tostring", "type", "xpcall",
 }
 local GATED = { spawn = "spawn", run = "commands", set = "settings", get = "settings" }
+-- Defined further down, with rt.ui and rt.page.
+local ui_for, page_for
 local function copy(t)
   local out = {}
   for k, v in pairs(t) do out[k] = v end
@@ -247,6 +249,16 @@ function rt._sandbox(name, permissions, require_fn)
     api.bind = function(keys, rhs, mode) only_functions(rhs) return bind(keys, rhs, mode) end
     api.keymap.set = function(mode, keys, rhs, opts) only_functions(rhs) return set(mode, keys, rhs, opts) end
   end
+  -- Questions name the plugin asking. rt.page acts as this plugin, only with
+  -- the pages permission, and the browser checks the site again when it runs.
+  local own = ui_for(name)
+  api.ui = copy(rt.ui)
+  api.ui.select, api.ui.input = own.select, own.input
+  if permissions.pages and #permissions.pages > 0 then
+    api.page = page_for(name)
+  else
+    api.page = nil
+  end
   -- Each plugin's stores are its own.
   api.store = function(store) return rt.store(name .. "--" .. (store or "data")) end
   if permissions.settings then env.c = c end
@@ -257,6 +269,41 @@ end
 
 -- Nobody changes the string methods for everyone else.
 getmetatable("").__metatable = false
+
+-- rt.ui: pickers and questions in the prompt area, as vim.ui has them.
+function ui_for(source)
+  local ui = {}
+  function ui.select(items, opts, on_choice)
+    if type(opts) == "function" then opts, on_choice = {}, opts end
+    opts = opts or {}
+    if #items == 0 then return on_choice(nil, nil) end
+    local labels = {}
+    for i, item in ipairs(items) do
+      labels[i] = tostring(opts.format and opts.format(item) or item)
+    end
+    rt._ask(source, "select", opts.prompt or "Pick one", labels, function(answer)
+      local i = tonumber(answer)
+      if i then on_choice(items[i + 1], i + 1) else on_choice(nil, nil) end
+    end)
+  end
+  function ui.input(opts, on_confirm)
+    if type(opts) == "function" then opts, on_confirm = {}, opts end
+    opts = opts or {}
+    rt._ask(source, "input", opts.prompt or "Answer", { default = opts.default, secret = opts.secret }, on_confirm)
+  end
+  return ui
+end
+
+-- rt.page: the current tab's page, as `source` (nil for config.lua).
+function page_for(source)
+  return {
+    type = function(text) rt._page(source, "type", text) end,
+    key = function(keys) rt._page(source, "key", keys) end,
+    fill_login = function(login) rt._page(source, "fill_login", login) end,
+  }
+end
+rt.ui = ui_for(nil)
+rt.page = page_for(nil)
 
 -- rt.store(name): data kept between runs, saved on every change.
 local stores = {}
@@ -374,6 +421,8 @@ struct LoadedPlugin {
     dir: std::path::PathBuf,
     /// Its globals: a sandbox, or the shared ones when trusted.
     env: mlua::Table,
+    /// The sites `rt.page` may act on; `None` when trusted.
+    pages: Option<Vec<String>>,
 }
 
 /// What callbacks see of the browser.
@@ -419,6 +468,61 @@ pub enum Action {
     },
     /// `rt.unbind` after loading, never saved.
     Unbind { mode: Mode, keys: String },
+    /// `rt.ui.select`/`rt.ui.input`: ask in the prompt area; [`answered`]
+    /// hands the answer to callback `id`. `source` names who asks.
+    Ask {
+        id: u32,
+        source: String,
+        prompt: String,
+        ask: Ask,
+    },
+    /// `rt.page.*` on the current tab, never through a command line, so the
+    /// text stays out of history, `.` and messages. `pages` is where the
+    /// plugin may act (`None`: config.lua or a trusted plugin), checked
+    /// against the tab when it runs.
+    Page {
+        plugin: Option<String>,
+        pages: Option<Vec<String>>,
+        request: PageRequest,
+    },
+}
+
+/// What `rt.ui` asks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Ask {
+    /// Pick one of these labels.
+    Select(Vec<String>),
+    /// Type an answer; `secret` masks it.
+    Input { default: String, secret: bool },
+}
+
+/// What `rt.page` does to the current page.
+#[derive(Clone, PartialEq, Eq)]
+pub enum PageRequest {
+    /// Type text into the focused field.
+    Type(String),
+    /// Press keys, as `:fake-key` does.
+    Key(String),
+    /// Fill the page's login form, only while the tab is still on `host`.
+    FillLogin {
+        host: String,
+        username: Option<String>,
+        password: Option<String>,
+        submit: bool,
+    },
+}
+
+// Debug output never shows what's typed or filled.
+impl std::fmt::Debug for PageRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Type(_) => f.write_str("Type(..)"),
+            Self::Key(keys) => write!(f, "Key({keys:?})"),
+            Self::FillLogin { host, submit, .. } => {
+                write!(f, "FillLogin {{ host: {host:?}, submit: {submit}, .. }}")
+            }
+        }
+    }
 }
 
 /// Where `rt.open` opens a URL.
@@ -621,6 +725,7 @@ pub fn load_plugin(
             name: name.clone(),
             dir: dir.clone(),
             env: env.clone(),
+            pages: (!trusted).then(|| permissions.pages.clone()),
         });
         let mut scripts: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("plugin"))
             .map(|entries| entries.filter_map(|e| e.ok().map(|e| e.path())).collect())
@@ -712,6 +817,37 @@ pub fn spawned(
         if let Some(rt) = r.borrow().as_ref() {
             let api: mlua::Result<mlua::Table> = rt.lua.globals().get("rt");
             if let Ok(table) = api.and_then(|api| api.get::<mlua::Table>("_spawned")) {
+                let _ = table.set(key, mlua::Value::Nil);
+            }
+        }
+    });
+    actions
+}
+
+/// Call an `rt.ui` callback with the answer (`None` when cancelled), once.
+pub fn answered(id: u32, answer: Option<String>, context: &Context) -> Result<Vec<Action>, String> {
+    let prepared = RUNTIME.with(|r| -> Option<mlua::Result<mlua::MultiValue>> {
+        let runtime = r.borrow();
+        let rt = runtime.as_ref()?;
+        Some((|| {
+            let value = match &answer {
+                Some(text) => mlua::Value::String(rt.lua.create_string(text)?),
+                None => mlua::Value::Nil,
+            };
+            Ok(mlua::MultiValue::from_vec(vec![value]))
+        })())
+    });
+    let args = match prepared {
+        None => return Ok(Vec::new()),
+        Some(Err(e)) => return Err(e.to_string()),
+        Some(Ok(args)) => args,
+    };
+    let key = mlua::Value::Integer(id.into());
+    let actions = invoke("_answers", key.clone(), args, context);
+    RUNTIME.with(|r| {
+        if let Some(rt) = r.borrow().as_ref() {
+            let api: mlua::Result<mlua::Table> = rt.lua.globals().get("rt");
+            if let Ok(table) = api.and_then(|api| api.get::<mlua::Table>("_answers")) {
                 let _ = table.set(key, mlua::Value::Nil);
             }
         }
@@ -1083,6 +1219,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     }
     api.set("EVENTS", events)?;
     api.set("_spawned", lua.create_table()?)?;
+    api.set("_answers", lua.create_table()?)?;
 
     let s = state.clone();
     api.set(
@@ -1466,6 +1603,140 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             Ok(())
         })?,
     )?;
+    // rt.ui.select/input (the prelude) ask through here; who asks is shown.
+    let s = state.clone();
+    api.set(
+        "_ask",
+        lua.create_function(
+            move |lua,
+                  (source, kind, prompt, data, callback): (
+                Option<String>,
+                String,
+                String,
+                Value,
+                mlua::Function,
+            )| {
+                let ask = match (kind.as_str(), data) {
+                    ("select", Value::Table(items)) => {
+                        let items: Vec<String> = items
+                            .sequence_values::<String>()
+                            .collect::<mlua::Result<_>>()?;
+                        if items.len() > rt_core::prompt::SELECT_MAX {
+                            return Err(mlua::Error::runtime(format!(
+                                "rt.ui.select offers at most {} items",
+                                rt_core::prompt::SELECT_MAX
+                            )));
+                        }
+                        Ask::Select(items)
+                    }
+                    ("input", Value::Table(opts)) => Ask::Input {
+                        default: opts.get::<Option<String>>("default")?.unwrap_or_default(),
+                        secret: opts.get::<Option<bool>>("secret")?.unwrap_or(false),
+                    },
+                    _ => return Err(mlua::Error::runtime("rt.ui: bad arguments")),
+                };
+                let id = {
+                    let mut state = s.borrow_mut();
+                    state.next_callback += 1;
+                    state.next_callback - 1
+                };
+                let api: mlua::Table = lua.globals().get("rt")?;
+                api.get::<mlua::Table>("_answers")?.set(id, callback)?;
+                let source =
+                    source.map_or_else(|| "config.lua".to_string(), |p| format!("Plugin {p}"));
+                s.borrow_mut().actions.push(Action::Ask {
+                    id,
+                    source,
+                    prompt,
+                    ask,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    // rt.page (the prelude) acts through here, as config.lua (`nil`) or a
+    // plugin, whose `pages` permission goes with the request.
+    let s = state.clone();
+    api.set(
+        "_page",
+        lua.create_function(
+            move |_, (plugin, kind, arg): (Option<String>, String, Value)| {
+                // Errors never echo the argument: it may be a password.
+                let text = |what: &str| match &arg {
+                    Value::String(t) => Ok(t.to_str()?.to_string()),
+                    _ => Err(mlua::Error::runtime(format!("rt.page.{kind} takes {what}"))),
+                };
+                let request = match kind.as_str() {
+                    "type" => PageRequest::Type(text("text")?),
+                    "key" => {
+                        let keys = text("keys")?;
+                        Key::parse_sequence(&keys)
+                            .map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                        PageRequest::Key(keys)
+                    }
+                    "fill_login" => {
+                        let Value::Table(login) = &arg else {
+                            return Err(mlua::Error::runtime(
+                                "rt.page.fill_login takes { host, username, password, submit }",
+                            ));
+                        };
+                        let host: Option<String> = login.get("host")?;
+                        let Some(host) = host.filter(|h| !h.is_empty()) else {
+                            return Err(mlua::Error::runtime(
+                                "rt.page.fill_login needs the host the login is for",
+                            ));
+                        };
+                        PageRequest::FillLogin {
+                            host,
+                            username: login.get("username")?,
+                            password: login.get("password")?,
+                            submit: login.get::<Option<bool>>("submit")?.unwrap_or(false),
+                        }
+                    }
+                    _ => return Err(mlua::Error::runtime("rt.page: unknown action")),
+                };
+                let mut state = s.borrow_mut();
+                let pages = match &plugin {
+                    None => None,
+                    Some(name) => Some(
+                        state
+                            .plugins
+                            .iter()
+                            .find(|p| &p.name == name)
+                            .map_or_else(Vec::new, |p| {
+                                p.pages.clone().unwrap_or_else(|| vec!["*".into()])
+                            }),
+                    ),
+                };
+                state.actions.push(Action::Page {
+                    plugin,
+                    pages,
+                    request,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    let json = lua.create_table()?;
+    json.set(
+        "decode",
+        lua.create_function(|lua, text: String| {
+            let value: serde_json::Value = serde_json::from_str(&text)
+                .map_err(|e| mlua::Error::runtime(format!("rt.json.decode: {e}")))?;
+            let options = mlua::serde::SerializeOptions::new()
+                .serialize_none_to_null(false)
+                .serialize_unit_to_null(false);
+            lua.to_value_with(&value, options)
+        })?,
+    )?;
+    json.set(
+        "encode",
+        lua.create_function(|lua, value: Value| {
+            let value: serde_json::Value = lua.from_value(value)?;
+            serde_json::to_string(&value).map_err(mlua::Error::external)
+        })?,
+    )?;
+    api.set("json", json)?;
 
     // `hb` is the old name, kept so existing configs still load.
     lua.globals().set("rt", api.clone())?;
@@ -1648,6 +1919,8 @@ function M.setup(opts)
     if pcall(rt.keymap.set, "normal", "zz", "spawn evil") then table.insert(found, "bind-command") end
     if pcall(rt.bind, "zz", "spawn evil") then table.insert(found, "bind-command") end
     if pcall(rt.open, "javascript:alert(1)") then table.insert(found, "javascript") end
+    if rt.page then table.insert(found, "page") end
+    if rt._page or rt._ask or rt._answers then table.insert(found, "private") end
     rt.open("x;;spawn evil", "tab")
     rt.keymap.set = nil
     rt.store().set("k", "v")
@@ -1747,6 +2020,119 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
                 load_plugin("granted", &dir.join("plugins/granted"), &files, false, &ctx).unwrap()
             ),
             ["true true false"]
+        );
+        // rt.page acts as the plugin, with its pages; rt.ui names who asks.
+        let pages = crate::plugins::Permissions {
+            pages: vec!["*.example.com".into()],
+            ..Default::default()
+        };
+        write(
+            "plugins/filler/plugin/f.lua",
+            r#"
+rt.command("filler-fill", function()
+  rt.page.fill_login({ host = "example.com", username = "ann", password = "hunter2" })
+  if pcall(rt.page.fill_login, { password = "hunter2" }) then rt.notify("no host") end
+  local ok, err = pcall(rt.page.type, { "hunter2" })
+  rt.notify(tostring(ok) .. " " .. tostring(err):gsub("^.-: ", ""))
+end)
+rt.command("filler-ask", function()
+  rt.ui.input({ prompt = "Master password", secret = true }, function(answer) rt.notify("got " .. tostring(answer)) end)
+  rt.ui.select({ { n = "a" }, { n = "b" } }, { format = function(x) return x.n end }, function(item, i)
+    rt.notify("picked " .. tostring(item and item.n) .. " " .. tostring(i))
+  end)
+end)
+"#,
+        );
+        load_plugin("filler", &dir.join("plugins/filler"), &pages, false, &ctx).unwrap();
+        let fill = run_command("filler-fill", "", &ctx).unwrap();
+        let refused = texts(fill.clone()).join("");
+        assert!(
+            refused.starts_with("false rt.page.type takes text"),
+            "{refused}"
+        );
+        assert!(
+            !refused.contains("hunter2"),
+            "errors don't echo what was passed"
+        );
+        let [
+            Action::Page {
+                plugin,
+                pages,
+                request,
+            },
+            ..,
+        ] = fill.as_slice()
+        else {
+            panic!("{fill:?}");
+        };
+        assert_eq!(plugin.as_deref(), Some("filler"));
+        assert_eq!(pages.as_deref(), Some(&["*.example.com".to_string()][..]));
+        assert!(matches!(request, PageRequest::FillLogin { host, .. } if host == "example.com"));
+        assert!(
+            !format!("{fill:?}").contains("hunter2"),
+            "secrets stay out of debug output"
+        );
+        let asks = run_command("filler-ask", "", &ctx).unwrap();
+        let ids: Vec<u32> = asks
+            .iter()
+            .filter_map(|a| match a {
+                Action::Ask { id, source, .. } => {
+                    assert_eq!(source, "Plugin filler");
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(matches!(
+            &asks[0],
+            Action::Ask {
+                ask: Ask::Input { secret: true, .. },
+                ..
+            }
+        ));
+        assert!(
+            matches!(&asks[1], Action::Ask { ask: Ask::Select(items), .. } if items == &["a", "b"])
+        );
+        assert_eq!(
+            texts(answered(ids[0], Some("pw".into()), &ctx).unwrap()),
+            ["got pw"]
+        );
+        assert_eq!(
+            texts(answered(ids[1], Some("1".into()), &ctx).unwrap()),
+            ["picked b 2"]
+        );
+        assert!(
+            texts(answered(ids[1], Some("0".into()), &ctx).unwrap()).is_empty(),
+            "answered once"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn json_round_trips_and_config_pages_act_anywhere() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-json-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+local v = rt.json.decode('{"a": [1, "x", null, true], "b": {"c": null}}')
+assert(v.a[1] == 1 and v.a[2] == "x" and v.a[3] == nil and v.a[4] == true and v.b.c == nil)
+assert(rt.json.encode({ k = "v" }) == '{"k":"v"}')
+assert(not pcall(rt.json.decode, "{oops"))
+rt.command("cfg-type", function() rt.page.type("hello") end)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        assert_eq!(
+            run_command("cfg-type", "", &Context::default()).unwrap(),
+            [Action::Page {
+                plugin: None,
+                pages: None,
+                request: PageRequest::Type("hello".into())
+            }]
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

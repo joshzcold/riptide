@@ -126,6 +126,29 @@ rt.command("translate", function(text)
 end)
 ```
 
+`rt.json.decode(text)` and `rt.json.encode(value)` read and write JSON, such as a program's output; `null` becomes `nil`.
+
+## Questions and the page
+
+`rt.ui.select(items, opts, on_choice)` and `rt.ui.input(opts, on_confirm)` ask in the prompt area, like Neovim's `vim.ui`. A picker gives each item a key (`1`–`9`, then `a`–`z`); `secret = true` masks what's typed:
+
+```lua
+rt.ui.select({ "work", "home" }, { prompt = "Profile" }, function(choice)
+  if choice then rt.notify("Using " .. choice) end
+end)
+rt.ui.input({ prompt = "Passphrase", secret = true }, function(text) --[[ nil if cancelled ]] end)
+```
+
+`rt.page` acts on the current tab's page:
+
+| | |
+|---|---|
+| `rt.page.type(text)` | types into the focused field, like `:insert-text` |
+| `rt.page.key(keys)` | presses keys, like `:fake-key` |
+| `rt.page.fill_login({ host, username, password, submit })` | fills the page's login form, but only while the tab is still on `host` |
+
+They never go through a command line, so what's typed isn't kept in the command history or `:messages`. They don't act on riptide's own pages, and a plugin needs the `pages` permission for the site.
+
 For completion and type checking in Neovim, VS Code and other editors using lua-language-server:
 
 ```sh
