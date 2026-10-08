@@ -784,7 +784,7 @@ function rt.json.encode(value) end
 ---@field timeout integer Milliseconds before a status bar message clears (0 keeps it)
 
 ---@class rt.c.plugins
----@field check_interval integer Every this many days, check plugins from git for new commits in the background and say which have updates; nothing updates by itself (0: never)
+---@field check_interval integer Every this many days, check plugins from git for new commits in the background and say once which have updates; nothing updates by itself (0: never)
 
 ---@class rt.c.prompt
 ---@field position "bottom"|"center"|"docked" Where questions (permissions, logins, downloads, page dialogs) appear: bottom, a box floating near the bottom of the page; center, the same box in the middle; or docked above the status bar

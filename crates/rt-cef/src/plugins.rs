@@ -774,6 +774,33 @@ fn last_check_file(data_dir: &Path) -> PathBuf {
     data_dir.join("pack-last-check")
 }
 
+/// The newest commit of each repository the background check has already
+/// mentioned, one `<commit> <url>` per line, so it says so only once.
+fn announced_file(data_dir: &Path) -> PathBuf {
+    data_dir.join("pack-announced")
+}
+
+/// Whether the background check hasn't mentioned `latest` of `src` yet; it
+/// counts as mentioned from now on.
+fn first_mention(src: &str, latest: &str) -> bool {
+    let Some((_, data_dir)) = paths() else {
+        return true;
+    };
+    let path = announced_file(&data_dir);
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut lines: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.ends_with(&format!(" {src}")))
+        .collect();
+    if text.lines().any(|l| l == format!("{latest} {src}")) {
+        return false;
+    }
+    let line = format!("{latest} {src}");
+    lines.push(&line);
+    let _ = std::fs::write(&path, lines.join("\n") + "\n");
+    true
+}
+
 /// At startup: check for updates in the background if `plugins.check_interval`
 /// days have passed since the last time.
 fn maybe_check() {
@@ -908,7 +935,7 @@ wrap_task! {
             let quiet = QUIET.with(|q| {
                 let mut q = q.borrow_mut();
                 let found = q.as_mut()?;
-                if !log.is_empty() {
+                if !log.is_empty() && first_mention(&self.src, &self.latest) {
                     found.extend(names.iter().cloned());
                 }
                 Some(())

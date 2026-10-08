@@ -1738,8 +1738,8 @@ pub static SETTINGS: &[SettingDef] = &[
     def!(
         "plugins.check_interval",
         Kind::Int { min: 0, max: 365 },
-        Value::Int(7),
-        "Every this many days, check plugins from git for new commits in the background and say which have updates; nothing updates by itself (0: never)"
+        Value::Int(1),
+        "Every this many days, check plugins from git for new commits in the background and say once which have updates; nothing updates by itself (0: never)"
     ),
     def!(
         "prompt.position",

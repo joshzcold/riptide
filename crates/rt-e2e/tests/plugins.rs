@@ -675,5 +675,29 @@ fn plugins_are_checked_for_updates_in_the_background() {
     b.wait_until("still the pinned version", |s| s.message() == Some("v1"));
     let checked = std::fs::read_to_string(b.data_dir().join("pack-last-check")).unwrap();
     assert!(checked.trim().parse::<u64>().unwrap() > 1);
+
+    // The next check finds the same update and says nothing: it was mentioned.
+    b.run("quit");
+    b.wait_exit();
+    std::fs::write(b.data_dir().join("pack-last-check"), "1").unwrap();
+    b.restart();
+    let start = std::time::Instant::now();
+    while std::fs::read_to_string(b.data_dir().join("pack-last-check"))
+        .unwrap()
+        .trim()
+        == "1"
+    {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the second check didn't run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let s = b.state();
+    assert_ne!(
+        s.message(),
+        Some("Plugin updates for versioned; review them on :plugins")
+    );
     std::fs::remove_dir_all(&repo).unwrap();
 }
