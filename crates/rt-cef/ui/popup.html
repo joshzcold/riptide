@@ -25,7 +25,7 @@
     border: 1px solid var(--accent);
     border-bottom: none;
     user-select: none;
-    cursor: default;
+    cursor: move;
   }
   #title { flex: 1; color: var(--accent); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   kbd { font: var(--font); font-size: .85em; padding: 0 .4ch; border-radius: 3px; background: var(--key-bg); color: var(--accent); }
@@ -41,6 +41,26 @@
   const close = document.getElementById("close");
   close.addEventListener("mousedown", (e) => e.preventDefault());
   close.addEventListener("click", () => rt.send("close", "{}"));
+  // Dragging the bar moves the popup. Screen coordinates, since the bar
+  // itself moves under the pointer; the pointer stays captured meanwhile.
+  const bar = document.getElementById("bar");
+  let last = null;
+  bar.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target === close) return;
+    last = [e.screenX, e.screenY];
+    bar.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  bar.addEventListener("pointermove", (e) => {
+    if (!last) return;
+    const [dx, dy] = [e.screenX - last[0], e.screenY - last[1]];
+    if (!dx && !dy) return;
+    last = [e.screenX, e.screenY];
+    rt.send("move", JSON.stringify({ dx, dy }));
+  });
+  const stop = () => { last = null; };
+  bar.addEventListener("pointerup", stop);
+  bar.addEventListener("pointercancel", stop);
 </script>
 </body>
 </html>

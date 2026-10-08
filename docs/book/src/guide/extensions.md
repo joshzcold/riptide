@@ -20,7 +20,7 @@ Installed extensions keep their Web Store id, so their settings carry over betwe
 
 `:extensions` opens the Extensions tab of `:settings`. It lists every extension with its version, where it's from and what it can do, and these buttons:
 
-- **Popup** opens the extension's popup over the top right of the page, as Chrome does. Escape or its ✕ closes it, and so does switching tabs. **Options** opens its options page in a tab.
+- **Popup** opens the extension's popup over the top right of the page, as Chrome does. Drag its bar to move it; the next popup opens where you left the last one. Escape or its ✕ closes it, and so does switching tabs. **Options** opens its options page in a tab.
 - **Remove** deletes an installed one.
 - **Check for updates** asks the Web Store for newer versions. **Update to …** then shows what the new version asks for that the old one didn't, before installing it.
 - **Chrome's extensions page** turns extensions on or off, and shows their errors.

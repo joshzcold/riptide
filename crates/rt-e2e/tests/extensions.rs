@@ -110,6 +110,35 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     });
     assert_eq!(s.popup["title"], "riptide probe");
     assert_eq!(s.tabs().len(), 2, "no new tab");
+
+    // Dragging its bar moves it. The window is at the screen's origin.
+    let s = b.wait_until("it's placed", |s| s.popup["bounds"].is_array());
+    let at = |s: &rt_e2e::State, i: usize| s.popup["bounds"][i].as_i64().unwrap();
+    let (x, y) = (at(&s, 0), at(&s, 1));
+    let xdotool = |args: &[String]| {
+        let status = std::process::Command::new("xdotool")
+            .args(args)
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    let (grab_x, grab_y) = (x + 20, y - 12);
+    xdotool(&[
+        "mousemove".into(),
+        grab_x.to_string(),
+        grab_y.to_string(),
+        "mousedown".into(),
+        "1".into(),
+    ]);
+    for step in 1..=10 {
+        let (to_x, to_y) = (grab_x - 30 * step, grab_y + 10 * step);
+        xdotool(&["mousemove".into(), to_x.to_string(), to_y.to_string()]);
+    }
+    xdotool(&["mouseup".into(), "1".into()]);
+    b.wait_until("it moved with the pointer", |s| {
+        s.popup["bounds"].is_array() && at(s, 0) == x - 300 && at(s, 1) == y + 100
+    });
     b.keys("<Escape>");
     b.wait_until("Escape closes it", |s| s.popup.is_null());
     b.run("extension-open riptide probe");

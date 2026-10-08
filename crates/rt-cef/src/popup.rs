@@ -31,10 +31,14 @@ struct Popup {
     page_overlay: Option<OverlayController>,
     bar_overlay: Option<OverlayController>,
     size: (i32, i32),
+    /// Where it was dragged to, from its usual place at the top right.
+    offset: (i32, i32),
 }
 
 thread_local! {
     static POPUP: RefCell<Option<Popup>> = const { RefCell::new(None) };
+    /// Where the last popup was left, for the next one.
+    static LAST_OFFSET: std::cell::Cell<(i32, i32)> = const { std::cell::Cell::new((0, 0)) };
 }
 
 /// Show `url`, an extension's popup page, for the current window.
@@ -64,6 +68,7 @@ pub fn open(title: &str, url: &str) {
             page_overlay,
             bar_overlay,
             size: DEFAULT_SIZE,
+            offset: LAST_OFFSET.with(std::cell::Cell::get),
         })
     });
     reposition();
@@ -154,8 +159,7 @@ pub fn reposition() {
             .1
             .min(area.height - 2 * MARGIN - BAR_HEIGHT)
             .max(1);
-        let x = area.x + area.width - width - RIGHT;
-        let y = area.y + MARGIN;
+        let (x, y) = place(&area, (width, height), popup.offset);
         Some((
             popup.bar_overlay.clone(),
             Rect {
@@ -184,6 +188,33 @@ pub fn reposition() {
     }
 }
 
+/// The bar's top left: the top right of `area`, moved by `offset`, but
+/// never outside it.
+fn place(area: &Rect, (width, height): (i32, i32), offset: (i32, i32)) -> (i32, i32) {
+    let x = area.x + area.width - width - RIGHT + offset.0;
+    let y = area.y + MARGIN + offset.1;
+    let x = x.clamp(area.x, (area.x + area.width - width).max(area.x));
+    let y = y.clamp(
+        area.y,
+        (area.y + area.height - height - BAR_HEIGHT).max(area.y),
+    );
+    (x, y)
+}
+
+/// The bar was dragged by `dx`, `dy` pixels.
+pub fn move_by(dx: i32, dy: i32) {
+    let moved = POPUP.with(|p| {
+        let mut p = p.borrow_mut();
+        let popup = p.as_mut()?;
+        popup.offset = (popup.offset.0 + dx, popup.offset.1 + dy);
+        LAST_OFFSET.with(|l| l.set(popup.offset));
+        Some(())
+    });
+    if moved.is_some() {
+        reposition();
+    }
+}
+
 /// Escape in normal mode closes an open popup in the focused window.
 pub fn forward_key(key: &rt_core::key::Key) -> bool {
     let escape = key.code == rt_core::key::KeyCode::Escape && key.mods.is_empty();
@@ -205,14 +236,59 @@ pub fn forward_key(key: &rt_core::key::Key) -> bool {
 /// What the e2e tests see: the popup's title and URL, or null.
 pub fn test_state() -> serde_json::Value {
     POPUP.with(|p| {
-        p.borrow().as_ref().map_or(serde_json::Value::Null, |popup| {
-            let url = popup
-                .page
-                .browser()
-                .and_then(|b| b.main_frame())
-                .map(|f| CefString::from(&f.url()).to_string())
-                .unwrap_or_default();
-            serde_json::json!({ "title": popup.title, "url": url, "size": [popup.size.0, popup.size.1] })
-        })
+        p.borrow()
+            .as_ref()
+            .map_or(serde_json::Value::Null, |popup| {
+                let url = popup
+                    .page
+                    .browser()
+                    .and_then(|b| b.main_frame())
+                    .map(|f| CefString::from(&f.url()).to_string())
+                    .unwrap_or_default();
+                let bounds = popup
+                    .page_overlay
+                    .as_ref()
+                    .filter(|o| o.is_valid() != 0)
+                    .map(|o| o.bounds())
+                    .map(|b| [b.x, b.y, b.width, b.height]);
+                serde_json::json!({
+                    "title": popup.title,
+                    "url": url,
+                    "size": [popup.size.0, popup.size.1],
+                    "bounds": bounds,
+                })
+            })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dragged_popup_stays_in_the_page_area() {
+        let area = Rect {
+            x: 0,
+            y: 30,
+            width: 1000,
+            height: 700,
+        };
+        let size = (300, 200);
+        // Its usual place: the top right.
+        assert_eq!(
+            place(&area, size, (0, 0)),
+            (1000 - 300 - RIGHT, 30 + MARGIN)
+        );
+        // Dragged left and down.
+        assert_eq!(
+            place(&area, size, (-400, 100)),
+            (1000 - 300 - RIGHT - 400, 30 + MARGIN + 100)
+        );
+        // Dragged too far: held at the edges.
+        assert_eq!(place(&area, size, (-5000, -5000)), (0, 30));
+        assert_eq!(
+            place(&area, size, (5000, 5000)),
+            (700, 30 + 700 - 200 - BAR_HEIGHT)
+        );
+    }
 }

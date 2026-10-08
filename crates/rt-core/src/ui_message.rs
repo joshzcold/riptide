@@ -62,6 +62,8 @@ pub enum UiMessage {
     Restart,
     /// The close button above an extension's popup.
     PopupClose,
+    /// Dragging the bar above an extension's popup, by this many pixels.
+    PopupMove { dx: i32, dy: i32 },
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -323,6 +325,13 @@ struct FloatSize {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct PopupMove {
+    dx: i32,
+    dy: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ExtensionSource {
     source: String,
 }
@@ -538,6 +547,13 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             Ok(UiMessage::FloatSize { id, width, height })
         }
         ("popup.html", "close") => Ok(UiMessage::PopupClose),
+        ("popup.html", "move") => {
+            let PopupMove { dx, dy } = payload(name, json)?;
+            if dx.abs() > 10_000 || dy.abs() > 10_000 {
+                return Err(format!("{name}: move {dx},{dy} out of range"));
+            }
+            Ok(UiMessage::PopupMove { dx, dy })
+        }
         ("panel.html", "click") => {
             let PanelClick { id, line } = payload(name, json)?;
             Ok(UiMessage::PanelClick { id, line })
