@@ -22,7 +22,7 @@ jobs:
     name: commit messages
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Check Conventional Commits
@@ -44,7 +44,7 @@ jobs:
     env:
       CEF_PATH: ${{ github.workspace }}/../cef
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install CEF runtime libraries, Xvfb, xdotool and x11-utils (xprop, xwininfo)
         run: |
           sudo apt-get update
@@ -57,7 +57,7 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Cache CEF binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.CEF_PATH }}
           key: cef-linux-${{ hashFiles('Cargo.lock') }}
@@ -80,7 +80,7 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # cef-dll-sys downloads CEF into its build directory, which this caches.
       - uses: Swatinem/rust-cache@v2
@@ -108,7 +108,7 @@ jobs:
     name: docs (build, internal links)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the book
         run: scripts/mdbook.sh build docs/book
       # Offline: only links inside the book; docs.yml checks external ones weekly.

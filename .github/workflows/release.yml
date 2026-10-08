@@ -53,7 +53,7 @@ jobs:
       ref: ${{ steps.plan.outputs.ref }}
       publish: ${{ steps.plan.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'push' && github.sha || github.ref }}
           fetch-depth: 0
@@ -141,11 +141,11 @@ jobs:
       REF: ${{ needs.plan.outputs.ref }}
       PUBLISH: ${{ needs.plan.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.plan.outputs.ref }}
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: dist-*
           path: dist
@@ -166,7 +166,7 @@ jobs:
           EOF
       - name: Build provenance
         if: env.PUBLISH == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.tar.gz
@@ -208,7 +208,7 @@ jobs:
             "Points \`packaging/aur/PKGBUILD\` and \`packaging/nix/package.nix\` (and so the flake) at the v$VERSION tarball."
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-dry-run
           path: |
