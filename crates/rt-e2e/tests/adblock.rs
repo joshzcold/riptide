@@ -5,8 +5,19 @@ use rt_e2e::Browser;
 
 /// Start with the test filter list compiled and loaded.
 fn with_filters() -> Browser {
+    with_lists(&["filters.txt"])
+}
+
+fn with_lists(lists: &[&str]) -> Browser {
+    let lists: Vec<String> = lists
+        .iter()
+        .map(|l| format!("\"file://{{pages}}/{l}\""))
+        .collect();
     let b = Browser::launch()
-        .toml("content.blocking.adblock.lists = [\"file://{pages}/filters.txt\"]\n")
+        .toml(&format!(
+            "content.blocking.adblock.lists = [{}]\n",
+            lists.join(", ")
+        ))
         .start("page.html");
     b.run("adblock-update");
     let engine = b.data_dir().join("adblock/engine.dat");
@@ -73,4 +84,27 @@ fn the_status_bar_counts_blocked_requests_per_page() {
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn scriptlets_run_first_and_redirects_stand_in() {
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    b.open("scriptlets.html");
+    b.wait_eval(
+        "document.title",
+        "constant=false aopr=aborted script=loaded image=loaded",
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tracking_parameters_come_off_page_addresses() {
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    let url = b.url("page.html");
+    b.run(&format!("open {url}?utm_source=mail&id=7"));
+    let clean = format!("{url}?id=7");
+    b.wait_until("the page loads without utm_source", |s| {
+        s.tab().is_loaded(&clean)
+    });
 }

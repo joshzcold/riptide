@@ -11,4 +11,4 @@ secon = "secon"
 teh = "teh"
 
 [files]
-extend-exclude = ["CHANGELOG.md", "*.png", "*.svg", "crates/rt-e2e/pages/blank.pdf"]
+extend-exclude = ["CHANGELOG.md", "*.png", "*.svg", "crates/rt-e2e/pages/blank.pdf", "crates/rt-adblock/resources/ubo.json"]

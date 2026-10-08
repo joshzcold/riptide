@@ -79,6 +79,38 @@ pub fn register(registrar: &mut SchemeRegistrar) {
     registrar.add_custom_scheme(Some(&CefString::from(SCHEME)), options);
 }
 
+/// A response with `body`, for a `$redirect` stand-in.
+pub fn bytes_resource(body: Vec<u8>, mime: &'static str) -> ResourceHandler {
+    RtResource::new(
+        Arc::from(body),
+        mime,
+        String::new(),
+        200,
+        Arc::new(AtomicUsize::new(0)),
+    )
+}
+
+/// A stand-in's MIME type as a static string (the resource keeps one).
+pub fn static_mime(mime: &str) -> &'static str {
+    const KNOWN: &[&str] = &[
+        "application/javascript",
+        "application/json",
+        "audio/mp3",
+        "image/gif",
+        "image/png",
+        "text/css",
+        "text/html",
+        "text/plain",
+        "text/xml",
+        "video/mp4",
+    ];
+    KNOWN
+        .iter()
+        .find(|k| **k == mime)
+        .copied()
+        .unwrap_or("application/octet-stream")
+}
+
 /// Called once in the browser process, before any window opens.
 pub fn install() {
     let mut factory = RtSchemeFactory::new();
@@ -206,7 +238,12 @@ wrap_resource_handler! {
                 let header = |name: &str, value: &str| {
                     response.set_header_by_name(Some(&CefString::from(name)), Some(&CefString::from(value)), 1)
                 };
-                header("Content-Security-Policy", &self.csp);
+                if self.csp.is_empty() {
+                    // A `$redirect` stand-in: readable from the page that asked.
+                    header("Access-Control-Allow-Origin", "*");
+                } else {
+                    header("Content-Security-Policy", &self.csp);
+                }
                 header("X-Content-Type-Options", "nosniff");
                 header("Cache-Control", "no-store");
             }

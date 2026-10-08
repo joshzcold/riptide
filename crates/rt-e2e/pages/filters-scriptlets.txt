@@ -1,0 +1,6 @@
+! Scriptlets, $redirect stand-ins and $removeparam for scriptlets.html.
+127.0.0.1##+js(set-constant, rtAdsEnabled, false)
+127.0.0.1##+js(aopr, rtDetectAdblock)
+||127.0.0.1^*/ad-stand-in.js$script,redirect=noop.js
+||127.0.0.1^*/beacon.gif$image,redirect=1x1.gif
+$removeparam=utm_source

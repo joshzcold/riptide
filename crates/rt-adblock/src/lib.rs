@@ -4,6 +4,10 @@
 //! Lists are kept as downloaded in `<data>/adblock/lists/`, and the compiled
 //! engine is cached in `<data>/adblock/engine.dat` so startup doesn't parse
 //! every list again.
+//!
+//! Scriptlets (`##+js(...)`) and `$redirect` files come from uBlock Origin
+//! (GPL-3.0), built into `resources/ubo.json` by
+//! `scripts/update-adblock-resources.sh`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -11,15 +15,44 @@ use std::path::{Path, PathBuf};
 use adblock::Engine;
 use adblock::lists::{FilterFormat, FilterSet, ParseOptions};
 use adblock::request::Request;
+use adblock::resources::Resource;
 
 pub struct Blocker {
     engine: Engine,
+}
+
+/// uBlock Origin's scriptlets and `$redirect` files.
+const UBO_RESOURCES: &str = include_str!("../resources/ubo.json");
+
+/// The uBlock Origin release they come from.
+pub const UBO_VERSION: &str = include_str!("../resources/ubo.version");
+
+fn resources() -> Vec<Resource> {
+    serde_json::from_str(UBO_RESOURCES).unwrap_or_else(|e| {
+        tracing::error!("the built-in adblock resources don't parse: {e}");
+        Vec::new()
+    })
+}
+
+/// What to do with a request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    Allow,
+    Block,
+    /// Answer with this `data:` URL instead (a `$redirect` rule): a harmless
+    /// stand-in, so the page doesn't notice the blocking.
+    Redirect(String),
+    /// Load this URL instead: the same address without the tracking
+    /// parameters a `$removeparam` rule takes out.
+    Rewrite(String),
 }
 
 /// Element hiding for one page: CSS for its site-specific rules, and what the
 /// generic class and id rules need.
 pub struct Cosmetic {
     pub css: String,
+    /// Scriptlets to run in the page before its own scripts, or empty.
+    pub script: String,
     /// False when the lists say `#@#` generic hiding is off for the site.
     pub generic: bool,
     exceptions: HashSet<String>,
@@ -81,7 +114,8 @@ impl Blocker {
             };
             set.add_filter_list(text.to_string(), options);
         }
-        let engine = Engine::new_with_filter_set(set);
+        let mut engine = Engine::new_with_filter_set(set);
+        engine.use_resources(resources());
         (Blocker { engine }, rules)
     }
 
@@ -93,6 +127,8 @@ impl Blocker {
     pub fn deserialize(bytes: &[u8]) -> Option<Self> {
         let mut engine = Engine::default();
         engine.deserialize(bytes).ok()?;
+        // Resources aren't in the cache.
+        engine.use_resources(resources());
         Some(Blocker { engine })
     }
 
@@ -101,6 +137,7 @@ impl Blocker {
         let resources = self.engine.url_cosmetic_resources(url);
         Cosmetic {
             css: hide_css(&resources.hide_selectors),
+            script: resources.injected_script,
             generic: !resources.generichide,
             exceptions: resources.exceptions,
         }
@@ -117,10 +154,25 @@ impl Blocker {
 
     /// `kind` is a request type such as "script", "image" or "sub_frame".
     pub fn should_block(&self, url: &str, source_url: &str, kind: &str) -> bool {
-        match Request::new(url, source_url, kind, "GET") {
-            Ok(request) => self.engine.check_network_request(&request).should_block(),
-            Err(_) => false,
+        matches!(
+            self.check(url, source_url, kind),
+            Verdict::Block | Verdict::Redirect(_)
+        )
+    }
+
+    /// What to do with a request: allow it, block it, or answer it with a
+    /// stand-in file.
+    pub fn check(&self, url: &str, source_url: &str, kind: &str) -> Verdict {
+        let Ok(request) = Request::new(url, source_url, kind, "GET") else {
+            return Verdict::Allow;
+        };
+        let result = self.engine.check_network_request(&request);
+        if result.should_block() {
+            return result.redirect.map_or(Verdict::Block, Verdict::Redirect);
         }
+        result
+            .rewritten_url
+            .map_or(Verdict::Allow, Verdict::Rewrite)
     }
 }
 
@@ -267,6 +319,60 @@ mod tests {
             b.generic_css(&classes, &[], &page).is_empty(),
             "#@# makes an exception"
         );
+    }
+
+    #[test]
+    fn scriptlets_redirects_and_removeparam() {
+        let list = concat!(
+            "news.example.org##+js(set-constant, adsEnabled, false)\n",
+            "news.example.org##+js(aopr, detectAdblock)\n",
+            "||ads.example.com/ima3.js$script,redirect=google-ima.js\n",
+            "||ads.example.com/pixel.gif$image,redirect=1x1.gif\n",
+            "$removeparam=utm_source\n",
+        );
+        let (b, _) = Blocker::from_lists([list]);
+        let script = b.cosmetic("https://news.example.org/a").script;
+        // The scriptlets and what they need, called with the rules' arguments.
+        assert!(script.contains("function setConstant("), "{script}");
+        assert!(script.contains("function safeSelf("));
+        assert!(
+            script.contains("setConstant(\"adsEnabled\", \"false\")"),
+            "{script}"
+        );
+        assert!(script.contains("abortOnPropertyRead(\"detectAdblock\")"));
+        assert!(b.cosmetic("https://other.example.org/").script.is_empty());
+
+        let page = "https://news.example.org/";
+        let Verdict::Redirect(url) = b.check("https://ads.example.com/ima3.js", page, "script")
+        else {
+            panic!("not redirected");
+        };
+        assert!(url.starts_with("data:application/javascript;base64,"));
+        let Verdict::Redirect(url) = b.check("https://ads.example.com/pixel.gif", page, "image")
+        else {
+            panic!("not redirected");
+        };
+        assert!(url.starts_with("data:image/gif;base64,"));
+        // As in uBlock Origin, removeparam applies to pages and requests for data.
+        for kind in ["document", "xmlhttprequest"] {
+            assert_eq!(
+                b.check("https://cdn.example.net/a?utm_source=x&id=1", page, kind),
+                Verdict::Rewrite("https://cdn.example.net/a?id=1".into()),
+                "{kind}"
+            );
+        }
+        assert_eq!(
+            b.check("https://cdn.example.net/a.js", page, "script"),
+            Verdict::Allow
+        );
+        // The cache keeps them working.
+        let b = Blocker::deserialize(&b.serialize()).unwrap();
+        assert!(
+            b.cosmetic("https://news.example.org/a")
+                .script
+                .contains("setConstant(")
+        );
+        assert!(UBO_VERSION.trim().starts_with("1."), "{UBO_VERSION}");
     }
 
     #[test]

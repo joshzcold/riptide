@@ -10,7 +10,7 @@ Riptide is one Rust workspace around CEF's prebuilt Chromium. The [project plan]
 | `crates/rt-core` | Modes, key parsing, bindings, commands, the command line, settings, URL guessing and the help data. **No CEF dependency**; unit tested. |
 | `crates/rt-config` | Config paths per platform, the command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, and the generated Lua types, settings docs and reference pages. |
 | `crates/rt-storage` | History (SQLite), quickmarks and bookmarks (qutebrowser formats), sessions (TOML). |
-| `crates/rt-adblock` | Ad and tracker blocking with Adblock Plus filter lists (Brave's adblock-rust). |
+| `crates/rt-adblock` | Ad and tracker blocking with Adblock Plus filter lists (Brave's adblock-rust). `resources/ubo.json` holds uBlock Origin's scriptlets and `$redirect` stand-ins; refresh it with `scripts/update-adblock-resources.sh` (needs Node) when uBlock Origin releases. |
 | `crates/rt-cef` | CEF integration: window layout, handlers, renderer-process bindings, the `riptide://` pages and the status bar and completion UI. |
 
 The rule that keeps this testable: `rt-core` never depends on CEF. CEF is an adapter that turns events into `rt-core` inputs and carries out the actions `rt-core` returns.

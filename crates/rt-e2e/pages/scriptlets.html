@@ -1,0 +1,25 @@
+<!doctype html>
+<title>scriptlets</title>
+<script>
+  // Scriptlets run before this: set-constant keeps rtAdsEnabled false, and
+  // aopr makes reading rtDetectAdblock throw.
+  window.rtAdsEnabled = true;
+  const results = { constant: String(window.rtAdsEnabled) };
+  try {
+    void window.rtDetectAdblock;
+    results.aopr = "read";
+  } catch {
+    results.aopr = "aborted";
+  }
+  const show = () => {
+    if (results.script && results.image) {
+      document.title = `constant=${results.constant} aopr=${results.aopr} script=${results.script} image=${results.image}`;
+    }
+  };
+  // Neither file exists: only a $redirect stand-in makes them load.
+  const image = new Image();
+  image.onload = () => { results.image = "loaded"; show(); };
+  image.onerror = () => { results.image = "error"; show(); };
+  image.src = "beacon.gif";
+</script>
+<script src="ad-stand-in.js" onload="results.script = 'loaded'; show()" onerror="results.script = 'error'; show()"></script>

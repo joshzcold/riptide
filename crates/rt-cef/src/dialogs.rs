@@ -119,6 +119,7 @@ wrap_request_handler! {
                     return 1;
                 }
                 crate::content::before_navigation(browser, &url);
+                crate::adblock::before_navigation(browser, &url);
             }
             blocked.into()
         }
@@ -248,13 +249,32 @@ wrap_resource_request_handler! {
                 .main_frame()
                 .map(|f| CefString::from(&f.url()).to_string())
                 .unwrap_or_default();
-            if crate::adblock::should_block(&url, &page, request.resource_type()) {
-                crate::adblock::count_blocked(browser.identifier());
-                ReturnValue::CANCEL
-            } else {
-                crate::content::before_request(request);
-                ReturnValue::CONTINUE
+            match crate::adblock::check(&url, &page, request.resource_type()) {
+                rt_adblock::Verdict::Block => {
+                    crate::adblock::count_blocked(browser.identifier());
+                    return ReturnValue::CANCEL;
+                }
+                // Answered by `resource_handler` below.
+                rt_adblock::Verdict::Redirect(data_url) => {
+                    crate::adblock::count_blocked(browser.identifier());
+                    crate::adblock::hold_stand_in(request.identifier(), data_url);
+                }
+                rt_adblock::Verdict::Rewrite(to) => request.set_url(Some(&CefString::from(to.as_str()))),
+                rt_adblock::Verdict::Allow => {}
             }
+            crate::content::before_request(request);
+            ReturnValue::CONTINUE
+        }
+
+        /// A `$redirect` rule's stand-in, instead of the network.
+        fn resource_handler(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            request: Option<&mut Request>,
+        ) -> Option<ResourceHandler> {
+            let (body, mime) = crate::adblock::take_stand_in(request?.identifier())?;
+            Some(crate::scheme::bytes_resource(body, mime))
         }
     }
 }

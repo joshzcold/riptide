@@ -15,8 +15,10 @@ The status bar shows how many requests were blocked on the current page, e.g. `â
 
 - `content.blocking.enabled` turns blocking on or off.
 - `content.blocking.whitelist` lists hosts where nothing is blocked (subdomains included).
-- Top-level pages are never blocked, so a bad rule can't make a site unreachable.
+- Top-level pages are never blocked, so a bad rule can't make a site unreachable. Their tracking parameters are taken out, though (`$removeparam`): `?utm_source=mail&id=7` loads as `?id=7`.
 - Element-hiding rules (`##.ad`, `example.com##.sponsored`) are applied once a page loads: the site-specific ones, and the generic ones for the classes and ids the page uses, checked again 2 and 6 seconds later for ads that arrive late.
+- Scriptlet rules (`example.com##+js(set-constant, adsEnabled, false)`) run in the page before its own scripts, which is how lists defeat anti-adblock walls and in-player video ads. `$redirect` rules answer a blocked request with a harmless stand-in (an empty script, a 1Ã—1 image), so the page carries on as if it had loaded. Both use uBlock Origin's scriptlets and stand-ins, built into riptide.
+- Not supported yet: procedural element hiding (`:has-text()`, `:upward()` and the like), and element hiding inside frames.
 
 ## Network traffic
 

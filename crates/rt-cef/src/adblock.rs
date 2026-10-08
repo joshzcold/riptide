@@ -136,18 +136,101 @@ wrap_task! {
     }
 }
 
-pub fn should_block(url: &str, page: &str, resource: ResourceType) -> bool {
+/// What to do with a request (on the IO thread). Top-level pages are never
+/// blocked, so a mistaken rule can't make a site unreachable, but their
+/// tracking parameters are taken out (`$removeparam`).
+pub fn check(url: &str, page: &str, resource: ResourceType) -> rt_adblock::Verdict {
+    use rt_adblock::Verdict;
+    let top = matches!(
+        resource,
+        ResourceType::MAIN_FRAME | ResourceType::NAVIGATION_PRELOAD_MAIN_FRAME
+    );
+    if top {
+        return match blocker_for(url).map(|b| b.check(url, url, "document")) {
+            Some(Verdict::Rewrite(to)) => Verdict::Rewrite(to),
+            _ => Verdict::Allow,
+        };
+    }
     let Some(kind) = kind(resource) else {
-        return false;
+        return Verdict::Allow;
     };
     let Some(blocker) = blocker_for(page) else {
-        return false;
+        return Verdict::Allow;
     };
-    let blocked = blocker.should_block(url, page, kind);
-    if blocked {
-        tracing::debug!(url, page, kind, "blocked");
+    let verdict = blocker.check(url, page, kind);
+    if verdict != Verdict::Allow {
+        tracing::debug!(url, page, kind, ?verdict, "adblock");
     }
-    blocked
+    verdict
+}
+
+/// `$redirect` stand-ins waiting for their request's resource handler, by
+/// request id (both run on the IO thread).
+static STAND_INS: std::sync::Mutex<std::collections::BTreeMap<u64, String>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+pub fn hold_stand_in(request: u64, data_url: String) {
+    if let Ok(mut held) = STAND_INS.lock() {
+        held.insert(request, data_url);
+    }
+}
+
+/// The stand-in for `request`, decoded from its `data:` URL: the bytes and
+/// their MIME type.
+pub fn take_stand_in(request: u64) -> Option<(Vec<u8>, &'static str)> {
+    let data_url = STAND_INS.lock().ok()?.remove(&request)?;
+    let (head, body) = data_url.strip_prefix("data:")?.split_once(',')?;
+    let mime = head.trim_end_matches(";base64");
+    let bytes = if head.ends_with(";base64") {
+        rt_core::extensions::base64_decode(body)?
+    } else {
+        body.as_bytes().to_vec()
+    };
+    Some((bytes, crate::scheme::static_mime(mime)))
+}
+
+/// Scriptlets (`##+js(...)`) must run before the page's own scripts. Each
+/// tab gets a site's scriptlets once, through DevTools, which runs them in
+/// every new document whose host is that site's, before anything else.
+pub fn before_navigation(browser: &Browser, url: &str) {
+    let Some(blocker) = blocker_for(url) else {
+        return;
+    };
+    let host = rt_core::url::host(url).to_string();
+    if host.is_empty() {
+        return;
+    }
+    let key = (browser.identifier(), host.clone());
+    if SCRIPTLETS_SENT.with(|s| s.borrow().contains(&key)) {
+        return;
+    }
+    let script = blocker.cosmetic(url).script;
+    SCRIPTLETS_SENT.with(|s| s.borrow_mut().insert(key));
+    if script.is_empty() {
+        return;
+    }
+    let host_json = serde_json::to_string(&host).unwrap_or_default();
+    let source = format!(
+        "if (location.hostname === {host_json}) {{ (function () {{ const scriptletGlobals = {{}};\n{script}\n}})(); }}"
+    );
+    let message = serde_json::json!({
+        "id": 1,
+        "method": "Page.addScriptToEvaluateOnNewDocument",
+        "params": { "source": source },
+    })
+    .to_string();
+    if let Some(host) = browser.host() {
+        // The registration only takes with the Page domain on.
+        let enable = serde_json::json!({ "id": 1, "method": "Page.enable" }).to_string();
+        host.send_dev_tools_message(Some(enable.as_bytes()));
+        host.send_dev_tools_message(Some(message.as_bytes()));
+    }
+}
+
+thread_local! {
+    /// Which tabs (browser ids) have been given which hosts' scriptlets.
+    static SCRIPTLETS_SENT: RefCell<std::collections::HashSet<(i32, String)>> =
+        RefCell::new(std::collections::HashSet::new());
 }
 
 /// The adblock request type. Top-level pages are never blocked, so a

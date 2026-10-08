@@ -1293,6 +1293,7 @@ name = "rt-adblock"
 version = "0.2.0"
 dependencies = [
  "adblock",
+ "serde_json",
  "tracing",
 ]
 
