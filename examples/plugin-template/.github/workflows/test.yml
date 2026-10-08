@@ -2,14 +2,21 @@ name: test
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install riptide
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          url=$(curl -fsSL https://api.github.com/repos/joshzcold/riptide/releases/latest \
-            | grep -o 'https://[^"]*linux-x86_64.tar.gz' | head -n1)
-          curl -fsSL "$url" | tar -xz
-          echo "$PWD/$(ls -d riptide-*/ | head -n1)" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libnss3 libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+            libcups2t64 libpango-1.0-0 libcairo2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxrandr2 libxi6 libdrm2 libdbus-1-3
+          # The nightly build: --plugin-test is newer than the latest release.
+          gh release download nightly -R joshzcold/riptide -p '*-linux-x86_64.tar.gz' -O riptide.tar.gz
+          mkdir riptide && tar -xzf riptide.tar.gz -C riptide --strip-components=1
+          echo "$PWD/riptide" >> "$GITHUB_PATH"
       - name: Test
         run: xvfb-run -a riptide --plugin-test .
