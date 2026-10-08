@@ -70,8 +70,14 @@ pub fn load(paths: &Paths) -> Loaded {
 
     let toml_ops = ops.len();
     let lua_path = paths.config_lua();
-    if lua_path.exists() {
-        files.push(lua_path.clone());
+    let plugins_toml = plugins::PluginsFile::path(&paths.config_dir);
+    if plugins_toml.exists() {
+        files.push(plugins_toml.clone());
+    }
+    if lua_path.exists() || plugins_toml.exists() {
+        if lua_path.exists() {
+            files.push(lua_path.clone());
+        }
         // Let `rt.get` see what the earlier files set.
         let mut settings = Settings::default();
         for op in &ops {

@@ -570,6 +570,11 @@ pub enum Command {
     },
     /// Delete checkouts and lockfile entries no plugin in config.lua uses.
     PackClean,
+    /// Add a plugin from git to plugins.toml, then install and load it.
+    PackAdd {
+        src: String,
+        subdir: Option<String>,
+    },
     /// Clean, update everything, and install what's missing.
     PackSync,
     /// Put every plugin from git back on its commit in rt-pack-lock.json.
@@ -937,6 +942,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "pack-update",
         "Update plugins from git to their newest commits, all or one: :pack-update [name]",
+    ),
+    spec(
+        "pack-add",
+        "Add a plugin from git, kept in plugins.toml: :pack-add <url> [folder in the repository]",
     ),
     spec(
         "pack-sync",
@@ -1882,6 +1891,13 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             name: args.optional().map(String::from),
         },
         "pack-sync" => Command::PackSync,
+        "pack-add" => {
+            let src = args.required("url")?.to_string();
+            Command::PackAdd {
+                src,
+                subdir: args.optional().map(String::from),
+            }
+        }
         "pack-clean" => Command::PackClean,
         "pack-restore" => Command::PackRestore,
         "pack-update" => Command::PackUpdate {
@@ -2618,6 +2634,7 @@ mod tests {
     #[test]
     fn every_spec_parses() {
         let needs_args = [
+            "pack-add",
             "pack-load",
             "scroll",
             "scroll-page",

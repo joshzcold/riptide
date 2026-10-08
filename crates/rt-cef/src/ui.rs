@@ -48,6 +48,7 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::FloatSize { id, width, height } => crate::float::set_size(id, width, height),
         UiMessage::PanelClick { id, line } => crate::panel::click(id, line),
         UiMessage::ClearSite { site } => crate::settings_page::clear_site(&site),
+        UiMessage::PackAdd { src, subdir } => crate::plugins::add(&src, &subdir),
         UiMessage::Pack { action } => {
             use rt_core::ui_message::PackAction;
             match action {
@@ -56,6 +57,7 @@ pub fn handle_message(message: UiMessage) {
                 PackAction::Sync => crate::plugins::sync(),
                 PackAction::Restore => crate::plugins::restore(),
                 PackAction::Clean => crate::plugins::clean(),
+                PackAction::Browse => crate::plugins::browse(),
             }
         }
         UiMessage::Plugin { name, action } => {

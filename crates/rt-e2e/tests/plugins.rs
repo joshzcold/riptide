@@ -701,3 +701,78 @@ fn plugins_are_checked_for_updates_in_the_background() {
     );
     std::fs::remove_dir_all(&repo).unwrap();
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_are_added_from_the_catalog_and_kept_in_plugins_toml() {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-catalog-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&repo);
+    for (name, word) in [("alpha", "a"), ("beta", "b")] {
+        std::fs::create_dir_all(repo.join(format!("{name}/plugin"))).unwrap();
+        std::fs::write(
+            repo.join(format!("{name}/riptide-plugin.toml")),
+            format!("description = \"Says {word}\"\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join(format!("{name}/plugin/{name}.lua")),
+            format!("rt.command('{name}-say', function() rt.notify('{word}') end)"),
+        )
+        .unwrap();
+    }
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "two plugins"]);
+    let url = format!("file://{}", repo.display());
+    let b = Browser::launch()
+        .lua(&format!("c.plugins.catalog = {url:?}"))
+        .start("page.html");
+
+    // Browse lists the catalog; Add puts the plugin in plugins.toml and loads it.
+    b.run("plugins");
+    let click = |key: &str| {
+        let query = format!("document.querySelector('[data-key=\"{key}\"]')");
+        b.wait_eval(&format!("String(!!{query} && !{query}.disabled)"), "true");
+        b.eval(&format!("{query}.click(), ''"));
+    };
+    click("plugins:browse#browse");
+    b.wait_eval(
+        "(page.catalog?.plugins || []).map((p) => p.name).join(' ')",
+        "alpha beta",
+    );
+    click("catalog:alpha#add");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}:${p.added}`).join(' ')",
+        "alpha:loaded:true",
+    );
+    b.run("alpha-say");
+    b.wait_until("alpha runs", |s| s.message() == Some("a"));
+    let toml = || std::fs::read_to_string(b.config_dir().join("plugins.toml")).unwrap_or_default();
+    assert!(toml().contains("subdir = \"alpha\""), "{}", toml());
+
+    // :pack-add does the same from the command line.
+    b.run(&format!("pack-add {url} beta"));
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "alpha:loaded beta:loaded",
+    );
+
+    // Remove takes it out of plugins.toml, so it doesn't come back.
+    click("plugin:alpha:remove#remove");
+    b.wait_eval("page.plugins.map((p) => p.name).join(' ')", "beta");
+    assert!(!toml().contains("alpha"), "{}", toml());
+    std::fs::remove_dir_all(&repo).unwrap();
+}

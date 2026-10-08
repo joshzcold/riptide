@@ -61,7 +61,9 @@ impl Permissions {
         flag(self.clipboard, "read and write the clipboard");
         flag(self.keys, "see every key you press");
         let mut list = |hosts: &[String], text: &str| {
-            if !hosts.is_empty() {
+            if hosts.iter().any(|h| h == "*") {
+                out.push(format!("{text} every site"));
+            } else if !hosts.is_empty() {
                 out.push(format!("{text}: {}", hosts.join(", ")));
             }
         };
@@ -183,6 +185,132 @@ pub fn valid_name(name: &str) -> bool {
 
 /// A plugin's name from its git URL or folder: the last part, without
 /// `.git`, a `riptide-` prefix or a `.nvim`-style suffix.
+/// `plugins.toml` in the config folder: the plugins added from the Plugins
+/// tab or `:pack-add`, loaded beside `config.lua`'s `rt.pack.add`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PluginsFile {
+    #[serde(rename = "plugin", skip_serializing_if = "Vec::is_empty")]
+    pub plugins: Vec<FileSpec>,
+}
+
+/// One `[[plugin]]` in `plugins.toml`, with the keys `rt.pack.add` takes.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FileSpec {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub src: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub subdir: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub dir: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub version: String,
+    /// Passed to the plugin's `setup`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opts: Option<toml::Table>,
+}
+
+impl FileSpec {
+    /// Its name, as `rt.pack.add` would give it.
+    pub fn plugin_name(&self) -> String {
+        if !self.name.is_empty() {
+            return self.name.clone();
+        }
+        let from = [&self.subdir, &self.src, &self.dir]
+            .into_iter()
+            .find(|s| !s.is_empty())
+            .cloned()
+            .unwrap_or_default();
+        name_from(&from)
+    }
+}
+
+const PLUGINS_FILE_HEADER: &str = "\
+# Plugins added from riptide's Plugins tab or :pack-add. riptide rewrites
+# this file when you add or remove one there; you can edit it too. Plugins
+# in config.lua's rt.pack.add win over ones here with the same name.
+";
+
+impl PluginsFile {
+    pub fn path(config_dir: &Path) -> PathBuf {
+        config_dir.join("plugins.toml")
+    }
+
+    pub fn load(config_dir: &Path) -> Result<Self, String> {
+        let path = Self::path(config_dir);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    pub fn save(&self, config_dir: &Path) -> Result<(), String> {
+        let path = Self::path(config_dir);
+        let body = toml::to_string(self).map_err(|e| e.to_string())?;
+        let partial = path.with_extension("toml.part");
+        std::fs::write(&partial, format!("{PLUGINS_FILE_HEADER}\n{body}"))
+            .and_then(|()| std::fs::rename(&partial, &path))
+            .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Add a plugin from git; false if one with its name is there already.
+    pub fn add(&mut self, src: &str, subdir: &str) -> bool {
+        let spec = FileSpec {
+            src: src.to_string(),
+            subdir: subdir.to_string(),
+            ..FileSpec::default()
+        };
+        let name = spec.plugin_name();
+        if self.plugins.iter().any(|p| p.plugin_name() == name) {
+            return false;
+        }
+        self.plugins.push(spec);
+        true
+    }
+
+    /// Take out the plugin named `name`; false if it isn't here.
+    pub fn remove(&mut self, name: &str) -> bool {
+        let before = self.plugins.len();
+        self.plugins.retain(|p| p.plugin_name() != name);
+        self.plugins.len() != before
+    }
+}
+
+/// Whether `subdir` names a folder inside a repository: plain names joined
+/// by `/`, never `..`, so it can't leave the checkout.
+pub fn valid_subdir(subdir: &str) -> bool {
+    let subdir = subdir.trim_matches('/');
+    subdir.is_empty()
+        || subdir.split('/').all(|part| {
+            valid_name(part)
+                || (part != "."
+                    && part != ".."
+                    && part
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')))
+        })
+}
+
+/// Whether `src` is a git URL the Plugins tab may add: https, ssh, a
+/// `user@host:path` or a `file://` URL, never an option or a bare path.
+pub fn valid_git_url(src: &str) -> bool {
+    let src = src.trim();
+    !src.is_empty()
+        && src.len() <= 500
+        && !src.starts_with('-')
+        && !src.chars().any(|c| c.is_whitespace() || c.is_control())
+        && (src.starts_with("https://")
+            || src.starts_with("ssh://")
+            || src.starts_with("file:///")
+            || src
+                .split_once('@')
+                .is_some_and(|(_, rest)| rest.contains(':') && !rest.contains("://")))
+}
+
 pub fn name_from(src: &str) -> String {
     let last = src
         .trim_end_matches('/')
@@ -383,6 +511,55 @@ mod tests {
         )
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("../up"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn plugins_toml_adds_names_and_removes_plugins() {
+        let dir = std::env::temp_dir().join(format!("rt-plugins-toml-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(PluginsFile::load(&dir).unwrap(), PluginsFile::default());
+        let mut file = PluginsFile::default();
+        assert!(file.add("https://github.com/joshzcold/riptide-plugins", "pass"));
+        assert!(!file.add("https://github.com/joshzcold/riptide-plugins", "pass"));
+        assert!(file.add("https://github.com/someone/riptide-tab-tools.git", ""));
+        file.save(&dir).unwrap();
+        let text = std::fs::read_to_string(PluginsFile::path(&dir)).unwrap();
+        assert!(
+            text.starts_with("# Plugins added from riptide's Plugins tab"),
+            "{text}"
+        );
+        let mut file = PluginsFile::load(&dir).unwrap();
+        let names: Vec<String> = file.plugins.iter().map(FileSpec::plugin_name).collect();
+        assert_eq!(names, ["pass", "tab-tools"]);
+        assert!(file.remove("pass"));
+        assert!(!file.remove("pass"));
+        std::fs::write(
+            PluginsFile::path(&dir),
+            "[[plugin]]\nsrc = \"x\"\nsurprise = 1\n",
+        )
+        .unwrap();
+        assert!(PluginsFile::load(&dir).unwrap_err().contains("surprise"));
+        for good in [
+            "https://github.com/a/b",
+            "ssh://git@host/a/b",
+            "git@github.com:a/b.git",
+            "file:///srv/plugins",
+        ] {
+            assert!(valid_git_url(good), "{good}");
+        }
+        for bad in [
+            "",
+            "-c core.x=y",
+            "/srv/plugins",
+            "ftp://x/y",
+            "https://a b",
+        ] {
+            assert!(!valid_git_url(bad), "{bad}");
+        }
+        assert!(valid_subdir("tools/tab-tools") && valid_subdir(""));
+        assert!(!valid_subdir("../up") && !valid_subdir("a/../b"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

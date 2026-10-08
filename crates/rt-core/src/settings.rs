@@ -1736,6 +1736,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Which window URLs from a second riptide invocation open in"
     ),
     def!(
+        "plugins.catalog",
+        Kind::Str,
+        Value::Str("https://github.com/joshzcold/riptide-plugins".into()),
+        "The git repository of plugins the Plugins tab's Browse lists, one plugin per folder"
+    ),
+    def!(
         "plugins.check_interval",
         Kind::Int { min: 0, max: 365 },
         Value::Int(1),

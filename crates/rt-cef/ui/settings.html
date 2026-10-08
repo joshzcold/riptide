@@ -917,8 +917,56 @@ function renderPlugins() {
   const section = el("section");
   const h2 = el("h2");
   h2.append(icon("plugins"), "Plugins");
-  section.append(h2, el("p", "blurb", "Plugins added with rt.pack.add in config.lua. Ones from git stay on the commit in rt-pack-lock.json until you check for updates, read what changed, and update; plugins from one repository update together."));
+  section.append(h2, el("p", "blurb", "Plugins from rt.pack.add in config.lua, and the ones you add here (kept in plugins.toml). Ones from git stay on the commit in rt-pack-lock.json until you check for updates, read what changed, and update; plugins from one repository update together."));
   if (errors.has("plugins")) section.append(el("div", "banner", errors.get("plugins")));
+
+  // Add a plugin from git, or from the catalog; both go to plugins.toml.
+  const installed = new Set((page.plugins || []).map((p) => p.name));
+  const addCard = el("div", "card");
+  const form = el("div", "addform");
+  form.style.gridTemplateColumns = "minmax(0, 2fr) minmax(0, 1fr) auto auto";
+  const url = control({ name: "plugins:add" }, el("input"), "url");
+  url.placeholder = "Add a plugin: its git URL";
+  url.setAttribute("aria-label", "Plugin's git URL");
+  const folder = control({ name: "plugins:add" }, el("input"), "folder");
+  folder.placeholder = "folder in it, e.g. pass";
+  folder.setAttribute("aria-label", "Folder in the repository");
+  const add = control({ name: "plugins:add" }, el("button", null, "Add"), "add");
+  add.title = "Install it and keep it in plugins.toml; it asks for its permissions first (:pack-add)";
+  const submit = () => {
+    const src = url.value.trim();
+    if (!src) return fail("plugins", "Enter the plugin's git URL");
+    rt.send("pack-add", JSON.stringify({ src, subdir: folder.value.trim() }));
+    url.value = "";
+    folder.value = "";
+  };
+  add.addEventListener("click", submit);
+  for (const input of [url, folder]) input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  const browse = control({ name: "plugins:browse" }, el("button", null, "Browse"), "browse");
+  browse.title = "List the plugins in plugins.catalog (fetched with git)";
+  browse.addEventListener("click", () => rt.send("pack", JSON.stringify({ action: "browse" })));
+  form.append(url, folder, add, browse);
+  addCard.append(form);
+  if (page.catalog?.plugins) {
+    for (const item of page.catalog.plugins) {
+      const row = el("div", "keyrow");
+      row.style.gridTemplateColumns = "minmax(0, 1fr) auto";
+      const about = el("div");
+      about.append(el("div", "name", item.name));
+      if (item.description) about.append(el("div", "desc", item.description));
+      const needs = [...item.permissions];
+      if (item.dependencies.length) needs.push(`brings ${item.dependencies.join(", ")}`);
+      if (needs.length) about.append(el("div", "desc", `Asks to ${needs.join("; ")}`));
+      const has = installed.has(item.name);
+      const button = control({ name: `catalog:${item.folder}` }, el("button", null, has ? "Added" : "Add"), "add");
+      button.disabled = has;
+      button.title = has ? `${item.name} is on` : `Add ${item.name} from ${page.catalog.src}`;
+      button.addEventListener("click", () => rt.send("pack-add", JSON.stringify({ src: page.catalog.src, subdir: item.folder })));
+      row.append(about, button);
+      addCard.append(row);
+    }
+  }
+  section.append(addCard, el("div", "spacer"));
 
   // Every plugin at once, as the :pack-* commands do.
   const all = page.plugins || [];
@@ -974,6 +1022,7 @@ function renderPlugins() {
     const perms = wide(el("div", "keyrow"));
     perms.append(el("div", "desc", plugin.trusted ? "Trusted: runs without the sandbox" : plugin.approved.length ? `Approved: ${plugin.approved.join(", ")}` : "No permissions approved"));
     if (plugin.triggers.length) perms.append(el("div", "desc", `Loads on ${plugin.triggers.join(", ")}`));
+    perms.append(el("div", "desc", plugin.added ? "Added here (plugins.toml)" : "From config.lua"));
     if (plugin.shares?.length) perms.append(el("div", "desc", `Updates together with ${plugin.shares.join(", ")}, from the same repository`));
     block.append(perms);
     if (plugin.update) {
@@ -989,7 +1038,7 @@ function renderPlugins() {
     section.append(block, el("div", "spacer"));
   });
   if (!plugins.length) {
-    const empty = el("p", null, (page.plugins || []).length ? "No plugin matches." : "No plugins yet. Add one with rt.pack.add in config.lua.");
+    const empty = el("p", null, (page.plugins || []).length ? "No plugin matches." : "No plugins yet. Add one above, or with rt.pack.add in config.lua.");
     empty.id = "empty";
     section.append(empty);
   }

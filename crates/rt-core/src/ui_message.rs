@@ -56,6 +56,8 @@ pub enum UiMessage {
     Plugin { name: String, action: PluginAction },
     /// The Plugins tab's buttons for every plugin.
     Pack { action: PackAction },
+    /// The Plugins tab's Add: a plugin from git, by URL and folder.
+    PackAdd { src: String, subdir: String },
     /// The Extensions tab's buttons; `id` is empty for checking all.
     Extension { id: String, action: ExtensionAction },
     /// The Extensions tab's Install box: a Web Store page or an id.
@@ -89,6 +91,8 @@ pub enum PackAction {
     Restore,
     /// Remove checkouts config.lua no longer uses.
     Clean,
+    /// Fetch the catalog repository and list its plugins.
+    Browse,
 }
 
 /// What the Plugins tab asks for.
@@ -364,6 +368,14 @@ struct Extension {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct PackAdd {
+    src: String,
+    #[serde(default)]
+    subdir: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Pack {
     action: PackAction,
 }
@@ -407,6 +419,36 @@ fn setting_name(name: String) -> Result<String, String> {
     } else {
         Err(format!("no setting {name:?}"))
     }
+}
+
+/// A git URL the Plugins tab may add (`rt_config::plugins::valid_git_url`
+/// says the same; this crate can't use it): https, ssh, `user@host:path` or
+/// `file://`.
+fn plugin_git_url(src: &str) -> bool {
+    !src.is_empty()
+        && src.len() <= 500
+        && !src.starts_with('-')
+        && !src.chars().any(|c| c.is_whitespace() || c.is_control())
+        && (src.starts_with("https://")
+            || src.starts_with("ssh://")
+            || src.starts_with("file:///")
+            || src
+                .split_once('@')
+                .is_some_and(|(_, rest)| rest.contains(':') && !rest.contains("://")))
+}
+
+/// A folder in a repository: plain names joined by `/`, never `..`.
+fn plugin_folder(subdir: &str) -> bool {
+    subdir.len() <= 200
+        && (subdir.is_empty()
+            || subdir.split('/').all(|part| {
+                !part.is_empty()
+                    && part != "."
+                    && part != ".."
+                    && part
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            }))
 }
 
 /// Validate a message from the page at `url`.
@@ -460,6 +502,18 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             let site =
                 site(&text).ok_or_else(|| format!("{text:?} isn't a site, e.g. example.com"))?;
             Ok(UiMessage::ClearSite { site })
+        }
+        ("settings", "pack-add") => {
+            let PackAdd { src, subdir } = payload(name, json)?;
+            let src = src.trim().to_string();
+            let subdir = subdir.trim().trim_matches('/').to_string();
+            if !plugin_git_url(&src) {
+                return Err(format!("{name}: {src:?} isn't a git URL"));
+            }
+            if !plugin_folder(&subdir) {
+                return Err(format!("{name}: bad folder {subdir:?}"));
+            }
+            Ok(UiMessage::PackAdd { src, subdir })
         }
         ("settings", "pack") => {
             let Pack { action } = payload(name, json)?;
@@ -844,6 +898,26 @@ mod tests {
             })
         );
         assert!(parse(page, "pack", r#"{"action": "delete-everything"}"#).is_err());
+        assert_eq!(
+            parse(
+                page,
+                "pack-add",
+                r#"{"src": "https://github.com/a/b", "subdir": "pass"}"#
+            ),
+            Ok(UiMessage::PackAdd {
+                src: "https://github.com/a/b".into(),
+                subdir: "pass".into()
+            })
+        );
+        assert!(parse(page, "pack-add", r#"{"src": "git@github.com:a/b.git"}"#).is_ok());
+        for bad in [
+            r#"{"src": "--upload-pack=x"}"#,
+            r#"{"src": "/home/me/repo"}"#,
+            r#"{"src": "ftp://example.com/x"}"#,
+            r#"{"src": "https://x/y", "subdir": "../up"}"#,
+        ] {
+            assert!(parse(page, "pack-add", bad).is_err(), "{bad}");
+        }
         assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
         assert!(

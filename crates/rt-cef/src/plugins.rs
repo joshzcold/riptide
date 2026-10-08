@@ -485,6 +485,9 @@ pub fn run_command(command: &rt_core::Command) -> bool {
         rt_core::Command::PackCheck { name } => check_updates(name.as_deref()),
         rt_core::Command::PackUpdate { name } => update(name.as_deref()),
         rt_core::Command::PackSync => sync(),
+        rt_core::Command::PackAdd { src, subdir } => {
+            add(src, subdir.as_deref().unwrap_or_default())
+        }
         rt_core::Command::PackClean => clean(),
         rt_core::Command::PackRestore => restore(),
         rt_core::Command::PackLoad { name, keys } => {
@@ -731,6 +734,7 @@ pub fn page_data() -> serde_json::Value {
                     format!("{} ({})", spec.src, spec.subdir)
                 },
                 "git": spec.dir.is_none() && !spec.src.is_empty(),
+                "added": spec.added,
                 // The plugins it shares a checkout with, which update with it.
                 "shares": if spec.dir.is_none() && !spec.src.is_empty() {
                     members_of(&spec.src).into_iter().filter(|n| *n != spec.name).collect()
@@ -1055,6 +1059,121 @@ fn apply_reviewed(name: &str) -> bool {
     }
 }
 
+/// `:pack-add` and the Plugins tab's Add: a plugin from git into
+/// plugins.toml, then reload, which installs it and asks for its permissions.
+pub fn add(src: &str, subdir: &str) {
+    let Some((config_dir, _)) = paths() else {
+        return;
+    };
+    let (src, subdir) = (src.trim(), subdir.trim().trim_matches('/'));
+    if !rt_config::plugins::valid_git_url(src) {
+        return shell::show_message(
+            Level::Error,
+            format!("{src:?} isn't a git URL (https://…, ssh://… or user@host:path)"),
+        );
+    }
+    if !rt_config::plugins::valid_subdir(subdir) {
+        return shell::show_message(
+            Level::Error,
+            format!("{subdir:?} isn't a folder in a repository"),
+        );
+    }
+    let mut file = match rt_config::plugins::PluginsFile::load(&config_dir) {
+        Ok(file) => file,
+        Err(e) => return shell::show_message(Level::Error, e),
+    };
+    if !file.add(src, subdir) {
+        return shell::show_message(Level::Info, "That plugin is in plugins.toml already");
+    }
+    if let Err(e) = file.save(&config_dir) {
+        return shell::show_message(Level::Error, e);
+    }
+    shell::show_message(Level::Info, "Added to plugins.toml; installing it");
+    reload();
+}
+
+thread_local! {
+    /// The catalog's plugins once Browse has fetched it: its URL, then each
+    /// folder's name, description and dependencies.
+    static CATALOG: std::cell::RefCell<Option<serde_json::Value>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The Plugins tab's Browse: fetch `plugins.catalog` and list its plugins,
+/// one per folder with a riptide-plugin.toml. Nothing in it runs.
+pub fn browse() {
+    let Some((_, data_dir)) = paths() else { return };
+    let Some(src) = shell::with(|s| s.engine.settings().str("plugins.catalog").to_string()) else {
+        return;
+    };
+    if !rt_config::plugins::valid_git_url(&src) {
+        return shell::show_message(
+            Level::Error,
+            format!("plugins.catalog: {src:?} isn't a git URL"),
+        );
+    }
+    shell::show_message(Level::Info, format!("Fetching {src}…"));
+    let dir = data_dir.join("catalog").join(repo_key(&src));
+    std::thread::spawn(move || {
+        let fetched = if dir.is_dir() {
+            git::fetch_latest(&dir).and_then(|latest| git::checkout(&dir, &latest))
+        } else {
+            git::install(&src, &dir, None)
+        };
+        let listing = fetched.map(|_| {
+            let mut entries: Vec<serde_json::Value> = std::fs::read_dir(&dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter(|e| e.path().join("riptide-plugin.toml").is_file())
+                .filter_map(|e| {
+                    let folder = e.file_name().to_string_lossy().into_owned();
+                    let manifest = Manifest::read(&e.path()).ok()?;
+                    Some(serde_json::json!({
+                        "folder": folder,
+                        "name": manifest.name.unwrap_or_else(|| folder.clone()),
+                        "description": manifest.description.unwrap_or_default(),
+                        "dependencies": manifest.dependencies,
+                        "permissions": manifest.permissions.describe(),
+                    }))
+                })
+                .collect();
+            entries.sort_by(|a, b| a["folder"].as_str().cmp(&b["folder"].as_str()));
+            serde_json::json!({ "src": src, "plugins": entries })
+        });
+        let text = match listing {
+            Ok(json) => json.to_string(),
+            Err(e) => serde_json::json!({ "error": e }).to_string(),
+        };
+        let mut task = Browsed::new(text);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+wrap_task! {
+    struct Browsed {
+        // The listing as JSON, or {"error": …}.
+        json: String,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let value: serde_json::Value = serde_json::from_str(&self.json).unwrap_or_default();
+            if let Some(error) = value["error"].as_str() {
+                return shell::show_message(Level::Error, format!("plugins.catalog: {error}"));
+            }
+            CATALOG.with(|c| *c.borrow_mut() = Some(value));
+            crate::settings_page::refresh();
+        }
+    }
+}
+
+/// The catalog for the Plugins tab, once Browse has fetched it.
+pub fn catalog_data() -> serde_json::Value {
+    CATALOG
+        .with(|c| c.borrow().clone())
+        .unwrap_or(serde_json::Value::Null)
+}
+
 /// `:pack-restore`: every plugin from git back on its commit in
 /// rt-pack-lock.json, e.g. after pulling your dotfiles. Reloading does it.
 pub fn restore() {
@@ -1147,6 +1266,14 @@ pub fn remove(name: &str) {
     else {
         return;
     };
+    // Added from the tab: out of plugins.toml too, so it's gone for good.
+    let from_file = spec.added
+        && rt_config::plugins::PluginsFile::load(&config_dir)
+            .and_then(|mut file| {
+                let removed = file.remove(name);
+                file.save(&config_dir).map(|()| removed)
+            })
+            .unwrap_or(false);
     let shared = spec.dir.is_none() && members_of(&spec.src).len() > 1;
     if spec.dir.is_none() && !shared {
         let dir = repo_folder(&spec, &data_dir);
@@ -1162,6 +1289,10 @@ pub fn remove(name: &str) {
         lock.save(&config_dir)
     });
     STATUS.with(|s| s.borrow_mut().remove(name));
+    if from_file {
+        shell::show_message(Level::Info, format!("Removed {name}"));
+        return reload();
+    }
     shell::show_message(
         Level::Info,
         format!(

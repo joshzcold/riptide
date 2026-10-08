@@ -580,6 +580,8 @@ pub struct PluginSpec {
     /// The plugin's folder inside its git repository, for a repository of
     /// several plugins; empty for its root.
     pub subdir: String,
+    /// From `plugins.toml` (the Plugins tab or `:pack-add`), not config.lua.
+    pub added: bool,
 }
 
 impl PluginSpec {
@@ -1455,8 +1457,10 @@ pub fn emit(
 /// Run a Lua config file. `settings` is the state so far, which `rt.get` reads.
 /// Changes made before an error are kept, like qutebrowser's `config.py`.
 pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Option<String>) {
+    // No config.lua, but plugins.toml: the plugins still need the runtime.
     let source = match std::fs::read_to_string(path) {
         Ok(source) => source,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return (Vec::new(), Some(format!("{}: {e}", path.display()))),
     };
     let state = Rc::new(RefCell::new(State {
@@ -1480,6 +1484,15 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
                 .exec()
                 .map_err(|e| e.to_string())
         });
+    let file_errors = add_file_plugins(&lua, &state, &paths.config_dir);
+    let result = match (result, file_errors.is_empty()) {
+        (Ok(()), true) => Ok(()),
+        (Ok(()), false) => Err(file_errors.join("\n")),
+        (Err(e), _) => Err(std::iter::once(e)
+            .chain(file_errors)
+            .collect::<Vec<_>>()
+            .join("\n")),
+    };
     let ops = {
         let mut state = state.borrow_mut();
         state.loaded = true;
@@ -1494,6 +1507,51 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
         })
     });
     (ops, result.err().map(|e| tidy_error(&e, &paths.config_dir)))
+}
+
+/// The plugins in `plugins.toml`, through `rt.pack.add` like config.lua's,
+/// except ones config.lua already added by name. Returns the errors.
+fn add_file_plugins(lua: &Lua, state: &Rc<RefCell<State>>, config_dir: &Path) -> Vec<String> {
+    let file = match crate::plugins::PluginsFile::load(config_dir) {
+        Ok(file) => file,
+        Err(e) => return vec![e],
+    };
+    let mut errors = Vec::new();
+    for spec in file.plugins {
+        let name = spec.plugin_name();
+        if state.borrow().specs.iter().any(|s| s.name == name) {
+            continue;
+        }
+        let added = (|| -> mlua::Result<()> {
+            let table = lua.create_table()?;
+            for (key, value) in [
+                ("src", &spec.src),
+                ("subdir", &spec.subdir),
+                ("dir", &spec.dir),
+                ("name", &spec.name),
+                ("version", &spec.version),
+            ] {
+                if !value.is_empty() {
+                    table.set(key, value.as_str())?;
+                }
+            }
+            if let Some(opts) = &spec.opts {
+                table.set("opts", lua.to_value(opts)?)?;
+            }
+            let api: mlua::Table = lua.globals().get("rt")?;
+            let pack: mlua::Table = api.get("pack")?;
+            pack.get::<mlua::Function>("add")?.call::<()>(table)
+        })();
+        match added {
+            Ok(()) => {
+                if let Some(s) = state.borrow_mut().specs.iter_mut().find(|s| s.name == name) {
+                    s.added = true;
+                }
+            }
+            Err(e) => errors.push(format!("plugins.toml: {name}: {e}")),
+        }
+    }
+    errors
 }
 
 /// Chunk names relative to the config dir. Lua truncates long names in error
@@ -1903,6 +1961,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     commands,
                     keys: parsed,
                     subdir,
+                    added: false,
                 });
                 Ok(())
             },
@@ -2619,6 +2678,45 @@ assert(not pcall(rt.statusbar.widget, "a b", function() end))
         let (texts, errors) = widget_texts(&names, &ctx);
         assert_eq!(texts.len(), 2);
         assert!(errors.is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn plugins_toml_adds_plugins_with_options_unless_config_lua_has_them() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-plugins-toml-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        std::fs::create_dir_all(&paths.config_dir).unwrap();
+        let config = paths.config_dir.join("config.lua");
+        std::fs::write(
+            paths.config_dir.join("plugins.toml"),
+            "[[plugin]]\nsrc = \"https://example.com/p.git\"\nsubdir = \"pass\"\nopts = { gopass = true }\n\n[[plugin]]\ndir = \"/p/mine\"\n",
+        )
+        .unwrap();
+        // No config.lua at all: plugins.toml still loads.
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(run(&config, &paths, Settings::default()).1, None);
+        let specs = plugin_specs();
+        assert_eq!(
+            specs
+                .iter()
+                .map(|s| (s.name.as_str(), s.added))
+                .collect::<Vec<_>>(),
+            [("pass", true), ("mine", true)]
+        );
+        // config.lua's own spec for a name wins.
+        std::fs::write(
+            &config,
+            "rt.pack.add({ dir = '/p/elsewhere', name = 'mine' })",
+        )
+        .unwrap();
+        assert_eq!(run(&config, &paths, Settings::default()).1, None);
+        let mine = plugin_specs()
+            .into_iter()
+            .find(|s| s.name == "mine")
+            .unwrap();
+        assert!(!mine.added);
+        assert_eq!(mine.dir.as_deref(), Some(Path::new("/p/elsewhere")));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -6,7 +6,7 @@ The password plugins fill logins from your password manager's command line tool.
 rt.pack.add({ "https://github.com/joshzcold/riptide-plugins", subdir = "pass" })
 ```
 
-riptide installs it the first time it starts with this (it needs `git`), along with the `passwords` plugin it fills through, and asks you to allow each: the password manager plugin to run programs (your password manager), and `passwords` to fill in pages. Like other plugins from git, they stay on the version installed until you update them from `:plugins`. Add more than one, and the picker lists the logins of all of them.
+Or open `:plugins`, press **Browse** and **Add** the one you want. riptide installs it the first time it starts with this (it needs `git`), along with the `passwords` plugin it fills through, and asks you to allow each: the password manager plugin to run programs (your password manager), and `passwords` to fill in pages. Like other plugins from git, they stay on the version installed until you update them from `:plugins`. Add more than one, and the picker lists the logins of all of them.
 
 | Key | Command | Fills |
 |---|---|---|

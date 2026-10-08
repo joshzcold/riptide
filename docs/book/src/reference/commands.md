@@ -76,6 +76,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:plugins` |  | Show your plugins, their permissions and updates |
 | `:pack-check` |  | Check plugins from git for new commits, to review and update on :plugins: :pack-check [name] |
 | `:pack-update` |  | Update plugins from git to their newest commits, all or one: :pack-update [name] |
+| `:pack-add` |  | Add a plugin from git, kept in plugins.toml: :pack-add &lt;url&gt; [folder in the repository] |
 | `:pack-sync` |  | Remove plugins no longer in config.lua, update the rest and install what's missing |
 | `:pack-clean` |  | Remove the checkouts and lockfile entries of plugins no longer in config.lua |
 | `:pack-restore` |  | Put every plugin from git back on its commit in rt-pack-lock.json |

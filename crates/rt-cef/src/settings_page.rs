@@ -27,6 +27,7 @@ pub fn page() -> Arc<[u8]> {
 /// The settings as JSON, safe inside an inline `<script>`.
 fn data() -> Option<String> {
     let plugins = crate::plugins::page_data();
+    let catalog = crate::plugins::catalog_data();
     let extensions = crate::extensions::page_data();
     shell::with(|s| {
         let entries = rt_core::settings_page::build(
@@ -37,6 +38,7 @@ fn data() -> Option<String> {
         );
         let mut json = serde_json::to_value(&entries).unwrap_or_default();
         json["plugins"] = plugins;
+        json["catalog"] = catalog;
         json["extensions"] = extensions;
         // `</` would end the inline <script> early.
         serde_json::to_string(&json)

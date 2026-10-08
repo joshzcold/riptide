@@ -4,6 +4,18 @@ Plugins add commands, key bindings, hooks and more, written in Lua like `config.
 
 ## Adding a plugin
 
+The quickest way is the Plugins tab (`:plugins`): **Browse** lists the plugins in [riptide-plugins](https://github.com/joshzcold/riptide-plugins) (or the repository `plugins.catalog` names) with what each asks for, and **Add** installs one. You can also paste a git URL and the folder in it, or run `:pack-add <url> [folder]`. Plugins added this way are kept in `plugins.toml` in the config folder, which riptide writes for you:
+
+```toml
+# plugins.toml
+[[plugin]]
+src = "https://github.com/joshzcold/riptide-plugins"
+subdir = "keepassxc"
+opts = { database = "~/Passwords.kdbx" }  # options, which you can add by hand
+```
+
+**Remove** on the tab takes such a plugin out of `plugins.toml` again. For more control, add plugins in `config.lua` instead; if both name the same plugin, `config.lua`'s wins:
+
 ```lua
 -- config.lua
 rt.pack.add({
