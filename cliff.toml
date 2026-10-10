@@ -39,6 +39,11 @@ split_commits = false
 protect_breaking_commits = true
 tag_pattern = "v[0-9].*"
 sort_commits = "oldest"
+# A word like lua:<name> would be an unclosed HTML tag in the book; as code
+# it reads the same there and on riptide's :changelog page.
+commit_preprocessors = [
+    { pattern = '([^\s`]*<[\w-]+>[^\s`]*)', replace = "`${1}`" },
+]
 commit_parsers = [
     { message = "^feat", group = "<!-- 0 -->Features" },
     { message = "^fix", group = "<!-- 1 -->Bug fixes" },

@@ -614,10 +614,16 @@ pub fn settings_markdown() -> String {
             other => lua_type(other).replace('|', "\\|"),
         };
         let default = def.default_value().to_string().replace('|', "\\|");
+        // `<name>` or `<Ctrl-d>` in a description must not read as HTML.
+        let description = def
+            .description
+            .replace('|', "\\|")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
         let _ = writeln!(
             out,
-            "| `{}` | {kind} | `{default}` | {} |",
-            def.name, def.description
+            "| `{}` | {kind} | `{default}` | {description} |",
+            def.name
         );
     }
     out
