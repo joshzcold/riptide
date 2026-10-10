@@ -149,7 +149,7 @@ pub fn count_blocked(browser: i32) {
     }
 }
 
-/// A new page started loading in `browser`, or the tab closed.
+/// A new page is being requested in `browser` (IO thread).
 pub fn reset_blocked(browser: i32) {
     if let Ok(mut blocked) = BLOCKED.lock() {
         blocked.remove(&browser);

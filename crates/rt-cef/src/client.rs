@@ -711,9 +711,6 @@ wrap_load_handler! {
                 && let Some(frame) = frame.filter(|f| f.is_main() != 0)
             {
                 crate::userstyle::inject(frame);
-                if let Some(browser) = browser {
-                    crate::adblock::reset_blocked(browser.identifier());
-                }
                 let url = CefString::from(&frame.url()).to_string();
                 crate::lua::emit("load_started", &[("url", &url)]);
             }

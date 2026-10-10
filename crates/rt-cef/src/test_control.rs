@@ -29,17 +29,24 @@ mod enabled {
 
     /// Long enough for a slow page's eval; the socket client waits longer.
     const TIMEOUT: Duration = Duration::from_secs(20);
+    const EVAL_TIMEOUT: Duration = Duration::from_secs(5);
 
     /// Runs on the socket's thread: the work happens on the UI thread, and
     /// this waits for its answer.
     pub fn handle(request: TestRequest) -> Reply {
+        // An eval sent as the page navigates is never answered; giving up
+        // sooner leaves the test time to ask the new page.
+        let timeout = match request {
+            TestRequest::Eval { .. } | TestRequest::EvalBar { .. } => EVAL_TIMEOUT,
+            _ => TIMEOUT,
+        };
         let (tx, rx) = mpsc::channel();
         let mut task = RunTest::new(RefCell::new(Some((request, tx))));
         if post_task(ThreadId::UI, Some(&mut task)) == 0 {
             return Err("the browser is shutting down".into());
         }
-        rx.recv_timeout(TIMEOUT)
-            .map_err(|_| "no answer from the UI thread".to_string())?
+        rx.recv_timeout(timeout)
+            .map_err(|_| "no answer from the UI thread or the page".to_string())?
     }
 
     fn run(request: TestRequest, tx: Sender<Reply>) {

@@ -41,6 +41,7 @@ fn download_delete_removes_the_newest_download() {
     b.follow_hint("hint", |h| h.text == "download");
     let saved = b.scratch().join("dl/saved.txt");
     b.wait_file(&saved);
+    b.wait_download_finished();
     b.run("download-delete");
     let start = std::time::Instant::now();
     while saved.exists() {

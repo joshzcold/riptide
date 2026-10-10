@@ -39,6 +39,7 @@ fn downloads_open_dispatcher_opens_finished_downloads() {
     );
     b.follow_hint("hint", |h| h.text == "download");
     b.wait_file(&b.scratch().join("dl/saved.txt"));
+    b.wait_download_finished();
     b.run("download-open");
     let opened = b.wait_file(&b.scratch().join("opened"));
     assert!(opened.trim().ends_with("dl/saved.txt"), "{opened:?}");
@@ -50,7 +51,7 @@ fn downloads_remove_finished_clears_the_list() {
     let b = launch("downloads.location.prompt = false\ndownloads.remove_finished = 0");
     b.follow_hint("hint", |h| h.text == "download");
     b.wait_file(&b.scratch().join("dl/saved.txt"));
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    b.wait_download_finished();
     b.run("download-open");
     b.wait_until("the finished download is gone from the list", |s| {
         s.message()

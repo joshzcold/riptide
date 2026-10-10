@@ -288,6 +288,14 @@ impl Browser {
         panic!("timed out waiting for {}", path.display());
     }
 
+    /// Wait until riptide counts a download as finished. The file is on disk
+    /// a moment before that, so `:download-open` and friends wait for this.
+    pub fn wait_download_finished(&self) {
+        self.wait_until("the download finishes", |s| {
+            s.message().is_some_and(|m| m.contains("Download finished"))
+        });
+    }
+
     /// Wait for the browser to exit by itself, e.g. after `:quit`.
     pub fn wait_exit(&self) -> std::process::ExitStatus {
         let start = Instant::now();
@@ -453,10 +461,34 @@ impl Browser {
     /// Start hints with `command` (e.g. `hint` or `hint inputs`) and press the
     /// label of the first element `pick` chooses, which clicks it for real.
     pub fn follow_hint(&self, command: &str, pick: impl Fn(&Hint) -> bool) {
-        self.run(command);
-        let state = self.wait_until("hints are shown", |s| {
-            s.mode == "hint" && !s.hints.is_empty()
-        });
+        // A page that redraws itself (riptide's own pages do) ends hint mode
+        // as it starts, so ask again if no hints come up.
+        let start = Instant::now();
+        let state = loop {
+            self.run(command);
+            let asked = Instant::now();
+            let shown = loop {
+                self.check_running();
+                if let Ok(Some(data)) = self.request(TestRequest::State)
+                    && let Ok(state) = serde_json::from_value::<State>(data)
+                    && state.mode == "hint"
+                    && !state.hints.is_empty()
+                {
+                    break Some(state);
+                }
+                if asked.elapsed() > Duration::from_secs(3) {
+                    break None;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            };
+            if let Some(state) = shown {
+                break state;
+            }
+            assert!(
+                start.elapsed() < TIMEOUT,
+                "timed out waiting until hints are shown"
+            );
+        };
         let Some(hint) = state.hints.iter().find(|h| pick(h)) else {
             panic!("no hint matches; hints: {:#?}", state.hints);
         };

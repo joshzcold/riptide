@@ -259,6 +259,16 @@ fn extension_install_asks_first_and_loads_after_restart() {
     let page = b.url("page.html");
     b.restart_with(&[&page]);
     b.wait_until("the page loads", |s| s.tab().is_loaded(&page));
+    // A page that loads while Chromium is still registering the extension
+    // misses its content script; the next load has it.
+    let start = std::time::Instant::now();
+    while b.try_eval("document.documentElement.dataset.packed || ''") != Ok("yes".into()) {
+        if start.elapsed() > std::time::Duration::from_secs(4) {
+            b.run("reload");
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     b.wait_eval("document.documentElement.dataset.packed || ''", "yes");
 
     // The same version again changes nothing; a newer one says what's new.

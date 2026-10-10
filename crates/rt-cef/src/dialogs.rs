@@ -249,6 +249,11 @@ wrap_resource_request_handler! {
                 .main_frame()
                 .map(|f| CefString::from(&f.url()).to_string())
                 .unwrap_or_default();
+            // A new page starts its count here, on the thread that counts, so
+            // none of its own blocked requests can come before the reset.
+            if request.resource_type() == ResourceType::MAIN_FRAME {
+                crate::adblock::reset_blocked(browser.identifier());
+            }
             match crate::adblock::check(&url, &page, request.resource_type()) {
                 rt_adblock::Verdict::Block => {
                     crate::adblock::count_blocked(browser.identifier());
