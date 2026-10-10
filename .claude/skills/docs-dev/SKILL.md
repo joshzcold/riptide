@@ -17,9 +17,9 @@ The developer guide is part of the mdBook site in `docs/book/` (`docs/book/src/d
 | Commit conventions, generated files, pre-push checks | `dev/contributing.md` |
 | How the docs are built, generated or styled | `dev/docs.md`, and both docs skills (`docs-user`, `docs-dev`) |
 | Versioning, changelog, release workflow, packaging | `dev/releasing.md` |
-| Plans, status, gaps | `docs/PLAN.md` only (not published) |
+| Plans and open work | `docs/PLAN.md` only (not published); a finished milestone becomes one line in its Done table |
 
-- **Pitfalls and lessons learned** (a CEF quirk, a threading rule, a flaky-test cause) go in the developer guide where the next person will look, as well as in the milestone's notes in `docs/PLAN.md`.
+- **Pitfalls and lessons learned** (a CEF quirk, a threading rule, a flaky-test cause) go in `docs/book/src/dev/cef-pitfalls.md` or the developer guide page for their area, where the next person will look. `docs/PLAN.md` lists only open work.
 - **Manual testing rules** live in `.claude/skills/local-testing/SKILL.md`; `dev/testing.md` links to it rather than copying it.
 - A new `./task` target is listed in `dev/building.md`, or `dev/testing.md` if it's a check.
 - If the change is also visible to users, use the `docs-user` skill too.

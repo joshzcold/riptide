@@ -35,6 +35,7 @@
 
 - [Building](dev/building.md)
 - [Architecture](dev/architecture.md)
+- [CEF pitfalls](dev/cef-pitfalls.md)
 - [Testing](dev/testing.md)
 - [Contributing](dev/contributing.md)
 - [Writing documentation](dev/docs.md)

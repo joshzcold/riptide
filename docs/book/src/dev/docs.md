@@ -9,8 +9,8 @@ This book is the documentation. It's built with [mdBook](https://rust-lang.githu
 | A new or changed command, setting or default binding | Nothing by hand: regenerate the reference (below). Add or update a guide page only if the feature needs explaining beyond its one-line description. |
 | New user-visible behaviour (a mode, a prompt, a page, a file riptide reads) | The matching page under `docs/book/src/guide/` or `configuration/`. Add a page to `SUMMARY.md` if no existing one fits. |
 | How riptide is built, structured, tested or released | The matching page under `docs/book/src/dev/`. |
-| A pitfall or lesson learned (a CEF quirk, a threading rule) | `docs/book/src/dev/`, and the milestone notes in `docs/PLAN.md`. |
-| Plans, status and gaps | `docs/PLAN.md` only; it isn't published. |
+| A pitfall or lesson learned (a CEF quirk, a threading rule) | [CEF pitfalls](cef-pitfalls.md), or the developer guide page for its area. |
+| Plans and what's left to do | `docs/PLAN.md` only; it isn't published. Finished work is one line there, documented in the guides. |
 
 Refactors, internal-only fixes and test-only changes don't need documentation.
 
