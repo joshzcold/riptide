@@ -21,7 +21,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-pin` | `<Ctrl-p>` | Pin or unpin the current tab (count: tab number) |
 | `:tab-next` | `<Ctrl-PgDown>` `J` | Switch to the next tab |
 | `:tab-prev` | `<Ctrl-PgUp>` `K` `gT` | Switch to the previous tab |
-| `:tab-focus` | `<Alt-1>` `<Alt-2>` `<Alt-3>` `<Alt-4>` `<Alt-5>` `<Alt-6>` `<Alt-7>` `<Alt-8>` `<Alt-9>` `<Ctrl-Tab>` `<Ctrl-^>` `g$` `g0` `g^` | Select a tab by number, or 'last' |
+| `:tab-focus` | `<Alt-1>` `<Alt-2>` `<Alt-3>` `<Alt-4>` `<Alt-5>` `<Alt-6>` `<Alt-7>` `<Alt-8>` `<Alt-9>` `<Ctrl-Tab>` `<Ctrl-^>` `g$` `g0` `g^` | Select a tab by number, 'last', or 'stack-prev'/'stack-next' through recently focused tabs |
 | `:tab-move` | `gJ` `gK` `gm` | Move the current tab: +, -, start, end or a number |
 | `:tab-only` | `co` | Close all tabs except the current one |
 | `:tab-clone` |  | Duplicate the current tab: :tab-clone [-b] [-w] |

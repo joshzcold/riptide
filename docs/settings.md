@@ -201,6 +201,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.close_mouse_button` | middle \| right \| none | `middle` | Which mouse button closes a tab clicked in the tab bar |
 | `tabs.close_mouse_button_on_bar` | new-tab \| close-current \| close-last \| ignore | `new-tab` | What tabs.close_mouse_button does on the empty part of the tab bar |
 | `tabs.favicons.show` | always \| never \| pinned | `always` | Show site icons in the tab bar: always, never, or only on pinned tabs |
+| `tabs.focus_stack_size` | integer | `10` | How many recently focused tabs tab-focus stack-prev can go back through; -1 for no limit |
 | `tabs.indicator.width` | integer | `3` | Width in pixels of the loading indicator at the left of each tab (0 hides it) |
 | `tabs.last_close` | ignore \| blank \| startpage \| default-page \| close | `ignore` | What closing the last tab does |
 | `tabs.max_width` | integer | `-1` | Largest width in pixels of a tab in a top or bottom tab bar (-1 for no limit) |

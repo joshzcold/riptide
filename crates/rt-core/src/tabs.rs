@@ -23,7 +23,32 @@ pub struct TabList<T> {
     pinned: Vec<bool>,
     current: usize,
     previous: Option<usize>,
+    /// Tabs focused before, oldest first, for `tab-focus stack-prev`.
+    stack: Vec<usize>,
+    /// Tabs `stack-prev` went back from, nearest last, for `stack-next`.
+    forward: Vec<usize>,
+    /// How the next focus change came about.
+    next_focus: StackMove,
 }
+
+/// Whether a focus change walks the stack, which changes how it's recorded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum StackMove {
+    #[default]
+    None,
+    Prev,
+    Next,
+}
+
+/// Which way `tab-focus` walks the stack of recently focused tabs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StackDirection {
+    Prev,
+    Next,
+}
+
+/// A bound on the stack even when `tabs.focus_stack_size` sets none.
+const STACK_LIMIT: usize = 1000;
 
 impl<T> Default for TabList<T> {
     fn default() -> Self {
@@ -32,6 +57,9 @@ impl<T> Default for TabList<T> {
             pinned: Vec::new(),
             current: 0,
             previous: None,
+            stack: Vec::new(),
+            forward: Vec::new(),
+            next_focus: StackMove::None,
         }
     }
 }
@@ -124,6 +152,9 @@ impl<T> TabList<T> {
         self.pinned.insert(to, pinned);
         self.current = shifted(self.current, from, to);
         self.previous = self.previous.map(|p| shifted(p, from, to));
+        for i in self.stack.iter_mut().chain(self.forward.iter_mut()) {
+            *i = shifted(*i, from, to);
+        }
     }
 
     /// Insert a tab and return its index. The first tab is always focused.
@@ -142,6 +173,11 @@ impl<T> TabList<T> {
             self.current += 1;
         }
         self.previous = self.previous.map(|p| if p >= index { p + 1 } else { p });
+        for i in self.stack.iter_mut().chain(self.forward.iter_mut()) {
+            if *i >= index {
+                *i += 1;
+            }
+        }
         if focus {
             self.focus(index);
         }
@@ -160,6 +196,14 @@ impl<T> TabList<T> {
             Some(p) if p > index => Some(p - 1),
             p => p,
         };
+        for stack in [&mut self.stack, &mut self.forward] {
+            stack.retain(|&i| i != index);
+            for i in stack.iter_mut() {
+                if *i > index {
+                    *i -= 1;
+                }
+            }
+        }
         if index < self.current
             || (index == self.current && self.current == self.tabs.len() && self.current > 0)
         {
@@ -174,9 +218,52 @@ impl<T> TabList<T> {
         if index >= self.tabs.len() || index == self.current {
             return false;
         }
+        match std::mem::take(&mut self.next_focus) {
+            StackMove::Prev => {}
+            walked => {
+                // Any other switch starts a new path; stack-next keeps its way forward.
+                if walked == StackMove::None {
+                    self.forward.clear();
+                }
+                self.stack.push(self.current);
+                if self.stack.len() > STACK_LIMIT {
+                    self.stack.remove(0);
+                }
+            }
+        }
         self.previous = Some(self.current);
         self.current = index;
         true
+    }
+
+    /// The tab `tab-focus stack-prev` or `stack-next` goes to, keeping at most
+    /// `size` tabs (`tabs.focus_stack_size`, `None` for no limit). Focus it
+    /// next with [`TabList::focus`], which records the step.
+    pub fn stack_target(
+        &mut self,
+        direction: StackDirection,
+        size: Option<usize>,
+    ) -> Option<usize> {
+        if let Some(size) = size {
+            let extra = self.stack.len().saturating_sub(size);
+            self.stack.drain(..extra);
+        }
+        let (from, step) = match direction {
+            StackDirection::Prev => (&mut self.stack, StackMove::Prev),
+            StackDirection::Next => (&mut self.forward, StackMove::Next),
+        };
+        // Closed tabs are gone from it already; the current one is skipped.
+        let target = loop {
+            let i = from.pop()?;
+            if i != self.current && i < self.tabs.len() {
+                break i;
+            }
+        };
+        if step == StackMove::Prev {
+            self.forward.push(self.current);
+        }
+        self.next_focus = step;
+        Some(target)
     }
 
     pub fn previous(&self) -> Option<usize> {
@@ -373,6 +460,73 @@ mod tests {
         tabs.focus(2);
         assert_eq!(tabs.offset(1), 0);
         assert_eq!(tabs.offset(4), 0);
+    }
+
+    /// Walk the stack as `tab-focus stack-prev`/`stack-next` would.
+    fn walk(tabs: &mut TabList<&'static str>, direction: StackDirection) -> Option<&'static str> {
+        let index = tabs.stack_target(direction, Some(10))?;
+        tabs.focus(index);
+        tabs.current().copied()
+    }
+
+    #[test]
+    fn stack_prev_and_next_walk_back_and_forth_through_focused_tabs() {
+        use StackDirection::{Next, Prev};
+        let mut tabs = list(&["a", "b", "c", "d"]);
+        for i in [1, 2, 3] {
+            tabs.focus(i);
+        }
+        assert_eq!(walk(&mut tabs, Prev), Some("c"));
+        assert_eq!(walk(&mut tabs, Prev), Some("b"));
+        assert_eq!(walk(&mut tabs, Next), Some("c"));
+        assert_eq!(walk(&mut tabs, Prev), Some("b"));
+        assert_eq!(walk(&mut tabs, Prev), Some("a"));
+        assert_eq!(walk(&mut tabs, Prev), None);
+        assert_eq!(walk(&mut tabs, Next), Some("b"));
+        assert_eq!(walk(&mut tabs, Next), Some("c"));
+        assert_eq!(walk(&mut tabs, Next), Some("d"));
+        assert_eq!(walk(&mut tabs, Next), None);
+    }
+
+    #[test]
+    fn any_other_switch_ends_the_way_forward() {
+        use StackDirection::{Next, Prev};
+        let mut tabs = list(&["a", "b", "c", "d"]);
+        tabs.focus(1);
+        tabs.focus(2);
+        assert_eq!(walk(&mut tabs, Prev), Some("b"));
+        tabs.focus(3);
+        assert_eq!(walk(&mut tabs, Next), None);
+        assert_eq!(walk(&mut tabs, Prev), Some("b"));
+    }
+
+    #[test]
+    fn the_stack_follows_tabs_that_move_open_and_close() {
+        use StackDirection::Prev;
+        let mut tabs = list(&["a", "b", "c", "d"]);
+        tabs.focus(1);
+        tabs.focus(2);
+        tabs.focus(3);
+        // Stack: a b c; current d.
+        tabs.insert("new", Position::First, false);
+        tabs.move_tab(2, 4);
+        // Now: new a c d b; c is gone from the stack once closed.
+        tabs.remove(2);
+        assert_eq!(walk(&mut tabs, Prev), Some("b"));
+        assert_eq!(walk(&mut tabs, Prev), Some("a"));
+        assert_eq!(walk(&mut tabs, Prev), None);
+    }
+
+    #[test]
+    fn the_stack_keeps_only_the_most_recent_tabs() {
+        let mut tabs = list(&["a", "b", "c", "d"]);
+        for i in [1, 2, 3] {
+            tabs.focus(i);
+        }
+        let index = tabs.stack_target(StackDirection::Prev, Some(1)).unwrap();
+        tabs.focus(index);
+        assert_eq!(tabs.current(), Some(&"c"));
+        assert_eq!(tabs.stack_target(StackDirection::Prev, Some(1)), None);
     }
 
     #[test]

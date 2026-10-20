@@ -81,7 +81,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Next up (as of 2026-10-20)
 
 1. **Merge the riptide-plugins `options` branch** (below): v0.4.0 is out (2026-10-20), with plugin options and keyring secrets.
-2. **Then pick from the open work below.** The missing plugin events are in review (PR #13). Candidates: a plugin health report and a tab focus stack.
+2. **Then pick from the open work below.** The missing plugin events are in review (PR #13). Candidates: a plugin health report, plugin pages in floats, and a tab's leave-page warning on `d`.
 
 ### Plugins (M27)
 
@@ -105,7 +105,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Tabs, windows and sessions
 
-- A tab focus stack (`tab-focus stack-prev`/`stack-next`, `tabs.focus_stack_size`).
 - Closing a tab with `d` skips the page's leave-page warning.
 - Call windows are restored as ordinary windows.
 - Favicons aren't kept in sessions (they're fetched again on load).

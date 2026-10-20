@@ -158,3 +158,29 @@ fn capital_t_picks_a_tab_by_title() {
     b.keys("<Tab><Return>");
     b.wait_until("the search tab is current", |s| s.window().current_tab == 0);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_focus_stack_prev_and_next_walk_the_recently_focused_tabs() {
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .start("nav1.html");
+    // Focused in turn: nav1, second, nav2, then second again.
+    three_tabs(&b);
+    for (command, expected) in [("stack-prev", 2), ("stack-prev", 1), ("stack-prev", 0)] {
+        b.run(&format!("tab-focus {command}"));
+        b.wait_until(&format!("{command} focuses tab {expected}"), |s| {
+            s.window().current_tab == expected
+        });
+    }
+    b.run("tab-focus stack-prev");
+    b.wait_until("there's nothing further back", |s| {
+        s.message().is_some_and(|m| m.contains("no earlier tab"))
+    });
+    for expected in [1, 2] {
+        b.run("tab-focus stack-next");
+        b.wait_until(&format!("stack-next focuses tab {expected}"), |s| {
+            s.window().current_tab == expected
+        });
+    }
+}

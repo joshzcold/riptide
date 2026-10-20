@@ -32,6 +32,14 @@ Links that open new windows (`target=_blank`, `window.open`) open as tabs next t
 
 After you close the current tab, `tabs.select_on_remove` picks the next one to show: `next` (default), `prev`, or `last-used`. `J`/`K` wrap around from the last tab to the first unless `tabs.wrap = false`. `u` can reopen the last `tabs.undo_stack_size` closed tabs (100 by default).
 
+`:tab-focus last` goes back to the tab you were on before. To go further back, `:tab-focus stack-prev` steps back through the tabs you focused, and `:tab-focus stack-next` steps forward again, like back and forward in a page's history. Switching to a tab any other way starts a new path. `tabs.focus_stack_size` sets how many tabs it remembers (10 by default; -1 for no limit). Neither has a default key, so bind them, for example:
+
+```toml
+[bindings.normal]
+"<Alt-[>" = "tab-focus stack-prev"
+"<Alt-]>" = "tab-focus stack-next"
+```
+
 Where new tabs go is set by `tabs.new_position.related` (tabs opened from a page) and `tabs.new_position.unrelated` (everything else).
 
 ## Modes per tab

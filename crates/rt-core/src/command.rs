@@ -51,6 +51,10 @@ pub enum TabTarget {
     Number(i64),
     /// The previously focused tab.
     Last,
+    /// Back through the recently focused tabs (`stack-prev`).
+    StackPrev,
+    /// Forward again after `stack-prev` (`stack-next`).
+    StackNext,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -756,7 +760,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec("tab-next", "Switch to the next tab"),
     spec("tab-prev", "Switch to the previous tab"),
-    spec("tab-focus", "Select a tab by number, or 'last'"),
+    spec(
+        "tab-focus",
+        "Select a tab by number, 'last', or 'stack-prev'/'stack-next' through recently focused tabs",
+    ),
     spec(
         "tab-move",
         "Move the current tab: +, -, start, end or a number",
@@ -1376,6 +1383,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-focus" => Command::TabFocus(match args.optional() {
             None => None,
             Some("last") => Some(TabTarget::Last),
+            Some("stack-prev") => Some(TabTarget::StackPrev),
+            Some("stack-next") => Some(TabTarget::StackNext),
             Some(_) => Some(TabTarget::Number(args.parse_last_int("index")?)),
         }),
         "tab-move" => Command::TabMove(match args.optional() {
@@ -2315,6 +2324,14 @@ mod tests {
         assert_eq!(
             parse("tab-focus last").unwrap(),
             Command::TabFocus(Some(TabTarget::Last))
+        );
+        assert_eq!(
+            parse("tab-focus stack-prev").unwrap(),
+            Command::TabFocus(Some(TabTarget::StackPrev))
+        );
+        assert_eq!(
+            parse("tab-focus stack-next").unwrap(),
+            Command::TabFocus(Some(TabTarget::StackNext))
         );
         assert_eq!(
             parse("tab-move +").unwrap(),

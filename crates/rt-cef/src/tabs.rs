@@ -5,7 +5,7 @@ use cef::*;
 use rt_core::Command;
 use rt_core::command::{TabMoveTarget, TabTarget};
 use rt_core::engine::Level;
-use rt_core::tabs::{Position, SelectOnRemove, resolve_index};
+use rt_core::tabs::{Position, SelectOnRemove, StackDirection, resolve_index};
 
 use crate::client::Role;
 use crate::shell::{self, Tab};
@@ -30,6 +30,8 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
                 Some(index) => focus(index),
                 None => shell::show_message(Level::Error, "There is no previous tab"),
             },
+            (None, Some(TabTarget::StackPrev)) => focus_stack(StackDirection::Prev),
+            (None, Some(TabTarget::StackNext)) => focus_stack(StackDirection::Next),
         },
         Command::TabClose { force } => {
             if let Some(index) = shell::with(|s| s.tabs.current_index()) {
@@ -265,6 +267,26 @@ fn focus_offset(n: i64) {
             .offset_wrapping(n, s.engine.settings().bool("tabs.wrap"))
     }) {
         focus(index);
+    }
+}
+
+/// `tab-focus stack-prev` and `stack-next`: back and forth through the
+/// recently focused tabs, up to `tabs.focus_stack_size` of them.
+fn focus_stack(direction: StackDirection) {
+    let target = shell::with(|s| {
+        let size = usize::try_from(s.engine.settings().int("tabs.focus_stack_size")).ok();
+        s.tabs.stack_target(direction, size)
+    })
+    .flatten();
+    match target {
+        Some(index) => focus(index),
+        None => shell::show_message(
+            Level::Error,
+            match direction {
+                StackDirection::Prev => "There is no earlier tab to go back to",
+                StackDirection::Next => "There is no tab to go forward to",
+            },
+        ),
     }
 }
 

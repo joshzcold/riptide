@@ -1897,6 +1897,15 @@ pub static SETTINGS: &[SettingDef] = &[
         "Show site icons in the tab bar: always, never, or only on pinned tabs"
     ),
     def!(
+        "tabs.focus_stack_size",
+        Kind::Int {
+            min: -1,
+            max: 10_000
+        },
+        Value::Int(10),
+        "How many recently focused tabs tab-focus stack-prev can go back through; -1 for no limit"
+    ),
+    def!(
         "tabs.indicator.width",
         Kind::Int { min: 0, max: 20 },
         Value::Int(3),
