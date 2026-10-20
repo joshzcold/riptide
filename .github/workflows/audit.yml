@@ -21,6 +21,6 @@ jobs:
     name: advisories
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check RustSec advisories
         run: scripts/tool.sh cargo-deny check advisories
