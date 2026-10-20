@@ -1,7 +1,7 @@
 # Maintainer: Joshua Cold <joshzcold@gmail.com>
-# riptide-bin: the Linux release tarball (the binary and the CEF runtime).
+# riptide-browser-bin: the Linux release tarball (the binary and the CEF runtime).
 # The version and checksum are updated at each release.
-pkgname=riptide-bin
+pkgname=riptide-browser-bin
 pkgver=0.4.0
 pkgrel=1
 pkgdesc="Keyboard-driven web browser with vim-like bindings, built on CEF"
@@ -11,8 +11,8 @@ license=('GPL-3.0-or-later')
 depends=('alsa-lib' 'at-spi2-core' 'cairo' 'dbus' 'expat' 'glib2' 'gtk3' 'hicolor-icon-theme'
          'libcups' 'libdrm' 'libxcomposite' 'libxdamage' 'libxkbcommon' 'libxrandr' 'mesa'
          'nspr' 'nss' 'pango' 'systemd-libs')
-provides=('riptide')
-conflicts=('riptide')
+provides=('riptide-browser')
+conflicts=('riptide-browser' 'riptide' 'riptide-bin')
 options=('!strip' '!debug')
 source=("https://github.com/joshzcold/riptide/releases/download/v${pkgver}/riptide-${pkgver}-linux-x86_64.tar.gz")
 sha256sums=('675e6a43d43bf08b2ce2410bce29ed669b8e2b72c0aca161eef059bb7b9a3c53')
