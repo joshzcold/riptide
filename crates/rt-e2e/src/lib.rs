@@ -60,10 +60,21 @@ pub struct WindowState {
     /// Opened with `:open --call`.
     #[serde(default)]
     pub call: bool,
+    /// Where the window is on the screen, once it has opened.
+    #[serde(default)]
+    pub bounds: Option<Bounds>,
     pub current_tab: usize,
     pub tabs: Vec<TabState>,
     /// The notice shown in place of a crashed tab is on screen.
     pub crash_notice: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct Bounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -419,6 +430,23 @@ impl Browser {
     /// Make the browser panic, as a bug in riptide would. It exits without answering.
     pub fn panic(&self) {
         let _ = self.request(TestRequest::Panic);
+    }
+
+    /// Move and size the current window, as a window manager would.
+    pub fn set_window_bounds(&self, bounds: Bounds) {
+        let Bounds {
+            x,
+            y,
+            width,
+            height,
+        } = bounds;
+        self.request(TestRequest::SetWindowBounds {
+            x,
+            y,
+            width,
+            height,
+        })
+        .unwrap_or_else(|e| panic!("set window bounds: {e}"));
     }
 
     /// Crash the current tab's renderer process.

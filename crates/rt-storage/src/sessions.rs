@@ -14,7 +14,54 @@ pub struct Session {
 pub struct WindowState {
     /// Index of the focused tab.
     pub active: usize,
+    /// Absent in sessions saved before windows kept their size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geometry: Option<Geometry>,
     pub tabs: Vec<TabState>,
+}
+
+/// Where a window was and how big, in screen DIPs. When it's maximized, these
+/// are the bounds it goes back to when unmaximized.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Geometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub maximized: bool,
+}
+
+impl Geometry {
+    /// Whether enough of the window's top would be on one of `screens` (their
+    /// work areas) to grab and move it: a screen that's gone moves it elsewhere.
+    pub fn is_on(&self, screens: &[Geometry]) -> bool {
+        const GRAB_WIDTH: i32 = 100;
+        const GRAB_HEIGHT: i32 = 30;
+        screens.iter().any(|s| {
+            let left = self.x.max(s.x);
+            let right = (self.x + self.width).min(s.x + s.width);
+            let top = self.y.max(s.y);
+            let bottom = (self.y + GRAB_HEIGHT).min(s.y + s.height);
+            right - left >= GRAB_WIDTH.min(self.width)
+                && bottom - top >= GRAB_HEIGHT.min(self.height)
+        })
+    }
+
+    /// The last window's geometry, kept in `path` for the next start.
+    pub fn load(path: &Path) -> Option<Self> {
+        let text = std::fs::read_to_string(path).ok()?;
+        toml::from_str::<Self>(&text)
+            .ok()
+            .filter(|g| g.width > 0 && g.height > 0)
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), String> {
+        let text = toml::to_string(self).map_err(|e| e.to_string())?;
+        let tmp = path.with_extension("toml.tmp");
+        std::fs::write(&tmp, text).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,7 +107,11 @@ impl WindowState {
             }
             kept.push(tab);
         }
-        (!kept.is_empty()).then_some(Self { active, tabs: kept })
+        (!kept.is_empty()).then_some(Self {
+            active,
+            geometry: None,
+            tabs: kept,
+        })
     }
 }
 
@@ -208,6 +259,13 @@ mod tests {
         let session = Session {
             windows: vec![WindowState {
                 active: 1,
+                geometry: Some(Geometry {
+                    x: 10,
+                    y: 20,
+                    width: 900,
+                    height: 600,
+                    maximized: true,
+                }),
                 tabs: vec![
                     TabState {
                         url: "https://a.org/".into(),
@@ -243,6 +301,44 @@ mod tests {
         let tab = &session.windows[0].tabs[0];
         assert!(!tab.pinned);
         assert!(tab.back.is_empty() && tab.forward.is_empty() && tab.scroll.is_none());
+        assert_eq!(session.windows[0].geometry, None);
+    }
+
+    fn rect(x: i32, y: i32, width: i32, height: i32) -> Geometry {
+        Geometry {
+            x,
+            y,
+            width,
+            height,
+            maximized: false,
+        }
+    }
+
+    #[test]
+    fn a_window_is_on_a_screen_when_its_top_can_be_grabbed() {
+        let screens = [rect(0, 0, 1920, 1080), rect(1920, 0, 1280, 1024)];
+        assert!(rect(100, 100, 800, 600).is_on(&screens));
+        // Across both screens, or mostly off the right one.
+        assert!(rect(1500, 100, 800, 600).is_on(&screens));
+        assert!(rect(3100, 100, 800, 600).is_on(&screens));
+        // On a third screen that's no longer there, or with the title bar above the top.
+        assert!(!rect(3300, 100, 800, 600).is_on(&screens));
+        assert!(!rect(100, -600, 800, 600).is_on(&screens));
+        assert!(!rect(100, 1070, 800, 600).is_on(&screens));
+    }
+
+    #[test]
+    fn the_last_window_geometry_saves_and_loads() {
+        let dir = std::env::temp_dir().join(format!("rt-geometry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("window.toml");
+        assert_eq!(Geometry::load(&path), None);
+        let geometry = rect(-5, 40, 1000, 700);
+        geometry.save(&path).unwrap();
+        assert_eq!(Geometry::load(&path), Some(geometry));
+        std::fs::write(&path, "x = 0\ny = 0\nwidth = 0\nheight = 10\n").unwrap();
+        assert_eq!(Geometry::load(&path), None);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -250,6 +346,7 @@ mod tests {
         let text = toml::to_string(&Session {
             windows: vec![WindowState {
                 active: 0,
+                geometry: None,
                 tabs: vec![tab(("https://a.org/", "A", false))],
             }],
         })

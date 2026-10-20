@@ -109,6 +109,25 @@ impl Tab {
     }
 }
 
+pub fn bounds_geometry(bounds: &Rect) -> rt_storage::Geometry {
+    rt_storage::Geometry {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        maximized: false,
+    }
+}
+
+pub fn geometry_bounds(geometry: &rt_storage::Geometry) -> Rect {
+    Rect {
+        x: geometry.x,
+        y: geometry.y,
+        width: geometry.width,
+        height: geometry.height,
+    }
+}
+
 /// One browser window: its views, tabs and what was last drawn in it.
 pub struct WindowState {
     /// Stable across other windows opening and closing.
@@ -118,6 +137,10 @@ pub struct WindowState {
     /// A call window: Chrome style, with a Chrome-style first tab (`:open --call`).
     pub call: bool,
     pub window: Option<Window>,
+    /// Its last two bounds while it wasn't maximized, minimized or fullscreen.
+    /// CEF reports a maximize's bounds before the window says it's maximized.
+    normal_bounds: Option<rt_storage::Geometry>,
+    earlier_bounds: Option<rt_storage::Geometry>,
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
     /// Closed tabs as (index, url), newest last, for `undo`.
@@ -161,12 +184,42 @@ pub struct WindowState {
 }
 
 impl WindowState {
+    /// Where the window is, for sessions and the next start. A maximized
+    /// window keeps the bounds it had before.
+    pub fn geometry(&self) -> Option<rt_storage::Geometry> {
+        let window = self.window.as_ref()?;
+        let maximized = window.is_maximized() != 0;
+        let normal = !maximized && window.is_minimized() == 0 && window.is_fullscreen() == 0;
+        let now = bounds_geometry(&View::from(window).bounds_in_screen());
+        let bounds = if normal {
+            now
+        } else if self.normal_bounds == Some(now) {
+            self.earlier_bounds?
+        } else {
+            self.normal_bounds?
+        };
+        (bounds.width > 0 && bounds.height > 0).then_some(rt_storage::Geometry {
+            maximized,
+            ..bounds
+        })
+    }
+
+    /// The window moved or changed size while not maximized, minimized or fullscreen.
+    pub fn note_bounds(&mut self, bounds: &Rect) {
+        let bounds = bounds_geometry(bounds);
+        if self.normal_bounds != Some(bounds) {
+            self.earlier_bounds = self.normal_bounds.replace(bounds);
+        }
+    }
+
     pub fn new(id: u32, private: bool) -> Self {
         Self {
             id,
             private,
             call: false,
             window: None,
+            normal_bounds: None,
+            earlier_bounds: None,
             content: None,
             tabs: TabList::default(),
             closed: Vec::new(),
@@ -782,6 +835,7 @@ fn run_command(command: Command, count: Option<u32>) {
             if save && let Err(e) = storage::save_session(&storage::default_session()) {
                 tracing::warn!("could not save session: {e}");
             }
+            storage::save_window_geometry(None);
             let windows: Vec<Window> =
                 with(|s| s.windows.iter().filter_map(|w| w.window.clone()).collect())
                     .unwrap_or_default();
@@ -849,7 +903,10 @@ pub fn current_session() -> rt_storage::Session {
                         .iter()
                         .enumerate()
                         .map(|(i, t)| crate::history::tab_state(t, w.tabs.is_pinned(i)));
-                    rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())
+                    let mut state =
+                        rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())?;
+                    state.geometry = w.geometry();
+                    Some(state)
                 })
                 .collect(),
         }

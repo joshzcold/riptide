@@ -505,6 +505,11 @@ pub fn restore(session: &rt_storage::Session) {
         return shell::show_message(Level::Error, "That session has no tabs");
     };
     restore_window(window);
+    if let Some(geometry) = &window.geometry
+        && let Some(open) = shell::with(|s| s.window.clone()).flatten()
+    {
+        crate::window::apply_geometry(&open, geometry);
+    }
     for other in session
         .windows
         .iter()

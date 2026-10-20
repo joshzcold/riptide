@@ -8,8 +8,9 @@
 | Quickmarks | `<config>/quickmarks` | qutebrowser's: one `name url` per line |
 | Bookmarks | `<config>/bookmarks/urls` | qutebrowser's: one `url title` per line |
 | Sessions | `<data>/sessions/<name>.toml` | TOML |
+| The last window's size and place | `<data>/window.toml` | TOML |
 
-Quickmarks and bookmarks sit next to the config, so you can keep them in dotfiles. Sessions keep each tab's page, its back/forward history (up to 50 pages each way) and how far it was scrolled.
+Quickmarks and bookmarks sit next to the config, so you can keep them in dotfiles. Sessions keep each window's size, place and whether it was maximized, plus each tab's page, its back/forward history (up to 50 pages each way) and how far it was scrolled.
 
 In a restored tab, `H` and `L` load the saved pages again, so they come from the network rather than the cache, and anything typed into forms on them is gone. The scroll position is the one at the last autosave (`auto_save.interval`).
 

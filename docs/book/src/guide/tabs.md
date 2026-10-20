@@ -42,6 +42,8 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 
 `:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
 
+Windows remember their size. At startup the first window opens where the last one closed, at the same size and maximized if it was, even without `auto_save.session`. A new window from `:open -w` takes the size of the window you're in, and the window manager places it. If the window was last on a monitor that's no longer connected, it keeps its size and the window manager places it instead. Tiling window managers set the size themselves.
+
 ### Call windows
 
 `:open --call url` opens a video call in a call window. When the call's page shares your screen, Chrome's own picker opens, so you can share a single window or the whole screen, or a tab with its sound. In an ordinary tab, screen sharing asks in the status bar and always shares the whole screen.

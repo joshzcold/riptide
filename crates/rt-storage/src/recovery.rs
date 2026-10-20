@@ -174,6 +174,7 @@ mod tests {
         Session {
             windows: vec![WindowState {
                 active: 0,
+                geometry: None,
                 tabs: vec![TabState {
                     url: url.into(),
                     title: String::new(),

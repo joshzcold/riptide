@@ -48,6 +48,13 @@ pub enum TestRequest {
     EvalBar { code: String, bar: String },
     /// Crash the current tab's renderer process.
     CrashTab,
+    /// Move and size the current window, in screen DIPs, as a window manager would.
+    SetWindowBounds {
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    },
     /// Panic on the browser's UI thread, as a bug in riptide would.
     Panic,
 }

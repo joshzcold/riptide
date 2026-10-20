@@ -423,6 +423,36 @@ pub fn load_session(name: &str) -> Result<Session, String> {
     with(|s| s.sessions.load(name)).unwrap_or_else(|| Err("storage is unavailable".into()))
 }
 
+/// Where the next start puts its first window, in the data folder.
+const WINDOW_FILE: &str = "window.toml";
+
+/// Keep window `id`'s geometry (the active window's when `None`) for the
+/// next start. Private windows leave the last one alone.
+pub fn save_window_geometry(id: Option<u32>) {
+    let Some((geometry, path)) = shell::with(|s| {
+        let window = match id {
+            Some(id) => s.windows.get(s.window_index(id)?)?,
+            None => s.windows.get(s.active)?,
+        };
+        if window.private {
+            return None;
+        }
+        Some((window.geometry()?, s.paths.data_dir.join(WINDOW_FILE)))
+    })
+    .flatten() else {
+        return;
+    };
+    if let Err(e) = geometry.save(&path) {
+        tracing::warn!("could not save the window's size: {e}");
+    }
+}
+
+/// The geometry the last window closed with, if it was kept.
+pub fn last_window_geometry() -> Option<rt_storage::Geometry> {
+    let path = shell::with(|s| s.paths.data_dir.join(WINDOW_FILE))?;
+    rt_storage::Geometry::load(&path)
+}
+
 /// `:save`: write each of `what` (everything when empty) now.
 fn save(what: &[String]) {
     let all = what.is_empty();

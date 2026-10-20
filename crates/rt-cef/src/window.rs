@@ -179,17 +179,77 @@ fn open(
     popup: Option<BrowserView>,
     call: bool,
 ) {
-    let Some(id) = shell::with(|s| {
+    let Some((id, first, active)) = shell::with(|s| {
+        let active = s.windows.get(s.active).and_then(|w| w.geometry());
         let id = s.new_window(private);
         let index = s.window_index(id)?;
         s.windows[index].call = call;
-        Some(id)
+        Some((id, s.windows.len() == 1, active))
     })
     .flatten() else {
         return;
     };
-    let mut delegate = RtWindowDelegate::new(id, urls, commands, session, popup, call);
+    // A saved window goes back where it was, and so does the first window at
+    // startup. Other new windows take the active window's size.
+    let placement = match session.as_ref().and_then(|w| w.geometry) {
+        Some(saved) => Some(Placement {
+            geometry: saved,
+            positioned: true,
+        }),
+        None if first => storage::last_window_geometry().map(|geometry| Placement {
+            geometry,
+            positioned: true,
+        }),
+        None => active.map(|geometry| Placement {
+            geometry,
+            positioned: false,
+        }),
+    };
+    // A window that opens maximized never reports the bounds it unmaximizes to.
+    if let Some(Placement { geometry: g, .. }) =
+        placement.filter(|p| p.geometry.maximized && p.positioned)
+    {
+        shell::with(|s| {
+            if let Some(index) = s.window_index(id) {
+                s.windows[index].note_bounds(&shell::geometry_bounds(&g));
+            }
+        });
+    }
+    let mut delegate = RtWindowDelegate::new(id, urls, commands, session, popup, call, placement);
     window_create_top_level(Some(&mut delegate));
+}
+
+/// Where a new window opens: the geometry's size, and with `positioned` its place too.
+#[derive(Clone, Copy)]
+struct Placement {
+    geometry: rt_storage::Geometry,
+    positioned: bool,
+}
+
+/// The work areas of the screens, in DIPs.
+fn screens() -> Vec<rt_storage::Geometry> {
+    let mut displays = vec![None; display_get_count()];
+    display_get_alls(Some(&mut displays));
+    displays
+        .into_iter()
+        .flatten()
+        .map(|d| shell::bounds_geometry(&d.work_area()))
+        .collect()
+}
+
+/// Move and size `window` as `geometry` says, for `:session-load`.
+pub fn apply_geometry(window: &Window, geometry: &rt_storage::Geometry) {
+    if geometry.is_on(&screens()) {
+        window.set_bounds(Some(&shell::geometry_bounds(geometry)));
+    } else {
+        window.set_size(Some(&Size {
+            width: geometry.width,
+            height: geometry.height,
+        }));
+    }
+    if geometry.maximized {
+        window.maximize();
+    }
 }
 
 /// The request context for new tabs in the active window: the shared
@@ -317,11 +377,15 @@ wrap_window_delegate! {
         // A popup to show as this window's tab (`tabs.tabs_are_windows`).
         popup: Option<BrowserView>,
         call: bool,
+        placement: Option<Placement>,
     }
 
     impl ViewDelegate {
         fn preferred_size(&self, _view: Option<&mut View>) -> Size {
-            Size { width: 1280, height: 800 }
+            match self.placement {
+                Some(Placement { geometry: g, .. }) => Size { width: g.width, height: g.height },
+                None => Size { width: 1280, height: 800 },
+            }
         }
 
         /// Without it, views use the preferred size as the minimum, and the
@@ -334,6 +398,37 @@ wrap_window_delegate! {
     impl PanelDelegate {}
 
     impl WindowDelegate {
+        /// An empty rect lets CEF place a window of the preferred size. A saved
+        /// place on a screen that's gone is dropped.
+        fn initial_bounds(&self, _window: Option<&mut Window>) -> Rect {
+            match self.placement {
+                Some(Placement { geometry: g, positioned: true }) if g.is_on(&screens()) => shell::geometry_bounds(&g),
+                _ => Rect::default(),
+            }
+        }
+
+        fn initial_show_state(&self, _window: Option<&mut Window>) -> ShowState {
+            if self.placement.is_some_and(|p| p.geometry.maximized) {
+                ShowState::MAXIMIZED
+            } else {
+                ShowState::NORMAL
+            }
+        }
+
+        /// Kept for when it's maximized, so a session saves the size it goes back to.
+        fn on_window_bounds_changed(&self, window: Option<&mut Window>, new_bounds: Option<&Rect>) {
+            let (Some(window), Some(bounds)) = (window, new_bounds) else { return };
+            if window.is_maximized() != 0 || window.is_minimized() != 0 || window.is_fullscreen() != 0 {
+                return;
+            }
+            let id = self.id;
+            shell::with(|s| {
+                if let Some(index) = s.window_index(id) {
+                    s.windows[index].note_bounds(bounds);
+                }
+            });
+        }
+
         /// `window.hide_decoration`: no title bar or borders from the window manager.
         fn is_frameless(&self, _window: Option<&mut Window>) -> ::std::os::raw::c_int {
             shell::with(|s| s.engine.settings().bool("window.hide_decoration"))
@@ -528,6 +623,8 @@ wrap_window_delegate! {
                 if !go_ahead {
                     return 0;
                 }
+                // `:quit` keeps the active window's itself.
+                storage::save_window_geometry(Some(id));
             }
             let save = shell::with(|s| {
                 let index = s.window_index(id)?;

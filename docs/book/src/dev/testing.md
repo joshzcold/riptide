@@ -12,15 +12,16 @@ The e2e and smoke tests use temporary profiles, so they never touch your browsin
 
 ## End-to-end tests
 
-Debug builds (and release builds with `--features test-control`) answer test requests on the [command socket](https://github.com/joshzcold/riptide/blob/main/crates/rt-config/src/remote.rs). Release builds refuse them. There are four requests:
+Debug builds (and release builds with `--features test-control`) answer test requests on the [command socket](https://github.com/joshzcold/riptide/blob/main/crates/rt-config/src/remote.rs). Release builds refuse them. The requests:
 
 | Request | Does |
 |---|---|
 | `keys` | Presses keys such as `5j`, `<Escape>` or `:open x<Return>`. They go through the same engine path as typed keys, and to the page when the engine doesn't use them. |
 | `run` | Runs a command line, as `:` would. |
-| `state` | Returns JSON with the mode, windows, tabs (URL, title, pinned, loading, mode), the status bar, completion and the prompt. |
+| `state` | Returns JSON with the mode, windows (with their bounds), tabs (URL, title, pinned, loading, mode), the status bar, completion and the prompt. |
 | `eval` | Runs JavaScript in a tab and returns its string result. |
 | `evalbar` | Runs JavaScript in the window's `tabbar`, `statusbar` or `completion` overlay page (`Browser::eval_bar`). |
+| `setwindowbounds` | Moves and sizes the current window, as a window manager would (`Browser::set_window_bounds`). `state` reports each window's `bounds`. |
 
 `crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. Its browsers run without the desktop's session bus and keep plugins' secrets in memory (`RIPTIDE_SECRET_STORE=memory`), so a test never touches your keyring. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
 

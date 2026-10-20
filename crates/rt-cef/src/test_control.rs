@@ -60,6 +60,17 @@ mod enabled {
             TestRequest::Eval { code, tab } => return eval(&code, tab, tx),
             TestRequest::EvalBar { code, bar } => return eval_bar(&code, &bar, tx),
             TestRequest::CrashTab => crash_tab(),
+            TestRequest::SetWindowBounds {
+                x,
+                y,
+                width,
+                height,
+            } => set_window_bounds(cef::Rect {
+                x,
+                y,
+                width,
+                height,
+            }),
             TestRequest::Panic => panic!("a panic the test channel asked for"),
         };
         let _ = tx.send(reply);
@@ -99,6 +110,14 @@ mod enabled {
             process_message_create(Some(&CefString::from(crate::renderer::CRASH_MESSAGE)))
                 .ok_or("could not create process message")?;
         frame.send_process_message(ProcessId::RENDERER, Some(&mut message));
+        Ok(None)
+    }
+
+    fn set_window_bounds(bounds: cef::Rect) -> Reply {
+        let window = shell::with(|s| s.window.clone())
+            .flatten()
+            .ok_or("no window")?;
+        window.set_bounds(Some(&bounds));
         Ok(None)
     }
 
@@ -150,9 +169,14 @@ mod enabled {
                         .crash_notice
                         .as_ref()
                         .is_some_and(|v| cef::View::from(v).is_visible() != 0);
+                    let bounds = w.window.as_ref().map(|window| {
+                        let b = cef::View::from(window).bounds_in_screen();
+                        json!({ "x": b.x, "y": b.y, "width": b.width, "height": b.height })
+                    });
                     json!({
                         "private": w.private,
                         "call": w.call,
+                        "bounds": bounds,
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
                         "crash_notice": crash_notice,

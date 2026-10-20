@@ -107,7 +107,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Tabs, windows and sessions
 
 - A tab focus stack (`tab-focus stack-prev`/`stack-next`, `tabs.focus_stack_size`).
-- Window size and position aren't saved; every window opens at 1280×800.
 - Closing a tab with `d` skips the page's leave-page warning.
 - Call windows are restored as ordinary windows.
 - Favicons aren't kept in sessions (they're fetched again on load).

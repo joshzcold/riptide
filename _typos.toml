@@ -1,8 +1,9 @@
 # typos (scripts/tool.sh typos): spelling in code, docs and commit messages.
 # These words are right where they are: partial command names and URLs typed
 # in tests, hint labels, the misspelling the spell checker is tested with, and
-# language codes (fo-FO is Faroese).
+# language codes (fo-FO is Faroese), and the cef crate's display_get_alls.
 [default.extend-words]
+alls = "alls"
 ba = "ba"
 fo = "fo"
 oll = "oll"
