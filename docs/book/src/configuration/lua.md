@@ -80,11 +80,19 @@ An empty string hides the widget. What a widget function asks for besides its te
 | `load_started`, `load_finished` | a tab starts or finishes loading a page | `url` |
 | `url_changed` | a tab's address changes | `url` |
 | `title_changed` | a tab's title changes | `url`, `title` |
+| `page_error` | a tab's page fails to load | `url`, `error` (Chromium's name, e.g. `ERR_NAME_NOT_RESOLVED`) |
 | `tab_opened`, `tab_closed` | a tab opens or closes | `url` |
 | `tab_selected` | another tab becomes the current one | `url`, `index` (from 1) |
+| `tab_moved` | the current tab moves in the tab bar | `url`, `from`, `to` (from 1) |
 | `window_opened`, `window_closed` | a window opens or closes | `private` (`"true"`, `"false"`) on opening |
+| `focus_gained`, `focus_lost` | a riptide window becomes, or stops being, the active window | |
 | `mode_changed` | the mode changes | `from`, `to` |
+| `insert_entered` | a text field takes focus and riptide enters insert mode | `url` |
+| `command` | a command runs: typed, bound to a key, from an alias or run by a script | `name`, `args` |
 | `setting_changed` | a setting changes (`:set`, the settings page) | `name`, `value` (as text) |
+| `theme_changed` | the theme in use changes, by `ui.theme` or, with `ui.theme = "auto"`, the system's light or dark mode | `theme` |
+| `prompt_shown` | riptide asks a question | `topic` (`dialog`, `permission`, `login`, `download`, `certificate`, `confirm`), `title`, `message`, `url` |
+| `permission_answered` | you answer a site's permission request | `site`, `permissions`, `answer` (`allow`, `block`, `not_now`), `remembered` (`"true"`, `"false"`) |
 | `download_started`, `download_finished` | a download starts or ends | `url`, `path`; `state` (`done`, `failed`, `cancelled`) when it ends |
 
 `opts` can have:
@@ -92,6 +100,8 @@ An empty string hides the widget. What a widget function asks for besides its te
 - `pattern`: only pages matching it, written as for `:set -u` (`example.com`, `*.example.com`, `https://example.com`, `*://*.example.com/docs/*`).
 - `once = true`: run the first time only.
 - `group`: a name, so `rt.off(group)` removes them all.
+
+`command` fires after the command runs, for each command in a `;;` chain, and a key reports the command it's bound to (`:` is `cmd-set-text :`). A `command` hook that runs commands itself runs again for them.
 
 `rt.on` returns an id for `rt.off(id)`. `rt.group(name, { clear = true })` removes the group's hooks and returns its name, so a script that runs again (`:config-source`) doesn't add its hooks twice:
 

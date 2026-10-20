@@ -570,6 +570,9 @@ wrap_window_delegate! {
         fn on_window_activation_changed(&self, _window: Option<&mut Window>, active: ::std::os::raw::c_int) {
             if active != 0 {
                 shell::activate_window(self.id);
+                crate::lua::emit("focus_gained", &[]);
+            } else {
+                crate::lua::emit("focus_lost", &[]);
             }
         }
 

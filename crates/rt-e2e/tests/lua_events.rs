@@ -326,3 +326,54 @@ end)
     b.keys("zc");
     b.wait_until("the new command ran", |s| s.message() == Some("late ran"));
 }
+
+/// The events plugins asked for: errors, moves, commands, insert mode,
+/// themes, questions and permission answers.
+const MORE_EVENTS: &str = r#"
+local log = "{scratch}/events"
+local function note(text)
+  local f = io.open(log, "a")
+  f:write(text .. "\n")
+  f:close()
+end
+rt.on("page_error", function(e) note("page_error " .. e.error) end)
+rt.on("tab_moved", function(e) note("tab_moved " .. e.from .. " " .. e.to) end)
+rt.on("command", function(e)
+  if e.name == "message-info" then note("command " .. e.name .. " " .. e.args) end
+end)
+rt.on("insert_entered", function() note("insert_entered") end)
+rt.on("theme_changed", function(e) note("theme_changed " .. e.theme) end)
+rt.on("prompt_shown", function(e) note("prompt_shown " .. e.topic) end)
+rt.on("permission_answered", function(e) note("permission_answered " .. e.answer .. " " .. e.remembered) end)
+"#;
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn config_lua_hears_errors_moves_commands_themes_and_questions() {
+    let b = Browser::launch().lua(MORE_EVENTS).start("geo.html");
+    b.run("message-info hello there");
+    wait_for_line(&b, "command message-info hello there");
+
+    b.run("set ui.theme nord");
+    wait_for_line(&b, "theme_changed nord");
+
+    b.follow_hint("hint", |h| h.text == "ask");
+    b.wait_mode("yesno");
+    wait_for_line(&b, "prompt_shown permission");
+    b.keys("n");
+    wait_for_line(&b, "permission_answered not_now false");
+
+    b.run("set input.insert_mode.auto_load true");
+    b.eval("const i = document.createElement('input'); document.body.prepend(i); i.focus(), ''");
+    wait_for_line(&b, "insert_entered");
+    b.keys("<Escape>");
+
+    b.run(&format!("open -t {}", b.url("page.html")));
+    b.wait_until("two tabs", |s| s.tabs().len() == 2);
+    b.run("tab-move 1");
+    wait_for_line(&b, "tab_moved 2 1");
+
+    // Chromium refuses port 1 without trying it.
+    b.run("open http://127.0.0.1:1/");
+    wait_for_line(&b, "page_error ERR_UNSAFE_PORT");
+}
