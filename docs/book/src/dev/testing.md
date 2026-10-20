@@ -105,6 +105,6 @@ Other scheduled jobs:
 | Workflow | When | Does |
 |---|---|---|
 | [`audit.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/audit.yml) | daily, and when `Cargo.lock` or `deny.toml` changes | RustSec security advisories (cargo-deny) |
-| [`cef-update.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/cef-update.yml) | weekly | Opens an "Update CEF to X" issue when crates.io has a newer `cef` than `Cargo.lock` pins |
+| [`cef-update.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/cef-update.yml) | weekly | Opens an "Update CEF to X" pull request when crates.io has a newer `cef` than `Cargo.lock` pins, and starts `check.yml` on it (a pull request opened by a workflow doesn't start it by itself) |
 | [`nightly.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/nightly.yml) | daily | The rolling `nightly` pre-release (see [Releasing](releasing.md)) |
 | [Dependabot](https://github.com/joshzcold/riptide/blob/main/.github/dependabot.yml) | weekly | Pull requests that update the GitHub Actions the workflows use |
