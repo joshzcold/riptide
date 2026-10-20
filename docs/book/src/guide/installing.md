@@ -21,7 +21,7 @@ macOS and Windows builds compile and pass their unit tests, but can't run the br
 Both install the latest release's Linux tarball.
 
 - **Nix** (flakes): `nix run github:joshzcold/riptide`, or add `github:joshzcold/riptide` as a flake input and use its `packages.x86_64-linux.default`. The package ([`packaging/nix/package.nix`](https://github.com/joshzcold/riptide/blob/main/packaging/nix/package.nix)) patches the binaries for NixOS. The Nix store can't hold a setuid sandbox helper, so it relies on user namespaces for the sandbox, which NixOS allows.
-- **Arch Linux:** [`packaging/aur/PKGBUILD`](https://github.com/joshzcold/riptide/blob/main/packaging/aur/PKGBUILD) builds `riptide-bin`. It installs to `/opt/riptide` with `riptide` on your `PATH`, plus a desktop entry and icon. Run `makepkg -si` in that directory. It isn't published to the AUR yet.
+- **Arch Linux:** install [`riptide-bin`](https://aur.archlinux.org/packages/riptide-bin) from the AUR, for example `yay -S riptide-bin`. It installs to `/opt/riptide` with `riptide` on your `PATH`, plus a desktop entry and icon. The AUR's `riptide` package is a different program, a music player that also installs a `riptide` command, so the two conflict.
 
 To package a tarball you built yourself with Nix:
 

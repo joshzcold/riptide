@@ -50,6 +50,7 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 
 **Packages:**
 - The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) are updated by the publish job's pull request. If that step fails, run `scripts/update-packages.sh X.Y.Z riptide-X.Y.Z-linux-x86_64.tar.gz` with the released tarball and open a pull request with the result.
+- Merging that pull request publishes the `PKGBUILD` to the AUR as [`riptide-bin`](https://aur.archlinux.org/packages/riptide-bin) ([`aur.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/aur.yml)). It checks the tarball's checksum, writes `.SRCINFO` and pushes over SSH with the `RIPTIDE_AUR_SSH_PRIVATE_KEY` secret, whose public half (`RIPTIDE_AUR_SSH_PUBLIC_KEY`) is on the maintainer's AUR account. Run it by hand (a dry run by default) to check the key or to publish again.
 - To check the Nix package, run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
 
 **In the browser:**

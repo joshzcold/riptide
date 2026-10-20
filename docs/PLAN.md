@@ -124,7 +124,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Packaging (M10)
 
-- Publish `riptide-bin` to the AUR (needs the maintainer's account).
 - macOS: an app bundle, signing and notarization. Windows: an installer, and named pipes for the remote command (each start is a new instance there).
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 

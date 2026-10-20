@@ -1,0 +1,74 @@
+name: aur
+
+# Publishes packaging/aur/PKGBUILD to the AUR as riptide-bin when it changes
+# on main, which is when the release's packages pull request is merged.
+# Running it by hand defaults to a dry run: it checks the PKGBUILD and shows
+# the change without pushing.
+on:
+  push:
+    branches: [main]
+    paths: [packaging/aur/PKGBUILD]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (check and show the change, don't push)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish riptide-bin
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    env:
+      PUSH: ${{ github.event_name == 'push' || !inputs.dry_run }}
+    steps:
+      - name: Install git and ssh
+        run: pacman -Syu --noconfirm --needed git openssh
+      - uses: actions/checkout@v4
+      # makepkg won't run as root.
+      - name: Check the PKGBUILD and write .SRCINFO
+        run: |
+          useradd -m builder
+          cp packaging/aur/PKGBUILD /home/builder/
+          chown -R builder: /home/builder
+          # Downloads the release tarball and checks its sha256sum.
+          su builder -c 'cd ~ && makepkg --verifysource --noconfirm && makepkg --printsrcinfo > .SRCINFO'
+          cat /home/builder/.SRCINFO
+      - name: Commit to the AUR repository
+        env:
+          AUR_KEY: ${{ secrets.RIPTIDE_AUR_SSH_PRIVATE_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          # The AUR's published host key.
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes'
+          # The first push creates the package.
+          git clone -q ssh://aur@aur.archlinux.org/riptide-bin.git aur
+          cp /home/builder/PKGBUILD /home/builder/.SRCINFO aur/
+          cd aur
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "riptide-bin is already up to date"
+            exit 0
+          fi
+          git diff --cached --stat
+          version=$(sed -n 's/^\tpkgver = //p' .SRCINFO)-$(sed -n 's/^\tpkgrel = //p' .SRCINFO)
+          git -c user.name="Joshua Cold" -c user.email="joshzcold@gmail.com" \
+            commit -q -m "riptide-bin $version"
+          if [[ $PUSH != true ]]; then
+            echo "Dry run: not pushing riptide-bin $version"
+            exit 0
+          fi
+          git push -q origin HEAD:master
+          echo "Published riptide-bin $version: https://aur.archlinux.org/packages/riptide-bin" >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
