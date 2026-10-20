@@ -86,7 +86,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Plugins (M27)
 
 - **riptide-plugins `options` branch:** the password plugins' `[[option]]`s and saved passwords. Merge it into `main` now that v0.4.0 is out; v0.3.0 rejects its unknown manifest keys.
-- **Events** from the design not built yet: `page_error`, `tab_moved`, `key` (unhandled keys, with a way to swallow one), `command` (before and after), `insert_entered`, `prompt_shown`, `permission_answered`, `theme_changed`, `focus_gained`/`focus_lost`. Per-site keys (`rt.keymap.set(…, { site = … })`).
+- **Events** from the design not built yet: `key` (unhandled keys, with a way to swallow one) and a `command` hook before a command runs, which could cancel it (`command` fires after). Per-site keys (`rt.keymap.set(…, { site = … })`).
 - **A health report:** a plugin's optional `health()`, run by `:plugins check` (git missing, a tool not found, a required option unset).
 - **Plugin pages in floats** (tabs and panels have them).
 - **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.

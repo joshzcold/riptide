@@ -243,7 +243,16 @@ wrap_client! {
                 if current && !by_page { s.engine.focus_changed(editable) } else { Vec::new() }
             });
             if let Some(effects) = effects {
+                let entered = effects
+                    .iter()
+                    .any(|e| matches!(e, rt_core::Effect::ModeChanged { to: rt_core::Mode::Insert, .. }));
                 shell::apply(effects);
+                if entered {
+                    let url = shell::with(|s| s.tabs.current().map(|t| t.url.clone()))
+                        .flatten()
+                        .unwrap_or_default();
+                    crate::lua::emit("insert_entered", &[("url", &url)]);
+                }
             }
             1
         }
@@ -842,6 +851,7 @@ wrap_load_handler! {
             }
             let error_text = error_text.map(CefString::to_string).unwrap_or_default();
             let failed_url = failed_url.map(CefString::to_string).unwrap_or_default();
+            crate::lua::emit("page_error", &[("url", &failed_url), ("error", &error_text)]);
             // Navigating to our own error page would add a history entry that
             // `back` returns to, so draw into Chromium's error document instead.
             shell::with_tab(browser, |s, index, current| {

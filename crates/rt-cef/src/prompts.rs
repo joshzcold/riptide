@@ -119,9 +119,17 @@ fn queue(scope: Scope, mut prompt: Prompt, on_answer: impl FnOnce(PromptAnswer) 
             },
         )
     });
+    let shown = [
+        ("topic", prompt.topic.name().to_string()),
+        ("title", prompt.title.clone()),
+        ("message", prompt.message.clone()),
+        ("url", prompt.url.clone().unwrap_or_default()),
+    ];
     if let Some(effects) = shell::with(|s| s.engine.push_prompt(prompt)) {
         shell::apply(effects);
     }
+    let fields: Vec<(&str, &str)> = shown.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    crate::lua::emit("prompt_shown", &fields);
     id
 }
 

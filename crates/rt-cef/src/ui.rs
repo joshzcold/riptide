@@ -90,6 +90,7 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::ColorScheme { dark } => {
             if rt_core::theme::set_prefers_dark(dark) {
                 crate::shell::refresh_ui();
+                crate::lua::check_theme();
             }
         }
     }

@@ -91,6 +91,25 @@ fn resolve(
         kind,
         move |answer| {
             let (outcome, saved) = answer_outcome(&answer);
+            let asked: Vec<&str> = features
+                .iter()
+                .filter(|f| bits & f.bit != 0)
+                .map(|f| f.label)
+                .collect();
+            let answered = match outcome {
+                Outcome::Allow => "allow",
+                Outcome::Block => "block",
+                _ => "not_now",
+            };
+            crate::lua::emit(
+                "permission_answered",
+                &[
+                    ("site", &origin),
+                    ("permissions", &asked.join(", ")),
+                    ("answer", answered),
+                    ("remembered", if saved.is_some() { "true" } else { "false" }),
+                ],
+            );
             if let Some(allow) = saved {
                 if !site {
                     REMEMBERED.with(|r| r.borrow_mut().remember(&origin, bits, features, allow));

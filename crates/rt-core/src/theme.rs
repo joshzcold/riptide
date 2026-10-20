@@ -165,6 +165,15 @@ pub fn theme_name(settings: &Settings, dark: bool) -> &str {
     auto_name(settings, settings.str("ui.theme"), dark)
 }
 
+/// [`theme_name`] for the light/dark preference riptide last saw.
+pub fn current_name(settings: &Settings) -> String {
+    theme_name(
+        settings,
+        PREFERS_DARK.load(std::sync::atomic::Ordering::Relaxed),
+    )
+    .to_string()
+}
+
 fn auto_name<'a>(settings: &'a Settings, name: &'a str, dark: bool) -> &'a str {
     match name {
         "auto" if dark => settings.str("ui.auto_theme.dark"),

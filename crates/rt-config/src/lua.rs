@@ -538,8 +538,16 @@ pub const EVENTS: &[(&str, &str)] = &[
     ("load_finished", "a tab finished loading a page (url)"),
     ("url_changed", "a tab's address changed (url)"),
     ("title_changed", "a tab's title changed (url, title)"),
+    (
+        "page_error",
+        "a tab's page failed to load (url, error: Chromium's name for it, e.g. ERR_NAME_NOT_RESOLVED)",
+    ),
     ("tab_opened", "a tab was opened (url)"),
     ("tab_closed", "a tab was closed (url)"),
+    (
+        "tab_moved",
+        "the current tab moved in the tab bar (url, from, to; indexes from 1)",
+    ),
     (
         "tab_selected",
         "another tab became the current one (url, index from 1)",
@@ -549,8 +557,33 @@ pub const EVENTS: &[(&str, &str)] = &[
         "a window was opened (private: \"true\" or \"false\")",
     ),
     ("window_closed", "a window was closed"),
+    ("focus_gained", "a riptide window became the active window"),
+    (
+        "focus_lost",
+        "a riptide window stopped being the active window",
+    ),
     ("mode_changed", "the mode changed (from, to)"),
+    (
+        "insert_entered",
+        "a text field took focus and riptide entered insert mode (url)",
+    ),
+    (
+        "command",
+        "a command ran, typed, bound to a key or run by a script (name, args)",
+    ),
     ("setting_changed", "a setting changed (name, value as text)"),
+    (
+        "theme_changed",
+        "the theme in use changed, by ui.theme or the system's light or dark mode (theme)",
+    ),
+    (
+        "prompt_shown",
+        "riptide asked a question (topic: dialog, permission, login, download, certificate or confirm; title, message, url)",
+    ),
+    (
+        "permission_answered",
+        "you answered a site's permission request (site, permissions, answer: allow, block or not_now, remembered: \"true\" or \"false\")",
+    ),
     ("download_started", "a download started (url, path)"),
     (
         "download_finished",
