@@ -164,6 +164,16 @@ A riptide older than the plugin ignores keys it doesn't know, such as `[[option]
 
 A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring. On Linux without a keyring service, saving a secret says so and the plugin can ask instead.
 
+### Riptide versions
+
+A plugin that uses something newer than the riptide you have names the versions it works with, as a [semver requirement](https://docs.rs/semver/latest/semver/struct.VersionReq.html):
+
+```toml
+riptide = ">=0.4"
+```
+
+An older riptide doesn't load it. `:plugins` shows why ("needs riptide >=0.4, and this is 0.3.0; update riptide"), and Browse shows it but won't add it. Use `>=`, since a bare `"0.4"` means 0.4.x only. riptide 0.3 and older don't know this key and refuse the whole manifest, so the plugin doesn't load there either.
+
 ### Dependencies
 
 A plugin that builds on another lists it in `riptide-plugin.toml`:

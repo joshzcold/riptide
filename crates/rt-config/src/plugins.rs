@@ -7,6 +7,7 @@
 //! ```toml
 //! name = "reading-list"
 //! description = "Save pages to read later"
+//! riptide = ">=0.4"                 # the riptide versions it works with
 //! [permissions]
 //! spawn = true                      # run programs
 //! network = ["api.example.com"]     # rt.fetch to these hosts (later)
@@ -108,6 +109,8 @@ impl Permissions {
 pub struct Manifest {
     pub name: Option<String>,
     pub description: Option<String>,
+    /// The riptide versions it works with, as a semver requirement (`">=0.4"`).
+    pub riptide: Option<String>,
     pub permissions: Permissions,
     /// Plugins it needs loaded first, by name; it may `require` their modules.
     pub dependencies: Vec<String>,
@@ -199,6 +202,10 @@ impl Manifest {
                         keys.join(", ")
                     );
                 }
+                if let Some(wanted) = &manifest.riptide {
+                    semver::VersionReq::parse(wanted)
+                        .map_err(|e| format!("{}: riptide = {wanted:?}: {e}", path.display()))?;
+                }
                 if let Some(bad) = manifest.dependencies.iter().find(|d| !valid_name(d)) {
                     return Err(format!("{}: {bad:?} isn't a plugin name", path.display()));
                 }
@@ -228,6 +235,19 @@ impl Manifest {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Manifest::default()),
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
+    }
+
+    /// Why this riptide can't run it, if its `riptide` requirement leaves it out.
+    pub fn unsupported(&self) -> Option<String> {
+        let current = semver::Version::parse(env!("CARGO_PKG_VERSION")).ok()?;
+        self.unsupported_by(&current)
+    }
+
+    fn unsupported_by(&self, current: &semver::Version) -> Option<String> {
+        let wanted = self.riptide.as_deref()?;
+        let req = semver::VersionReq::parse(wanted).ok()?;
+        (!req.matches(current))
+            .then(|| format!("needs riptide {wanted}, and this is {current}; update riptide"))
     }
 }
 
@@ -629,6 +649,28 @@ mod tests {
         )
         .unwrap();
         assert!(Manifest::read(&dir).unwrap_err().contains("../up"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn manifests_name_the_riptide_versions_they_need() {
+        let dir = std::env::temp_dir().join(format!("rt-plugin-version-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let write = |text: &str| std::fs::write(dir.join("riptide-plugin.toml"), text).unwrap();
+        let version = |v: &str| semver::Version::parse(v).unwrap();
+        write("riptide = \">=0.4\"\n");
+        let manifest = Manifest::read(&dir).unwrap();
+        assert!(manifest.unknown.is_empty());
+        assert_eq!(
+            manifest.unsupported_by(&version("0.3.0")).unwrap(),
+            "needs riptide >=0.4, and this is 0.3.0; update riptide"
+        );
+        assert_eq!(manifest.unsupported_by(&version("0.4.0")), None);
+        assert_eq!(manifest.unsupported_by(&version("1.2.3")), None);
+        assert_eq!(Manifest::default().unsupported(), None);
+        write("riptide = \"at least 0.4\"\n");
+        assert!(Manifest::read(&dir).unwrap_err().contains("at least 0.4"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -2037,6 +2037,7 @@ version = "0.3.0"
 dependencies = [
  "mlua",
  "rt-core",
+ "semver",
  "serde",
  "serde_json",
  "toml",

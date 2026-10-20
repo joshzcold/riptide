@@ -305,6 +305,9 @@ fn prepare(name: &str) {
         Ok(manifest) => manifest,
         Err(e) => return failed(e.to_string()),
     };
+    if let Some(why) = manifest.unsupported() {
+        return failed(why);
+    }
     let dependencies = manifest.dependencies;
     for dependency in &dependencies {
         if let Err(why) = add_dependency(&spec, dependency, &config_dir, &data_dir) {
@@ -1252,12 +1255,14 @@ pub fn browse() {
                 .filter_map(|e| {
                     let folder = e.file_name().to_string_lossy().into_owned();
                     let manifest = Manifest::read(&e.path()).ok()?;
+                    let unsupported = manifest.unsupported();
                     Some(serde_json::json!({
                         "folder": folder,
                         "name": manifest.name.unwrap_or_else(|| folder.clone()),
                         "description": manifest.description.unwrap_or_default(),
                         "dependencies": manifest.dependencies,
                         "permissions": manifest.permissions.describe(),
+                        "unsupported": unsupported,
                     }))
                 })
                 .collect();

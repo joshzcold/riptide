@@ -934,3 +934,63 @@ return M"#,
     say("vault-token", "token nil");
     std::fs::remove_dir_all(&repo).unwrap();
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_for_a_newer_riptide_are_refused_with_a_reason() {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-versions-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&repo);
+    for (name, wanted) in [("today", ">=0.1"), ("someday", ">=99")] {
+        let script = repo.join(format!("{name}/plugin/{name}.lua"));
+        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
+        std::fs::write(&script, "").unwrap();
+        std::fs::write(
+            repo.join(format!("{name}/riptide-plugin.toml")),
+            format!("riptide = {wanted:?}\n"),
+        )
+        .unwrap();
+    }
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["add", "."]);
+    git(&["commit", "--quiet", "-m", "two plugins"]);
+    let dir = repo.display().to_string();
+    let b = Browser::launch()
+        .lua(&format!(
+            "c.plugins.catalog = {:?}\nrt.pack.add({{ {{ dir = {:?} }}, {{ dir = {:?} }} }})",
+            format!("file://{dir}"),
+            format!("{dir}/today"),
+            format!("{dir}/someday")
+        ))
+        .start("page.html");
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "someday:failed today:loaded",
+    );
+    let error = b.eval("page.plugins.find((p) => p.name === 'someday').error");
+    assert!(error.contains("needs riptide >=99"), "{error}");
+    // Browse lists both, and won't add the one this riptide can't run.
+    b.eval(r#"document.querySelector('[data-key="plugins:browse#browse"]').click(), ''"#);
+    b.wait_eval(
+        "(page.catalog?.plugins || []).map((p) => `${p.folder}:${!!p.unsupported}`).join(' ')",
+        "someday:true today:false",
+    );
+    b.wait_eval(
+        r#"String(document.querySelector('[data-key="catalog:someday#add"]')?.disabled)"#,
+        "true",
+    );
+    std::fs::remove_dir_all(&repo).unwrap();
+}

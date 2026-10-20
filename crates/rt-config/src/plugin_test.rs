@@ -59,6 +59,9 @@ pub fn prepare(plugin: &Path, basedir: &Path) -> Result<(), String> {
         .name
         .clone()
         .unwrap_or_else(|| crate::plugins::name_from(&plugin.display().to_string()));
+    if let Some(why) = manifest.unsupported() {
+        return Err(format!("{name} {why}"));
+    }
     let config_dir = basedir.join("config");
     std::fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
     // The author's own plugin: what it asks for is approved, so nothing asks.

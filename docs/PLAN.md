@@ -86,7 +86,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Plugins (M27)
 
 - **riptide-plugins `options` branch:** the password plugins' `[[option]]`s and saved passwords. Merge it into `main` once a release with plugin options (0.4) is out, since v0.3.0 rejects unknown manifest keys.
-- **A minimum riptide version** in `riptide-plugin.toml` (`riptide = ">=0.4"`), checked before loading, with a clear message instead of a failure, and shown on the Browse list.
 - **Events** from the design not built yet: `page_error`, `tab_moved`, `key` (unhandled keys, with a way to swallow one), `command` (before and after), `insert_entered`, `prompt_shown`, `permission_answered`, `theme_changed`, `focus_gained`/`focus_lost`. Per-site keys (`rt.keymap.set(…, { site = … })`).
 - **A health report:** a plugin's optional `health()`, run by `:plugins check` (git missing, a tool not found, a required option unset).
 - **Plugin pages in floats** (tabs and panels have them).
@@ -178,6 +177,6 @@ Unit tests in every crate, end-to-end tests in `rt-e2e` (a browser per test over
 ## Open questions
 
 1. **qutebrowser compatibility depth:** import `config.py` bindings and settings? History, bookmarks, quickmarks and themes already import.
-2. **Plugin compatibility across releases:** a minimum-version field (above) handles new keys; should riptide-plugins keep a branch per riptide release?
+2. **Plugin compatibility across releases:** `riptide = ">=0.4"` in a manifest handles new keys; should riptide-plugins keep a branch per riptide release?
 
 > riptide is GPL-3.0 (`LICENSE`). Dependency licenses must stay GPL-compatible; `cargo-deny` checks them.
