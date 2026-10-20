@@ -1,25 +1,27 @@
 name: cef update
 
 # Once a week, compare the pinned `cef` crate (Cargo.lock) with the newest
-# release on crates.io, and open an issue when there's a newer one. Upgrading
-# stays a deliberate change on a branch, with the e2e and smoke tests (see
-# "Chromium update cadence" in docs/PLAN.md).
+# release on crates.io, and open a pull request that upgrades to it. A pull
+# request opened with GITHUB_TOKEN doesn't start other workflows, so this
+# starts check.yml on its branch; its results show on the pull request.
 on:
   schedule:
     - cron: '0 6 * * 2'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
+  pull-requests: write
+  actions: write
 
 jobs:
-  check:
-    name: check for a new CEF
+  update:
+    name: upgrade to a new CEF
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - name: Compare with crates.io
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Open a pull request for the newest cef crate
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -30,18 +32,42 @@ jobs:
           if [[ -z $latest || $latest == null || $latest == "$pinned" ]]; then
             exit 0
           fi
-          title="Update CEF to $latest"
-          if gh issue list --state open --search "\"$title\" in:title" --json title --jq '.[].title' | grep -qxF "$title"; then
-            echo "an issue for $latest is already open"
+          branch="deps/cef-${latest//+/-}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch exists already"
             exit 0
           fi
-          gh issue create --title "$title" --body "$(cat <<EOF
-          A newer \`cef\` crate is out: **$latest** (riptide pins $pinned).
 
-          - Release notes: https://github.com/tauri-apps/cef-rs/releases
-          - To upgrade: on a branch, set \`cef = { version = "=$latest" … }\` in \`Cargo.toml\`, run \`cargo update -p cef -p cef-dll-sys\` and \`./task setup\`, then \`./task check\` (lint, unit, e2e and smoke tests).
-          - Watch for API changes in the generated bindings, and note the new Chromium version in the changelog.
+          # 154.5.0+154.0.34: the crate's version, then the CEF build it binds.
+          crate=${latest%%+*}
+          build=${latest#*+}
+          chromium=$(curl -fsSL https://cef-builds.spotifycdn.com/index.json |
+            jq -r --arg build "$build+" '[.linux64.versions[] | select(.cef_version | startswith($build)) | .chromium_version] | first // empty') || true
+          sed -i -E "s/^(cef = \{ version = \"=)[^\"]+/\1$crate/" Cargo.toml
+          cargo update -p cef -p cef-dll-sys
+          now=$(awk '/^name = "cef"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
+          if [[ $now != "$latest" ]]; then
+            echo "::error::Cargo.lock has cef $now after the update, not $latest"
+            exit 1
+          fi
+
+          subject="feat: update CEF to $build${chromium:+ (Chromium $chromium)}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git commit -qam "$subject"
+          git push -q origin "$branch"
+
+          # Replaces the issue the older version of this workflow opened.
+          issue=$(gh issue list --state open --search "\"Update CEF to $latest\" in:title" --json number --jq '.[0].number // empty')
+          gh pr create --base main --head "$branch" --title "$subject" --body "$(cat <<EOF
+          The \`cef\` crate $latest is out (riptide pins $pinned): https://github.com/tauri-apps/cef-rs/releases
+
+          This bumps \`Cargo.toml\` and \`Cargo.lock\`. The check below runs the lint, unit, e2e and smoke tests against the new CEF. If the generated bindings changed, push the fixes to this branch.
+          ${issue:+
+          Closes #$issue}
 
           Opened by the weekly \`cef-update\` workflow.
           EOF
           )"
+          gh workflow run check.yml --ref "$branch"

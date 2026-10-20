@@ -150,7 +150,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ## Chromium update cadence
 
 - Pin the `cef` crate to an exact version.
-- `cef-update.yml` opens an "Update CEF to X" issue when crates.io has a newer `cef` crate; upgrades go through a branch with the full test suite.
+- `cef-update.yml` opens an "Update CEF to X" pull request when crates.io has a newer `cef` crate, and runs the full test suite on it; binding changes are fixed on its branch.
 - Keep CEF-specific code in `rt-cef`, so binding churn doesn't reach the core.
 
 ## Testing
