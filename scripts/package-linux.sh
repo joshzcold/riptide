@@ -100,6 +100,14 @@ if $deb; then
         aarch64) deb_arch=arm64 ;;
         *) echo "package-linux.sh: no Debian architecture for $(uname -m)" >&2; exit 1 ;;
     esac
+    # Debian versions must start with a digit: nightly-20261020-c7c2679 becomes
+    # 0.3.0+nightly20261020.c7c2679, which sorts after 0.3.0 and before 0.4.0.
+    deb_version=$version
+    if [[ $version =~ ^nightly-([0-9]+)-([0-9a-f]+)$ ]]; then
+        crate=$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"riptide","version":"\([^"]*\)".*/\1/p')
+        deb_version=$crate+nightly${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
+    fi
+    [[ $deb_version =~ ^[0-9] ]] || { echo "package-linux.sh: $version is not a Debian version" >&2; exit 1; }
     tree=dist/$name.deb-root
     rm -rf "$tree"
     mkdir -p "$tree/opt" "$tree/usr/bin" "$tree/DEBIAN"
@@ -138,7 +146,7 @@ EOF
     size=$(du -sk --exclude=DEBIAN "$tree" | cut -f1)
     cat >"$tree/DEBIAN/control" <<EOF
 Package: riptide
-Version: $version
+Version: $deb_version
 Architecture: $deb_arch
 Maintainer: Joshua Cold <joshzcold@gmail.com>
 Installed-Size: $size

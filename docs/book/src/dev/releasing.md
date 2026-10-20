@@ -35,7 +35,7 @@ Because a new version in `Cargo.toml` is what triggers a release, change it only
 
 ## Nightly builds
 
-[`.github/workflows/nightly.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/nightly.yml) runs at 07:00 UTC. If `main` changed since the last nightly, it builds it the same way and replaces the rolling [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly), with files named `riptide-nightly-<date>-<commit>-…`. Running it by hand builds even if nothing changed. It never becomes the "latest" release.
+[`.github/workflows/nightly.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/nightly.yml) runs at 07:00 UTC. If `main` changed since the last nightly, it builds it the same way and replaces the rolling [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly), with files named `riptide-nightly-<date>-<commit>-…`. Debian versions must start with a digit, so the `.deb` inside says `<crate version>+nightly<date>.<commit>` (for example `0.3.0+nightly20261020.c7c2679`). That sorts after the last release and before the next one. Running it by hand builds even if nothing changed. It never becomes the "latest" release.
 
 ## Verifying a download
 

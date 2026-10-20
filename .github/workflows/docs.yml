@@ -26,7 +26,7 @@ jobs:
         if: github.event_name == 'schedule'
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --include-fragments --no-progress --exclude-path '404\.html$' 'docs/book/book/**/*.html'
+          args: --include-fragments --no-progress --exclude-loopback --exclude-path '404\.html$' 'docs/book/book/**/*.html'
           fail: true
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'schedule'

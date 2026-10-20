@@ -4,7 +4,13 @@
 [advisories]
 # RustSec advisories; yanked crates fail too. Ignoring one needs a reason here.
 yanked = "deny"
-ignore = []
+ignore = [
+    # zvariant, zvariant_derive and zbus_names were merged into zbus 6, but
+    # keyring's secret-service still needs zbus 5. Drop these once it moves.
+    { id = "RUSTSEC-2026-0370", reason = "merged into zbus 6; secret-service needs zbus 5" },
+    { id = "RUSTSEC-2026-0371", reason = "merged into zbus 6; secret-service needs zbus 5" },
+    { id = "RUSTSEC-2026-0372", reason = "merged into zbus 6; secret-service needs zbus 5" },
+]
 
 [licenses]
 # riptide is GPL-3.0-or-later and ships its dependencies, so every license

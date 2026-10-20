@@ -80,11 +80,8 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-20)
 
-1. **Fix the failing scheduled jobs.**
-   - **Nightly:** fails at `dpkg-deb` every day since 2026-10-07. `scripts/package-linux.sh` puts `nightly-YYYYMMDD-sha` into the `.deb` control file, and Debian versions must start with a digit. Map it to a valid version such as `0.3.0~nightly20261020+c7c2679`. riptide-plugins' CI installs the nightly, so it's blocked too.
-   - **Audit:** fails on rustls 0.23.45 (RUSTSEC-2026-0346/0347/0348). Only `download-cef`'s `ureq` uses it, at build time; `cargo update -p rustls` moves it to 0.23.46.
-2. **Release 0.4**, which the other session does. None of the plugin work since v0.3.0 has shipped: options and keyring secrets, `plugins.toml`, Add/Browse, update/sync/lockfile and the background check. Then merge the riptide-plugins `options` branch (below).
-3. **Then pick from the open work below.** Candidates: a minimum riptide version for plugins, config file watching, saved window geometry, extension update checks and the missing plugin events.
+1. **Release 0.4**, which the other session does. None of the plugin work since v0.3.0 has shipped: options and keyring secrets, `plugins.toml`, Add/Browse, update/sync/lockfile and the background check. Then merge the riptide-plugins `options` branch (below).
+2. **Then pick from the open work below.** Candidates: a minimum riptide version for plugins, config file watching, saved window geometry, extension update checks and the missing plugin events.
 
 ### Plugins (M27)
 
@@ -146,6 +143,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - The documentation site doesn't show the version it was built from.
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
 - The crash tests don't cover a native abort in the browser process.
+- `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
 
 ### Not planned
 
