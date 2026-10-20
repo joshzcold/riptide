@@ -19,7 +19,7 @@
 //! (URL, title, mode, count) and return [`Action`]s for the browser to carry out.
 
 use std::cell::RefCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use mlua::{Lua, LuaSerdeExt, Value};
@@ -573,6 +573,8 @@ struct State {
     specs: Vec<PluginSpec>,
     /// Plugins loaded so far, whose modules `require` finds.
     plugins: Vec<LoadedPlugin>,
+    /// The config's own modules `require` read, and how they were then.
+    modules: Vec<(PathBuf, crate::watch::Stamp)>,
 }
 
 /// A plugin `rt.pack.add` asked for.
@@ -1049,6 +1051,17 @@ pub fn user_commands() -> Vec<(String, String)> {
     })
 }
 
+/// The modules in the config dir that `config.lua` required, and how they
+/// were when read.
+pub fn config_modules() -> Vec<(PathBuf, crate::watch::Stamp)> {
+    RUNTIME.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map(|rt| rt.state.borrow().modules.clone())
+            .unwrap_or_default()
+    })
+}
+
 /// How long one callback may run before it's stopped.
 const CALLBACK_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -1496,6 +1509,7 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
         descriptions: Default::default(),
         specs: Vec::new(),
         plugins: Vec::new(),
+        modules: Vec::new(),
     }));
     let lua = Lua::new();
     let result = setup(&lua, paths, state.clone())
@@ -1594,7 +1608,9 @@ fn searcher(
     lua.create_function(move |lua, module: String| {
         let file = format!("{}.lua", module.replace('.', "/"));
         for candidate in [dir.join(&file), dir.join("lua").join(&file)] {
+            let stamp = crate::watch::stamp(&candidate);
             if let Ok(source) = std::fs::read_to_string(&candidate) {
+                state.borrow_mut().modules.push((candidate.clone(), stamp));
                 let name = format!("@{}", chunk_name(&candidate, &dir));
                 let loader = lua.load(source).set_name(name).into_function()?;
                 return Ok(mlua::Value::Function(loader));

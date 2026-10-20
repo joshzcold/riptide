@@ -997,6 +997,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "How many history entries :open completion shows (0 turns history completion off)"
     ),
     def!(
+        "config.watch",
+        Kind::Bool,
+        Value::Bool(true),
+        "Reload the config when config.toml, config.lua or a module it requires changes on disk"
+    ),
+    def!(
         "confirm_quit",
         Kind::List,
         Value::List(vec!["never".to_string()]),
