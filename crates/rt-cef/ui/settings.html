@@ -1042,10 +1042,11 @@ function renderPlugins() {
       const needs = [...item.permissions];
       if (item.dependencies.length) needs.push(`brings ${item.dependencies.join(", ")}`);
       if (needs.length) about.append(el("div", "desc", `Asks to ${needs.join("; ")}`));
+      if (item.unsupported) about.append(el("div", "desc", `Can't add: it ${item.unsupported}`));
       const has = installed.has(item.name);
       const button = control({ name: `catalog:${item.folder}` }, el("button", null, has ? "Added" : "Add"), "add");
-      button.disabled = has;
-      button.title = has ? `${item.name} is on` : `Add ${item.name} from ${page.catalog.src}`;
+      button.disabled = has || !!item.unsupported;
+      button.title = has ? `${item.name} is on` : item.unsupported ? `${item.name} ${item.unsupported}` : `Add ${item.name} from ${page.catalog.src}`;
       button.addEventListener("click", () => rt.send("pack-add", JSON.stringify({ src: page.catalog.src, subdir: item.folder })));
       row.append(about, button);
       addCard.append(row);
