@@ -13,6 +13,11 @@
     {
       packages.${system} = rec {
         riptide = pkgs.callPackage ./packaging/nix/package.nix { };
+        # Built from this checkout (packaging/nix/source.nix).
+        riptide-source = pkgs.callPackage ./packaging/nix/source.nix {
+          src = self;
+          commit = builtins.substring 0 10 (self.rev or self.dirtyRev or "unknown");
+        };
         default = riptide;
       };
       apps.${system}.default = {
