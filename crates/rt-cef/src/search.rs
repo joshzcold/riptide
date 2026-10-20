@@ -52,14 +52,20 @@ const SELECTED_LINK_JS: &str = "(() => {
   return JSON.stringify(link ? link.href : null);
 })()";
 
-fn follow_selection(tab: bool) {
+/// How long a match may take to become the selection after the find stops.
+const SELECTION_SETTLE_MS: i64 = 100;
+
+fn follow_selection(tab: bool, retry: bool) {
     let Some(browser) = shell::with(|s| s.current_browser()).flatten() else {
         return;
     };
-    // A find match only becomes the page's selection once the find ends.
+    // A find match only becomes the page's selection once the find ends,
+    // which the renderer does in its own time.
     if let Some(host) = browser.host() {
         host.stop_finding(0);
     }
+    let searching = shell::with(|s| s.tabs.current().is_some_and(|t| t.search_match.is_some()))
+        .unwrap_or(false);
     crate::eval::eval(&browser, SELECTED_LINK_JS, move |result| {
         let link = result
             .ok()
@@ -74,15 +80,31 @@ fn follow_selection(tab: bool) {
                 };
                 shell::open(target, true, Some(url));
             }
+            None if retry && searching => {
+                let mut task = FollowAgain::new(tab);
+                post_delayed_task(ThreadId::UI, Some(&mut task), SELECTION_SETTLE_MS);
+            }
             // Nothing to follow: the page gets its Return after all.
             None => crate::client::send_to_page(rt_core::Key::plain(rt_core::KeyCode::Enter)),
         }
     });
 }
 
+wrap_task! {
+    struct FollowAgain {
+        tab: bool,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            follow_selection(self.tab, false);
+        }
+    }
+}
+
 pub fn run_command(command: &Command, count: Option<u32>) -> bool {
     if let Command::SelectionFollow { tab } = command {
-        follow_selection(*tab);
+        follow_selection(*tab, true);
         return true;
     }
     let Some(host) = shell::with(|s| s.current_browser())
