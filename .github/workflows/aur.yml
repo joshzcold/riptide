@@ -46,12 +46,14 @@ jobs:
         env:
           AUR_KEY: ${{ secrets.RIPTIDE_AUR_SSH_PRIVATE_KEY }}
         run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$AUR_KEY" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
+          # ssh in a container looks in /root/.ssh, not $HOME, so it's told where.
+          ssh_dir=$RUNNER_TEMP/ssh
+          install -d -m 700 "$ssh_dir"
+          printf '%s\n' "$AUR_KEY" > "$ssh_dir/aur"
+          chmod 600 "$ssh_dir/aur"
           # The AUR's published host key.
-          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > ~/.ssh/known_hosts
-          export GIT_SSH_COMMAND='ssh -i ~/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes'
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
           # The first push creates the package.
           git clone -q ssh://aur@aur.archlinux.org/riptide-bin.git aur
           cp /home/builder/PKGBUILD /home/builder/.SRCINFO aur/
