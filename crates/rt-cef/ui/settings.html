@@ -1111,6 +1111,16 @@ function renderPlugins() {
     perms.append(el("div", "desc", plugin.added ? "Added here (plugins.toml)" : "From config.lua"));
     if (plugin.shares?.length) perms.append(el("div", "desc", `Updates together with ${plugin.shares.join(", ")}, from the same repository`));
     block.append(perms);
+    if (plugin.keys?.length) {
+      const keys = wide(el("div", "keyrow"));
+      keys.append(el("div", "name", "Keys"));
+      for (const k of plugin.keys) {
+        const line = el("div", "desc");
+        line.append(keyChips(k.keys), k.desc ? ` ${k.desc}` : "", k.mode === "normal" ? "" : ` (${k.mode} mode)`);
+        keys.append(line);
+      }
+      block.append(keys);
+    }
     if (plugin.options?.length) block.append(...pluginOptions(plugin, wide));
     if (plugin.update) {
       const row = wide(el("div", "keyrow"));

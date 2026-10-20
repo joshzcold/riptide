@@ -80,7 +80,7 @@ Every `plugins.check_interval` days (1 by default; 0 turns it off), riptide chec
 
 ## The plugins page
 
-`:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't) and the permissions you approved, with the buttons above.
+`:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't), the permissions you approved and the keys it bound (with each one's `desc`, and its mode if not normal), with the buttons above.
 
 To review before updating, press **Check all** (or `:pack-check`), read each plugin's new commits on the page, then press **Update** on one or **Update all**. **Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's lockfile entry and its checkout, unless another plugin uses it; take it out of `config.lua` too, or it's installed again at the next start.
 
