@@ -51,7 +51,7 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 **Packages:**
 - The AUR `PKGBUILD`s (`packaging/aur/<package>/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) are updated by the publish job's pull request. If that step fails, run `scripts/update-packages.sh X.Y.Z riptide-X.Y.Z-linux-x86_64.tar.gz` with the released tarball and open a pull request with the result.
 - Merging that pull request publishes both to the AUR ([`aur.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/aur.yml)): [`riptide-browser-bin`](https://aur.archlinux.org/packages/riptide-browser-bin), from the release tarball, and [`riptide-browser`](https://aur.archlinux.org/packages/riptide-browser), built from the release tag against the CEF build its `Cargo.lock` pins (`update-packages.sh` looks up that build's checksum in the CEF index). It checks the sources' checksums, builds `riptide-browser` (a package that doesn't build isn't published), writes `.SRCINFO` and pushes over SSH with the `RIPTIDE_AUR_SSH_PRIVATE_KEY` secret, whose public half (`RIPTIDE_AUR_SSH_PUBLIC_KEY`) is on the maintainer's AUR account. Run it by hand (a dry run by default) to check the key or to publish again.
-- To check the Nix package, run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
+- To check the Nix packages, run `nix build .#riptide` (the release tarball) or `nix build .#riptide-source` (built from the checkout), then `BIN=result/bin/riptide scripts/smoke-test.sh`. `riptide-source` needs no update at a release; it reads the version and dependencies from the checkout.
 
 **In the browser:**
 

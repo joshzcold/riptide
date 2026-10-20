@@ -57,6 +57,26 @@ jobs:
             exit 1
           fi
 
+          # The Nix source package pins the CEF archive too: its full version,
+          # SHA-1 (from the index) and SHA-256 (as an SRI hash).
+          read -r cef_full sha1 < <(curl -fsSL https://cef-builds.spotifycdn.com/index.json |
+            jq -r --arg build "$build+" '[.linux64.versions[] | select(.cef_version | startswith($build))] | first
+              | "\(.cef_version) \([.files[] | select(.type == "minimal") | .sha1] | first)"')
+          archive="cef_binary_${cef_full}_linux64_minimal.tar.bz2"
+          curl -fsSL -o "$RUNNER_TEMP/cef.tar.bz2" "https://cef-builds.spotifycdn.com/$archive"
+          echo "$sha1  $RUNNER_TEMP/cef.tar.bz2" | sha1sum -c -
+          sri="sha256-$(sha256sum "$RUNNER_TEMP/cef.tar.bz2" | cut -d' ' -f1 | xxd -r -p | base64 -w0)"
+          rev=${cef_full#*+g}
+          rev=${rev%%+*}
+          sed -i -E \
+            -e "s/^(  cefVersion = \")[^\"]*/\1$build/" \
+            -e "s/^(  cefGitRevision = \")[^\"]*/\1$rev/" \
+            -e "s/^(  cefChromiumVersion = \")[^\"]*/\1${cef_full##*+chromium-}/" \
+            -e "s/^(  cefSha1 = \")[^\"]*/\1$sha1/" \
+            -e "s|^(      srcHashes.x86_64-linux = \")[^\"]*|\1$sri|" \
+            packaging/nix/source.nix
+          git diff --stat -- packaging/nix/source.nix
+
           subject="feat: update CEF to $build${chromium:+ (Chromium $chromium)}"
           bot="${APP_SLUG}[bot]"
           git config user.name "$bot"
@@ -70,7 +90,7 @@ jobs:
           gh pr create --base main --head "$branch" --title "$subject" --body "$(cat <<EOF
           The \`cef\` crate $latest is out (riptide pins $pinned): https://github.com/tauri-apps/cef-rs/releases
 
-          This bumps \`Cargo.toml\` and \`Cargo.lock\`. The check below runs the lint, unit, e2e and smoke tests against the new CEF. If the generated bindings changed, push the fixes to this branch.
+          This bumps \`Cargo.toml\`, \`Cargo.lock\` and the CEF build in \`packaging/nix/source.nix\`. The check below runs the lint, unit, e2e and smoke tests against the new CEF. If the generated bindings changed, push the fixes to this branch.
           ${issue:+
           Closes #$issue}
 
