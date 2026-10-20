@@ -603,6 +603,33 @@ fn plugins_install_from_a_folder_of_a_repository_of_several() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn the_plugins_tab_lists_the_keys_each_plugin_bound() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/keyed/plugin/keyed.lua",
+            r#"rt.keymap.set("normal", "<Space>kk", function() rt.notify("kk") end, { desc = "Say kk" })
+rt.keymap.set("insert", "<Ctrl-k>", function() end)"#,
+        )
+        .lua(r#"rt.pack.add({ { dir = rt.config_dir .. "/../scratch-plugins/keyed" } })"#)
+        .start("page.html");
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).join(' ')",
+        "keyed:loaded",
+    );
+    b.wait_eval(
+        "page.plugins[0].keys.map((k) => `${k.mode} ${k.keys} ${k.desc}`).join('; ')",
+        "normal <Space>kk Say kk; insert <Ctrl-k> ",
+    );
+    // Drawn on the plugin's card, with the keys as chips.
+    b.wait_eval(
+        "String([...document.querySelectorAll('.desc kbd')].some((k) => k.textContent === '<Space>'))",
+        "true",
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn plugins_bring_their_dependencies_which_load_first() {
     let b = Browser::launch()
         .file(

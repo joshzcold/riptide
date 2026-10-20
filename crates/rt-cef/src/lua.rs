@@ -125,12 +125,18 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 mode,
                 keys,
                 command,
-            } => {
-                if let Some(Err(e)) = shell::with(|s| s.engine.bind_from_lua(mode, &keys, &command))
-                {
-                    shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));
+            } => match shell::with(|s| s.engine.bind_from_lua(mode, &keys, &command)) {
+                Some(Err(e)) => shell::show_message(Level::Error, format!("{source}: {keys}: {e}")),
+                Some(Ok(_)) if source != "config.lua" => {
+                    PLUGIN_KEYS.with(|k| {
+                        let mut k = k.borrow_mut();
+                        let list = k.entry(source.to_string()).or_default();
+                        list.retain(|(m, key, _)| (*m, key.as_str()) != (mode, keys.as_str()));
+                        list.push((mode, keys, command));
+                    });
                 }
-            }
+                _ => {}
+            },
             Action::Float { id, source, spec } => crate::float::show(id, source, spec),
             Action::FloatClose { id } => crate::float::close(id, true),
             Action::Panel { id, source, spec } => crate::panel::show(id, source, spec),
@@ -171,6 +177,11 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 if let Some(Err(e)) = shell::with(|s| s.engine.unbind_from_lua(mode, &keys)) {
                     shell::show_message(Level::Error, format!("{source}: {keys}: {e}"));
                 }
+                PLUGIN_KEYS.with(|k| {
+                    for list in k.borrow_mut().values_mut() {
+                        list.retain(|(m, key, _)| (*m, key.as_str()) != (mode, keys.as_str()));
+                    }
+                });
             }
             Action::Ask {
                 id,
@@ -244,6 +255,38 @@ pub fn current_context() -> Context {
 pub fn emit(event: &str, fields: &[(&str, &str)]) {
     crate::plugins::on_event(event);
     carry_out(lua::emit(event, fields, &context(None)));
+}
+
+/// A key a plugin bound: mode, keys and command.
+type PluginKey = (rt_core::Mode, String, String);
+
+thread_local! {
+    /// The keys each plugin bound since the config last loaded.
+    static PLUGIN_KEYS: std::cell::RefCell<std::collections::BTreeMap<String, Vec<PluginKey>>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+/// The config is loading again, and with it every plugin's keys.
+pub fn forget_plugin_keys() {
+    PLUGIN_KEYS.with(|k| k.borrow_mut().clear());
+}
+
+/// The keys `plugin` bound, for the Plugins tab: mode, keys and what they do.
+pub fn plugin_keys(plugin: &str) -> Vec<serde_json::Value> {
+    PLUGIN_KEYS.with(|k| {
+        k.borrow()
+            .get(plugin)
+            .into_iter()
+            .flatten()
+            .map(|(mode, keys, command)| {
+                // A function bound without a `desc` has nothing worth showing.
+                let what = lua::describe(command)
+                    .or_else(|| (!command.starts_with("lua-call ")).then(|| command.clone()))
+                    .unwrap_or_default();
+                serde_json::json!({ "mode": mode.name(), "keys": keys, "desc": what })
+            })
+            .collect()
+    })
 }
 
 thread_local! {

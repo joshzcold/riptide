@@ -136,8 +136,9 @@ pub fn start() {
         return;
     };
     let lock = Lockfile::load(&config_dir).unwrap_or_default();
-    // The config was just applied: the old placeholders went with it.
+    // The config was just applied: the old placeholders and keys went with it.
     WAITING.with(|w| w.borrow_mut().clear());
+    crate::lua::forget_plugin_keys();
     crate::pages::unregister_all();
     BLOCKED.with(|b| b.borrow_mut().clear());
     for spec in rt_config::lua::plugin_specs() {
@@ -748,6 +749,7 @@ pub fn page_data() -> serde_json::Value {
                 "trusted": spec.trusted,
                 "approved": locked.approved.describe(),
                 "triggers": triggers(&spec),
+                "keys": crate::lua::plugin_keys(&spec.name),
                 "state": if state.state.is_empty() { "pending" } else { state.state },
                 "error": state.error,
                 "update": state.update.map(|(commit, log)| serde_json::json!({ "commit": commit, "log": log })),
