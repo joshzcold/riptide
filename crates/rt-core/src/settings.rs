@@ -1374,6 +1374,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Delete the temporary file after the editor closes; false keeps it, e.g. to recover text"
     ),
     def!(
+        "extensions.check_interval",
+        Kind::Int { min: 0, max: 365 },
+        Value::Int(1),
+        "Every this many days, check extensions installed from the Web Store for newer versions in the background and say once which have updates; nothing updates by itself (0: never)"
+    ),
+    def!(
         "extensions.load",
         Kind::List,
         Value::List(Vec::new()),

@@ -22,7 +22,7 @@ Installed extensions keep their Web Store id, so their settings carry over betwe
 
 - **Popup** opens the extension's popup over the top right of the page, as Chrome does. Drag its bar to move it; the next popup opens where you left the last one. Escape or its ✕ closes it, and so does switching tabs. **Options** opens its options page in a tab.
 - **Remove** deletes an installed one.
-- **Check for updates** asks the Web Store for newer versions. **Update to …** then shows what the new version asks for that the old one didn't, before installing it.
+- **Check for updates** asks the Web Store for newer versions. **Update to …** then shows what the new version asks for that the old one didn't, before installing it. riptide also checks once a day in the background and says which extensions have updates, once per new version. `extensions.check_interval` sets the number of days, and `0` turns it off.
 - **Chrome's extensions page** turns extensions on or off, and shows their errors.
 
 When something changed since riptide started, the tab says so, with a **Restart now** button.
@@ -57,7 +57,7 @@ What doesn't work is anything that needs the extension to know which site you're
 | **Extensions can't tell which site you're on.** Anything that depends on it doesn't work: uBlock Origin Lite's per-site switch, filtering level and element picker (its popup says "not a website"), and password managers' login suggestions. | Settings that don't depend on the site, such as filter lists and the default blocking level, work from the popup or options. For logins, see [Password managers](#password-managers). |
 | **Only Manifest V3.** Chromium no longer runs Manifest V2 extensions, such as the original uBlock Origin, and riptide refuses to install them. Firefox add-ons don't run either. | uBlock Origin Lite, or riptide's own ad blocker (`content.blocking`). |
 | **Changes need a restart.** Extensions load when riptide starts. | Accept the "Restart now?" question, or use **Restart now** on the Extensions tab. |
-| **No automatic updates.** | Press **Check for updates** on the Extensions tab, or run `:extension-update`. |
+| **Updates don't install by themselves.** riptide only tells you about them. | Press **Update to …** on the Extensions tab, or run `:extension-update <name>`. |
 | **Not in private windows.** | Use a normal window. |
 | **Chrome's own Remove only hides an extension until the next start**, because riptide loads it from its folder each time. | **Remove** on the Extensions tab, or `:extension-remove`. |
 | **Desktop apps are linked at startup.** riptide only finds a password manager's desktop app if the app set itself up for another Chromium browser first. | Turn on the app's browser integration for Chromium or Chrome, then restart riptide. |

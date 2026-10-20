@@ -397,3 +397,32 @@ fn a_downloaded_extension_installs_instead_of_saving() {
         .unwrap_or(0);
     assert_eq!(leftovers, 0, "the download is deleted once it's read");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn installed_extensions_are_checked_for_updates_in_the_background() {
+    let id = "oboonakemofpalcgghocfoadofidjkkk";
+    let manifest = r#"{ "manifest_version": 3, "name": "Checked", "version": "1.0" }"#;
+    let b = Browser::launch()
+        .toml("messages.timeout = 0\n")
+        .file(&format!("data/extensions/{id}/manifest.json"), manifest)
+        // Checked once, long ago: the next check is due.
+        .file("data/extensions-last-check", "1")
+        .env(
+            "RIPTIDE_EXTENSION_UPDATE_URL",
+            "{server}/extensions/update.xml",
+        )
+        .start("page.html");
+    b.wait_until("the background check finds the update", |s| {
+        s.message()
+            .is_some_and(|m| m.contains("Extension updates: Checked 2.0"))
+    });
+    let last: u64 = std::fs::read_to_string(b.data_dir().join("extensions-last-check"))
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    assert!(last > 1, "the check's time is kept");
+    let announced = std::fs::read_to_string(b.data_dir().join("extensions-announced")).unwrap();
+    assert_eq!(announced, format!("{id} 2.0\n"));
+}

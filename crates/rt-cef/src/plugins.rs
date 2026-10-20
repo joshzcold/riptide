@@ -813,24 +813,12 @@ fn first_mention(src: &str, latest: &str) -> bool {
 fn maybe_check() {
     let Some((_, data_dir)) = paths() else { return };
     let days = shell::with(|s| s.engine.settings().int("plugins.check_interval")).unwrap_or(0);
-    if days <= 0 || repositories().is_empty() {
+    if days <= 0
+        || repositories().is_empty()
+        || !crate::background::due(&last_check_file(&data_dir), days)
+    {
         return;
     }
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    // The first run starts the clock: what was just installed is current.
-    let Some(last) = std::fs::read_to_string(last_check_file(&data_dir))
-        .ok()
-        .and_then(|t| t.trim().parse::<u64>().ok())
-    else {
-        let _ = std::fs::write(last_check_file(&data_dir), now.to_string());
-        return;
-    };
-    if now.saturating_sub(last) < days as u64 * 86_400 {
-        return;
-    }
-    let _ = std::fs::write(last_check_file(&data_dir), now.to_string());
     QUIET.with(|q| *q.borrow_mut() = Some(Vec::new()));
     fetch(None, After::Check);
 }

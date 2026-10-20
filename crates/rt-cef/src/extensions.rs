@@ -347,6 +347,7 @@ pub fn after_startup() {
     if !LOADED.load(Ordering::Relaxed) {
         return;
     }
+    crate::client::later(5_000, maybe_check);
     for ms in [1500, 4000] {
         crate::client::later(ms, reload_stuck);
     }
@@ -375,7 +376,7 @@ pub fn run_command(command: &Command) -> bool {
         Command::ExtensionInstall { source } => install(source),
         Command::ExtensionRemove { name } => remove(name),
         Command::ExtensionOpen { name, page } => open(name, page.as_deref()),
-        Command::ExtensionUpdate { name } if name.is_empty() => check_updates(None),
+        Command::ExtensionUpdate { name } if name.is_empty() => check_updates(None, false),
         Command::ExtensionUpdate { name } => match find(name) {
             Some(e) if e.installed => install(&e.id),
             Some(e) => shell::show_message(
@@ -714,7 +715,7 @@ pub fn ui_action(id: &str, action: rt_core::ui_message::ExtensionAction) {
         ExtensionAction::Popup => open(id, Some("popup")),
         ExtensionAction::Options => open(id, Some("options")),
         ExtensionAction::Remove => remove(id),
-        ExtensionAction::Check => check_updates((!id.is_empty()).then_some(id)),
+        ExtensionAction::Check => check_updates((!id.is_empty()).then_some(id), false),
         ExtensionAction::Update => install(id),
         ExtensionAction::Chrome => chrome_page(),
     }
@@ -726,24 +727,87 @@ fn chrome_page() {
     crate::window::create_call("chrome://extensions".into());
 }
 
-/// Ask the Web Store whether installed extensions (or one) have newer versions.
-fn check_updates(only: Option<&str>) {
+/// When the background check last ran, as seconds since the epoch.
+const LAST_CHECK_FILE: &str = "extensions-last-check";
+/// The versions the background check has already mentioned, one `<id> <version>`
+/// per line, so it says so only once.
+const ANNOUNCED_FILE: &str = "extensions-announced";
+
+/// After startup: check for updates in the background if
+/// `extensions.check_interval` days have passed since the last time.
+fn maybe_check() {
+    let Some((days, data_dir)) = shell::with(|s| {
+        (
+            s.engine.settings().int("extensions.check_interval"),
+            s.paths.data_dir.clone(),
+        )
+    }) else {
+        return;
+    };
+    if days <= 0
+        || !current().iter().any(|e| e.installed)
+        || !crate::background::due(&data_dir.join(LAST_CHECK_FILE), days)
+    {
+        return;
+    }
+    check_updates(None, true);
+}
+
+/// Whether the background check hasn't mentioned `version` of `id` yet; it
+/// counts as mentioned from now on.
+fn first_mention(id: &str, version: &str) -> bool {
+    let Some(path) = shell::with(|s| s.paths.data_dir.join(ANNOUNCED_FILE)) else {
+        return true;
+    };
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let line = format!("{id} {version}");
+    if text.lines().any(|l| l == line) {
+        return false;
+    }
+    let mut lines: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.starts_with(&format!("{id} ")))
+        .collect();
+    lines.push(&line);
+    let _ = std::fs::write(&path, lines.join("\n") + "\n");
+    true
+}
+
+/// The update check's address. Test builds may point it elsewhere with
+/// `RIPTIDE_EXTENSION_UPDATE_URL`.
+fn update_check_url(entry: &Entry) -> String {
+    #[cfg(any(debug_assertions, feature = "test-control"))]
+    if let Ok(url) = std::env::var("RIPTIDE_EXTENSION_UPDATE_URL") {
+        return url;
+    }
+    extensions::update_check_url(
+        &entry.id,
+        &entry.about.version,
+        cef::sys::CHROME_VERSION_MAJOR,
+    )
+}
+
+/// Ask the Web Store whether installed extensions (or one) have newer
+/// versions. A `quiet` (background) check says only which have updates it
+/// hasn't mentioned before.
+fn check_updates(only: Option<&str>, quiet: bool) {
     let entries: Vec<Entry> = current()
         .into_iter()
         .filter(|e| e.installed && only.is_none_or(|id| e.id == id))
         .collect();
     if entries.is_empty() {
-        return shell::show_message(Level::Info, "No installed extensions to check");
+        if !quiet {
+            shell::show_message(Level::Info, "No installed extensions to check");
+        }
+        return;
     }
-    shell::show_message(Level::Info, "Checking for extension updates…");
+    if !quiet {
+        shell::show_message(Level::Info, "Checking for extension updates…");
+    }
     let left = std::rc::Rc::new(std::cell::Cell::new(entries.len()));
     let found = std::rc::Rc::new(RefCell::new(Vec::new()));
     for entry in entries {
-        let url = extensions::update_check_url(
-            &entry.id,
-            &entry.about.version,
-            cef::sys::CHROME_VERSION_MAJOR,
-        );
+        let url = update_check_url(&entry);
         let (left, found) = (left.clone(), found.clone());
         crate::fetch::get(&url, move |result| {
             let newer = result
@@ -752,22 +816,26 @@ fn check_updates(only: Option<&str>) {
                 .filter(|v| extensions::newer(v, &entry.about.version));
             if let Some(version) = newer {
                 UPDATES.with(|u| u.borrow_mut().insert(entry.id.clone(), version.clone()));
-                found
-                    .borrow_mut()
-                    .push(format!("{} {version}", entry.about.name));
+                if !quiet || first_mention(&entry.id, &version) {
+                    found
+                        .borrow_mut()
+                        .push(format!("{} {version}", entry.about.name));
+                }
             }
             left.set(left.get() - 1);
             if left.get() == 0 {
                 let found = found.borrow();
-                let text = if found.is_empty() {
-                    "Extensions are up to date".to_string()
-                } else {
-                    format!(
-                        "Updates: {}; :extension-update <name> installs one",
-                        found.join(", ")
-                    )
-                };
-                shell::show_message(Level::Info, text);
+                if found.is_empty() && !quiet {
+                    shell::show_message(Level::Info, "Extensions are up to date");
+                } else if !found.is_empty() {
+                    shell::show_message(
+                        Level::Info,
+                        format!(
+                            "Extension updates: {}; :extension-update <name> installs one",
+                            found.join(", ")
+                        ),
+                    );
+                }
                 crate::settings_page::refresh();
             }
         });

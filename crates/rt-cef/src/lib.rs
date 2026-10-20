@@ -3,6 +3,7 @@
 
 mod actions;
 mod adblock;
+mod background;
 mod caret;
 mod client;
 mod clipboard;

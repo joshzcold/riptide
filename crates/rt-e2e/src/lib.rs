@@ -136,6 +136,7 @@ pub struct Launch {
     /// `(path under the profile, contents, executable)`.
     files: Vec<(String, String, bool)>,
     args: Vec<String>,
+    env: Vec<(String, String)>,
 }
 
 impl Launch {
@@ -167,6 +168,12 @@ impl Launch {
     /// `PATH` before the real one.
     pub fn command(self, name: &str, contents: &str) -> Self {
         self.script(&format!("../bin/{name}"), contents)
+    }
+
+    /// An environment variable for the browser, kept across restarts.
+    pub fn env(mut self, name: &str, value: &str) -> Self {
+        self.env.push((name.into(), value.into()));
+        self
     }
 
     /// An extra command line argument, e.g. a Chromium switch.
@@ -216,12 +223,15 @@ impl Launch {
         let socket = remote::socket_path(&base.join("data"), Some(&run));
         let mut args: Vec<&str> = self.args.iter().map(String::as_str).collect();
         args.push(&url);
-        let browser = spawn_browser(&dir, &display, &args);
+        let env: Vec<(String, String)> =
+            self.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect();
+        let browser = spawn_browser(&dir, &display, &env, &args);
         let b = Browser {
             dir,
             socket,
             port,
             display,
+            env,
             browser: RefCell::new(browser),
             xvfb: RefCell::new(xvfb),
         };
@@ -239,6 +249,7 @@ pub struct Browser {
     socket: PathBuf,
     port: u16,
     display: String,
+    env: Vec<(String, String)>,
     browser: RefCell<Child>,
     xvfb: RefCell<Child>,
 }
@@ -365,7 +376,7 @@ impl Browser {
             *self.xvfb.borrow_mut() = start_xvfb_on(&self.display);
         }
         // A crash can leave the socket behind; the new browser replaces it.
-        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, args);
+        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, &self.env, args);
         self.wait_until("the browser is back", |s| !s.tabs().is_empty());
     }
 
@@ -629,7 +640,7 @@ impl Drop for Browser {
     }
 }
 
-fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
+fn spawn_browser(dir: &Path, display: &str, env: &[(String, String)], args: &[&str]) -> Child {
     let log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -660,6 +671,7 @@ fn spawn_browser(dir: &Path, display: &str, args: &[&str]) -> Child {
             "RT_LOG",
             std::env::var("RT_LOG").unwrap_or_else(|_| "info".into()),
         )
+        .envs(env.iter().map(|(k, v)| (k, v)))
         .stdin(Stdio::null())
         .stdout(log.try_clone().unwrap())
         .stderr(log);

@@ -81,7 +81,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Next up (as of 2026-10-20)
 
 1. **Release 0.4**, which the other session does. None of the plugin work since v0.3.0 has shipped: options and keyring secrets, `plugins.toml`, Add/Browse, update/sync/lockfile and the background check. Then merge the riptide-plugins `options` branch (below).
-2. **Then pick from the open work below.** Candidates: a minimum riptide version for plugins, config file watching, saved window geometry, extension update checks and the missing plugin events.
+2. **Then pick from the open work below.** Config file watching is in progress on `feat/config-watch`. Candidates: the missing plugin events, a plugin health report, and a tab focus stack.
 
 ### Plugins (M27)
 
@@ -95,7 +95,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Extensions (M28)
 
 - Popups and keyboard commands can't see riptide's tabs: CEF lists only Chrome-style tabs in `chrome.tabs`. Needs a CEF change, or an upstream issue.
-- Automatic extension update checks (like plugins' daily check).
 - Not checked yet: real autofill with a vault, passkeys, `chrome.commands` shortcuts.
 
 ### Ad blocking (M8)
