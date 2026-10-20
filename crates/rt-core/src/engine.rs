@@ -113,6 +113,8 @@ pub struct StatusView {
 /// The modal key-handling state machine. It has no knowledge of CEF.
 pub struct Engine {
     keymap: Keymap,
+    /// Commands run since the browser last asked, for `rt.on("command")`.
+    ran: Vec<(String, String)>,
     settings: Settings,
     mode: Mode,
     pending: Vec<Key>,
@@ -209,6 +211,7 @@ impl Engine {
     pub fn new(keymap: Keymap) -> Self {
         Self {
             keymap,
+            ran: Vec::new(),
             settings: Settings::default(),
             mode: Mode::Normal,
             pending: Vec::new(),
@@ -988,7 +991,10 @@ impl Engine {
                     None => command::parse(&piece).map_err(|e| e.to_string()),
                 });
             match result {
-                Ok(cmd) => self.execute(cmd, count, &mut effects),
+                Ok(cmd) => {
+                    self.note_ran(piece);
+                    self.execute(cmd, count, &mut effects)
+                }
                 Err(e) => {
                     self.show_message(Level::Error, e);
                     break;
@@ -996,6 +1002,21 @@ impl Engine {
             }
         }
         effects
+    }
+
+    /// Keep `piece` for [`Engine::take_ran`]; `lua-call` is how keys reach Lua
+    /// functions, so it isn't one the user ran.
+    fn note_ran(&mut self, piece: &str) {
+        let piece = piece.trim_start_matches(':');
+        let (name, args) = piece.split_once(char::is_whitespace).unwrap_or((piece, ""));
+        if name != "lua-call" && self.ran.len() < 100 {
+            self.ran.push((name.to_string(), args.trim().to_string()));
+        }
+    }
+
+    /// The commands run since the last call: name and arguments.
+    pub fn take_ran(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.ran)
     }
 
     fn expand_alias(&self, piece: &str) -> Option<String> {
@@ -3330,6 +3351,27 @@ mod tests {
             e.status().message.unwrap().text,
             "X is not bound in normal mode"
         );
+    }
+
+    #[test]
+    fn commands_that_ran_are_kept_for_plugins() {
+        let mut e = engine();
+        e.execute_str(":reload ;; scroll down ;; lua-call 3", None);
+        press(&mut e, ":q<Return>");
+        // Keys report the commands they're bound to, and aliases what they expand to.
+        let ran = e.take_ran();
+        let ran: Vec<(&str, &str)> = ran.iter().map(|(n, a)| (n.as_str(), a.as_str())).collect();
+        assert_eq!(
+            ran,
+            [
+                ("reload", ""),
+                ("scroll", "down"),
+                ("cmd-set-text", ":"),
+                ("command-accept", ""),
+                ("close", ""),
+            ]
+        );
+        assert!(e.take_ran().is_empty());
     }
 
     #[test]

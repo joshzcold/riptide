@@ -246,6 +246,22 @@ pub fn emit(event: &str, fields: &[(&str, &str)]) {
     carry_out(lua::emit(event, fields, &context(None)));
 }
 
+thread_local! {
+    /// The theme in use when last checked; `None` until the config first loads.
+    static THEME: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Emit `theme_changed` if the theme in use isn't the one last seen.
+pub fn check_theme() {
+    let Some(now) = shell::with(|s| rt_core::theme::current_name(s.engine.settings())) else {
+        return;
+    };
+    let before = THEME.with(|t| t.borrow_mut().replace(now.clone()));
+    if before.is_some_and(|before| before != now) {
+        emit("theme_changed", &[("theme", &now)]);
+    }
+}
+
 /// Hand an `rt.spawn` program's result to its callback.
 pub fn spawned(callback: u32, result: &lua::SpawnResult) {
     carry_out(lua::spawned(callback, result, &context(None)));

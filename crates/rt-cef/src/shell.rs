@@ -541,6 +541,7 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
     crate::settings_page::refresh();
     apply_chromium_settings();
     crate::plugins::start();
+    crate::lua::check_theme();
     errors
 }
 
@@ -659,6 +660,7 @@ fn persist(op: rt_core::config::ConfigOp) {
             .flatten()
             .unwrap_or_default();
         crate::lua::emit("setting_changed", &[("name", name), ("value", &value)]);
+        crate::lua::check_theme();
     }
 }
 
@@ -693,6 +695,9 @@ pub fn apply(effects: Vec<Effect>) {
             Effect::DeleteCompletion(item) => storage::delete_completion(&item),
             Effect::YankText { text, primary } => clipboard::yank_to(&text, "text", primary),
         }
+    }
+    for (name, args) in with(|s| s.engine.take_ran()).unwrap_or_default() {
+        crate::lua::emit("command", &[("name", &name), ("args", &args)]);
     }
     refresh_ui();
 }

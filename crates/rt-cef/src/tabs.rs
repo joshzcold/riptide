@@ -168,6 +168,25 @@ pub fn move_tab(from: usize, to: usize) {
     if let Some(index) = shell::with(|s| s.tabs.current_index()) {
         select(index);
     }
+    moved(from, to);
+}
+
+/// `rt.on("tab_moved")`, if the tab really moved.
+fn moved(from: usize, to: usize) {
+    if from == to {
+        return;
+    }
+    let url = shell::with(|s| s.tabs.get(to).map(|t| t.url.clone()))
+        .flatten()
+        .unwrap_or_default();
+    crate::lua::emit(
+        "tab_moved",
+        &[
+            ("url", &url),
+            ("from", &(from + 1).to_string()),
+            ("to", &(to + 1).to_string()),
+        ],
+    );
 }
 
 /// Open `url` in a new tab, or a new window with `tabs.tabs_are_windows`.
@@ -621,7 +640,7 @@ fn last_close() {
 }
 
 fn move_current(target: Option<TabMoveTarget>, count: Option<u32>) {
-    shell::with(|s| {
+    let moved_tab = shell::with(|s| {
         let len = s.tabs.len();
         let n = i64::from(count.unwrap_or(1).max(1));
         let to = match target {
@@ -634,14 +653,19 @@ fn move_current(target: Option<TabMoveTarget>, count: Option<u32>) {
                 None => {
                     s.engine
                         .show_message(Level::Error, format!("There's no tab with index {k}"));
-                    return;
+                    return None;
                 }
             },
             Some(TabMoveTarget::Start) => 0,
             Some(TabMoveTarget::End) => len.saturating_sub(1),
         };
+        let from = s.tabs.current_index();
         s.tabs.move_current(to);
+        Some((from, s.tabs.current_index()))
     });
+    if let Some((from, to)) = moved_tab.flatten() {
+        moved(from, to);
+    }
 }
 
 /// An open tab, for `:tab-select` completion: window and tab numbers
