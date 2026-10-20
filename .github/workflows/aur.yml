@@ -1,13 +1,14 @@
 name: aur
 
-# Publishes packaging/aur/PKGBUILD to the AUR as riptide-browser-bin when it changes
-# on main, which is when the release's packages pull request is merged.
-# Running it by hand defaults to a dry run: it checks the PKGBUILD and shows
-# the change without pushing.
+# Publishes packaging/aur/<package>/PKGBUILD to the AUR when it changes on
+# main, which is when the release's packages pull request is merged:
+# riptide-browser-bin (the release tarball) and riptide-browser (built from
+# the release tag). Running it by hand defaults to a dry run: it checks each
+# PKGBUILD and shows the change without pushing.
 on:
   push:
     branches: [main]
-    paths: [packaging/aur/PKGBUILD]
+    paths: ['packaging/aur/**']
   workflow_dispatch:
     inputs:
       dry_run:
@@ -24,24 +25,39 @@ concurrency:
 
 jobs:
   publish:
-    name: publish riptide-browser-bin
+    name: publish ${{ matrix.package }}
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: riptide-browser-bin
+            build: false
+          - package: riptide-browser
+            build: true
     env:
       PUSH: ${{ github.event_name == 'push' || !inputs.dry_run }}
     steps:
       - name: Install git and ssh
         run: pacman -Syu --noconfirm --needed git openssh
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # makepkg won't run as root.
       - name: Check the PKGBUILD and write .SRCINFO
         run: |
           useradd -m builder
-          cp packaging/aur/PKGBUILD /home/builder/
+          cp packaging/aur/${{ matrix.package }}/PKGBUILD /home/builder/
           chown -R builder: /home/builder
-          # Downloads the release tarball and checks its sha256sum.
+          # Downloads the sources and checks their checksums.
           su builder -c 'cd ~ && makepkg --verifysource --noconfirm && makepkg --printsrcinfo > .SRCINFO'
           cat /home/builder/.SRCINFO
+      # A package that doesn't build isn't published.
+      - name: Build the package
+        if: matrix.build
+        run: |
+          (source /home/builder/PKGBUILD && pacman -S --noconfirm --needed "${depends[@]}" "${makedepends[@]}")
+          su builder -c 'cd ~ && makepkg --noconfirm'
+        shell: bash
       - name: Commit to the AUR repository
         env:
           AUR_KEY: ${{ secrets.RIPTIDE_AUR_SSH_PRIVATE_KEY }}
@@ -55,22 +71,22 @@ jobs:
           echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$ssh_dir/known_hosts"
           export GIT_SSH_COMMAND="ssh -i $ssh_dir/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
           # The first push creates the package.
-          git clone -q ssh://aur@aur.archlinux.org/riptide-browser-bin.git aur
+          git clone -q ssh://aur@aur.archlinux.org/${{ matrix.package }}.git aur
           cp /home/builder/PKGBUILD /home/builder/.SRCINFO aur/
           cd aur
           git add PKGBUILD .SRCINFO
           if git diff --cached --quiet; then
-            echo "riptide-browser-bin is already up to date"
+            echo "${{ matrix.package }} is already up to date"
             exit 0
           fi
           git diff --cached --stat
           version=$(sed -n 's/^\tpkgver = //p' .SRCINFO)-$(sed -n 's/^\tpkgrel = //p' .SRCINFO)
           git -c user.name="Joshua Cold" -c user.email="joshzcold@gmail.com" \
-            commit -q -m "riptide-browser-bin $version"
+            commit -q -m "${{ matrix.package }} $version"
           if [[ $PUSH != true ]]; then
-            echo "Dry run: not pushing riptide-browser-bin $version"
+            echo "Dry run: not pushing ${{ matrix.package }} $version"
             exit 0
           fi
           git push -q origin HEAD:master
-          echo "Published riptide-browser-bin $version: https://aur.archlinux.org/packages/riptide-browser-bin" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published ${{ matrix.package }} $version: https://aur.archlinux.org/packages/${{ matrix.package }}" >> "$GITHUB_STEP_SUMMARY"
         shell: bash

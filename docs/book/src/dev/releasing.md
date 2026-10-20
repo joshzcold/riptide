@@ -21,7 +21,7 @@ If Actions isn't allowed to create pull requests (**Settings → Actions → Gen
 |---|---|
 | plan | **From Actions:** prepares the release pull request, or for a dry run, the version to build. **On every push to `main`:** releases the commit if `Cargo.toml`'s version has no tag yet (a merged release pull request), and otherwise does nothing. |
 | build | Runs [`build-release.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/build-release.yml) on the release commit (below). |
-| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release, which tags the commit, with that version's section of the changelog. Then [`scripts/update-packages.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/update-packages.sh) points the AUR and Nix packages at the new tarball, in a pull request. Pre-releases leave the packages alone, and a dry run only prints the change. |
+| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release, which tags the commit, with that version's section of the changelog. Then [`scripts/update-packages.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/update-packages.sh) points the AUR and Nix packages at the new release, in a pull request. Pre-releases leave the packages alone, and a dry run only prints the change. |
 
 Because a new version in `Cargo.toml` is what triggers a release, change it only through the release pull request.
 
@@ -49,8 +49,8 @@ gh attestation verify riptide-0.2.0-linux-x86_64.tar.gz --repo joshzcold/riptide
 ## After a release
 
 **Packages:**
-- The AUR `PKGBUILD` (`packaging/aur/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) are updated by the publish job's pull request. If that step fails, run `scripts/update-packages.sh X.Y.Z riptide-X.Y.Z-linux-x86_64.tar.gz` with the released tarball and open a pull request with the result.
-- Merging that pull request publishes the `PKGBUILD` to the AUR as [`riptide-browser-bin`](https://aur.archlinux.org/packages/riptide-browser-bin) ([`aur.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/aur.yml)). It checks the tarball's checksum, writes `.SRCINFO` and pushes over SSH with the `RIPTIDE_AUR_SSH_PRIVATE_KEY` secret, whose public half (`RIPTIDE_AUR_SSH_PUBLIC_KEY`) is on the maintainer's AUR account. Run it by hand (a dry run by default) to check the key or to publish again.
+- The AUR `PKGBUILD`s (`packaging/aur/<package>/`) and the Nix package (`packaging/nix/package.nix`, used by the root `flake.nix`) are updated by the publish job's pull request. If that step fails, run `scripts/update-packages.sh X.Y.Z riptide-X.Y.Z-linux-x86_64.tar.gz` with the released tarball and open a pull request with the result.
+- Merging that pull request publishes both to the AUR ([`aur.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/aur.yml)): [`riptide-browser-bin`](https://aur.archlinux.org/packages/riptide-browser-bin), from the release tarball, and [`riptide-browser`](https://aur.archlinux.org/packages/riptide-browser), built from the release tag against the CEF build its `Cargo.lock` pins (`update-packages.sh` looks up that build's checksum in the CEF index). It checks the sources' checksums, builds `riptide-browser` (a package that doesn't build isn't published), writes `.SRCINFO` and pushes over SSH with the `RIPTIDE_AUR_SSH_PRIVATE_KEY` secret, whose public half (`RIPTIDE_AUR_SSH_PUBLIC_KEY`) is on the maintainer's AUR account. Run it by hand (a dry run by default) to check the key or to publish again.
 - To check the Nix package, run `nix build .#riptide`, then `BIN=result/bin/riptide scripts/smoke-test.sh`.
 
 **In the browser:**

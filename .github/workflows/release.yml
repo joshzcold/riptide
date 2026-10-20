@@ -205,7 +205,7 @@ jobs:
           git push -q origin "HEAD:refs/heads/release/v$VERSION-packages"
           scripts/open-pr.sh "release/v$VERSION-packages" \
             "chore(release): update the AUR and Nix packages for v$VERSION" \
-            "Points \`packaging/aur/PKGBUILD\` and \`packaging/nix/package.nix\` (and so the flake) at the v$VERSION tarball."
+            "Points the AUR packages in \`packaging/aur/\` and \`packaging/nix/package.nix\` (and so the flake) at v$VERSION."
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v7

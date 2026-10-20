@@ -47,7 +47,7 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has Linux x
 | **Ubuntu 24.04+, Debian 13+** | the `.deb` (from v0.2, and in the nightly): `sudo apt install ./riptide_*_amd64.deb` |
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide` |
-| **Arch Linux** | [`packaging/aur/PKGBUILD`](packaging/aur/PKGBUILD) (`makepkg -si`) |
+| **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |
 
 The [`nightly`](https://github.com/joshzcold/riptide/releases/tag/nightly) pre-release is rebuilt from `main` every night it changes. [Installing](https://joshzcold.github.io/riptide/guide/installing.html) covers the sandbox setup.
 
