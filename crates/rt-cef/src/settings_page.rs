@@ -82,6 +82,15 @@ fn refused(name: &str, error: &str) {
     }
 }
 
+/// Fresh data in open settings pages, or the Plugins tab in a new tab if
+/// none is open.
+pub fn show_plugins() {
+    refresh();
+    if open_pages().is_empty() {
+        shell::open(OpenTarget::Tab, true, Some(format!("{URL}#plugins")));
+    }
+}
+
 pub fn run_command(command: &Command) -> bool {
     let url = match command {
         Command::Settings => URL.to_string(),

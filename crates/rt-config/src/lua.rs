@@ -199,13 +199,34 @@ function rt._pack_ready(name)
   end
 end
 
+-- rt._health(name, required, health): plugin name's required options that
+-- are unset, then what its health(report) says, as { level, text } pairs.
+function rt._health(name, required, health)
+  local results = {}
+  local function add(level, text) results[#results + 1] = { level, tostring(text) } end
+  local spec = pack_specs[name] or {}
+  if spec.config == nil or spec.opts ~= nil then
+    local opts = spec.opts or {}
+    for _, option in ipairs(required) do
+      if opts[option] == nil then add("error", ("option %s is required and not set"):format(option)) end
+    end
+  end
+  if health then
+    local report = {}
+    for _, level in ipairs({ "ok", "warn", "error" }) do report[level] = function(text) add(level, text) end end
+    local ok, err = pcall(health, report)
+    if not ok then add("error", "its health check failed: " .. tostring(err)) end
+  end
+  return results
+end
+
 -- A plugin's globals: the safe parts of Lua, its own copy of rt with only the
 -- functions its permissions allow, and require limited to plugin modules.
 local SAFE = {
   "assert", "error", "ipairs", "next", "pairs", "pcall", "rawequal", "rawget", "rawlen",
   "rawset", "select", "setmetatable", "getmetatable", "tonumber", "tostring", "type", "xpcall",
 }
-local GATED = { spawn = "spawn", run = "commands", set = "settings", get = "settings" }
+local GATED = { spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings" }
 -- Defined further down, with rt.ui and rt.page.
 local ui_for, page_for, secret_for
 local function copy(t)
@@ -1190,6 +1211,52 @@ pub fn widget_texts(
         errors.push(e);
     }
     (texts, errors)
+}
+
+/// What a plugin's health check found: `"ok"`, `"warn"` or `"error"`, and what.
+pub type HealthItem = (String, String);
+
+/// Plugin `name`'s health: its `required` options that are unset, then, once
+/// it has `loaded`, what its module's `health(report)` says. What else it
+/// asks for is ignored.
+pub fn plugin_health(
+    name: &str,
+    required: &[String],
+    loaded: bool,
+    context: &Context,
+) -> Vec<HealthItem> {
+    let out: RefCell<Vec<Vec<String>>> = RefCell::new(Vec::new());
+    let mut items = Vec::new();
+    let result = run_guarded(context, |lua, state| {
+        let mut health = None;
+        if loaded {
+            match plugin_module(lua, state, name, Some(&[name.to_string()])) {
+                Ok(Some(Value::Table(module))) => {
+                    health = module
+                        .get::<Option<mlua::Function>>("health")
+                        .ok()
+                        .flatten();
+                }
+                Ok(_) => {}
+                Err(e) => items.push(("error".to_string(), format!("its module failed: {e}"))),
+            }
+        }
+        let api: mlua::Table = lua.globals().get("rt")?;
+        let check: mlua::Function = api.get("_health")?;
+        *out.borrow_mut() = check.call((name, required.to_vec(), health))?;
+        Ok(())
+    });
+    if let Err(e) = result {
+        items.push(("error".to_string(), e));
+    }
+    let found = out
+        .into_inner()
+        .into_iter()
+        .filter_map(|pair| match pair.as_slice() {
+            [level, text] => Some((level.clone(), text.clone())),
+            _ => None,
+        });
+    found.chain(items).collect()
 }
 
 /// Add a plugin another needs (its `dependencies`) and config.lua didn't
@@ -2315,6 +2382,12 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             Ok(())
         })?,
     )?;
+    api.set(
+        "which",
+        lua.create_function(|_, program: String| {
+            Ok(crate::plugins::which(&program).map(|p| p.display().to_string()))
+        })?,
+    )?;
     let s = state.clone();
     api.set(
         "message",
@@ -2932,6 +3005,83 @@ assert(not pcall(rt.statusbar.widget, "a b", function() end))
     }
 
     #[test]
+    fn health_reports_unset_options_and_the_plugins_own_checks() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-health-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let write = |path: &str, text: &str| {
+            let path = dir.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        write(
+            "plugins/vault/lua/vault/init.lua",
+            r#"
+local M = {}
+function M.setup() end
+function M.health(report)
+  report.ok("vault ready")
+  if not rt.which("riptide-no-such-tool") then report.error("riptide-no-such-tool not found") end
+  report.warn(rt.which("sh") and "sh found" or "no sh")
+end
+return M
+"#,
+        );
+        write(
+            "plugins/broken/lua/broken/init.lua",
+            "return { health = function() error('oops') end }",
+        );
+        let dir_text = dir.display().to_string();
+        write(
+            "config.lua",
+            &format!(
+                r#"
+rt.pack.add({{
+  {{ dir = [[{dir_text}/plugins/vault]], opts = {{ database = "x" }} }},
+  {{ dir = [[{dir_text}/plugins/broken]] }},
+}})
+"#
+            ),
+        );
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context::default();
+        let spawn = crate::plugins::Permissions {
+            spawn: true,
+            ..Default::default()
+        };
+        let plugin = |name: &str| dir.join("plugins").join(name);
+        load_plugin("vault", &plugin("vault"), &spawn, false, &[], &ctx).unwrap();
+        let pair = |level: &str, text: &str| (level.to_string(), text.to_string());
+        let required = ["database".to_string(), "profile".to_string()];
+        assert_eq!(
+            plugin_health("vault", &required, true, &ctx),
+            [
+                pair("error", "option profile is required and not set"),
+                pair("ok", "vault ready"),
+                pair("error", "riptide-no-such-tool not found"),
+                pair("warn", "sh found"),
+            ]
+        );
+        // Not loaded yet: only the options are checked.
+        assert_eq!(
+            plugin_health("broken", &required, false, &ctx),
+            [
+                pair("error", "option database is required and not set"),
+                pair("error", "option profile is required and not set"),
+            ]
+        );
+        let none = crate::plugins::Permissions::default();
+        load_plugin("broken", &plugin("broken"), &none, false, &[], &ctx).unwrap();
+        let found = plugin_health("broken", &[], true, &ctx);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].1.contains("health check failed") && found[0].1.contains("oops"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn plugins_run_sandboxed_with_their_permissions() {
         let dir = std::env::temp_dir().join(format!("rt-lua-plugins-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -2949,7 +3099,7 @@ function M.setup(opts)
   rt.command("demo-hello", function() rt.notify((opts.greeting or "?") .. " from demo") end)
   rt.command("demo-probe", function()
     local found = {}
-    for _, k in ipairs({ "spawn", "run", "set", "get" }) do if rt[k] then table.insert(found, k) end end
+    for _, k in ipairs({ "spawn", "which", "run", "set", "get" }) do if rt[k] then table.insert(found, k) end end
     if io then table.insert(found, "io") end
     if os.execute then table.insert(found, "os.execute") end
     if c then table.insert(found, "c") end

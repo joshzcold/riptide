@@ -107,6 +107,10 @@
   .note.allowed { border-color: var(--ok, #0d6e5a); color: var(--fg); background: color-mix(in srgb, var(--ok, #0d6e5a) 35%, transparent); }
   .log { margin: .3rem 0 0; padding: 0 0 0 1.1rem; font: .85em/1.5 var(--mono); color: var(--muted); }
   .note.blocked { border-color: var(--error); color: var(--fg); background: color-mix(in srgb, var(--error) 30%, transparent); }
+  .health .mark { display: inline-block; width: 1.2em; font-weight: 700; }
+  .health .ok .mark { color: var(--ok, #0d6e5a); }
+  .health .warn .mark, .health .error .mark { color: var(--error); }
+  .health .error { color: var(--fg); }
   .banner { background: var(--error); color: #fff; border-radius: 8px; padding: .5rem .8rem; margin-bottom: .8rem; font-weight: 600; }
 
   /* The colors preview: riptide's bars drawn with the --rt-* colors. */
@@ -1070,6 +1074,7 @@ function renderPlugins() {
       actions.append(b);
     };
     packButton("Check all", "check-all", "Fetch every plugin from git and list the new commits (:pack-check)");
+    packButton("Check health", "health", "Check that every plugin can work: its options, the programs it needs and its own checks (:pack-health)");
     if (pending) packButton(`Update all (${pending})`, "update-all", "Apply every update listed below, then reload");
     packButton("Sync", "sync", "Remove plugins no longer in config.lua, update the rest to their newest commits, and install what's missing (:pack-sync)");
     packButton("Restore", "restore", "Put every plugin back on its commit in rt-pack-lock.json (:pack-restore)");
@@ -1098,6 +1103,7 @@ function renderPlugins() {
     };
     if (plugin.state === "lazy") button("Load now", "load", `Load ${plugin.name} without waiting`);
     if (plugin.git) button("Check for updates", "check", `Fetch ${plugin.name} and list new commits; nothing changes yet`);
+    button("Check health", "health", `Check that ${plugin.name} can work (:pack-health ${plugin.name})`);
     if (plugin.update) button(`Update (${plugin.update.log.length})`, "update", `Move ${plugin.name} to ${plugin.update.commit.slice(0, 12)} and reload`);
     if (plugin.approved.length && !plugin.trusted) button("Revoke", "revoke", `Forget the permissions you approved for ${plugin.name}; it asks again`);
     if (plugin.git) button("Remove", "remove", `Delete ${plugin.name}'s installed copy and lockfile entry`);
@@ -1120,6 +1126,17 @@ function renderPlugins() {
         keys.append(line);
       }
       block.append(keys);
+    }
+    if (plugin.health?.length) {
+      const health = wide(el("div", "keyrow health"));
+      health.append(el("div", "name", "Health"));
+      const marks = { ok: "✓", warn: "!", error: "✗", info: "·" };
+      for (const item of plugin.health) {
+        const line = el("div", `desc ${item.level}`);
+        line.append(el("span", "mark", marks[item.level] || "·"), item.text);
+        health.append(line);
+      }
+      block.append(health);
     }
     if (plugin.options?.length) block.append(...pluginOptions(plugin, wide));
     if (plugin.update) {

@@ -82,7 +82,7 @@ Every `plugins.check_interval` days (1 by default; 0 turns it off), riptide chec
 
 `:plugins` opens the Plugins tab of `:settings`: each plugin with where it comes from, the commit it's on, whether it loaded (and the error if it didn't), the permissions you approved and the keys it bound (with each one's `desc`, and its mode if not normal), with the buttons above.
 
-To review before updating, press **Check all** (or `:pack-check`), read each plugin's new commits on the page, then press **Update** on one or **Update all**. **Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's lockfile entry and its checkout, unless another plugin uses it; take it out of `config.lua` too, or it's installed again at the next start.
+To review before updating, press **Check all** (or `:pack-check`), read each plugin's new commits on the page, then press **Update** on one or **Update all**. **Check health** (or `:pack-health [name]`) lists on each plugin's card what could keep it from working: git missing for a plugin from git, a required option or secret not set, permissions you haven't approved, a load error, and the plugin's own checks. The status bar names the plugins with problems. **Revoke** forgets the permissions you approved, so the plugin asks again. **Remove** deletes a plugin's lockfile entry and its checkout, unless another plugin uses it; take it out of `config.lua` too, or it's installed again at the next start.
 
 ## Permissions
 
@@ -90,7 +90,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 
 | Permission | Lets it |
 |---|---|
-| `spawn` | run programs on your computer (`rt.spawn`) |
+| `spawn` | run programs on your computer (`rt.spawn`), and look for them (`rt.which`) |
 | `files` | read and write your files (Lua's `io` and `os`) |
 | `commands` | run any riptide command (`rt.run`) and bind keys to command lines; this includes running programs |
 | `settings` | read and change your settings (`rt.get`, `rt.set`, `c`) |
@@ -163,6 +163,23 @@ description = "The database password, so it doesn't ask"
 A riptide older than the plugin ignores keys it doesn't know, such as `[[option]]` before 0.4, with a warning in its log; it still refuses a permission it doesn't know.
 
 A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring. On Linux without a keyring service, saving a secret says so and the plugin can ask instead.
+
+### Health
+
+A plugin's module can have a `health(report)` function, which `:pack-health` runs once the plugin has loaded, to say whether what it needs is there. `report.ok(text)`, `report.warn(text)` and `report.error(text)` each add a line to the plugin's card:
+
+```lua
+-- lua/reading-list/init.lua
+function M.health(report)
+  if rt.which("pandoc") then
+    report.ok("pandoc found")
+  else
+    report.error("pandoc isn't installed; reading-list needs it to save pages as text")
+  end
+end
+```
+
+Riptide checks the options the manifest marks `required` itself, so `health` only needs to cover the rest. It runs like any callback, so keep it quick: it has 2 seconds, and anything else it does, such as `rt.notify`, is ignored.
 
 ### Riptide versions
 

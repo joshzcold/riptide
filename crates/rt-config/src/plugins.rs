@@ -451,6 +451,46 @@ pub fn name_from(src: &str) -> String {
         .to_string()
 }
 
+/// Where `program` is: itself if it's a path to a program, or the first one by
+/// that name in `PATH` (with `PATHEXT`'s extensions on Windows).
+pub fn which(program: &str) -> Option<PathBuf> {
+    fn runnable(path: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            path.metadata()
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        }
+        #[cfg(not(unix))]
+        path.is_file()
+    }
+    if program.is_empty() {
+        return None;
+    }
+    let path = Path::new(program);
+    if path.components().count() > 1 {
+        return runnable(path).then(|| path.to_path_buf());
+    }
+    let extensions: Vec<String> = if cfg!(windows) {
+        std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".EXE;.CMD;.BAT".into())
+            .split(';')
+            .map(String::from)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
+        std::iter::once(dir.join(program))
+            .chain(
+                extensions
+                    .iter()
+                    .map(|ext| dir.join(format!("{program}{ext}"))),
+            )
+            .find(|candidate| runnable(candidate))
+    })
+}
+
 /// Installing and pinning plugins with git, run as a program. These block,
 /// so the browser calls them off its UI thread.
 pub mod git {
@@ -576,6 +616,16 @@ pub mod git {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn which_finds_programs_in_path_and_by_path() {
+        assert!(which("sh").is_some());
+        assert_eq!(which("/bin/sh"), Some(PathBuf::from("/bin/sh")));
+        assert_eq!(which("riptide-no-such-program"), None);
+        assert_eq!(which("/etc/hostname-no-such-file"), None);
+        assert_eq!(which(""), None);
+    }
 
     #[test]
     fn names_from_urls_and_folders() {

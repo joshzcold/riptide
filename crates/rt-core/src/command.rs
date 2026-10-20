@@ -583,6 +583,11 @@ pub enum Command {
     PackSync,
     /// Put every plugin from git back on its commit in rt-pack-lock.json.
     PackRestore,
+    /// Check that plugins can work, one or all, and show what's wrong on the
+    /// Plugins tab.
+    PackHealth {
+        name: Option<String>,
+    },
     /// Move focus to the next `rt.ui.panel` in the window, and back to the
     /// page after the last.
     PanelFocus,
@@ -965,6 +970,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "pack-restore",
         "Put every plugin from git back on its commit in rt-pack-lock.json",
+    ),
+    spec(
+        "pack-health",
+        "Check that plugins can work (options, programs, their own checks) and show it on :plugins: :pack-health [name]",
     ),
     spec(
         "panel-focus",
@@ -1909,6 +1918,9 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "pack-clean" => Command::PackClean,
         "pack-restore" => Command::PackRestore,
+        "pack-health" => Command::PackHealth {
+            name: args.optional().map(String::from),
+        },
         "pack-update" => Command::PackUpdate {
             name: args.optional().map(String::from),
         },

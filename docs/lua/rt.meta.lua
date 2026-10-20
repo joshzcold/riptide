@@ -226,6 +226,12 @@ function rt.message(text, level) end
 ---@param callback? fun(result: rt.SpawnResult) called when it exits
 function rt.spawn(argv, opts, callback) end
 
+---Where a program is: the path given, or the first one by that name in
+---`PATH`; nil if there's none. Plugins need the spawn permission.
+---@param program string
+---@return string|nil
+function rt.which(program) end
+
 rt.ui = {}
 
 ---@class rt.SelectOpts

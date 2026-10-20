@@ -80,6 +80,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:pack-sync` |  | Remove plugins no longer in config.lua, update the rest and install what's missing |
 | `:pack-clean` |  | Remove the checkouts and lockfile entries of plugins no longer in config.lua |
 | `:pack-restore` |  | Put every plugin from git back on its commit in rt-pack-lock.json |
+| `:pack-health` |  | Check that plugins can work (options, programs, their own checks) and show it on :plugins: :pack-health [name] |
 | `:panel-focus` |  | Focus the next panel a plugin opened, then the page again; Escape also returns to the page |
 | `:pack-load` |  | Load a plugin that waits for an event, command or key now: :pack-load &lt;name&gt; |
 | `:recover` |  | Show the tabs open at each recent crash, to reopen some or all of them |

@@ -271,6 +271,12 @@ pub fn forget_plugin_keys() {
     PLUGIN_KEYS.with(|k| k.borrow_mut().clear());
 }
 
+/// What `plugin`'s health check finds: its `required` options left unset,
+/// then its own `health(report)` once it has `loaded`.
+pub fn plugin_health(plugin: &str, required: &[String], loaded: bool) -> Vec<lua::HealthItem> {
+    lua::plugin_health(plugin, required, loaded, &context(None))
+}
+
 /// The keys `plugin` bound, for the Plugins tab: mode, keys and what they do.
 pub fn plugin_keys(plugin: &str) -> Vec<serde_json::Value> {
     PLUGIN_KEYS.with(|k| {

@@ -64,6 +64,7 @@ pub fn handle_message(message: UiMessage) {
                 PackAction::Restore => crate::plugins::restore(),
                 PackAction::Clean => crate::plugins::clean(),
                 PackAction::Browse => crate::plugins::browse(),
+                PackAction::Health => crate::plugins::health(None),
             }
         }
         UiMessage::Plugin { name, action } => {
@@ -74,6 +75,7 @@ pub fn handle_message(message: UiMessage) {
                 PluginAction::Revoke => crate::plugins::revoke(&name),
                 PluginAction::Remove => crate::plugins::remove(&name),
                 PluginAction::Load => crate::plugins::load_now(&name),
+                PluginAction::Health => crate::plugins::health(Some(&name)),
             }
         }
         UiMessage::Extension { id, action } => crate::extensions::ui_action(&id, action),
