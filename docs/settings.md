@@ -69,6 +69,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `completion.use_best_match` | boolean | `false` | Return runs the first command that starts with an unknown command name, so :rel runs :reload |
 | `completion.web_history.exclude` | string[] | `[]` | URL globs (e.g. *://*.bank.example/*) that :open never suggests from history |
 | `completion.web_history.max_items` | integer | `100` | How many history entries :open completion shows (0 turns history completion off) |
+| `config.watch` | boolean | `true` | Reload the config when config.toml, config.lua or a module it requires changes on disk |
 | `confirm_quit` | string[] | `["never"]` | Ask before quitting: always, multiple-tabs (more than one tab open), downloads (downloads still running), or never |
 | `content.autoplay` | boolean | `true` | Let videos play by themselves; false waits until you interact with the page (after a restart) |
 | `content.blocking.adblock.lists` | string[] | `["https://easylist.to/easylist/easylist.txt","https://easylist.to/easylist/easyprivacy.txt","https://ublockorigin.github.io/uAssets/filters/filters.min.txt","https://ublockorigin.github.io/uAssets/filters/privacy.min.txt","https://ublockorigin.github.io/uAssets/filters/quick-fixes.min.txt","https://ublockorigin.github.io/uAssets/filters/unbreak.min.txt"]` | Adblock Plus filter lists or hosts files that :adblock-update downloads (https://, or file:// for local lists); uBlock Origin's own lists may use its trusted scriptlets |

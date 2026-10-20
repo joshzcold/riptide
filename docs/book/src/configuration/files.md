@@ -23,7 +23,8 @@ Every setting is listed in the [settings reference](../reference/settings.md), a
 - `:config-list-add` and `:config-list-remove` change one item of a list setting, and `:config-dict-add [--replace]` and `:config-dict-remove` one key of a map setting. For example, `:config-dict-add url.searchengines ddg https://duckduckgo.com/?q={}`. Like `:set`, they're saved in `autoconfig.toml`.
 - `:config-diff` lists the settings that differ from their defaults, `:config-clear` puts them all back, and `:config-write-toml [--force]` writes your current settings to `config.toml`.
 - `:config-edit` opens `config.lua` (or `config.toml`) in `editor.command` and reloads it when you close the editor.
-- `:config-source` reloads every file. Errors show in the status bar with `file:line`, and the rest of the file still applies.
+- Saving `config.toml`, `config.lua` or a Lua module it `require`s reloads the config within about two seconds, and the status bar says which file changed. Turn this off with `config.watch = false`.
+- `:config-source` reloads every file. Use it after editing a file riptide doesn't watch, such as a theme. Errors show in the status bar with `file:line`, and the rest of the file still applies.
 
 A few settings, such as `content.webgl` and `input.spatial_navigation`, only apply when riptide starts; the reference marks them "after a restart". When you change one, the status bar says so, and `:restart` restarts riptide with your tabs.
 

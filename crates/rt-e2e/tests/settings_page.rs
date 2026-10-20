@@ -283,7 +283,7 @@ fn per_site_values_can_be_added_and_j_k_return_work_on_the_page() {
     b.keys("j");
     wait_eval(&b, cursor, "changelog_after_upgrade");
     b.keys("j");
-    wait_eval(&b, cursor, "confirm_quit");
+    wait_eval(&b, cursor, "config.watch");
     b.keys("k");
     wait_eval(&b, cursor, "changelog_after_upgrade");
     b.keys("<Return>");

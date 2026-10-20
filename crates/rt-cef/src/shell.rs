@@ -514,6 +514,7 @@ pub fn load_config() -> Vec<String> {
 
 /// Put config that was already read into the engine.
 pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
+    crate::configcmd::watch(loaded.watched.clone());
     crate::float::close_all();
     crate::panel::close_all();
     let user_commands = rt_config::lua::user_commands();

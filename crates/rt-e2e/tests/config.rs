@@ -56,3 +56,41 @@ end)
     let s = b.wait_until("the hook ran", |s| s.message() == Some("hook saw second"));
     assert_eq!(s.tabs().len(), 2);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn saving_a_config_file_reloads_the_config() {
+    let b = Browser::launch()
+        .file("config/lua/words.lua", "return { word = 'one' }")
+        .lua("local words = require('words')\nrt.command('say', function() rt.notify(words.word) end)")
+        .start("page.html");
+    let say = |word: &str| {
+        b.run("say");
+        b.wait_until(&format!("say says {word}"), |s| s.message() == Some(word));
+    };
+    say("one");
+    // A module config.lua required is watched too.
+    let module = b.config_dir().join("lua/words.lua");
+    std::fs::write(&module, "return { word = 'two!' }").unwrap();
+    b.wait_until("the module reloaded", |s| {
+        s.message() == Some("words.lua changed: config reloaded")
+    });
+    say("two!");
+    std::fs::write(
+        b.config_dir().join("config.toml"),
+        "[bindings.normal]\n\"X\" = \"scroll-to-perc 100\"\n",
+    )
+    .unwrap();
+    b.wait_until("config.toml reloaded", |s| {
+        s.message() == Some("config.toml changed: config reloaded")
+    });
+    b.keys("X");
+    b.wait_eval("String(scrollY > 3000)", "true");
+    // Turned off, a change waits for :config-source.
+    b.run("set config.watch false");
+    std::fs::write(&module, "return { word = 'three' }").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    say("two!");
+    b.run("config-source");
+    say("three");
+}

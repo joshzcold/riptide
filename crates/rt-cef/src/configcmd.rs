@@ -1,6 +1,11 @@
-//! `:config-diff`, `:config-edit` and `:config-write-toml`.
+//! `:config-diff`, `:config-edit` and `:config-write-toml`, and `config.watch`.
 
+use std::cell::RefCell;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+
+use cef::*;
+use rt_config::watch::Watcher;
 
 use rt_core::Command;
 use rt_core::command::OpenTarget;
@@ -111,5 +116,63 @@ fn write_toml(force: bool) {
     match written {
         Ok(()) => shell::show_message(Level::Info, format!("Wrote {}", file.display())),
         Err(e) => shell::show_message(Level::Error, format!("Can't write {}: {e}", file.display())),
+    }
+}
+
+/// How often `config.watch` looks at the config files.
+const WATCH_POLL_MS: i64 = 1000;
+
+thread_local! {
+    static WATCHER: RefCell<Watcher> = RefCell::new(Watcher::default());
+    static WATCHING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The config was just read from `files`: watch them from here, so riptide's
+/// own reloads don't count as changes.
+pub fn watch(files: Vec<(PathBuf, rt_config::watch::Stamp)>) {
+    WATCHER.with(|w| *w.borrow_mut() = Watcher::new(files));
+    if !WATCHING.replace(true) {
+        schedule_poll();
+    }
+}
+
+fn schedule_poll() {
+    let mut task = WatchPoll::new();
+    post_delayed_task(ThreadId::UI, Some(&mut task), WATCH_POLL_MS);
+}
+
+wrap_task! {
+    struct WatchPoll {}
+
+    impl Task {
+        fn execute(&self) {
+            if shell::with(|s| s.engine.settings().bool("config.watch")).unwrap_or(false) {
+                reload_if_changed();
+            }
+            schedule_poll();
+        }
+    }
+}
+
+fn reload_if_changed() {
+    let modules = rt_config::lua::config_modules();
+    let changed = WATCHER.with(|w| {
+        let mut watcher = w.borrow_mut();
+        for (module, seen) in modules {
+            watcher.add(module, seen);
+        }
+        watcher.poll()
+    });
+    let Some(file) = changed.first() else { return };
+    let name = file
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let errors = shell::load_config();
+    if errors.is_empty() {
+        shell::show_message(Level::Info, format!("{name} changed: config reloaded"));
+    } else {
+        crate::report_config_errors(&errors);
     }
 }

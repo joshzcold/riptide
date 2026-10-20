@@ -113,7 +113,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Config
 
-- Watching `config.toml` and `config.lua` for changes (`:config-source` reloads by hand).
 - Importing qutebrowser's `config.py` (bindings and settings), beyond themes.
 
 ### Calls (M22)

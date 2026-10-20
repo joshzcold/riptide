@@ -23,6 +23,7 @@ pub mod theme_import;
 pub mod themes;
 pub mod toml_file;
 pub mod userscripts;
+pub mod watch;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -41,6 +42,9 @@ pub struct Loaded {
     pub sources: BTreeMap<String, String>,
     /// Config files that exist and were read.
     pub files: Vec<std::path::PathBuf>,
+    /// The files you edit, which `config.watch` reloads on a change: `config.toml`,
+    /// `config.lua` and the modules it required, whether or not they exist yet.
+    pub watched: Vec<(std::path::PathBuf, watch::Stamp)>,
     pub errors: Vec<String>,
     pub autoconfig: AutoConfig,
 }
@@ -57,6 +61,7 @@ pub fn load(paths: &Paths) -> Loaded {
     }
 
     let toml_path = paths.config_toml();
+    let toml_stamp = watch::stamp(&toml_path);
     match std::fs::read_to_string(&toml_path) {
         Ok(text) => {
             let (more, errs) = toml_file::parse(&text, &toml_path.display().to_string());
@@ -70,6 +75,7 @@ pub fn load(paths: &Paths) -> Loaded {
 
     let toml_ops = ops.len();
     let lua_path = paths.config_lua();
+    let lua_stamp = watch::stamp(&lua_path);
     let plugins_toml = plugins::PluginsFile::path(&paths.config_dir);
     if plugins_toml.exists() {
         files.push(plugins_toml.clone());
@@ -113,11 +119,14 @@ pub fn load(paths: &Paths) -> Loaded {
     for error in &errors {
         tracing::warn!("config: {error}");
     }
+    let mut watched = vec![(toml_path, toml_stamp), (lua_path, lua_stamp)];
+    watched.extend(lua::config_modules());
     Loaded {
         ops,
         overridden,
         sources,
         files,
+        watched,
         errors,
         autoconfig,
     }
