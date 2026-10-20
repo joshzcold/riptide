@@ -62,7 +62,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M15 | `riptide ':cmd' url` hands over to the running instance (Unix) | guide/terminal.md |
 | M16 | `:help` generated from the registries, `:version` | guide/terminal.md |
 | M17 | Spell checking with keyboard suggestions, `:spell-install` | guide/pages.md |
-| M18 | Versions, changelog, CI on three platforms, one-click and nightly releases (v0.1.0, v0.2.0, v0.3.0) | dev/releasing.md |
+| M18 | Versions, changelog, CI on three platforms, one-click and nightly releases (v0.1.0, v0.2.0, v0.3.0, v0.4.0) | dev/releasing.md |
 | M19 | qutebrowser parity sweep: tabs, status bar, key hints, completion, hints, URLs, downloads, content, input, sessions, tools, config commands | the reference pages |
 | M20 | Themes, fonts, `ui.css`, user themes and importers, bars sized by their pages, floating overlay and prompts | configuration/themes.md |
 | M21 | The settings page: Settings, Keys, Sites, Plugins and Extensions tabs | configuration/files.md |
@@ -80,12 +80,12 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-20)
 
-1. **Release 0.4**, which the other session does. None of the plugin work since v0.3.0 has shipped: options and keyring secrets, `plugins.toml`, Add/Browse, update/sync/lockfile and the background check. Then merge the riptide-plugins `options` branch (below).
-2. **Then pick from the open work below.** Config file watching is in progress on `feat/config-watch`. Candidates: the missing plugin events, a plugin health report, and a tab focus stack.
+1. **Merge the riptide-plugins `options` branch** (below): v0.4.0 is out (2026-10-20), with plugin options and keyring secrets.
+2. **Then pick from the open work below.** The missing plugin events are in review (PR #13). Candidates: a plugin health report and a tab focus stack.
 
 ### Plugins (M27)
 
-- **riptide-plugins `options` branch:** the password plugins' `[[option]]`s and saved passwords. Merge it into `main` once a release with plugin options (0.4) is out, since v0.3.0 rejects unknown manifest keys.
+- **riptide-plugins `options` branch:** the password plugins' `[[option]]`s and saved passwords. Merge it into `main` now that v0.4.0 is out; v0.3.0 rejects its unknown manifest keys.
 - **Events** from the design not built yet: `page_error`, `tab_moved`, `key` (unhandled keys, with a way to swallow one), `command` (before and after), `insert_entered`, `prompt_shown`, `permission_answered`, `theme_changed`, `focus_gained`/`focus_lost`. Per-site keys (`rt.keymap.set(…, { site = … })`).
 - **A health report:** a plugin's optional `health()`, run by `:plugins check` (git missing, a tool not found, a required option unset).
 - **Plugin pages in floats** (tabs and panels have them).
@@ -139,6 +139,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - The documentation site doesn't show the version it was built from.
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
 - The crash tests don't cover a native abort in the browser process.
+- `remote::tests::replaces_a_stale_socket` fails now and then on macOS CI (the second `Server::bind` errors); it passed on rerun.
 - `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
 
 ### Not planned
