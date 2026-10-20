@@ -71,7 +71,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M24 | The documentation website | dev/docs.md |
 | M25 | Permission questions belong to their tab, with site, icons and buttons | guide/prompts.md |
 | M26 | The e2e harness (`rt-e2e`), unit tests in the CEF layer, linters (clippy lints, cargo-deny, ShellCheck, actionlint, typos, Biome) | dev/testing.md |
-| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events, keys, commands, floats, panels, pages, `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
+| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events, keys, commands, floats, panels, pages, `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
 
 ---
@@ -80,14 +80,12 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-20)
 
-1. **Merge the riptide-plugins `options` branch** (below): v0.4.0 is out (2026-10-20), with plugin options and keyring secrets.
-2. **Then pick from the open work below.** The missing plugin events are in review (PR #13). Candidates: a plugin health report, plugin pages in floats, and a tab's leave-page warning on `d`.
+1. **Pick from the open work below.** Candidates: plugin pages in floats, and a tab's leave-page warning on `d`.
 
 ### Plugins (M27)
 
-- **riptide-plugins `options` branch:** the password plugins' `[[option]]`s and saved passwords. Merge it into `main` now that v0.4.0 is out; v0.3.0 rejects its unknown manifest keys.
 - **Events** from the design not built yet: `key` (unhandled keys, with a way to swallow one) and a `command` hook before a command runs, which could cancel it (`command` fires after). Per-site keys (`rt.keymap.set(…, { site = … })`).
-- **A health report:** a plugin's optional `health()`, run by `:plugins check` (git missing, a tool not found, a required option unset).
+- **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
 - **Plugin pages in floats** (tabs and panels have them).
 - **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.
 - **Trusted plugins and `rt.secret`:** trusted plugins run with the global `rt`, which has no plugin name, so they can't read secret options.

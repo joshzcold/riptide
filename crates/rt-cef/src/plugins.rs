@@ -21,6 +21,8 @@ struct Status {
     error: Option<String>,
     /// From "check for updates": the newest commit and the commits after the pinned one.
     update: Option<(String, Vec<String>)>,
+    /// From the last health check: each finding's level and text.
+    health: Option<Vec<rt_config::lua::HealthItem>>,
 }
 
 thread_local! {
@@ -59,6 +61,8 @@ fn set_state(name: &str, state: &'static str, error: Option<String>) {
         let status = all.entry(name.to_string()).or_default();
         status.state = state;
         status.error = error;
+        // An old check would describe how it was before.
+        status.health = None;
     });
     crate::settings_page::refresh();
     // Plugins waiting for this one won't load now.
@@ -494,6 +498,7 @@ pub fn run_command(command: &rt_core::Command) -> bool {
         }
         rt_core::Command::PackClean => clean(),
         rt_core::Command::PackRestore => restore(),
+        rt_core::Command::PackHealth { name } => health(name.as_deref()),
         rt_core::Command::PackLoad { name, keys } => {
             if !wake(name) {
                 let loaded =
@@ -753,9 +758,122 @@ pub fn page_data() -> serde_json::Value {
                 "state": if state.state.is_empty() { "pending" } else { state.state },
                 "error": state.error,
                 "update": state.update.map(|(commit, log)| serde_json::json!({ "commit": commit, "log": log })),
+                "health": state.health.map(|items| {
+                    items
+                        .into_iter()
+                        .map(|(level, text)| serde_json::json!({ "level": level, "text": text }))
+                        .collect::<Vec<_>>()
+                }),
             })
         })
         .collect()
+}
+
+/// `:pack-health` and the Plugins tab's health checks: what could keep each
+/// plugin, or just `name`, from working. The findings go on the Plugins tab.
+pub fn health(name: Option<&str>) {
+    let Some((_, data_dir)) = paths() else {
+        return;
+    };
+    let specs: Vec<PluginSpec> = rt_config::lua::plugin_specs()
+        .into_iter()
+        .filter(|s| name.is_none_or(|n| s.name == n))
+        .collect();
+    if specs.is_empty() {
+        let text = match name {
+            Some(name) => format!("No plugin named {name}"),
+            None => "No plugins to check".to_string(),
+        };
+        return shell::show_message(Level::Error, text);
+    }
+    let git_missing = rt_config::plugins::which("git").is_none();
+    let mut problems = Vec::new();
+    for spec in &specs {
+        let state = STATUS.with(|s| s.borrow().get(&spec.name).cloned().unwrap_or_default());
+        let mut items = Vec::new();
+        let mut add = |level: &str, text: String| items.push((level.to_string(), text));
+        if git_missing && spec.dir.is_none() && !spec.src.is_empty() {
+            add(
+                "error",
+                "git isn't installed, and plugins from git need it".into(),
+            );
+        }
+        match state.state {
+            "failed" | "blocked" => add(
+                "error",
+                state
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "it didn't load".into()),
+            ),
+            "refused" => add(
+                "warn",
+                "you said no to its permissions, so it isn't loaded".into(),
+            ),
+            "waiting" => add(
+                "warn",
+                "it's waiting for you to approve its permissions".into(),
+            ),
+            "installing" => add("warn", "it's still installing".into()),
+            "lazy" => add(
+                "info",
+                format!(
+                    "it loads on {}; its own checks run once it has (:pack-load {})",
+                    triggers(spec).join(", "),
+                    spec.name
+                ),
+            ),
+            _ => {}
+        }
+        let manifest = Manifest::read(&folder(spec, &data_dir)).unwrap_or_default();
+        let mut required = Vec::new();
+        for option in manifest.options.iter().filter(|o| o.required) {
+            if option.kind != rt_config::plugins::OptionKind::Secret {
+                required.push(option.name.clone());
+            } else if !crate::secrets::is_set(&data_dir, &spec.name, &option.name) {
+                add(
+                    "error",
+                    format!(
+                        "secret {} is required and not set; set it on :plugins",
+                        option.name
+                    ),
+                );
+            }
+        }
+        items.extend(crate::lua::plugin_health(
+            &spec.name,
+            &required,
+            state.state == "loaded",
+        ));
+        if items.is_empty() {
+            items.push(("ok".to_string(), "no problems found".to_string()));
+        }
+        if items
+            .iter()
+            .any(|(level, _)| level == "error" || level == "warn")
+        {
+            problems.push(spec.name.clone());
+        }
+        STATUS.with(|s| {
+            s.borrow_mut().entry(spec.name.clone()).or_default().health = Some(items);
+        });
+    }
+    if problems.is_empty() {
+        let checked = match specs.as_slice() {
+            [one] => one.name.clone(),
+            all => format!("{} plugins", all.len()),
+        };
+        shell::show_message(Level::Info, format!("Health: no problems with {checked}"));
+    } else {
+        shell::show_message(
+            Level::Warning,
+            format!(
+                "Health: problems with {}; see :plugins",
+                problems.join(", ")
+            ),
+        );
+    }
+    crate::settings_page::show_plugins();
 }
 
 /// What to do with a repository after fetching it.

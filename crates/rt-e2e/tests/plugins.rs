@@ -630,6 +630,44 @@ rt.keymap.set("insert", "<Ctrl-k>", function() end)"#,
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn pack_health_shows_what_keeps_each_plugin_from_working() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/fine/lua/fine/init.lua",
+            "return { setup = function() end, health = function(report) report.ok('all set') end }",
+        )
+        .file(
+            "scratch-plugins/needy/riptide-plugin.toml",
+            "[[option]]\nname = \"vault\"\nrequired = true\n",
+        )
+        .file(
+            "scratch-plugins/needy/lua/needy/init.lua",
+            "return { setup = function() end, health = function(report) report.warn('no vault tool') end }",
+        )
+        .lua(
+            r#"
+local dir = rt.config_dir .. "/../scratch-plugins/"
+rt.pack.add({ { dir = dir .. "fine", opts = {} }, { dir = dir .. "needy", opts = {} } })
+"#,
+        )
+        .start("page.html");
+    b.run("pack-health");
+    b.wait_until("the health check says which plugin has problems", |s| {
+        s.message() == Some("Health: problems with needy; see :plugins")
+    });
+    // It opened the Plugins tab, with each plugin's findings.
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}: ${(p.health || []).map((h) => `${h.level} ${h.text}`).join(', ')}`).join('; ')",
+        "fine: ok all set; needy: error option vault is required and not set, warn no vault tool",
+    );
+    b.wait_eval(
+        "String(document.querySelectorAll('.health .error').length)",
+        "1",
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn plugins_bring_their_dependencies_which_load_first() {
     let b = Browser::launch()
         .file(

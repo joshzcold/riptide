@@ -105,6 +105,8 @@ pub enum PackAction {
     Clean,
     /// Fetch the catalog repository and list its plugins.
     Browse,
+    /// Check that every plugin can work.
+    Health,
 }
 
 /// What the Plugins tab asks for.
@@ -121,6 +123,8 @@ pub enum PluginAction {
     Remove,
     /// Load a plugin that waits for an event, command or key now.
     Load,
+    /// Check that it can work.
+    Health,
 }
 
 /// What the Extensions tab asks for.

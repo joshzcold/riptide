@@ -136,6 +136,8 @@ rt.command("translate", function(text)
 end)
 ```
 
+`rt.which(program)` says where a program is, as `which` does in a shell: the first one by that name in `PATH`, or `nil`. A plugin needs the `spawn` permission for both.
+
 `rt.json.decode(text)` and `rt.json.encode(value)` read and write JSON, such as a program's output; `null` becomes `nil`.
 
 ## Questions and the page
