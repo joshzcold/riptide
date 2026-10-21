@@ -98,6 +98,29 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - Scriptlets in frames from another site (separate DevTools targets; needs `Target.setAutoAttach`).
 - A tab keeps a host's scriptlets until it closes, even after the site is whitelisted.
 
+### Splits
+
+Show two or more tabs side by side in one window, as in vim.
+
+- **Commands:** `:split [url]` and `:vsplit [url]` split the current pane in two, one above the other or side by side, showing the current tab again or `url` in a new tab. `:only` goes back to one pane and `:split-close` closes the current pane. `:split-focus left|down|up|right|next` moves between panes, and `:split-resize` and `:split-equal` change their sizes. With no URL, the new pane shows another tab (or a new one), since a tab is one browser and can't be in two panes.
+- **Keys**, as vim's `<Ctrl-w>` keys under the free `s` prefix (`<Ctrl-w>` is `:tab-close`):
+
+  | Key | Command |
+  |---|---|
+  | `ss` | `:split` |
+  | `sv` | `:vsplit` |
+  | `so` | `:only` |
+  | `sc` | `:split-close` |
+  | `sh` `sj` `sk` `sl` | `:split-focus left/down/up/right` |
+  | `sw` | `:split-focus next` |
+  | `s=` | `:split-equal` |
+
+- **Behaviour:** keys, hints, scrolling, the status bar and the command line all follow the focused pane, which gets a thin border in `colors.split.focused`. Each pane shows a tab from the window's tab list; the tab bar marks the tabs that are on screen, and `J`/`K` and `:tab-select` change the focused pane's tab. Closing a pane's tab shows the next tab in that pane, or closes the pane when no tab is left that isn't on screen elsewhere.
+- **Mouse:** clicking a pane focuses it, and dragging the border between two panes resizes them.
+- **Sessions:** the layout (the split tree, its sizes and each pane's tab) is saved and restored with the window.
+- **Building it:** the content panel becomes a tree of CEF `BoxLayout` panels with a `BrowserView` in each leaf. The engine keeps the layout and the focused pane in `rt-core`, so splitting, closing and moving between panes is unit tested without CEF; e2e tests cover the keys, focus following clicks and a restored layout. Call windows and floats stay outside the split tree.
+- **Open questions:** whether `:open -t` from a pane opens its tab in that pane (likely) or in the background, and how many panes a window allows.
+
 ### Tabs, windows and sessions
 
 - Favicons aren't kept in sessions (they're fetched again on load).
