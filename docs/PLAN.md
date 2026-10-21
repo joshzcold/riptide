@@ -103,7 +103,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 Show two or more tabs side by side in one window, as in vim.
 
 - **Commands:** `:split [url]` and `:vsplit [url]` split the current pane in two, one above the other or side by side, showing the current tab again or `url` in a new tab. `:only` goes back to one pane and `:split-close` closes the current pane. `:split-focus left|down|up|right|next` moves between panes, and `:split-resize` and `:split-equal` change their sizes. With no URL, the new pane shows another tab (or a new one), since a tab is one browser and can't be in two panes.
-- **Keys**, as vim's `<Ctrl-w>` keys under the free `s` prefix (`<Ctrl-w>` is `:tab-close`):
+- **Keys:** vim's `<Ctrl-w>` keys under the free `s` prefix (`<Ctrl-w>` is `:tab-close`), and `<Ctrl>` with `hjkl` to move between panes, as in many vim and tmux setups:
 
   | Key | Command |
   |---|---|
@@ -111,7 +111,7 @@ Show two or more tabs side by side in one window, as in vim.
   | `sv` | `:vsplit` |
   | `so` | `:only` |
   | `sc` | `:split-close` |
-  | `sh` `sj` `sk` `sl` | `:split-focus left/down/up/right` |
+  | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` | `:split-focus left/down/up/right` (normal mode; command and prompt mode keep `<Ctrl-h>` and `<Ctrl-k>` for editing) |
   | `sw` | `:split-focus next` |
   | `s=` | `:split-equal` |
 
