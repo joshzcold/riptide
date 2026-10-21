@@ -16,6 +16,9 @@ pub struct Keymap {
     bindings: HashMap<Mode, HashMap<Vec<Key>, String>>,
     /// Where each binding came from, e.g. `default`, `config.toml` or `plugin foo`.
     sources: HashMap<(Mode, Vec<Key>), String>,
+    /// The command and source a binding from another source replaced. Kept
+    /// through an unbind, so a lazy plugin's placeholder passes it on.
+    replaced: HashMap<(Mode, Vec<Key>), (String, String)>,
 }
 
 impl Keymap {
@@ -154,12 +157,28 @@ impl Keymap {
         source: &str,
     ) -> Result<(), KeyParseError> {
         let seq = Key::parse_sequence(keys)?;
-        self.bindings
+        let before = self
+            .bindings
             .entry(mode)
             .or_default()
             .insert(seq.clone(), command.to_string());
-        self.sources.insert((mode, seq), source.to_string());
+        let at = (mode, seq);
+        let before_source = self.sources.insert(at.clone(), source.to_string());
+        if let (Some(command), Some(from)) = (before, before_source)
+            && from != source
+        {
+            self.replaced.insert(at, (command, from));
+        }
         Ok(())
+    }
+
+    /// The command and source the binding for `keys` replaced, if it replaced
+    /// one from elsewhere.
+    pub fn replaced(&self, mode: Mode, keys: &str) -> Option<(&str, &str)> {
+        let seq = Key::parse_sequence(keys).ok()?;
+        let (command, source) = self.replaced.get(&(mode, seq.clone()))?;
+        let now = self.sources.get(&(mode, seq))?;
+        (now != source).then_some((command.as_str(), source.as_str()))
     }
 
     /// Where the binding for `keys` came from; empty if unknown or unbound.

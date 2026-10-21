@@ -65,7 +65,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M18 | Versions, changelog, CI on three platforms, one-click and nightly releases (v0.1.0, v0.2.0, v0.3.0, v0.4.0) | dev/releasing.md |
 | M19 | qutebrowser parity sweep: tabs, status bar, key hints, completion, hints, URLs, downloads, content, input, sessions, tools, config commands | the reference pages |
 | M20 | Themes, fonts, `ui.css`, user themes and importers, bars sized by their pages, floating overlay and prompts | configuration/themes.md |
-| M21 | The settings page: Settings, Keys (where each binding came from, `:map`), Sites, Plugins and Extensions tabs | configuration/files.md |
+| M21 | The settings page: Settings, Keys (where each binding came from and what it replaced, `:map`), Sites, Plugins and Extensions tabs | configuration/files.md |
 | M22 | Call windows with Chrome's screen-share picker, sharing markers, `:share-stop`, `cm` mute, picture-in-picture | guide/tabs.md |
 | M23 | Crash recovery (signals, crash loops, kept sessions, `:recover`), crashed-tab pages, crash reports | guide/sessions.md |
 | M24 | The documentation website | dev/docs.md |
@@ -135,7 +135,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - The documentation site doesn't show the version it was built from.
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
 - The crash tests don't cover a native abort in the browser process.
-- The Keys tab shows which plugin made a binding, but not what it replaced (e.g. "replaces `scroll down`").
 - Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
 - `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
 

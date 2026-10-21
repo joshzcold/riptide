@@ -330,3 +330,41 @@ rt.pack.add({ { dir = rt.config_dir .. "/../scratch-plugins/zapper", opts = {} }
             .contains("keys starting with z")
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_keys_tab_says_what_a_plugins_binding_replaced() {
+    let b = Browser::launch()
+        .toml("[bindings.normal]\n\"zt\" = \"reload\"\n")
+        .file(
+            "scratch-plugins/eager/lua/eager/init.lua",
+            "return { setup = function() rt.keymap.set('normal', 'zt', function() end, { desc = 'Take over' }) end }",
+        )
+        .file(
+            "scratch-plugins/lazy/lua/lazy/init.lua",
+            "return { setup = function() rt.keymap.set('normal', 'zl', function() rt.notify('lazy hi') end, { desc = 'Lazy hi' }) end }",
+        )
+        .lua(
+            r#"
+rt.keymap.set("normal", "zl", function() end, { desc = "Say hi" })
+local dir = rt.config_dir .. "/../scratch-plugins/"
+rt.pack.add({
+  { dir = dir .. "eager", opts = {} },
+  { dir = dir .. "lazy", keys = "zl", opts = {} },
+})
+"#,
+        )
+        .start("page.html");
+    // The lazy plugin's own binding takes over what its placeholder replaced.
+    b.keys("zl");
+    b.wait_until("the lazy plugin loaded", |s| s.message() == Some("lazy hi"));
+    b.run("map z");
+    b.wait_until("the keys tab opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    b.wait_eval(
+        "[...document.querySelectorAll('.keyrow')].map((r) => r.querySelector('.seq').textContent + ': ' + r.querySelector('.desc')?.textContent).join(' | ')",
+        "zl: Lazy hi · from plugin lazy · replaces Say hi (config.lua) \
+         | zt: Take over · from plugin eager · replaces reload (config.toml)",
+    );
+}

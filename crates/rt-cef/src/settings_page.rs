@@ -36,10 +36,17 @@ fn data() -> Option<String> {
             &s.setting_sources,
             &s.overridden,
         );
+        let describe = |command: &str| {
+            rt_config::lua::describe(command).unwrap_or_else(|| "A Lua function".into())
+        };
         for binding in entries.keys.iter_mut().flat_map(|m| &mut m.bindings) {
             if binding.command.starts_with("lua-call ") {
-                binding.desc = rt_config::lua::describe(&binding.command)
-                    .unwrap_or_else(|| "A Lua function".into());
+                binding.desc = describe(&binding.command);
+            }
+            if let Some((command, _)) = &mut binding.replaces
+                && command.starts_with("lua-call ")
+            {
+                *command = describe(command);
             }
         }
         let mut json = serde_json::to_value(&entries).unwrap_or_default();
