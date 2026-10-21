@@ -204,6 +204,7 @@ mod enabled {
                             })
                             .collect::<Vec<Value>>(),
                         "crash_notice": crash_notice,
+                        "pane_crash_notices": w.pane_notices.len(),
                     })
                 })
                 .collect();

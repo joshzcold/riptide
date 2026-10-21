@@ -294,6 +294,11 @@ fn adopt(
         content.add_child_view(Some(&mut child));
     }
     let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
+    // Sized at once, even in the background, so its page lays out at the
+    // size it'll be shown at and isn't still resizing when it's first used.
+    if let Some(window) = shell::with(|s| s.id) {
+        crate::panes::arrange(window);
+    }
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {
         switch_to(index, true);
@@ -445,6 +450,7 @@ pub fn show_current_in(window_id: u32, focus: bool) {
     if let Some(notice) = &notice {
         View::from(notice).set_visible(crashed.is_some().into());
     }
+    crate::panes::show_crashes(window_id, &content);
     crate::panes::arrange(window_id);
     if !focus {
         return;
@@ -465,17 +471,24 @@ pub fn show_current_in(window_id: u32, focus: bool) {
 /// crashed and, if it's showing, put the crash notice in its place.
 pub fn renderer_gone(browser: &mut Browser, status: TerminationStatus, error_code: i32) {
     let reason = crate::ui::crash_reason(status.into());
-    let Some(Some((window, url, current))) = shell::with_tab(Some(browser), |s, index, _| {
-        let current = index == s.tabs.current_index();
-        let window = s.id;
-        let tab = s.tabs.get_mut(index)?;
-        tab.crashed = Some(reason.to_string());
-        tab.progress = None;
-        Some((window, tab.url.clone(), current))
-    }) else {
+    let Some(Some((window, url, current, in_pane))) =
+        shell::with_tab(Some(browser), |s, index, _| {
+            let current = index == s.tabs.current_index();
+            let window = s.id;
+            let in_pane = crate::panes::in_other_pane(s, &s.tabs.get(index)?.view);
+            let tab = s.tabs.get_mut(index)?;
+            tab.crashed = Some(reason.to_string());
+            tab.progress = None;
+            Some((window, tab.url.clone(), current, in_pane))
+        })
+    else {
         return;
     };
     tracing::warn!("the renderer for {url} ended: {reason} (code {error_code})");
+    if in_pane {
+        // Its pane shows the notice; the focus stays where it is.
+        show_current_in(window, false);
+    }
     if current {
         show_current_in(window, true);
         shell::show_message(

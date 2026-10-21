@@ -735,6 +735,15 @@ pub struct TabInfo {
     pub pinned: bool,
 }
 
+/// Part of the current page, in CSS pixels from its viewport's top left.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PageRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
 /// Where `rt.ui.page` shows a page (its `where`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PagePlace {
@@ -744,9 +753,13 @@ pub enum PagePlace {
         size: u32,
     },
     /// A box over the page, as an extension's popup; sized to its content
-    /// unless `size` gives the width and height.
+    /// unless `size` gives the width and height, or `over` the part of the
+    /// current page it covers (CSS pixels, as `getBoundingClientRect`).
+    /// `all_keys` gives it every key, bindings and Escape included.
     Float {
         size: Option<(u32, u32)>,
+        over: Option<PageRect>,
+        all_keys: bool,
     },
 }
 
@@ -2288,6 +2301,41 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     Some("float") => {
                         let width: Option<u32> = opts.get("width")?;
                         let height: Option<u32> = opts.get("height")?;
+                        let over: Option<mlua::Table> = opts.get("over")?;
+                        let over = over
+                            .map(|t| -> mlua::Result<PageRect> {
+                                let [x, y, width, height]: [f64; 4] = [
+                                    t.get("x")?,
+                                    t.get("y")?,
+                                    t.get("width")?,
+                                    t.get("height")?,
+                                ];
+                                let sane = [x, y, width, height]
+                                    .iter()
+                                    .all(|v| v.is_finite() && v.abs() < 1e6);
+                                if !sane || width < 1.0 || height < 1.0 {
+                                    return Err(mlua::Error::runtime(
+                                        "rt.ui.page: over is { x, y, width, height }, in CSS pixels",
+                                    ));
+                                }
+                                Ok(PageRect {
+                                    x: x.round() as i32,
+                                    y: y.round() as i32,
+                                    width: width.round() as i32,
+                                    height: height.round() as i32,
+                                })
+                            })
+                            .transpose()?;
+                        let keys: Option<String> = opts.get("keys")?;
+                        let all_keys = match keys.as_deref() {
+                            None => false,
+                            Some("all") => true,
+                            Some(other) => {
+                                return Err(mlua::Error::runtime(format!(
+                                    "rt.ui.page: keys is \"all\" or nil, not {other:?}"
+                                )));
+                            }
+                        };
                         PagePlace::Float {
                             size: match (width, height) {
                                 (None, None) => None,
@@ -2296,6 +2344,8 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                                     h.unwrap_or(300).clamp(40, 2000),
                                 )),
                             },
+                            over,
+                            all_keys,
                         }
                     }
                     Some(other) => {

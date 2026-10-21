@@ -331,6 +331,14 @@ rt.command("open-notes-float", function()
   })
 end)
 rt.command("close-notes-float", function() float_page:close() end)
+rt.command("open-notes-over", function()
+  float_page = rt.ui.page({
+    where = "float",
+    over = { x = 20, y = 60, width = 500, height = 260 },
+    keys = "all",
+    on_message = function(name) rt.notify("over got " .. name) end,
+  })
+end)
 rt.command("open-notes", function()
   rt.ui.page({
     path = "index.html",
@@ -399,6 +407,28 @@ rt.send("hello", JSON.stringify({ n: 1 }));"#,
         "{}",
         s.popup
     );
+    b.run("close-notes-float");
+    b.wait_until("the float closed", |s| s.popup.is_null());
+
+    // Over part of the page, with its bar just above, and Escape is the
+    // page's: the float takes every key.
+    b.run("open-notes-over");
+    let s = b.wait_until("the float page loaded", |s| {
+        s.message() == Some("over got hello")
+    });
+    assert_eq!(s.popup["all_keys"], true);
+    let bounds = &s.popup["bounds"];
+    assert_eq!(
+        (&bounds[0], &bounds[2], &bounds[3]),
+        (&20.into(), &500.into(), &260.into())
+    );
+    let top = bounds[1].as_i64().unwrap();
+    assert!(
+        top > 60,
+        "below the tab bar, at the page's y = 60: {bounds}"
+    );
+    b.keys("<Escape>");
+    assert!(!b.state().popup.is_null(), "Escape closed the float");
     b.run("close-notes-float");
     b.wait_until("the float closed", |s| s.popup.is_null());
 }

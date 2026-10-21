@@ -2,11 +2,13 @@
 //! top right of the page, sized to its content, with a bar above it naming
 //! the extension and a close button. Escape, switching tabs or opening
 //! another popup closes it. One popup at a time. A plugin's page in a float
-//! (`rt.ui.page { where = "float" }`) is shown the same way.
+//! (`rt.ui.page { where = "float" }`) is shown the same way, and may cover
+//! part of the page (`over`) or take every key (`keys = "all"`).
 
 use std::cell::RefCell;
 
 use cef::*;
+use rt_config::lua::PageRect;
 
 use crate::client::Role;
 use crate::shell;
@@ -36,6 +38,19 @@ struct Popup {
     fixed: bool,
     /// Where it was dragged to, from its usual place at the top right.
     offset: (i32, i32),
+    /// The part of `tab`'s page it covers, instead of the top right.
+    over: Option<(PageRect, BrowserView)>,
+    /// Every key goes to it, riptide's bindings and Escape included.
+    all_keys: bool,
+}
+
+/// Where a popup goes and what it takes; by default the top right, sized to
+/// its content, with Escape closing it.
+#[derive(Default)]
+pub struct Placement {
+    pub size: Option<(i32, i32)>,
+    pub over: Option<PageRect>,
+    pub all_keys: bool,
 }
 
 thread_local! {
@@ -46,11 +61,20 @@ thread_local! {
 
 /// Show `url`, an extension's popup page, for the current window.
 pub fn open(title: &str, url: &str) {
-    open_sized(title, url, None);
+    open_with(title, url, Placement::default());
 }
 
-/// [`open`], at `size` rather than the size its page measures.
-pub fn open_sized(title: &str, url: &str, size: Option<(i32, i32)>) {
+/// [`open`], placed as `placement` says.
+pub fn open_with(title: &str, url: &str, placement: Placement) {
+    let Placement {
+        size,
+        over,
+        all_keys,
+    } = placement;
+    let over = over.and_then(|rect| {
+        let tab = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()?;
+        Some((rect, tab))
+    });
     close();
     let Some((window_id, window)) = shell::with(|s| Some((s.id, s.window.clone()?))).flatten()
     else {
@@ -78,12 +102,30 @@ pub fn open_sized(title: &str, url: &str, size: Option<(i32, i32)>) {
             size: size
                 .map(|(w, h)| (w.clamp(MIN_WIDTH, MAX_SIZE.0), h.clamp(40, MAX_SIZE.1)))
                 .unwrap_or(DEFAULT_SIZE),
-            fixed: size.is_some(),
-            offset: LAST_OFFSET.with(std::cell::Cell::get),
+            fixed: size.is_some() || over.is_some(),
+            offset: if over.is_some() {
+                (0, 0)
+            } else {
+                LAST_OFFSET.with(std::cell::Cell::get)
+            },
+            over,
+            all_keys,
         })
     });
     reposition();
-    View::from(&page).request_focus();
+    // Overlays only get the keyboard from a click, so the tab keeps it and
+    // passes keys on to a popup that takes them all.
+    if all_keys {
+        focus_tab();
+    } else {
+        View::from(&page).request_focus();
+    }
+}
+
+fn focus_tab() {
+    if let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten() {
+        View::from(&tab).request_focus();
+    }
 }
 
 /// Close the popup, if one is open.
@@ -100,9 +142,7 @@ pub fn close() {
         }
     }
     // Keys go back to the page.
-    if let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten() {
-        View::from(&tab).request_focus();
-    }
+    focus_tab();
 }
 
 fn is_ours(browser: &Browser, bar: bool) -> bool {
@@ -115,22 +155,36 @@ fn is_ours(browser: &Browser, bar: bool) -> bool {
     })
 }
 
-/// The bar has loaded: give it the extension's name.
+/// The bar has loaded: give it the extension's name, and the key that
+/// closes it.
 pub fn bar_loaded(browser: &Browser) {
-    let title = POPUP.with(|p| p.borrow().as_ref().map(|p| p.title.clone()));
-    if let (Some(title), Some(frame)) = (
+    let title = POPUP.with(|p| {
+        let p = p.borrow();
+        let popup = p.as_ref()?;
+        Some((popup.title.clone(), popup.all_keys))
+    });
+    if let (Some((title, all_keys)), Some(frame)) = (
         title.filter(|_| is_ours(browser, true)),
         browser.main_frame(),
     ) {
-        let json = serde_json::json!({ "title": title });
+        let key = if all_keys { "Shift-Esc" } else { "Esc" };
+        let json = serde_json::json!({ "title": title, "key": key });
         shell::exec_js(&frame, &format!("rtPopup({json})"));
     }
 }
 
-/// The popup page has loaded: size the box to what it draws.
+/// The popup page has loaded: size the box to what it draws. One that
+/// takes every key gets them from the tab, which loading took the keyboard
+/// from.
 pub fn page_loaded(browser: &Browser) {
+    if !is_ours(browser, false) {
+        return;
+    }
+    if takes_all_keys() {
+        focus_tab();
+    }
     let fixed = POPUP.with(|p| p.borrow().as_ref().is_some_and(|p| p.fixed));
-    if fixed || !is_ours(browser, false) {
+    if fixed {
         return;
     }
     // Its natural size, not the box's: measured at max-content width.
@@ -155,23 +209,38 @@ pub fn page_loaded(browser: &Browser) {
     });
 }
 
-/// Place the popup at the top right of its window's page area.
+/// Place the popup at the top right of its tab's page: the focused pane.
 pub fn reposition() {
     let placed = POPUP.with(|p| {
         let p = p.borrow();
         let popup = p.as_ref()?;
-        let area = shell::with(|s| {
-            let window = s.windows.iter().find(|w| w.id == popup.window)?;
-            Some(View::from(window.row.as_ref()?).bounds())
-        })
-        .flatten()?;
-        let width = popup.size.0.min(area.width - 2 * MARGIN).max(1);
-        let height = popup
-            .size
-            .1
-            .min(area.height - 2 * MARGIN - BAR_HEIGHT)
-            .max(1);
-        let (x, y) = place(&area, (width, height), popup.offset);
+        let (x, y, width, height) = match &popup.over {
+            Some((rect, tab)) => {
+                let (area, content) = shell::with(|s| {
+                    let window = s.windows.iter().find(|w| w.id == popup.window)?;
+                    Some((
+                        View::from(window.row.as_ref()?).bounds(),
+                        View::from(window.content.as_ref()?).bounds(),
+                    ))
+                })
+                .flatten()?;
+                let (x, y, width, height) = cover(&area, &content, rect, tab)?;
+                let (dx, dy) = popup.offset;
+                let (x, y) = clamp_to(&area, (width, height), (x + dx, y + dy));
+                (x, y, width, height)
+            }
+            None => {
+                let area = crate::panes::focused_area(popup.window)?;
+                let width = popup.size.0.min(area.width - 2 * MARGIN).max(1);
+                let height = popup
+                    .size
+                    .1
+                    .min(area.height - 2 * MARGIN - BAR_HEIGHT)
+                    .max(1);
+                let (x, y) = place(&area, (width, height), popup.offset);
+                (x, y, width, height)
+            }
+        };
         Some((
             popup.bar_overlay.clone(),
             Rect {
@@ -205,6 +274,11 @@ pub fn reposition() {
 fn place(area: &Rect, (width, height): (i32, i32), offset: (i32, i32)) -> (i32, i32) {
     let x = area.x + area.width - width - RIGHT + offset.0;
     let y = area.y + MARGIN + offset.1;
+    clamp_to(area, (width, height), (x, y))
+}
+
+/// The bar's top left at `(x, y)`, moved into `area`.
+fn clamp_to(area: &Rect, (width, height): (i32, i32), (x, y): (i32, i32)) -> (i32, i32) {
     let x = x.clamp(area.x, (area.x + area.width - width).max(area.x));
     let y = y.clamp(
         area.y,
@@ -213,13 +287,53 @@ fn place(area: &Rect, (width, height): (i32, i32), offset: (i32, i32)) -> (i32, 
     (x, y)
 }
 
+/// The bar's top left and the page's size to cover `rect` of `tab`'s page,
+/// in the window's pixels: the bar sits just above it. Tabs are laid out in
+/// `content`, which is laid out in the page area.
+fn cover(
+    area: &Rect,
+    content: &Rect,
+    rect: &PageRect,
+    tab: &BrowserView,
+) -> Option<(i32, i32, i32, i32)> {
+    let zoom = 1.2_f64.powf(tab.browser()?.host()?.zoom_level());
+    let pane = View::from(tab).bounds();
+    let origin = (area.x + content.x + pane.x, area.y + content.y + pane.y);
+    let scale = |v: i32| (f64::from(v) * zoom).round() as i32;
+    let width = scale(rect.width).clamp(MIN_WIDTH.min(area.width), area.width.max(1));
+    let height = scale(rect.height).clamp(40, (area.height - BAR_HEIGHT).max(40));
+    Some((
+        origin.0 + scale(rect.x),
+        origin.1 + scale(rect.y) - BAR_HEIGHT,
+        width,
+        height,
+    ))
+}
+
+/// The popup takes every key: riptide's bindings and Escape don't apply.
+pub fn takes_all_keys() -> bool {
+    POPUP.with(|p| p.borrow().as_ref().is_some_and(|p| p.all_keys))
+}
+
+/// The browser of a popup that takes every key, in the focused window.
+pub fn all_keys_host() -> Option<BrowserHost> {
+    let window = shell::with(|s| s.id)?;
+    POPUP.with(|p| {
+        let p = p.borrow();
+        let popup = p.as_ref().filter(|p| p.all_keys && p.window == window)?;
+        popup.page.browser()?.host()
+    })
+}
+
 /// The bar was dragged by `dx`, `dy` pixels.
 pub fn move_by(dx: i32, dy: i32) {
     let moved = POPUP.with(|p| {
         let mut p = p.borrow_mut();
         let popup = p.as_mut()?;
         popup.offset = (popup.offset.0 + dx, popup.offset.1 + dy);
-        LAST_OFFSET.with(|l| l.set(popup.offset));
+        if popup.over.is_none() {
+            LAST_OFFSET.with(|l| l.set(popup.offset));
+        }
         Some(())
     });
     if moved.is_some() {
@@ -235,7 +349,8 @@ pub fn page_frame() -> Option<(String, Frame)> {
     })
 }
 
-/// Escape in normal mode closes an open popup in the focused window.
+/// Escape in normal mode closes an open popup in the focused window, unless
+/// the popup takes every key.
 pub fn forward_key(key: &rt_core::key::Key) -> bool {
     let escape = key.code == rt_core::key::KeyCode::Escape && key.mods.is_empty();
     if !escape {
@@ -244,7 +359,13 @@ pub fn forward_key(key: &rt_core::key::Key) -> bool {
     let here = shell::with(|s| {
         (s.engine.mode() == rt_core::Mode::Normal)
             .then_some(s.id)
-            .is_some_and(|id| POPUP.with(|p| p.borrow().as_ref().is_some_and(|p| p.window == id)))
+            .is_some_and(|id| {
+                POPUP.with(|p| {
+                    p.borrow()
+                        .as_ref()
+                        .is_some_and(|p| p.window == id && !p.all_keys)
+                })
+            })
     })
     .unwrap_or(false);
     if here {
@@ -276,6 +397,7 @@ pub fn test_state() -> serde_json::Value {
                     "url": url,
                     "size": [popup.size.0, popup.size.1],
                     "bounds": bounds,
+                    "all_keys": popup.all_keys,
                 })
             })
     })
