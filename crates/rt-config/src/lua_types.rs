@@ -206,7 +206,7 @@ function rt.get(name) end
 ---@param spec {{ palette: table<string, string>, colors?: table<string, string> }}
 function rt.theme(name, spec) end
 
----Bind keys (qutebrowser notation, e.g. "<Ctrl-x>" or "gg") to a command,
+---Bind keys (e.g. "<Ctrl-x>" or "gg") to a command,
 ---or to a Lua function that runs when they're pressed.
 ---@param keys string
 ---@param command string|fun()

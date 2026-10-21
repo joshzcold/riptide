@@ -925,7 +925,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "edit-text",
-        "Edit the focused text field in editor.command (qutebrowser's name for :open-editor)",
+        "Edit the focused text field in editor.command (the same as :open-editor)",
     ),
     spec(
         "edit-url",

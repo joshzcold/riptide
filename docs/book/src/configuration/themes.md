@@ -85,7 +85,7 @@ A qutebrowser theme's status bar, completion, hint, error, insert and passthroug
 
 ## Changing single colors
 
-`colors.*` settings change one color on top of the theme, with qutebrowser's names where there is one. An empty value (the default) uses the theme's. Colors are `#rrggbb`, `#rgb`, `rgb(…)`, `hsl(…)` or a CSS color name:
+`colors.*` settings change one color on top of the theme. An empty value (the default) uses the theme's. Colors are `#rrggbb`, `#rgb`, `rgb(…)`, `hsl(…)` or a CSS color name:
 
 ```toml
 ui.theme = "nord"
@@ -101,7 +101,7 @@ The [settings reference](../reference/settings.md) lists every `colors.*` settin
 
 ## Fonts
 
-`fonts.default_family` and `fonts.default_size` set riptide's font, and the per-part settings (`fonts.statusbar`, `fonts.tabs.selected`, `fonts.tabs.unselected`, `fonts.completion.entry`, `fonts.completion.category`, `fonts.prompts`, `fonts.hints`, `fonts.keyhint`) take a CSS `font` in which `default_size` and `default_family` stand for those two, as in qutebrowser:
+`fonts.default_family` and `fonts.default_size` set riptide's font, and the per-part settings (`fonts.statusbar`, `fonts.tabs.selected`, `fonts.tabs.unselected`, `fonts.completion.entry`, `fonts.completion.category`, `fonts.prompts`, `fonts.hints`, `fonts.keyhint`) take a CSS `font` in which `default_size` and `default_family` stand for those two:
 
 ```toml
 "fonts.default_family" = '"JetBrains Mono", monospace'
@@ -129,7 +129,7 @@ Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and 
 "ui.overlay.width" = 900
 ```
 
-The default, `docked`, keeps the list full width above the status bar, as in qutebrowser. Questions have their own setting, `prompt.position`.
+The default, `docked`, keeps the list full width above the status bar. Questions have their own setting, `prompt.position`.
 
 ## Hint labels
 

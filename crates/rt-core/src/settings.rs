@@ -560,7 +560,7 @@ pub static SETTINGS: &[SettingDef] = &[
             ("wq", "quit --save"),
             ("wqa", "quit --save"),
         ]),
-        "Command aliases: name → command. As in qutebrowser, :q closes the window, :qa quits, :w saves the session and :wq saves and quits"
+        "Command aliases: name → command. :q closes the window, :qa quits, :w saves the session and :wq saves and quits"
     ),
     def!(
         "auto_save.interval",

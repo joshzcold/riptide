@@ -66,7 +66,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:extension-open` |  | Open an extension's popup over the page, or its options in a tab: :extension-open &lt;name&gt; [popup\|options] |
 | `:extension-update` |  | Check installed extensions for updates, or update one: :extension-update [name] |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
-| `:edit-text` |  | Edit the focused text field in editor.command (qutebrowser's name for :open-editor) |
+| `:edit-text` |  | Edit the focused text field in editor.command (the same as :open-editor) |
 | `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |
 | `:cmd-edit` |  | Edit the command line in editor.command, then put it back: [--run] runs it instead |
 | `:greasemonkey-reload` |  | Read the scripts in the greasemonkey directories again |

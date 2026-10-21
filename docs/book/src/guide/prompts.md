@@ -20,7 +20,7 @@ A permission request shows the asking site in large type, with its host in bold 
 
 For permission prompts:
 - `y` allows once and `n` (or `Escape`) means "not now".
-- `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, as in qutebrowser, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.
+- `A` always allows and `N` always blocks. These are saved as per-site settings in `autoconfig.toml`, so they survive restarts. That includes camera and microphone. Chromium also remembers `y` for its own permission prompts.
 
 The `content.geolocation`, `content.notifications.enabled`, `content.media.audio_capture`, `content.media.video_capture`, `content.desktop_capture`, `content.mouse_lock` (pointer lock, as games use) and `content.register_protocol_handler` (a site offering to handle `mailto:` links) settings (`ask`, `true` or `false`) answer without asking.
 
@@ -106,7 +106,7 @@ In the "Save file to" prompt, `Tab` completes file and directory names, as in a 
 
 ## Choosing files to upload
 
-Upload fields open Chromium's file dialog. To use a terminal file manager instead, set `fileselect.handler = "external"`. Riptide runs the command for the field (`fileselect.single_file.command`, `fileselect.multiple_files.command` or `fileselect.folder.command`) with `{}` replaced by a file to write the chosen paths to, one per line. The defaults run ranger in xterm, as qutebrowser does. For yazi in foot:
+Upload fields open Chromium's file dialog. To use a terminal file manager instead, set `fileselect.handler = "external"`. Riptide runs the command for the field (`fileselect.single_file.command`, `fileselect.multiple_files.command` or `fileselect.folder.command`) with `{}` replaced by a file to write the chosen paths to, one per line. The defaults run ranger in xterm. For yazi in foot:
 
 ```toml
 fileselect.handler = "external"

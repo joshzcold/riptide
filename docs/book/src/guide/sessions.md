@@ -5,8 +5,8 @@
 | What | Where | Format |
 |---|---|---|
 | History | `<data>/history.sqlite` | SQLite; `:history-clear --force` empties it |
-| Quickmarks | `<config>/quickmarks` | qutebrowser's: one `name url` per line |
-| Bookmarks | `<config>/bookmarks/urls` | qutebrowser's: one `url title` per line |
+| Quickmarks | `<config>/quickmarks` | one `name url` per line |
+| Bookmarks | `<config>/bookmarks/urls` | one `url title` per line |
 | Sessions | `<data>/sessions/<name>.toml` | TOML |
 | The last window's size and place | `<data>/window.toml` | TOML |
 

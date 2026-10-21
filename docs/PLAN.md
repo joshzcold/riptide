@@ -1,6 +1,6 @@
 # riptide — Project Plan
 
-A keyboard-driven, vim-like browser in the spirit of [qutebrowser](https://github.com/qutebrowser/qutebrowser), built on [CEF](https://github.com/chromiumembedded/cef) (modern Chromium) and controlled entirely from Rust.
+A keyboard-driven, vim-like browser built on [CEF](https://github.com/chromiumembedded/cef) (modern Chromium) and controlled entirely from Rust.
 
 This file tracks what's left to do. Finished work is one line per milestone below: the [user guide](book/src/introduction.md) documents what it does, the [developer guide](book/src/dev/architecture.md) how it's built and [CEF pitfalls](book/src/dev/cef-pitfalls.md) what it taught us, and `git log -p docs/PLAN.md` keeps the old notes (this file was condensed on 2026-10-09).
 
@@ -8,11 +8,10 @@ This file tracks what's left to do. Finished work is one line per milestone belo
 
 1. **Up-to-date browsing.** Track current CEF/Chromium releases closely (the `cef` crate ships `154.x` bindings for Chromium 154).
 2. **Rust control plane.** All browser logic — modes, keybindings, commands, config, storage — in Rust. No Python, no Qt.
-3. **qutebrowser feel.** Same modes, default bindings, command names, and workflow, so existing qutebrowser users feel at home.
+3. **Keyboard first.** Modes, default bindings and command names that work together, so the whole browser can be driven from the keyboard.
 
 ## Non-goals (for now)
 
-- Reimplementing qutebrowser's Python `config.py` API verbatim.
 - Mobile platforms.
 - Building Chromium from source (we consume CEF binary distributions).
 
@@ -63,7 +62,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M16 | `:help` generated from the registries, `:version` | guide/terminal.md |
 | M17 | Spell checking with keyboard suggestions, `:spell-install` | guide/pages.md |
 | M18 | Versions, changelog, CI on three platforms, one-click and nightly releases (v0.1.0, v0.2.0, v0.3.0, v0.4.0) | dev/releasing.md |
-| M19 | qutebrowser parity sweep: tabs, status bar, key hints, completion, hints, URLs, downloads, content, input, sessions, tools, config commands | the reference pages |
+| M19 | Command and setting sweep: tabs, status bar, key hints, completion, hints, URLs, downloads, content, input, sessions, tools, config commands | the reference pages |
 | M20 | Themes, fonts, `ui.css`, user themes and importers, bars sized by their pages, floating overlay and prompts | configuration/themes.md |
 | M21 | The settings page: Settings, Keys (where each binding came from, `:map`), Sites, Plugins and Extensions tabs | configuration/files.md |
 | M22 | Call windows with Chrome's screen-share picker, sharing markers, `:share-stop`, `cm` mute, picture-in-picture | guide/tabs.md |
@@ -107,10 +106,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - Call windows are restored as ordinary windows.
 - Favicons aren't kept in sessions (they're fetched again on load).
 
-### Config
-
-- Importing qutebrowser's `config.py` (bindings and settings), beyond themes.
-
 ### Calls (M22)
 
 - Check by hand on a real desktop: fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open.
@@ -142,8 +137,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Not planned
 
 - Proprietary codecs (H.264/AAC): they need a CEF source build, which works against goal 1 and raises patent questions. Revisit only if VP9/AV1 isn't enough, preferring a documented "build your own CEF" path.
-- `window.transparent`, `zoom.text_only`, `zoom.mouse_divider`, `content.local_content_can_access_remote_urls`, `content.persistent_storage`: CEF or Chromium has no way to do them.
-- qutebrowser's `qt.*`, `backend`, and Python-only commands.
 
 ---
 
@@ -171,7 +164,6 @@ Unit tests in every crate, end-to-end tests in `rt-e2e` (a browser per test over
 
 ## Open questions
 
-1. **qutebrowser compatibility depth:** import `config.py` bindings and settings? History, bookmarks, quickmarks and themes already import.
-2. **Plugin compatibility across releases:** `riptide = ">=0.4"` in a manifest handles new keys; should riptide-plugins keep a branch per riptide release?
+1. **Plugin compatibility across releases:** `riptide = ">=0.4"` in a manifest handles new keys; should riptide-plugins keep a branch per riptide release?
 
 > riptide is GPL-3.0 (`LICENSE`). Dependency licenses must stay GPL-compatible; `cargo-deny` checks them.

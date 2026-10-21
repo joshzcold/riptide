@@ -38,7 +38,7 @@ function rt.get(name) end
 ---@param spec { palette: table<string, string>, colors?: table<string, string> }
 function rt.theme(name, spec) end
 
----Bind keys (qutebrowser notation, e.g. "<Ctrl-x>" or "gg") to a command,
+---Bind keys (e.g. "<Ctrl-x>" or "gg") to a command,
 ---or to a Lua function that runs when they're pressed.
 ---@param keys string
 ---@param command string|fun()
@@ -401,7 +401,7 @@ function rt.json.decode(text) end
 function rt.json.encode(value) end
 
 ---@class rt.c
----@field aliases table<string, string> Command aliases: name → command. As in qutebrowser, :q closes the window, :qa quits, :w saves the session and :wq saves and quits
+---@field aliases table<string, string> Command aliases: name → command. :q closes the window, :qa quits, :w saves the session and :wq saves and quits
 ---@field auto_save rt.c.auto_save
 ---@field bindings rt.c.bindings
 ---@field changelog_after_upgrade "major"|"minor"|"patch"|"never" Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never

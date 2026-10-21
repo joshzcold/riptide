@@ -1,6 +1,6 @@
 ---
 name: docs-user
-description: Use after a change users can see (a new or changed command, setting, default binding, mode, prompt, page, file riptide reads, or behaviour) and before committing it — updates the user guide and regenerates the reference in the mdBook site under docs/book/. Also use when asked to write or fix user documentation, or to document a feature for qutebrowser users.
+description: Use after a change users can see (a new or changed command, setting, default binding, mode, prompt, page, file riptide reads, or behaviour) and before committing it — updates the user guide and regenerates the reference in the mdBook site under docs/book/. Also use when asked to write or fix user documentation.
 ---
 
 # Updating user documentation

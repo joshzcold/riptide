@@ -155,8 +155,8 @@ Section: web
 Priority: optional
 Homepage: https://joshzcold.github.io/riptide/
 Description: keyboard-driven web browser with vim-like bindings
- Riptide is a browser in the spirit of qutebrowser, built on the Chromium
- Embedded Framework (CEF) and controlled from Rust: modes, hints, a command
+ Riptide is a keyboard-driven browser built on the Chromium Embedded
+ Framework (CEF) and controlled from Rust: modes, hints, a command
  line, and configuration in TOML or Lua.
 EOF
     deb_file=dist/riptide_${version}_$deb_arch.deb

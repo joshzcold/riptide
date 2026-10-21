@@ -1,6 +1,6 @@
 # Lua
 
-`config.lua` gets `c` (qutebrowser-style `c.hints.chars = "asdf"`), `rt.set/get/bind/unbind`, `rt.platform` (`linux`, `macos`, `windows`), `rt.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
+`config.lua` gets `c` (`c.hints.chars = "asdf"`), `rt.set/get/bind/unbind`, `rt.platform` (`linux`, `macos`, `windows`), `rt.config_dir`, and `require()` from the config directory (`name.lua` or `lua/name.lua`). It is a normal Lua with the standard library, trusted like a shell rc file.
 
 The Lua VM stays alive after the file runs, so config can also script the browser:
 
