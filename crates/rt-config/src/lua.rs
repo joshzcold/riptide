@@ -80,17 +80,21 @@ function rt.group(name, opts)
 end
 
 rt._entry = {}
+-- Returns false if a hook did, which cancels what the event is about
+-- (before_command, key); every hook still runs.
 function rt._dispatch(event, payload)
   local list = hooks[event]
   if not list then return end
+  local cancelled = false
   for _, hook in ipairs({ table.unpack(list) }) do
     local wanted = hook.pattern == nil
       or (payload.url ~= nil and rt._matches(hook.pattern, payload.url))
     if wanted then
       if hook.once then rt.off(hook.id) end
-      hook.fn(payload)
+      if hook.fn(payload) == false then cancelled = true end
     end
   end
+  if cancelled then return false end
 end
 rt._entry[0] = rt._dispatch
 
@@ -258,6 +262,14 @@ function rt._sandbox(name, permissions, require_fn)
       if needs == nil or permissions[needs] then
         api[key] = type(value) == "table" and copy(value) or value
       end
+    end
+  end
+  -- Seeing the keys you press is a permission of its own.
+  if not permissions.keys then
+    local on = api.on
+    api.on = function(event, opts, fn)
+      if event == "key" then error("the key event needs the keys permission", 2) end
+      return on(event, opts, fn)
     end
   end
   -- A key bound to a command line could run anything, :spawn included.
@@ -604,8 +616,16 @@ pub const EVENTS: &[(&str, &str)] = &[
         "a text field took focus and riptide entered insert mode (url)",
     ),
     (
+        "before_command",
+        "a command is about to run (name, args); a hook that returns false cancels it and the rest of its ;; chain",
+    ),
+    (
         "command",
         "a command ran, typed, bound to a key or run by a script (name, args)",
+    ),
+    (
+        "key",
+        "a key in normal mode isn't bound to anything (key, e.g. x or <Ctrl-x>); a hook that returns false keeps it from the page; plugins need the keys permission",
     ),
     ("setting_changed", "a setting changed (name, value as text)"),
     (
@@ -1155,21 +1175,40 @@ fn invoke(
     args: mlua::MultiValue,
     context: &Context,
 ) -> Result<Vec<Action>, String> {
+    invoke_cancellable(table, key, args, context).map(|(actions, _)| actions)
+}
+
+/// [`invoke`], also saying whether a function returned `false`.
+fn invoke_cancellable(
+    table: &str,
+    key: mlua::Value,
+    args: mlua::MultiValue,
+    context: &Context,
+) -> Result<(Vec<Action>, bool), String> {
     let table = table.to_string();
-    run_guarded(context, move |lua, _| {
+    let cancelled = Rc::new(std::cell::Cell::new(false));
+    let flag = cancelled.clone();
+    let actions = run_guarded(context, move |lua, _| {
         let api: mlua::Table = lua.globals().get("rt")?;
         let table: mlua::Table = api.get(table)?;
+        let call = |f: mlua::Function, args: mlua::MultiValue| -> mlua::Result<()> {
+            if matches!(f.call::<mlua::Value>(args)?, mlua::Value::Boolean(false)) {
+                flag.set(true);
+            }
+            Ok(())
+        };
         match table.get::<mlua::Value>(key)? {
-            mlua::Value::Function(f) => f.call::<()>(args),
+            mlua::Value::Function(f) => call(f, args),
             mlua::Value::Table(hooks) => {
                 for hook in hooks.sequence_values::<mlua::Function>() {
-                    hook?.call::<()>(args.clone())?;
+                    call(hook?, args.clone())?;
                 }
                 Ok(())
             }
             _ => Ok(()),
         }
-    })
+    })?;
+    Ok((actions, cancelled.get()))
 }
 
 /// Run `f` in the runtime with `context`, stopping it after
@@ -1588,6 +1627,16 @@ pub fn emit(
     fields: &[(&str, &str)],
     context: &Context,
 ) -> Result<Vec<Action>, String> {
+    emit_cancellable(event, fields, context).map(|(actions, _)| actions)
+}
+
+/// [`emit`], also saying whether a hook returned `false` to cancel what
+/// the event is about.
+pub fn emit_cancellable(
+    event: &str,
+    fields: &[(&str, &str)],
+    context: &Context,
+) -> Result<(Vec<Action>, bool), String> {
     let prepared = RUNTIME.with(
         |r| -> Option<mlua::Result<(mlua::Value, mlua::MultiValue)>> {
             let runtime = r.borrow();
@@ -1605,12 +1654,12 @@ pub fn emit(
         },
     );
     match prepared {
-        None => Ok(Vec::new()),
+        None => Ok((Vec::new(), false)),
         Some(Err(e)) => Err(e.to_string()),
         Some(Ok((key, args))) => {
             let mut args = args.into_vec();
             args.insert(0, key);
-            invoke(
+            invoke_cancellable(
                 "_entry",
                 mlua::Value::Integer(0),
                 mlua::MultiValue::from_vec(args),
@@ -3155,6 +3204,7 @@ function M.setup(opts)
     if pcall(require, "secret") then table.insert(found, "user-module") end
     if pcall(rt.keymap.set, "normal", "zz", "spawn evil") then table.insert(found, "bind-command") end
     if pcall(rt.bind, "zz", "spawn evil") then table.insert(found, "bind-command") end
+    if pcall(rt.on, "key", function() end) then table.insert(found, "key-event") end
     if pcall(rt.open, "javascript:alert(1)") then table.insert(found, "javascript") end
     if rt.page then table.insert(found, "page") end
     if rt._page or rt._ask or rt._answers then table.insert(found, "private") end
@@ -3614,6 +3664,48 @@ assert(not pcall(rt.every, 1, function() end))
                 level: Level::Info,
                 text: "hello".into()
             }]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_hook_that_returns_false_cancels() {
+        use rt_core::engine::Level;
+        let dir = std::env::temp_dir().join(format!("rt-lua-cancel-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.on("before_command", function(e) if e.name == "quit" then return false end end)
+rt.on("before_command", function(e) rt.message("saw " .. e.name) end)
+rt.on("key", function(e) return e.key ~= "x" end)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let ctx = Context::default();
+        let (actions, cancelled) =
+            emit_cancellable("before_command", &[("name", "quit"), ("args", "")], &ctx).unwrap();
+        assert!(cancelled);
+        assert_eq!(
+            actions,
+            [Action::Message {
+                level: Level::Info,
+                text: "saw quit".into()
+            }],
+            "every hook runs"
+        );
+        let (_, cancelled) =
+            emit_cancellable("before_command", &[("name", "reload"), ("args", "")], &ctx).unwrap();
+        assert!(!cancelled);
+        assert!(emit_cancellable("key", &[("key", "x")], &ctx).unwrap().1);
+        assert!(!emit_cancellable("key", &[("key", "y")], &ctx).unwrap().1);
+        assert!(
+            !emit_cancellable("tab_opened", &[("url", "x")], &ctx)
+                .unwrap()
+                .1
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

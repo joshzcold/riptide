@@ -521,17 +521,31 @@ fn handle_key_event(event: &KeyEvent) -> bool {
                     effects: Vec::new(),
                 },
                 None,
+                false,
             );
         }
         let outcome = s.engine.handle_key(key);
+        let unbound = s.engine.take_unbound();
         s.suppress_char = outcome.consumed;
         let timeout = s.engine.settings().int("input.partial_timeout");
         let partial = s.engine.partial_keys().filter(|_| timeout > 0);
-        (outcome, partial.map(|generation| (generation, timeout)))
+        (
+            outcome,
+            partial.map(|generation| (generation, timeout)),
+            unbound,
+        )
     }) else {
         return false;
     };
-    let (outcome, partial) = outcome;
+    let (mut outcome, partial, unbound) = outcome;
+    // `key` hooks hear unbound keys in normal mode, and may keep one from the page.
+    if unbound && crate::lua::key_unbound(&key) && !outcome.consumed {
+        outcome.consumed = true;
+        outcome
+            .effects
+            .retain(|e| !matches!(e, rt_core::Effect::PassKey(_)));
+        shell::with(|s| s.suppress_char = true);
+    }
     if let Some((generation, timeout)) = partial {
         shell::expire_partial_after(generation, timeout);
     }

@@ -254,6 +254,61 @@ pub fn current_context() -> Context {
     context(None)
 }
 
+thread_local! {
+    /// The state as of the last redraw, for hooks that run while the
+    /// engine is busy and the shell can't be read (`before_command`).
+    static LAST_CONTEXT: std::cell::RefCell<Context> = std::cell::RefCell::new(Context::default());
+}
+
+/// Keep the current state for [`before_command`]; the shell calls it on each redraw.
+pub fn remember_context() {
+    if let Some(context) = shell::with(|s| context_of(s, None)) {
+        LAST_CONTEXT.with(|c| *c.borrow_mut() = context);
+    }
+}
+
+/// The engine asks before each command runs: `before_command` hooks may
+/// cancel it. They run in the engine, so what they ask for happens after.
+pub fn before_command(name: &str, args: &str) -> bool {
+    let context = LAST_CONTEXT.with(|c| c.borrow().clone());
+    let result = lua::emit_cancellable(
+        "before_command",
+        &[("name", name), ("args", args)],
+        &context,
+    );
+    let (actions, cancelled) = match result {
+        Ok(done) => done,
+        Err(e) => (Vec::new(), {
+            crate::client::later(0, move || carry_out(Err(e)));
+            false
+        }),
+    };
+    if !actions.is_empty() {
+        crate::client::later(0, move || carry_out(Ok(actions)));
+    }
+    crate::client::later(0, || crate::plugins::on_event("before_command"));
+    !cancelled
+}
+
+/// A key in normal mode that nothing is bound to: `key` hooks may keep it
+/// from the page. Returns whether one did.
+pub fn key_unbound(key: &rt_core::Key) -> bool {
+    crate::plugins::on_event("key");
+    let key = key.to_string();
+    let (actions, cancelled) = match lua::emit_cancellable("key", &[("key", &key)], &context(None))
+    {
+        Ok(done) => done,
+        Err(e) => {
+            return {
+                carry_out(Err(e));
+                false
+            };
+        }
+    };
+    carry_out(Ok(actions));
+    cancelled
+}
+
 /// Run the `rt.on(event, fn)` hooks.
 pub fn emit(event: &str, fields: &[(&str, &str)]) {
     crate::plugins::on_event(event);

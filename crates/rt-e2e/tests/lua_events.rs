@@ -377,3 +377,56 @@ fn config_lua_hears_errors_moves_commands_themes_and_questions() {
     b.run("open http://127.0.0.1:1/");
     wait_for_line(&b, "page_error ERR_UNSAFE_PORT");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn key_and_before_command_hooks_can_cancel() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.on("key", function(e)
+  rt.message("unbound " .. e.key)
+  if e.key == "x" then return false end
+end)
+rt.on("before_command", function(e)
+  if e.name == "reload" then
+    rt.message("no reload")
+    return false
+  end
+end)
+"#,
+        )
+        // Letters reach the page only with this.
+        .toml("messages.timeout = 0\ninput.forward_unbound_keys = \"all\"\n")
+        .start("page.html");
+    b.eval(
+        "window.typed = ''; addEventListener('keydown', (e) => { typed += e.key; document.title = 'typed=' + typed }); 'ok'",
+    );
+    // Chromium drops the first key a page gets after it loads.
+    let start = std::time::Instant::now();
+    while !b.eval("document.title").starts_with("typed=") {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "no key reached the page");
+        b.keys("e");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    b.eval("typed = ''; document.title = 'typed='; 'ok'");
+    b.keys("e");
+    b.wait_eval("document.title", "typed=e");
+    b.wait_until("the hook saw it", |s| {
+        s.message().is_some_and(|m| m == "unbound e")
+    });
+    b.keys("x");
+    b.wait_until("the hook saw x", |s| {
+        s.message().is_some_and(|m| m == "unbound x")
+    });
+    b.keys("e");
+    b.wait_eval("document.title", "typed=ee");
+
+    // r is bound to reload, which the hook cancels: the page keeps what it typed.
+    b.keys("r");
+    b.wait_until("the hook said no", |s| {
+        s.message().is_some_and(|m| m == "no reload")
+    });
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(b.eval("typed"), "ee");
+}
