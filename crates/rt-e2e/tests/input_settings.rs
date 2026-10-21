@@ -147,3 +147,40 @@ fn input_spatial_navigation_moves_focus_with_arrows() {
             .is_ok_and(|t| t == "A")
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn hovering_a_link_shows_its_address_in_the_status_bar() {
+    let b = Browser::start("biglink.html");
+    let (page, link) = (b.url("biglink.html"), b.url("second.html"));
+    let move_to = |x: &str, y: &str| {
+        let status = std::process::Command::new("xdotool")
+            .args(["mousemove", x, y])
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    let url = |b: &Browser| {
+        b.eval_bar(
+            "statusbar",
+            "[...document.querySelectorAll('.url')].map((e) => e.className + ' ' + e.textContent).join()",
+        )
+    };
+    let wait_for = |want: &str| {
+        let start = std::time::Instant::now();
+        while url(&b) != want {
+            assert!(
+                start.elapsed() < rt_e2e::TIMEOUT,
+                "the url widget is {:?}, not {want:?}",
+                url(&b)
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    };
+    move_to("400", "300");
+    wait_for(&format!("url hover {link}"));
+    // Off the page, onto the tab bar: the page's own address again.
+    move_to("400", "2");
+    wait_for(&format!("url http {page}"));
+}

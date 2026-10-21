@@ -29,6 +29,7 @@ pub const TOKENS: &[(&str, &str)] = &[
     ),
     ("statusbar-http-fg", "colors.statusbar.url.success.http.fg"),
     ("statusbar-url-error-fg", "colors.statusbar.url.error.fg"),
+    ("statusbar-url-hover-fg", "colors.statusbar.url.hover.fg"),
     ("messages-error-bg", "colors.messages.error.bg"),
     ("messages-error-fg", "colors.messages.error.fg"),
     ("messages-warning-bg", "colors.messages.warning.bg"),
@@ -91,6 +92,7 @@ pub const TEXT_PAIRS: &[(&str, &str)] = &[
     ("statusbar-https-fg", "statusbar-bg"),
     ("statusbar-http-fg", "statusbar-bg"),
     ("statusbar-url-error-fg", "statusbar-bg"),
+    ("statusbar-url-hover-fg", "statusbar-bg"),
     ("completion-description-fg", "completion-bg"),
     ("keyhint-fg", "completion-bg"),
     ("completion-match-fg", "completion-bg"),
@@ -314,6 +316,7 @@ fn derive(p: &Palette, name: &str) -> BTreeMap<&'static str, String> {
     set("statusbar-https-fg", &legible(p.accent, p.base));
     set("statusbar-http-fg", p.fg);
     set("statusbar-url-error-fg", &legible(p.yellow, p.base));
+    set("statusbar-url-hover-fg", &legible(p.blue, p.base));
     set("messages-error-bg", &red);
     set("messages-error-fg", &readable(&red));
     set("messages-warning-bg", &orange);

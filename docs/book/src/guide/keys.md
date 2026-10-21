@@ -113,7 +113,7 @@ Digits before a binding are a count (`3j`); `input.match_counts = false` lets yo
 "<Ctrl-g>" = "<Escape>"
 ```
 
-The mouse's back and forward buttons go back and forward. With `input.mouse.rocker_gestures = true`, holding the right button and clicking the left goes back, and the other way round goes forward; pages lose their context menu.
+With the mouse over a link, the status bar shows where it goes in place of the page's address (in `colors.statusbar.url.hover.fg`), and right-clicking it offers **Copy link address**. The mouse's back and forward buttons go back and forward. With `input.mouse.rocker_gestures = true`, holding the right button and clicking the left goes back, and the other way round goes forward; pages lose their context menu.
 
 `input.spatial_navigation = true` moves focus between links and fields with the arrow keys in passthrough and insert mode. `input.media_keys = false` stops the keyboard's play and pause keys from controlling pages. Both apply after a restart.
 

@@ -41,6 +41,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `colors.statusbar.private.bg` | string | `` | Status bar background in private windows; empty uses ui.theme's |
 | `colors.statusbar.private.fg` | string | `` | Status bar text in private windows; empty uses ui.theme's |
 | `colors.statusbar.url.error.fg` | string | `` | The address of a page that failed to load; empty uses ui.theme's |
+| `colors.statusbar.url.hover.fg` | string | `` | The address of the link under the mouse, shown in the status bar; empty uses ui.theme's |
 | `colors.statusbar.url.success.http.fg` | string | `` | An http:// address in the status bar; empty uses ui.theme's |
 | `colors.statusbar.url.success.https.fg` | string | `` | An https:// address in the status bar; empty uses ui.theme's |
 | `colors.tabs.bar.bg` | string | `` | Tab bar background behind the tabs; empty uses ui.theme's |

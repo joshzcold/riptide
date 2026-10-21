@@ -282,6 +282,11 @@ pub fn completions(pattern: &str) -> Vec<Completion> {
     })
 }
 
+/// The context menu's "Copy link address", among CEF's ids for embedders.
+fn copy_link() -> i32 {
+    MenuId::USER_FIRST.get_raw() as i32
+}
+
 wrap_context_menu_handler! {
     pub struct RtContextMenuHandler {}
 
@@ -293,9 +298,38 @@ wrap_context_menu_handler! {
             params: Option<&mut ContextMenuParams>,
             model: Option<&mut MenuModel>,
         ) {
-            if let (Some(browser), Some(params), Some(model)) = (browser, params, model) {
-                context_menu(browser, params, model);
+            let (Some(browser), Some(params), Some(model)) = (browser, params, model) else {
+                return;
+            };
+            if context_menu(browser, params, model) {
+                return;
             }
+            // A link: copy its address, as other browsers offer.
+            if !CefString::from(&params.link_url()).to_string().is_empty() {
+                if model.count() > 0 {
+                    model.add_separator();
+                }
+                model.add_item(copy_link(), Some(&CefString::from("Copy link address")));
+            }
+        }
+
+        fn on_context_menu_command(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            params: Option<&mut ContextMenuParams>,
+            command_id: ::std::os::raw::c_int,
+            _event_flags: EventFlags,
+        ) -> ::std::os::raw::c_int {
+            if command_id != copy_link() {
+                return 0;
+            }
+            if let Some(params) = params {
+                let url = CefString::from(&params.link_url()).to_string();
+                crate::clipboard::yank(&url, "link address");
+                shell::refresh_ui();
+            }
+            1
         }
     }
 }
