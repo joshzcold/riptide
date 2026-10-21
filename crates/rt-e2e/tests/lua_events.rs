@@ -377,3 +377,30 @@ fn config_lua_hears_errors_moves_commands_themes_and_questions() {
     b.run("open http://127.0.0.1:1/");
     wait_for_line(&b, "page_error ERR_UNSAFE_PORT");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn command_before_hooks_cancel_commands() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.on("command_before", function(e)
+  if e.name == "open" and e.args:find("second") then
+    rt.notify("not in " .. rt.mode() .. " mode")
+    return true
+  end
+end)
+"#,
+        )
+        .start("page.html");
+    let page = b.url("page.html");
+    b.run(&format!("open {}", b.url("second.html")));
+    b.wait_until("the hook cancelled it", |s| {
+        s.message() == Some("not in normal mode")
+    });
+    assert!(b.state().tab().is_loaded(&page));
+    // Other commands still run.
+    let nav1 = b.url("nav1.html");
+    b.run(&format!("open {nav1}"));
+    b.wait_until("nav1 loads", |s| s.tab().is_loaded(&nav1));
+}

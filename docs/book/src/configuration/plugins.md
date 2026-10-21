@@ -92,7 +92,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 |---|---|
 | `spawn` | run programs on your computer (`rt.spawn`), and look for them (`rt.which`) |
 | `files` | read and write your files (Lua's `io` and `os`) |
-| `commands` | run any riptide command (`rt.run`) and bind keys to command lines; this includes running programs |
+| `commands` | run any riptide command (`rt.run`), bind keys to command lines, and cancel commands with `command_before`; this includes running programs |
 | `settings` | read and change your settings (`rt.get`, `rt.set`, `c`) |
 | `clipboard` | read and write the clipboard |
 | `keys` | see every key you press |

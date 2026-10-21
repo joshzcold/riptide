@@ -152,6 +152,7 @@ wrap_browser_process_handler! {
             let mut engine = Engine::new(Keymap::defaults());
             engine.set_clipboard_reader(clipboard::read);
             engine.set_primary_reader(clipboard::read_primary);
+            engine.set_command_filter(lua::command_filter);
             engine.set_completion_source(storage::complete);
             let mut errors = storage::open(&startup.paths);
             shell::install(shell::Shell::new(engine, startup.paths));
