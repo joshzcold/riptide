@@ -213,6 +213,80 @@ impl Layout {
         equalize(&mut self.root);
     }
 
+    /// Grow the focused pane along `axis` (`Vertical`: wider) by `delta` of
+    /// its split's room, taken from the pane beside it; negative shrinks it.
+    /// False if no split runs along `axis` around it.
+    pub fn resize(&mut self, axis: Axis, delta: f64) -> bool {
+        resize(&mut self.root, self.focused, axis, delta).unwrap_or(false)
+    }
+
+    /// The borders between neighbouring panes in a `width` × `height` page
+    /// area, each `grab` pixels across, centred on the gap between them.
+    pub fn borders(&self, width: i32, height: i32, grab: i32) -> Vec<Border> {
+        let mut out = Vec::new();
+        let full = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        };
+        let size = (f64::from(width), f64::from(height));
+        borders(&self.root, full, &mut Vec::new(), size, grab, &mut out);
+        out
+    }
+
+    /// Move the border `id` by `delta` pixels (right or down) in a split
+    /// `extent` pixels across. False if there's no such border.
+    pub fn move_border(&mut self, id: &str, delta: i32, extent: i32) -> bool {
+        let Some((path, after)) = parse_border(id) else {
+            return false;
+        };
+        let mut node = &mut self.root;
+        for i in path {
+            match node {
+                Node::Split { children, .. } if i < children.len() => node = &mut children[i].0,
+                _ => return false,
+            }
+        }
+        let Node::Split { children, .. } = node else {
+            return false;
+        };
+        if after + 1 >= children.len() || extent <= 0 {
+            return false;
+        }
+        let total = children[after].1 + children[after + 1].1;
+        let moved = (children[after].1 + f64::from(delta) / f64::from(extent))
+            .clamp(MIN_SHARE, total - MIN_SHARE);
+        children[after].1 = moved;
+        children[after + 1].1 = total - moved;
+        true
+    }
+
+    /// The layout as a tree of whatever `tab` gives each pane, for saving.
+    /// Panes it gives nothing for are left out; `None` if one pane or less is left.
+    pub fn tree<T>(&self, mut tab: impl FnMut(PaneId) -> Option<T>) -> Option<Tree<T>> {
+        let tree = to_tree(&self.root, &mut tab)?;
+        matches!(tree, Tree::Split { .. }).then_some(tree)
+    }
+
+    /// A layout from a saved tree, with the pane for each item; the first
+    /// pane for which `focus` holds is focused.
+    pub fn from_tree<T>(tree: Tree<T>, focus: impl Fn(&T) -> bool) -> (Self, Vec<(PaneId, T)>) {
+        let mut panes = Vec::new();
+        let mut next_id = 0;
+        let root = from_tree(tree, &mut next_id, &mut panes);
+        let mut layout = Self {
+            root,
+            focused: 0,
+            next_id,
+        };
+        collapse(&mut layout.root);
+        if let Some((pane, _)) = panes.iter().find(|(_, t)| focus(t)) {
+            layout.focused = *pane;
+        }
+        (layout, panes)
+    }
+
     /// Each pane's place in a `width` × `height` page area, with `gap`
     /// pixels between neighbouring panes and none at the outer edges.
     pub fn bounds(&self, width: i32, height: i32, gap: i32) -> Vec<(PaneId, Bounds)> {
@@ -260,6 +334,200 @@ impl Layout {
             &mut out,
         );
         out
+    }
+}
+
+/// A layout to save and restore, with something (such as a tab's index) in
+/// each pane. Shares add up to 1 in each split.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Tree<T> {
+    Pane(T),
+    Split {
+        axis: Axis,
+        children: Vec<(Tree<T>, f64)>,
+    },
+}
+
+/// A border between two neighbouring panes, to drag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Border {
+    /// Stays the same while the layout keeps its shape (see `move_border`).
+    pub id: String,
+    /// `Vertical` for a border between panes side by side, which moves left and right.
+    pub axis: Axis,
+    pub bounds: Bounds,
+    /// How many pixels across its split is, along `axis`.
+    pub extent: i32,
+}
+
+/// A border's id: the child indices down to its split, then the pane it follows.
+fn border_id(path: &[usize], after: usize) -> String {
+    let path: Vec<String> = path.iter().map(usize::to_string).collect();
+    format!("{}:{after}", path.join("."))
+}
+
+fn parse_border(id: &str) -> Option<(Vec<usize>, usize)> {
+    let (path, after) = id.split_once(':')?;
+    let path = if path.is_empty() {
+        Vec::new()
+    } else {
+        path.split('.')
+            .map(|i| i.parse().ok())
+            .collect::<Option<_>>()?
+    };
+    Some((path, after.parse().ok()?))
+}
+
+fn borders(
+    node: &Node,
+    rect: Rect,
+    path: &mut Vec<usize>,
+    (w, h): (f64, f64),
+    grab: i32,
+    out: &mut Vec<Border>,
+) {
+    let Node::Split { axis, children } = node else {
+        return;
+    };
+    let mut offset = 0.0;
+    for (i, (child, share)) in children.iter().enumerate() {
+        let child_rect = match axis {
+            Axis::Vertical => Rect {
+                x: rect.x + offset * rect.width,
+                width: share * rect.width,
+                ..rect
+            },
+            Axis::Horizontal => Rect {
+                y: rect.y + offset * rect.height,
+                height: share * rect.height,
+                ..rect
+            },
+        };
+        path.push(i);
+        borders(child, child_rect, path, (w, h), grab, out);
+        path.pop();
+        offset += share;
+        if i + 1 == children.len() {
+            continue;
+        }
+        let bounds = match axis {
+            Axis::Vertical => Bounds {
+                x: ((rect.x + offset * rect.width) * w).round() as i32 - grab / 2,
+                y: (rect.y * h).round() as i32,
+                width: grab,
+                height: (rect.height * h).round() as i32,
+            },
+            Axis::Horizontal => Bounds {
+                x: (rect.x * w).round() as i32,
+                y: ((rect.y + offset * rect.height) * h).round() as i32 - grab / 2,
+                width: (rect.width * w).round() as i32,
+                height: grab,
+            },
+        };
+        let extent = match axis {
+            Axis::Vertical => rect.width * w,
+            Axis::Horizontal => rect.height * h,
+        };
+        out.push(Border {
+            id: border_id(path, i),
+            axis: *axis,
+            bounds,
+            extent: extent.round() as i32,
+        });
+    }
+}
+
+/// The smallest share a resize leaves a pane.
+const MIN_SHARE: f64 = 0.1;
+
+/// `Some(done)` once the focused pane is found below `node`.
+fn resize(node: &mut Node, focused: PaneId, axis: Axis, delta: f64) -> Option<bool> {
+    let Node::Split {
+        axis: split_axis,
+        children,
+    } = node
+    else {
+        return (*node == Node::Pane(focused)).then_some(false);
+    };
+    let i = children
+        .iter_mut()
+        .position(|(c, _)| contains(c, focused))?;
+    // A split further down along the same axis gets it first.
+    if let Some(true) = resize(&mut children[i].0, focused, axis, delta) {
+        return Some(true);
+    }
+    if *split_axis != axis || children.len() < 2 {
+        return Some(false);
+    }
+    let j = if i + 1 < children.len() { i + 1 } else { i - 1 };
+    let total = children[i].1 + children[j].1;
+    let grown = (children[i].1 + delta).clamp(MIN_SHARE, total - MIN_SHARE);
+    children[i].1 = grown;
+    children[j].1 = total - grown;
+    Some(true)
+}
+
+fn contains(node: &Node, pane: PaneId) -> bool {
+    match node {
+        Node::Pane(p) => *p == pane,
+        Node::Split { children, .. } => children.iter().any(|(c, _)| contains(c, pane)),
+    }
+}
+
+fn to_tree<T>(node: &Node, tab: &mut impl FnMut(PaneId) -> Option<T>) -> Option<Tree<T>> {
+    match node {
+        Node::Pane(p) => tab(*p).map(Tree::Pane),
+        Node::Split { axis, children } => {
+            let mut kept: Vec<(Tree<T>, f64)> = children
+                .iter()
+                .filter_map(|(c, share)| Some((to_tree(c, tab)?, *share)))
+                .collect();
+            let total: f64 = kept.iter().map(|(_, s)| s).sum();
+            for (_, s) in &mut kept {
+                *s /= total;
+            }
+            match kept.len() {
+                0 => None,
+                1 => kept.pop().map(|(t, _)| t),
+                _ => Some(Tree::Split {
+                    axis: *axis,
+                    children: kept,
+                }),
+            }
+        }
+    }
+}
+
+fn from_tree<T>(tree: Tree<T>, next_id: &mut PaneId, panes: &mut Vec<(PaneId, T)>) -> Node {
+    match tree {
+        Tree::Pane(item) => {
+            let id = *next_id;
+            *next_id += 1;
+            panes.push((id, item));
+            Node::Pane(id)
+        }
+        Tree::Split { axis, children } => {
+            let total: f64 = children.iter().map(|(_, s)| s.max(0.0)).sum();
+            let count = children.len() as f64;
+            let children: Vec<(Node, f64)> = children
+                .into_iter()
+                .map(|(c, share)| {
+                    // Saved shares that don't add up are made to, or shared out evenly.
+                    let share = if total > EPSILON {
+                        share.max(0.0) / total
+                    } else {
+                        1.0 / count
+                    };
+                    (from_tree(c, next_id, panes), share)
+                })
+                .collect();
+            if children.is_empty() {
+                let id = *next_id;
+                *next_id += 1;
+                return Node::Pane(id);
+            }
+            Node::Split { axis, children }
+        }
     }
 }
 
@@ -607,6 +875,157 @@ mod tests {
         layout.close(a);
         let b2 = layout.split(Axis::Vertical);
         assert_ne!(a, b2);
+    }
+
+    #[test]
+    fn resize_grows_the_focused_pane_and_shrinks_its_neighbour() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        assert!(layout.resize(Axis::Vertical, 0.1));
+        let widths: Vec<i32> = layout
+            .bounds(1000, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [400, 600], "the focused right pane is wider");
+        assert!(
+            !layout.resize(Axis::Horizontal, 0.1),
+            "no split runs that way"
+        );
+        assert!(layout.resize(Axis::Vertical, 5.0));
+        let widths: Vec<i32> = layout
+            .bounds(1000, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [100, 900], "the other pane keeps a little room");
+    }
+
+    #[test]
+    fn resize_finds_the_split_that_runs_the_right_way() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        layout.split(Axis::Horizontal);
+        // Taller within the right column, then wider against the left pane.
+        assert!(layout.resize(Axis::Horizontal, 0.2));
+        assert!(layout.resize(Axis::Vertical, -0.1));
+        assert_eq!(
+            layout.bounds(1000, 1000, 0),
+            [
+                (0, b(0, 0, 600, 1000)),
+                (1, b(600, 0, 400, 300)),
+                (2, b(600, 300, 400, 700)),
+            ]
+        );
+        assert!(!Layout::new().resize(Axis::Vertical, 0.1));
+    }
+
+    #[test]
+    fn a_layout_round_trips_through_a_tree() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below = layout.split(Axis::Horizontal);
+        layout.resize(Axis::Vertical, 0.1);
+        let tabs = |p: PaneId| {
+            Some(match p {
+                0 => "a",
+                p if p == right => "b",
+                p if p == below => "c",
+                _ => unreachable!(),
+            })
+        };
+        let tree = layout.tree(tabs).unwrap();
+        let (restored, panes) = Layout::from_tree(tree, |t| *t == "c");
+        assert_eq!(restored.bounds(1000, 1000, 2), layout.bounds(1000, 1000, 2));
+        let focused = panes
+            .iter()
+            .find(|(p, _)| *p == restored.focused())
+            .unwrap();
+        assert_eq!(focused.1, "c");
+        assert_eq!(
+            panes.iter().map(|(_, t)| *t).collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn panes_without_a_tab_are_left_out_of_the_tree() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below = layout.split(Axis::Horizontal);
+        let tree = layout.tree(|p| (p != below).then_some(p)).unwrap();
+        assert_eq!(
+            tree,
+            Tree::Split {
+                axis: Axis::Vertical,
+                children: vec![(Tree::Pane(0), 0.5), (Tree::Pane(right), 0.5)],
+            }
+        );
+        assert_eq!(
+            layout.tree(|p| (p == 0).then_some(p)),
+            None,
+            "one pane isn't a split"
+        );
+        assert_eq!(Layout::new().tree(Some), None);
+    }
+
+    #[test]
+    fn saved_shares_that_dont_add_up_are_fixed() {
+        let tree = Tree::Split {
+            axis: Axis::Vertical,
+            children: vec![(Tree::Pane('a'), 3.0), (Tree::Pane('b'), 1.0)],
+        };
+        let (layout, _) = Layout::from_tree(tree, |_| false);
+        let widths: Vec<i32> = layout
+            .bounds(800, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [600, 200]);
+        assert_eq!(layout.focused(), 0);
+    }
+
+    #[test]
+    fn borders_sit_between_panes_and_move_by_pixels() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        layout.split(Axis::Horizontal);
+        let borders = layout.borders(1000, 800, 6);
+        assert_eq!(
+            borders,
+            [
+                Border {
+                    id: ":0".into(),
+                    axis: Axis::Vertical,
+                    bounds: b(497, 0, 6, 800),
+                    extent: 1000,
+                },
+                Border {
+                    id: "1:0".into(),
+                    axis: Axis::Horizontal,
+                    bounds: b(500, 397, 500, 6),
+                    extent: 800,
+                },
+            ]
+        );
+        assert!(layout.move_border(":0", 100, 1000));
+        assert!(layout.move_border("1:0", -200, 800));
+        assert_eq!(
+            layout.bounds(1000, 800, 0),
+            [
+                (0, b(0, 0, 600, 800)),
+                (1, b(600, 0, 400, 200)),
+                (2, b(600, 200, 400, 600)),
+            ]
+        );
+        assert!(
+            layout.move_border(":0", 5000, 1000),
+            "it stops short of the edge"
+        );
+        assert_eq!(layout.bounds(1000, 800, 0)[0].1.width, 900);
+        assert!(!layout.move_border("1:1", 10, 800));
+        assert!(!layout.move_border("bad", 10, 800));
+        assert!(Layout::new().borders(1000, 800, 6).is_empty());
     }
 
     #[test]

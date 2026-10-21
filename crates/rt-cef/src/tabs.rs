@@ -437,10 +437,15 @@ pub fn show_current_in(window_id: u32, focus: bool) {
     };
     for (view, current, other_pane) in &views {
         View::from(view).set_visible(((*current && crashed.is_none()) || *other_pane).into());
+        if *other_pane {
+            // A lazily restored tab loads once it's on screen.
+            load_pending(view);
+        }
     }
     if let Some(notice) = &notice {
         View::from(notice).set_visible(crashed.is_some().into());
     }
+    crate::panes::show_crashes(window_id, &content);
     crate::panes::arrange(window_id);
     if !focus {
         return;
@@ -461,17 +466,24 @@ pub fn show_current_in(window_id: u32, focus: bool) {
 /// crashed and, if it's showing, put the crash notice in its place.
 pub fn renderer_gone(browser: &mut Browser, status: TerminationStatus, error_code: i32) {
     let reason = crate::ui::crash_reason(status.into());
-    let Some(Some((window, url, current))) = shell::with_tab(Some(browser), |s, index, _| {
-        let current = index == s.tabs.current_index();
-        let window = s.id;
-        let tab = s.tabs.get_mut(index)?;
-        tab.crashed = Some(reason.to_string());
-        tab.progress = None;
-        Some((window, tab.url.clone(), current))
-    }) else {
+    let Some(Some((window, url, current, in_pane))) =
+        shell::with_tab(Some(browser), |s, index, _| {
+            let current = index == s.tabs.current_index();
+            let window = s.id;
+            let in_pane = crate::panes::in_other_pane(s, &s.tabs.get(index)?.view);
+            let tab = s.tabs.get_mut(index)?;
+            tab.crashed = Some(reason.to_string());
+            tab.progress = None;
+            Some((window, tab.url.clone(), current, in_pane))
+        })
+    else {
         return;
     };
     tracing::warn!("the renderer for {url} ended: {reason} (code {error_code})");
+    if in_pane {
+        // Its pane shows the notice; the focus stays where it is.
+        show_current_in(window, false);
+    }
     if current {
         show_current_in(window, true);
         shell::show_message(
@@ -635,13 +647,23 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
     let old = if after_call {
         0
     } else {
-        shell::with(|s| s.tabs.len()).unwrap_or(0)
+        shell::with(|s| {
+            crate::panes::reset(s);
+            s.tabs.len()
+        })
+        .unwrap_or(0)
     };
     let lazy = shell::with(|s| s.engine.settings().bool("session.lazy_restore")).unwrap_or(false);
     let active = window.active.min(window.tabs.len() - 1);
     for &i in order.iter().skip(usize::from(call.is_some())) {
         let tab = &window.tabs[i];
-        let now = !lazy || i == active;
+        // Tabs in a saved pane are on screen at once, like the active one.
+        let now = !lazy
+            || i == active
+            || window
+                .splits
+                .as_ref()
+                .is_some_and(|s| crate::panes::shows(s, i));
         open(
             if now { &tab.url } else { "about:blank" },
             Position::Last,
@@ -670,7 +692,18 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
             }
         }
     });
-    switch_to(order.iter().position(|&i| i == active).unwrap_or(0), true);
+    let active = order.iter().position(|&i| i == active).unwrap_or(0);
+    if let Some(splits) = &window.splits {
+        shell::with(|s| {
+            crate::panes::restore(
+                s,
+                splits,
+                |saved| order.iter().position(|&i| i == saved),
+                active,
+            );
+        });
+    }
+    switch_to(active, true);
 }
 
 wrap_task! {

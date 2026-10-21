@@ -11,7 +11,7 @@ use std::path::Path;
 
 pub use history::{History, HistoryEntry};
 pub use marks::{Bookmarks, Quickmarks};
-pub use sessions::{Geometry, PageState, Session, Sessions, TabState, WindowState};
+pub use sessions::{Geometry, PageState, Session, Sessions, SplitState, TabState, WindowState};
 
 pub struct Storage {
     /// `None` if the database could not be opened; browsing still works.

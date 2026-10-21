@@ -149,6 +149,10 @@ pub struct WindowState {
     pub pane_tabs: Vec<(rt_core::split::PaneId, BrowserView)>,
     /// Behind the focused pane, showing through the gaps around it.
     pub pane_border: Option<Panel>,
+    /// Over each border between panes, to drag it: its id and view.
+    pub pane_handles: Vec<(String, BrowserView)>,
+    /// The crash notices over other panes' crashed tabs: (tab, notice).
+    pub pane_notices: Vec<(BrowserView, BrowserView)>,
     /// Closed tabs as (index, url), newest last, for `undo`.
     /// Closed tabs for `u`: index, URL and whether it was pinned.
     pub closed: Vec<(usize, String, bool)>,
@@ -231,6 +235,8 @@ impl WindowState {
             layout: rt_core::split::Layout::new(),
             pane_tabs: Vec::new(),
             pane_border: None,
+            pane_handles: Vec::new(),
+            pane_notices: Vec::new(),
             closed: Vec::new(),
             tabbar: None,
             row: None,
@@ -931,6 +937,18 @@ pub fn current_session() -> rt_storage::Session {
                     let mut state =
                         rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())?;
                     state.geometry = w.geometry();
+                    // `from_tabs` leaves out tabs without a URL; the panes follow.
+                    let saved: Vec<Option<usize>> = w
+                        .tabs
+                        .iter()
+                        .scan(0, |kept, t| {
+                            Some((!t.url.is_empty()).then(|| {
+                                *kept += 1;
+                                *kept - 1
+                            }))
+                        })
+                        .collect();
+                    state.splits = crate::panes::saved(w, |i| saved.get(i).copied().flatten());
                     Some(state)
                 })
                 .collect(),

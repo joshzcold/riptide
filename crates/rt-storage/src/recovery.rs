@@ -181,6 +181,7 @@ mod tests {
                     pinned: false,
                     ..Default::default()
                 }],
+                splits: None,
             }],
         }
     }

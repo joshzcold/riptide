@@ -30,6 +30,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:only` | `so` | Keep only the focused pane; the other panes' tabs stay open |
 | `:split-focus` | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` `sw` | Focus the pane to the left, below, above or to the right, or the next one: :split-focus left\|down\|up\|right\|next |
 | `:split-equal` | `s=` | Give every pane the same room |
+| `:split-resize` | `s+` `s-` `s<Greater>` `s<Less>` | Make the focused pane wider or taller by n percent of its split, or narrower or shorter with -n: :split-resize width\|height [+\|-]n |
 | `:tab-clone` |  | Duplicate the current tab: :tab-clone [-b] [-w] |
 | `:tab-give` | `gD` | Move the current tab to window N, or to a new window: :tab-give [N] |
 | `:tab-call` |  | Reopen the current tab in a call window, where screen sharing picks a tab, window or screen |

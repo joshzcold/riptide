@@ -218,7 +218,14 @@ fn missing_filter_lists_download_soon_after_startup() {
     b.wait_until("the list is downloaded without :adblock-update", |s| {
         s.message().is_some_and(|m| m.contains("rules from 1 list"))
     });
-    assert!(last_update(&b) > 0, "the download's time is kept");
+    let start = std::time::Instant::now();
+    while last_update(&b) == 0 {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the download's time isn't kept"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     b.open("adblock.html");
     b.wait_eval("document.title", "ads b=no a=yes");
 }
@@ -239,7 +246,15 @@ fn filter_lists_update_in_the_background_when_due() {
     std::fs::write(b.data_dir().join("adblock-last-update"), "1").unwrap();
     b.restart();
     wait_for_saved_list(&b, "second.example");
-    assert!(last_update(&b) > 1, "the update's time is kept");
+    // Kept once the lists have compiled, a little after they're saved.
+    let start = std::time::Instant::now();
+    while last_update(&b) <= 1 {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the update's time isn't kept"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
 
 #[test]

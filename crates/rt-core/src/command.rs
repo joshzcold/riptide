@@ -242,6 +242,12 @@ pub enum Command {
     SplitOnly,
     SplitFocus(PaneTarget),
     SplitEqual,
+    /// Grow the focused pane by `percent` of its split (negative shrinks
+    /// it); `width` side to side, else up and down.
+    SplitResize {
+        width: bool,
+        percent: i32,
+    },
     Undo,
     Hint(HintRequest),
     Yank(YankWhat),
@@ -816,6 +822,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Focus the pane to the left, below, above or to the right, or the next one: :split-focus left|down|up|right|next",
     ),
     spec("split-equal", "Give every pane the same room"),
+    spec(
+        "split-resize",
+        "Make the focused pane wider or taller by n percent of its split, or narrower or shorter with -n: :split-resize width|height [+|-]n",
+    ),
     spec(
         "tab-clone",
         "Duplicate the current tab: :tab-clone [-b] [-w]",
@@ -1470,6 +1480,19 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             ),
         }),
         "split-equal" => Command::SplitEqual,
+        "split-resize" => {
+            let width = match args.required("width or height")? {
+                "width" => true,
+                "height" => false,
+                other => return Err(args.error(format!("width or height, not {other}"))),
+            };
+            args.required("percent")?;
+            let percent = args.parse_last_int("percent")?;
+            Command::SplitResize {
+                width,
+                percent: percent.clamp(-100, 100) as i32,
+            }
+        }
         "tab-clone" => {
             let (mut background, mut window) = (false, false);
             while let Some(flag) = args.flag(&["-b", "--bg", "-w", "--window"]) {
@@ -2334,6 +2357,22 @@ mod tests {
         );
         assert!(parse("split-focus sideways").is_err());
         assert_eq!(parse("only").unwrap(), Command::SplitOnly);
+        assert_eq!(
+            parse("split-resize width +10").unwrap(),
+            Command::SplitResize {
+                width: true,
+                percent: 10
+            }
+        );
+        assert_eq!(
+            parse("split-resize height -5").unwrap(),
+            Command::SplitResize {
+                width: false,
+                percent: -5
+            }
+        );
+        assert!(parse("split-resize depth 5").is_err());
+        assert!(parse("split-resize width").is_err());
     }
 
     #[test]
@@ -2777,6 +2816,7 @@ mod tests {
     fn every_spec_parses() {
         let needs_args = [
             "split-focus",
+            "split-resize",
             "pack-add",
             "pack-load",
             "scroll",

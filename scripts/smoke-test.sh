@@ -57,6 +57,13 @@ cat >"$work/second.html" <<'EOF'
 <!doctype html><title>second</title>
 EOF
 
+cat >"$work/split.html" <<'EOF'
+<!doctype html><title>w=0</title><script>
+const show = () => { document.title = "w=" + innerWidth; };
+addEventListener("resize", show); show();
+</script>
+EOF
+
 cat >"$work/nav1.html" <<'EOF'
 <!doctype html><title>nav1</title><a href="nav2.html">Next »</a>
 EOF
@@ -161,7 +168,8 @@ c.window.title_format = "{mode}::{current_title}"
 c.content.blocking.adblock.update_interval = 0
 rt.bind("X", "open -t file://$work/second.html")
 EOF
-RT_LOG=${RT_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+# Keys, modes and where tabs are placed go in the log, for a failure's report.
+RT_LOG=${RT_LOG:-info,rt_cef::client=trace,rt_cef::shell=debug,rt_cef::panes=debug} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
@@ -261,6 +269,29 @@ else
     xdotool windowfocus --sync "$window"
 fi
 
+step "dragging the border between two splits resizes them"
+run "vsplit file://$work/split.html"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == w=* && $(page_title) != w=0 ]] && break; sleep 0.1; done
+before=$(page_title)
+# The border is in the middle of the page area, which starts below the tab bar.
+# Its handle is a page of its own, so the first drag may come before it's loaded.
+for _ in 1 2 3; do
+    xdotool mousemove --window "$window" 640 400 mousedown 1
+    for x in 600 540 480 440; do nap 0.05; xdotool mousemove --window "$window" "$x" 400; done
+    xdotool mouseup 1
+    for _ in $(seq 20); do [[ $(page_title) != "$before" ]] && break; nap 0.1; done
+    [[ $(page_title) != "$before" ]] && break
+done
+after=$(page_title)
+if [[ ${after#w=} -gt $(( ${before#w=} + 100 )) ]]; then
+    pass
+else
+    fail "the right pane went from $before to $after"
+fi
+run "only"
+run "tab-close"
+for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == second ]] && break; sleep 0.1; done
+
 step ":wq with several tabs saves and exits cleanly"
 run "set auto_save.session true"
 run "wq"
@@ -279,7 +310,9 @@ expect_exit
 
 if (( failures > 0 )); then
     echo "smoke-test: $failures check(s) failed; browser log:" >&2
-    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -vE "dbus|libva|vaapi|gpu" | tail -30 >&2
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -vE "dbus|libva|vaapi|gpu| key |placing tabs|mode changed|focusing" | tail -30 >&2
+    echo "smoke-test: the first keys, modes and tab placements:" >&2
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -E " key |placing tabs|mode changed|focusing" | head -60 >&2
     exit 1
 fi
 echo "smoke-test: all checks passed"

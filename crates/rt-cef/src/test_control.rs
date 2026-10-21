@@ -195,7 +195,16 @@ mod enabled {
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
                         "panes": panes,
+                        "split_handles": w
+                            .pane_handles
+                            .iter()
+                            .map(|(_, v)| {
+                                let b = cef::View::from(v).bounds();
+                                json!({ "x": b.x, "y": b.y, "width": b.width, "height": b.height })
+                            })
+                            .collect::<Vec<Value>>(),
                         "crash_notice": crash_notice,
+                        "pane_crash_notices": w.pane_notices.len(),
                     })
                 })
                 .collect();

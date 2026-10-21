@@ -39,6 +39,10 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     let b = Browser::start("page.html");
     let one = b.wait_until("one pane", |s| s.window().panes.len() == 1);
     let full = one.window().panes[0].bounds;
+    assert!(
+        full.width > 100 && full.height > 100,
+        "the first tab has a size: {full:?}"
+    );
     b.run(&format!("vsplit {}", b.url("second.html")));
     let s = b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
     let mut halves: Vec<_> = s.window().panes.iter().map(|p| p.bounds).collect();
@@ -54,6 +58,14 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     );
     assert!((left.width - right.width).abs() <= 1, "{halves:?}");
     assert_eq!(s.tabs().len(), 2);
+    // A handle to drag sits over the gap.
+    let s = b.wait_until("a handle", |s| s.window().split_handles.len() == 1);
+    let handle = s.window().split_handles[0];
+    assert!(
+        handle.x <= left.x + left.width && handle.x + handle.width >= right.x,
+        "{handle:?} {halves:?}"
+    );
+    assert_eq!(handle.height, full.height);
 }
 
 #[test]
@@ -109,8 +121,10 @@ fn sc_and_so_close_panes_but_keep_their_tabs() {
     let s = b.wait_until("two panes", |s| s.window().panes.len() == 2);
     assert_eq!(s.tabs().len(), 3, "the pane's tab stays open");
     assert_eq!(panes(&s), ["ready", "*second"]);
+    assert_eq!(s.window().split_handles.len(), 1);
     b.keys("so");
     let s = b.wait_until("one pane", |s| s.window().panes.len() == 1);
+    assert!(s.window().split_handles.is_empty());
     assert_eq!(s.tabs().len(), 3);
     assert_eq!(s.tab().title, "second");
 }
@@ -135,4 +149,75 @@ fn closing_a_panes_tab_shows_another_or_closes_the_pane() {
     b.wait_until("the pane shows the tab that wasn't on screen", |s| {
         s.tabs().len() == 2 && s.window().panes.len() == 2
     });
+}
+
+fn widths(s: &State) -> Vec<i32> {
+    let mut panes = s.window().panes.clone();
+    panes.sort_by_key(|p| (p.bounds.x, p.bounds.y));
+    panes.iter().map(|p| p.bounds.width).collect()
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn s_greater_and_s_minus_resize_the_focused_pane() {
+    let b = Browser::start("page.html");
+    b.run(&format!("vsplit {}", b.url("second.html")));
+    let s = b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
+    let before = widths(&s);
+    b.keys("s>");
+    b.wait_until("the right pane is wider", |s| {
+        let w = widths(s);
+        w.len() == 2 && w[1] > before[1] + 50 && w[0] < before[0] - 50
+    });
+    b.keys("s=");
+    b.wait_until("equal again", |s| widths(s) == before);
+    b.keys("s-");
+    b.wait_until("nothing runs up and down", |s| {
+        s.message().is_some_and(|m| m.contains("no neighbour"))
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn splits_come_back_with_the_session() {
+    let b = Browser::launch()
+        .toml(
+            "url.start_pages = [\"about:blank\"]\nauto_save.session = true\nsession.lazy_restore = true\n",
+        )
+        .start("page.html");
+    b.run(&format!("vsplit {}", b.url("second.html")));
+    b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
+    b.run(&format!("split {}", b.url("dialogs.html")));
+    b.wait_until("three panes", |s| {
+        panes(s) == ["ready", "second", "*dialogs"]
+    });
+    b.keys("s>");
+    b.keys("<Ctrl-h>");
+    let s = b.wait_until("the left pane, narrower", |s| {
+        let w = widths(s);
+        panes(s) == ["*ready", "second", "dialogs"] && w[0] < w[1]
+    });
+    let saved = widths(&s);
+    b.run("wq");
+    assert!(b.wait_exit().success());
+    let session = std::fs::read_to_string(b.data_dir().join("sessions/default.toml")).unwrap();
+    assert!(session.contains("[windows.splits]"), "{session}");
+
+    b.restart();
+    let s = b.wait_until("the panes are back", |s| {
+        panes(s) == ["*ready", "second", "dialogs"]
+    });
+    // With lazy restore, tabs load once they're on screen, in any pane.
+    for pane in &s.window().panes {
+        let url = s.window().tabs[pane.tab].url.clone();
+        let start = std::time::Instant::now();
+        while b.eval_tab(pane.tab, "location.href") != url {
+            assert!(start.elapsed() < rt_e2e::TIMEOUT, "{url} didn't load");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+    let restored = widths(&s);
+    for (a, b) in saved.iter().zip(&restored) {
+        assert!((a - b).abs() <= 2, "{saved:?} then {restored:?}");
+    }
 }
