@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  # cef-update.yml starts it on the branches of the pull requests it opens.
+  # To run it by hand on a branch.
   workflow_dispatch:
 
 permissions:

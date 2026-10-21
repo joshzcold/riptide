@@ -1,29 +1,35 @@
 name: cef update
 
 # Once a week, compare the pinned `cef` crate (Cargo.lock) with the newest
-# release on crates.io, and open a pull request that upgrades to it. A pull
-# request opened with GITHUB_TOKEN doesn't start other workflows, so this
-# starts check.yml on its branch; its results show on the pull request.
+# release on crates.io, and open a pull request that upgrades to it. It acts
+# as the riptide GitHub App (secrets CEF_UPDATE_APP_ID and CEF_UPDATE_APP_KEY),
+# since a pull request opened with GITHUB_TOKEN wouldn't start check.yml.
 on:
   schedule:
     - cron: '0 6 * * 2'
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
 
 jobs:
   update:
     name: upgrade to a new CEF
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.CEF_UPDATE_APP_ID }}
+          private-key: ${{ secrets.CEF_UPDATE_APP_KEY }}
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app.outputs.token }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Open a pull request for the newest cef crate
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
         run: |
           pinned=$(awk '/^name = "cef"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
           latest=$(curl -fsSL -H 'User-Agent: riptide-cef-update (github.com/joshzcold/riptide)' \
@@ -72,8 +78,9 @@ jobs:
           git diff --stat -- packaging/nix/source.nix
 
           subject="feat: update CEF to $build${chromium:+ (Chromium $chromium)}"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          bot="${APP_SLUG}[bot]"
+          git config user.name "$bot"
+          git config user.email "$(gh api "/users/$bot" --jq .id)+$bot@users.noreply.github.com"
           git switch -c "$branch"
           git commit -qam "$subject"
           git push -q origin "$branch"
@@ -90,4 +97,3 @@ jobs:
           Opened by the weekly \`cef-update\` workflow.
           EOF
           )"
-          gh workflow run check.yml --ref "$branch"
