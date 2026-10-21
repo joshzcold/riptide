@@ -293,6 +293,21 @@ function rt._sandbox(name, permissions, require_fn)
   return env
 end
 
+-- A trusted plugin's globals: the shared ones, read and written through,
+-- with an rt whose questions, floats, panels, pages and secrets are its own.
+function rt._trusted(name)
+  local own = ui_for(name)
+  local ui = setmetatable({
+    select = own.select,
+    input = own.input,
+    float = rt._float_for(name),
+    panel = rt._panel_for(name),
+    page = rt._page_for(name),
+  }, { __index = rt.ui })
+  local api = setmetatable({ ui = ui, secret = secret_for(name) }, { __index = rt, __newindex = rt })
+  return setmetatable({ rt = api }, { __index = _G, __newindex = _G })
+end
+
 -- Nobody changes the string methods for everyone else.
 getmetatable("").__metatable = false
 
@@ -1321,7 +1336,9 @@ pub fn load_plugin(
             return Ok(());
         }
         let env = if trusted {
-            lua.globals()
+            let api: mlua::Table = lua.globals().get("rt")?;
+            let trusted: mlua::Function = api.get("_trusted")?;
+            trusted.call::<mlua::Table>(name.as_str())?
         } else {
             let s = state.clone();
             let require = lua.create_function(move |lua, module: String| {
@@ -3154,7 +3171,11 @@ return M
         write("plugins/boom/plugin/boom.lua", "error('bad plugin')");
         write(
             "plugins/free/plugin/free.lua",
-            "rt.notify(io and rt.run and 'trusted' or 'sandboxed')",
+            r#"
+rt.notify(io and rt.run and 'trusted' or 'sandboxed')
+free_global = "shared"
+rt.secret.get("token", function() end)
+"#,
         );
         let dir_text = dir.display().to_string();
         write(
@@ -3168,6 +3189,7 @@ rt.pack.add({{
 }})
 assert(not pcall(require, "demo"))
 rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
+rt.command("seen", function() rt.notify(tostring(free_global)) end)
 "#
             ),
         );
@@ -3227,11 +3249,15 @@ rt.command("still", function() rt.keymap.set("normal", "zq", "reload") end)
         )
         .unwrap_err();
         assert!(error.starts_with("boom/plugin/boom.lua:1:"), "{error}");
+        // A trusted plugin shares the globals, but its secrets are its own.
         let free = specs[2].dir.clone().unwrap();
-        assert_eq!(
-            texts(load_plugin("free", &free, &none, true, &[], &ctx).unwrap()),
-            ["trusted"]
-        );
+        let loaded = load_plugin("free", &free, &none, true, &[], &ctx).unwrap();
+        assert!(loaded.iter().any(|a| matches!(
+            a,
+            Action::Secret { plugin, option, .. } if plugin == "free" && option == "token"
+        )));
+        assert_eq!(texts(loaded), ["trusted"]);
+        assert_eq!(texts(run_command("seen", "", &ctx).unwrap()), ["shared"]);
         // Permissions open what they name.
         let files = crate::plugins::Permissions {
             files: true,
