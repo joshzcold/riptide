@@ -482,8 +482,8 @@ wrap_window_delegate! {
                 layout.set_flex_for_view(Some(&mut row_view), 1);
             }
 
-            // All tab views share the content panel, which places them itself
-            // (`panes::arrange`): the current one fills it, or each pane has one.
+            // Experiment: a fill layout again, as before splits.
+            content.set_to_fill_layout();
             let mut content_view = View::from(&content);
             row.add_child_view(Some(&mut content_view));
             if let Some(layout) = row_layout {
