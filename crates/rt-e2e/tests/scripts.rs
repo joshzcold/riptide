@@ -33,6 +33,9 @@ fn hints_run_a_userscript_or_a_program_on_a_link() {
     b.follow_hint("hint links userscript us", |h| h.text.starts_with("next"));
     let out = b.wait_file(&b.scratch().join("us.out"));
     assert_eq!(out, format!("{nav2}|hints|{nav1}"));
+    // The FIFO is read once the userscript exits; its tab would take the open below.
+    let second = b.url("second.html");
+    b.wait_until("the FIFO's :open ran", |s| s.tab().is_loaded(&second));
 
     b.open("nav1.html");
     let hinted = b.scratch().join("hinted");
