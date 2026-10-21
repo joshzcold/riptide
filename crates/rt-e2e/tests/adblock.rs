@@ -241,3 +241,22 @@ fn filter_lists_update_in_the_background_when_due() {
     wait_for_saved_list(&b, "second.example");
     assert!(last_update(&b) > 1, "the update's time is kept");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn whitelisting_a_site_takes_its_scriptlets_back_from_open_tabs() {
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    let blocked = "constant=false aopr=aborted script=loaded image=loaded";
+    b.open("scriptlets.html");
+    b.wait_eval("document.title", blocked);
+    b.run("config-list-add content.blocking.whitelist 127.0.0.1");
+    b.run("reload");
+    b.wait_eval(
+        "document.title",
+        "constant=true aopr=read script=error image=error",
+    );
+    // And given again once it's off the whitelist.
+    b.run("config-list-remove content.blocking.whitelist 127.0.0.1");
+    b.run("reload");
+    b.wait_eval("document.title", blocked);
+}
