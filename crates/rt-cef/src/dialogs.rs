@@ -256,12 +256,12 @@ wrap_resource_request_handler! {
             }
             match crate::adblock::check(&url, &page, request.resource_type()) {
                 rt_adblock::Verdict::Block => {
-                    crate::adblock::count_blocked(browser.identifier());
+                    crate::adblock::count_blocked(browser.identifier(), &url);
                     return ReturnValue::CANCEL;
                 }
                 // Answered by `resource_handler` below.
                 rt_adblock::Verdict::Redirect(data_url) => {
-                    crate::adblock::count_blocked(browser.identifier());
+                    crate::adblock::count_blocked(browser.identifier(), &url);
                     crate::adblock::hold_stand_in(request.identifier(), data_url);
                 }
                 rt_adblock::Verdict::Rewrite(to) => request.set_url(Some(&CefString::from(to.as_str()))),

@@ -447,11 +447,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rt-stale-{}", std::process::id()));
         let path = dir.join("stale.sock");
         drop(Server::bind(&path).unwrap());
-        // Simulate a crash: the file exists but nobody listens.
-        std::os::unix::net::UnixListener::bind(&path)
+        // Simulate a crash: the file exists but nobody listens. A listener
+        // could live on briefly in a child another test is forking.
+        std::os::unix::net::UnixDatagram::bind(&path)
             .map(drop)
             .unwrap();
-        assert!(Server::bind(&path).is_ok());
+        Server::bind(&path).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
