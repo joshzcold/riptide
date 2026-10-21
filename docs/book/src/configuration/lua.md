@@ -97,6 +97,7 @@ An empty string hides the widget. What a widget function asks for besides its te
 | `insert_entered` | a text field takes focus and riptide enters insert mode | `url` |
 | `command` | a command runs: typed, bound to a key, from an alias or run by a script | `name`, `args` |
 | `command_before` | a command is about to run; a hook that returns `true` cancels it | `name`, `args`, `url` |
+| `key` | keys in normal mode that nothing is bound to; a hook that returns `true` keeps them from the page | `keys` (`x`, `gx`, `<Ctrl-x>`), `mode`, `url` |
 | `setting_changed` | a setting changes (`:set`, the settings page) | `name`, `value` (as text) |
 | `theme_changed` | the theme in use changes, by `ui.theme` or, with `ui.theme = "auto"`, the system's light or dark mode | `theme` |
 | `prompt_shown` | riptide asks a question | `topic` (`dialog`, `permission`, `login`, `download`, `certificate`, `confirm`), `title`, `message`, `url` |
@@ -117,6 +118,18 @@ An empty string hides the widget. What a widget function asks for besides its te
 rt.on("command_before", function(e)
   if e.name == "open" and e.args:find("news%.example") then
     rt.notify("Not before lunch")
+    return true
+  end
+end)
+```
+
+`key` hears the keys you press in normal mode that nothing is bound to: one key such as `x` or `<Ctrl-x>`, or a sequence such as `gx` when only its start is bound, whether or not `input.forward_unbound_keys` passes them to the page. The first hook that returns `true` keeps them from the page. A hook gets 50 ms, since it runs as you type, and a plugin needs the `keys` permission to use it:
+
+```lua
+-- Ctrl-s saves the session instead of reaching the page.
+rt.on("key", function(e)
+  if e.keys == "<Ctrl-s>" then
+    rt.run("session-save")
     return true
   end
 end)

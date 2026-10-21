@@ -352,6 +352,18 @@ pub fn spawned(callback: u32, result: &lua::SpawnResult) {
     carry_out(lua::spawned(callback, result, &context(None)));
 }
 
+/// Keys in normal mode that nothing is bound to: `key` hooks may keep them
+/// from the page. Returns whether one did.
+pub fn key_unbound(keys: &str) -> bool {
+    if !lua::has_hooks("key") {
+        return false;
+    }
+    let result = lua::key_unbound(keys, &context(None));
+    let kept = matches!(result, Ok((true, _)));
+    carry_out(result.map(|(_, actions)| actions));
+    kept
+}
+
 /// The engine's command filter: the `command_before` hooks. It runs while
 /// the shell is borrowed, so the hooks see only the URL, mode and count,
 /// and what they ask for (or fail with) is carried out afterwards.

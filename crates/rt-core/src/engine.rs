@@ -138,6 +138,8 @@ pub struct Engine {
     /// Asked before each command runs (name, args, the page's URL, the
     /// mode); true cancels it. The browser's `command_before` hooks.
     command_filter: Option<Box<CommandFilter>>,
+    /// The keys in normal mode that just matched no binding (see `take_unbound`).
+    unbound: Option<String>,
     completion_source: Option<completion::Source>,
     completion: Option<CompletionState>,
     hints: Option<HintSession>,
@@ -232,6 +234,7 @@ impl Engine {
             clipboard: None,
             primary: None,
             command_filter: None,
+            unbound: None,
             completion_source: None,
             completion: None,
             hints: None,
@@ -720,6 +723,12 @@ impl Engine {
     }
 
     /// Lets `{clipboard}` in commands read the system clipboard.
+    /// The keys, in normal mode, that just turned out to be bound to
+    /// nothing: one key or a sequence such as `gx`. Asking clears it.
+    pub fn take_unbound(&mut self) -> Option<String> {
+        self.unbound.take()
+    }
+
     pub fn set_command_filter(
         &mut self,
         filter: impl Fn(&str, &str, &str, Mode) -> bool + 'static,
@@ -1132,6 +1141,9 @@ impl Engine {
             Lookup::Partial => consumed(Vec::new()),
             Lookup::None => {
                 let had_prefix = self.pending.len() > 1 || self.count.is_some();
+                if mode == Mode::Normal {
+                    self.unbound = Some(self.pending.iter().map(Key::to_string).collect());
+                }
                 self.pending.clear();
                 self.count = None;
                 // Caret mode keeps every key; the page would scroll or type.
@@ -2234,6 +2246,27 @@ mod tests {
         let effects = e.execute_str("quit", None);
         assert!(effects.iter().any(|e| matches!(e, Effect::Run { .. })));
         assert!(asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn unbound_keys_in_normal_mode_are_noted() {
+        let mut e = engine();
+        press(&mut e, "x");
+        assert_eq!(e.take_unbound().as_deref(), Some("x"));
+        assert_eq!(e.take_unbound(), None, "asking clears it");
+        press(&mut e, "j");
+        assert_eq!(e.take_unbound(), None);
+        press(&mut e, "gx");
+        assert_eq!(
+            e.take_unbound().as_deref(),
+            Some("gx"),
+            "a sequence nothing is bound to"
+        );
+        press(&mut e, "<Ctrl-y>");
+        assert_eq!(e.take_unbound().as_deref(), Some("<Ctrl-y>"));
+        press(&mut e, "i");
+        press(&mut e, "x");
+        assert_eq!(e.take_unbound(), None, "insert mode types");
     }
 
     #[test]
