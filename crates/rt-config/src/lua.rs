@@ -268,7 +268,7 @@ function rt._sandbox(name, permissions, require_fn)
       end
     end
     local bind, set = api.bind, api.keymap.set
-    api.bind = function(keys, rhs, mode) only_functions(rhs) return bind(keys, rhs, mode) end
+    api.bind = function(keys, rhs, mode, pattern) only_functions(rhs) return bind(keys, rhs, mode, pattern) end
     api.keymap.set = function(mode, keys, rhs, opts) only_functions(rhs) return set(mode, keys, rhs, opts) end
   end
   -- Questions name the plugin asking. rt.page acts as this plugin, only with
@@ -416,7 +416,7 @@ local function modes_of(mode)
 end
 function rt.keymap.set(mode, keys, rhs, opts)
   for _, m in ipairs(modes_of(mode)) do
-    local command = rt.bind(keys, rhs, m)
+    local command = rt.bind(keys, rhs, m, opts and opts.pattern)
     if opts and opts.desc then rt._describe(command, opts.desc) end
   end
 end
@@ -739,6 +739,13 @@ pub enum Action {
     Spawn(SpawnRequest),
     /// `rt.bind` after loading: bind for this run only, never saved.
     Bind {
+        mode: Mode,
+        keys: String,
+        command: String,
+    },
+    /// `rt.keymap.set(…, { pattern })` after loading: for matching pages only.
+    BindFor {
+        pattern: String,
         mode: Mode,
         keys: String,
         command: String,
@@ -1929,8 +1936,19 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "bind",
         lua.create_function(
-            move |lua, (keys, command, mode): (String, Value, Option<String>)| {
+            move |lua,
+                  (keys, command, mode, pattern): (
+                String,
+                Value,
+                Option<String>,
+                Option<String>,
+            )| {
                 Key::parse_sequence(&keys).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                if pattern.as_deref().is_some_and(|p| p.trim().is_empty()) {
+                    return Err(mlua::Error::runtime(
+                        "rt.keymap.set: pattern is a URL pattern, e.g. \"*.example.com\"",
+                    ));
+                }
                 let mode = mode_arg(mode)?;
                 let command = match command {
                     Value::String(text) => text.to_str()?.to_string(),
@@ -1951,7 +1969,23 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     }
                 };
                 let mut state = s.borrow_mut();
-                if state.loaded {
+                if let Some(pattern) = pattern {
+                    if state.loaded {
+                        state.actions.push(Action::BindFor {
+                            pattern,
+                            mode,
+                            keys,
+                            command: command.clone(),
+                        });
+                    } else {
+                        state.ops.push(ConfigOp::BindFor {
+                            pattern,
+                            mode,
+                            keys,
+                            command: command.clone(),
+                        });
+                    }
+                } else if state.loaded {
                     // From a callback: the same as typing :bind.
                     state.actions.push(Action::Bind {
                         mode,

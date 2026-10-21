@@ -23,6 +23,13 @@ end)
 
 `rt.keymap.set(mode, keys, rhs, opts)` binds keys like `vim.keymap.set`: `mode` is one mode or a list, `rhs` a command line or a function, and `opts.desc` describes it in the key hints popup. `rt.keymap.del(mode, keys)` removes a binding. `rt.bind` and `rt.unbind` still work, and both also work inside callbacks.
 
+`opts.pattern` makes a binding for some sites only: on pages whose URL matches the pattern (as `rt.on` takes it), it wins over the usual binding for those keys, and elsewhere it does nothing. The Keys tab lists these under "On some sites".
+
+```lua
+rt.keymap.set("normal", "gp", function() rt.open(rt.url():gsub("/pull/%d+.*", "/pulls")) end,
+  { pattern = "*.github.com", desc = "The repository's pull requests" })
+```
+
 `rt.command(name, fn, opts)` takes a description, or a table with `desc` and `complete`. `complete` gets what's typed after the command and returns its completions, as strings or `{ name = "…", desc = "…" }`:
 
 ```lua

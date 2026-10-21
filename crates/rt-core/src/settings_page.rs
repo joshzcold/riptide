@@ -52,6 +52,18 @@ pub struct ModeKeys {
     pub bindings: Vec<Binding>,
     /// Default bindings that were unbound, as `[keys, command]`, to restore.
     pub removed: Vec<(String, String)>,
+    /// Bindings for some sites only (from Lua), in the order they were made.
+    pub site: Vec<SiteKey>,
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+pub struct SiteKey {
+    pub keys: String,
+    pub command: String,
+    pub pattern: String,
+    pub source: String,
+    /// As [`Binding::desc`].
+    pub desc: String,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -116,6 +128,16 @@ fn keys(keymap: &Keymap) -> Vec<ModeKeys> {
                     })
                     .collect(),
                 removed,
+                site: keymap
+                    .site_bindings(mode)
+                    .map(|b| SiteKey {
+                        keys: crate::key::format_sequence(&b.keys),
+                        desc: command_help(&b.command),
+                        command: b.command.clone(),
+                        pattern: b.pattern.clone(),
+                        source: b.source.clone(),
+                    })
+                    .collect(),
             }
         })
         .collect()

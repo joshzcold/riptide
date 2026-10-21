@@ -804,6 +804,23 @@ function renderKeys() {
   }
   section.append(card);
 
+  // Bindings for some sites only: made in Lua, so shown but not edited here.
+  const site = (mode.site || []).filter((b) => b.keys.startsWith(view.prefix)
+    && words.every((w) => `${b.keys} ${b.command} ${b.desc} ${b.source} ${b.pattern}`.toLowerCase().includes(w)));
+  if (site.length) {
+    section.append(el("div", "spacer"), el("h3", null, "On some sites"));
+    const siteCard = el("div", "card");
+    for (const b of site) {
+      const row = el("div", "keyrow");
+      const what = el("div", "what");
+      what.append(el("span", null, b.desc || b.command));
+      what.append(el("div", "desc", [`on ${b.pattern}`, b.source ? `from ${b.source}` : ""].filter(Boolean).join(" · ")));
+      row.append(keyChips(b.keys), what, el("div", "actions"));
+      siteCard.append(row);
+    }
+    section.append(siteCard);
+  }
+
   // Defaults that were unbound, to bring back.
   const removed = mode.removed.filter(([k, c]) => words.every((w) => `${k} ${c}`.toLowerCase().includes(w)));
   if (removed.length) {
@@ -1139,7 +1156,7 @@ function renderPlugins() {
       keys.append(el("div", "name", "Keys"));
       for (const k of plugin.keys) {
         const line = el("div", "desc");
-        line.append(keyChips(k.keys), k.desc ? ` ${k.desc}` : "", k.mode === "normal" ? "" : ` (${k.mode} mode)`);
+        line.append(keyChips(k.keys), k.desc ? ` ${k.desc}` : "", k.mode === "normal" ? "" : ` (${k.mode} mode)`, k.pattern ? ` on ${k.pattern}` : "");
         keys.append(line);
       }
       block.append(keys);

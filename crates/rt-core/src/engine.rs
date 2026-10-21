@@ -281,6 +281,12 @@ impl Engine {
                     .bind_from(*mode, keys, command, source)
                     .map_err(|e| e.to_string())
             }
+            ConfigOp::BindFor {
+                pattern,
+                mode,
+                keys,
+                command,
+            } => self.bind_for_from_lua(pattern, *mode, keys, command, source),
             ConfigOp::Unbind { mode, keys } => self
                 .keymap
                 .unbind(*mode, keys)
@@ -340,7 +346,7 @@ impl Engine {
         let blacklist = self.settings.list("keyhint.blacklist");
         let mut items: Vec<_> = self
             .keymap
-            .continuations(self.mode, &self.pending)
+            .continuations_at(self.mode, &self.pending, &self.url)
             .into_iter()
             .filter(|(rest, _)| {
                 let chain = format!("{prefix}{rest}");
@@ -927,7 +933,7 @@ impl Engine {
         } else {
             format!("{key} (as {mapped})")
         };
-        let binding = match self.keymap.lookup(Mode::Normal, &[mapped]) {
+        let binding = match self.keymap.lookup_at(Mode::Normal, &[mapped], &self.url) {
             Lookup::Exact(command) => format!("runs :{command}"),
             Lookup::Partial => "starts a key chain".to_string(),
             Lookup::None => "isn't bound".to_string(),
@@ -1075,7 +1081,7 @@ impl Engine {
         self.pending.push(key);
         self.partial_generation += 1;
         self.dirty = true;
-        match self.keymap.lookup(mode, &self.pending) {
+        match self.keymap.lookup_at(mode, &self.pending, &self.url) {
             Lookup::Exact(cmd) => {
                 let cmd = cmd.to_string();
                 let count = self.count.take();
@@ -1109,17 +1115,18 @@ impl Engine {
 
     fn handle_command(&mut self, key: Key) -> KeyOutcome {
         let before = self.cmdline.text().to_string();
-        let mut effects = if let Lookup::Exact(cmd) = self.keymap.lookup(Mode::Command, &[key]) {
-            let cmd = cmd.to_string();
-            self.execute_str(&cmd, None)
-        } else {
-            if let Some(c) = key.text() {
-                self.cmdline.insert(c);
-                self.history.reset();
-                self.dirty = true;
-            }
-            Vec::new()
-        };
+        let mut effects =
+            if let Lookup::Exact(cmd) = self.keymap.lookup_at(Mode::Command, &[key], &self.url) {
+                let cmd = cmd.to_string();
+                self.execute_str(&cmd, None)
+            } else {
+                if let Some(c) = key.text() {
+                    self.cmdline.insert(c);
+                    self.history.reset();
+                    self.dirty = true;
+                }
+                Vec::new()
+            };
         // Search as you type.
         if self.mode == Mode::Command
             && self.settings.bool("search.incremental")
@@ -1140,7 +1147,7 @@ impl Engine {
     }
 
     fn handle_hint(&mut self, key: Key) -> KeyOutcome {
-        if let Lookup::Exact(cmd) = self.keymap.lookup(Mode::Hint, &[key]) {
+        if let Lookup::Exact(cmd) = self.keymap.lookup_at(Mode::Hint, &[key], &self.url) {
             let cmd = cmd.to_string();
             return consumed(self.execute_str(&cmd, None));
         }
@@ -1245,7 +1252,7 @@ impl Engine {
             }
             return consumed(effects);
         }
-        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+        if let Lookup::Exact(cmd) = self.keymap.lookup_at(self.mode, &[key], &self.url) {
             let cmd = cmd.to_string();
             return consumed(self.execute_str(&cmd, None));
         }
@@ -1260,7 +1267,7 @@ impl Engine {
 
     /// The key after `` ` `` or `'` names the mark; anything else cancels.
     fn handle_mark(&mut self, key: Key) -> KeyOutcome {
-        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+        if let Lookup::Exact(cmd) = self.keymap.lookup_at(self.mode, &[key], &self.url) {
             let cmd = cmd.to_string();
             return consumed(self.execute_str(&cmd, None));
         }
@@ -1285,7 +1292,7 @@ impl Engine {
 
     /// The key after `q` or `@` names the register; anything else cancels.
     fn handle_macro_register(&mut self, key: Key) -> KeyOutcome {
-        if let Lookup::Exact(cmd) = self.keymap.lookup(self.mode, &[key]) {
+        if let Lookup::Exact(cmd) = self.keymap.lookup_at(self.mode, &[key], &self.url) {
             let cmd = cmd.to_string();
             return consumed(self.execute_str(&cmd, None));
         }
@@ -1374,7 +1381,7 @@ impl Engine {
     }
 
     fn handle_passthrough(&mut self, key: Key) -> KeyOutcome {
-        match self.keymap.lookup(self.mode, &[key]) {
+        match self.keymap.lookup_at(self.mode, &[key], &self.url) {
             Lookup::Exact(cmd) => {
                 let cmd = cmd.to_string();
                 consumed(self.execute_str(&cmd, None))
@@ -1958,7 +1965,7 @@ impl Engine {
             }
         };
         let Some(command) = command else {
-            let text = match self.keymap.lookup(mode, &seq) {
+            let text = match self.keymap.lookup_at(mode, &seq, &self.url) {
                 Lookup::Exact(cmd) => format!("{keys} is bound to '{cmd}' in {mode} mode"),
                 _ => format!("{keys} is unbound in {mode} mode"),
             };
@@ -1995,6 +2002,22 @@ impl Engine {
         self.check_command(command)?;
         self.keymap
             .bind_from(mode, keys, command, source)
+            .map_err(|e| e.to_string())
+    }
+
+    /// [`Self::bind_from_lua`] for pages matching `pattern` only.
+    pub fn bind_for_from_lua(
+        &mut self,
+        pattern: &str,
+        mode: Mode,
+        keys: &str,
+        command: &str,
+        source: &str,
+    ) -> Result<(), String> {
+        self.check_command(command)
+            .map_err(|e| format!("{keys}: {e}"))?;
+        self.keymap
+            .bind_for(pattern, mode, keys, command, source)
             .map_err(|e| e.to_string())
     }
 

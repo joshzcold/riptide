@@ -19,6 +19,18 @@ pub struct Keymap {
     /// The command and source a binding from another source replaced. Kept
     /// through an unbind, so a lazy plugin's placeholder passes it on.
     replaced: HashMap<(Mode, Vec<Key>), (String, String)>,
+    /// Bindings for pages whose URL matches a pattern, in the order they were made.
+    site: Vec<SiteBinding>,
+}
+
+/// A binding that wins over the usual one while the page matches `pattern`.
+#[derive(Clone, Debug)]
+pub struct SiteBinding {
+    pub pattern: String,
+    pub mode: Mode,
+    pub keys: Vec<Key>,
+    pub command: String,
+    pub source: String,
 }
 
 impl Keymap {
@@ -222,6 +234,86 @@ impl Keymap {
             .unwrap_or_default();
         list.sort();
         list
+    }
+
+    /// Bind `keys` for pages matching `pattern` only; a later one for the
+    /// same pattern and keys replaces it.
+    pub fn bind_for(
+        &mut self,
+        pattern: &str,
+        mode: Mode,
+        keys: &str,
+        command: &str,
+        source: &str,
+    ) -> Result<(), KeyParseError> {
+        let keys = Key::parse_sequence(keys)?;
+        self.site
+            .retain(|b| !(b.pattern == pattern && b.mode == mode && b.keys == keys));
+        self.site.push(SiteBinding {
+            pattern: pattern.to_string(),
+            mode,
+            keys,
+            command: command.to_string(),
+            source: source.to_string(),
+        });
+        Ok(())
+    }
+
+    /// A mode's per-site bindings, in the order they were made.
+    pub fn site_bindings(&self, mode: Mode) -> impl Iterator<Item = &SiteBinding> {
+        self.site.iter().filter(move |b| b.mode == mode)
+    }
+
+    /// The per-site bindings that apply at `url`, the last made first.
+    fn site_at<'a, 'u>(
+        &'a self,
+        mode: Mode,
+        url: &'u str,
+    ) -> impl Iterator<Item = &'a SiteBinding> + use<'a, 'u> {
+        self.site
+            .iter()
+            .rev()
+            .filter(move |b| b.mode == mode && crate::url::pattern_matches(&b.pattern, url))
+    }
+
+    /// [`Self::continuations`], with the per-site bindings for `url`.
+    pub fn continuations_at(&self, mode: Mode, prefix: &[Key], url: &str) -> Vec<(String, String)> {
+        let mut list = self.continuations(mode, prefix);
+        let mut seen = Vec::new();
+        // The last made first, so an older one for the same keys doesn't win.
+        for b in self.site_at(mode, url) {
+            if b.keys.len() <= prefix.len() || !b.keys.starts_with(prefix) {
+                continue;
+            }
+            let rest = format_sequence(&b.keys[prefix.len()..]);
+            if seen.contains(&rest) {
+                continue;
+            }
+            match list.iter_mut().find(|(r, _)| *r == rest) {
+                Some(entry) => entry.1 = b.command.clone(),
+                None => list.push((rest.clone(), b.command.clone())),
+            }
+            seen.push(rest);
+        }
+        list.sort();
+        list
+    }
+
+    /// [`Self::lookup`] on a page at `url`: its per-site bindings win.
+    pub fn lookup_at(&self, mode: Mode, seq: &[Key], url: &str) -> Lookup<'_> {
+        if let Some(b) = self.site_at(mode, url).find(|b| b.keys == seq) {
+            return Lookup::Exact(&b.command);
+        }
+        match self.lookup(mode, seq) {
+            Lookup::None
+                if self
+                    .site_at(mode, url)
+                    .any(|b| b.keys.len() > seq.len() && b.keys.starts_with(seq)) =>
+            {
+                Lookup::Partial
+            }
+            found => found,
+        }
     }
 
     /// Bindings that start with `prefix` (and are longer), as `(the rest of
@@ -455,6 +547,49 @@ mod tests {
 
     fn seq(s: &str) -> Vec<Key> {
         Key::parse_sequence(s).unwrap()
+    }
+
+    #[test]
+    fn site_bindings_win_on_matching_pages() {
+        let mut map = Keymap::defaults();
+        map.bind_for("*.github.com", Mode::Normal, "zp", "reload", "config.lua")
+            .unwrap();
+        map.bind_for("*.github.com", Mode::Normal, "j", "scroll up", "config.lua")
+            .unwrap();
+        let gh = "https://github.com/joshzcold/riptide";
+        let other = "https://example.com/";
+        assert_eq!(
+            map.lookup_at(Mode::Normal, &seq("zp"), gh),
+            Lookup::Exact("reload")
+        );
+        assert_eq!(
+            map.lookup_at(Mode::Normal, &seq("j"), gh),
+            Lookup::Exact("scroll up")
+        );
+        assert_eq!(
+            map.lookup_at(Mode::Normal, &seq("j"), other),
+            Lookup::Exact("scroll down")
+        );
+        assert_eq!(map.lookup_at(Mode::Normal, &seq("zp"), other), Lookup::None);
+        // A per-site chain makes its first key a prefix there only.
+        assert_eq!(map.lookup_at(Mode::Normal, &seq("z"), gh), Lookup::Partial);
+        assert_eq!(map.lookup_at(Mode::Normal, &seq("z"), other), Lookup::None);
+        assert_eq!(
+            map.continuations_at(Mode::Normal, &seq("z"), gh),
+            [("p".to_string(), "reload".to_string())]
+        );
+        assert!(
+            map.continuations_at(Mode::Normal, &seq("z"), other)
+                .is_empty()
+        );
+        // The same pattern and keys again replace the first.
+        map.bind_for("*.github.com", Mode::Normal, "zp", "stop", "")
+            .unwrap();
+        assert_eq!(
+            map.lookup_at(Mode::Normal, &seq("zp"), gh),
+            Lookup::Exact("stop")
+        );
+        assert_eq!(map.site_bindings(Mode::Normal).count(), 2);
     }
 
     #[test]

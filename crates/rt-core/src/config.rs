@@ -20,6 +20,13 @@ pub enum ConfigOp {
         keys: String,
         command: String,
     },
+    /// A binding for pages matching a URL pattern (from Lua; never saved).
+    BindFor {
+        pattern: String,
+        mode: Mode,
+        keys: String,
+        command: String,
+    },
     Unbind {
         mode: Mode,
         keys: String,
