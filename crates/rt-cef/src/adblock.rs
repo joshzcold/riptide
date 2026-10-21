@@ -131,17 +131,19 @@ fn blocker_for(page: &str) -> Option<Arc<Blocker>> {
     state.blocker.clone()
 }
 
-/// Requests blocked on each tab's current page, by browser id. Counted on the
-/// IO thread, shown by the `blocked` status bar widget.
-static BLOCKED: std::sync::Mutex<std::collections::BTreeMap<i32, u32>> =
-    std::sync::Mutex::new(std::collections::BTreeMap::new());
+/// URLs blocked on each tab's current page, by browser id. Counted on the IO
+/// thread, shown by the `blocked` status bar widget. A set, since Chromium can
+/// request a blocked script twice (its preload scanner, then the parser).
+static BLOCKED: std::sync::Mutex<
+    std::collections::BTreeMap<i32, std::collections::BTreeSet<String>>,
+> = std::sync::Mutex::new(std::collections::BTreeMap::new());
 /// A status bar redraw is already on its way, so a burst of blocks makes one.
 static REDRAW_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// One more request blocked on `browser`'s page (any thread).
-pub fn count_blocked(browser: i32) {
+/// `url` was blocked on `browser`'s page (any thread).
+pub fn count_blocked(browser: i32, url: &str) {
     if let Ok(mut blocked) = BLOCKED.lock() {
-        *blocked.entry(browser).or_default() += 1;
+        blocked.entry(browser).or_default().insert(url.to_string());
     }
     if !REDRAW_PENDING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         let mut task = RedrawBlocked::new();
@@ -160,7 +162,7 @@ pub fn reset_blocked(browser: i32) {
 pub fn blocked(browser: i32) -> u32 {
     BLOCKED
         .lock()
-        .map(|b| b.get(&browser).copied().unwrap_or(0))
+        .map(|b| b.get(&browser).map_or(0, |urls| urls.len() as u32))
         .unwrap_or(0)
 }
 
