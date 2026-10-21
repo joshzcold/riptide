@@ -426,6 +426,7 @@ wrap_window_delegate! {
         /// Kept for when it's maximized, so a session saves the size it goes back to.
         fn on_window_bounds_changed(&self, window: Option<&mut Window>, new_bounds: Option<&Rect>) {
             let (Some(window), Some(bounds)) = (window, new_bounds) else { return };
+            crate::panes::arrange(self.id);
             if window.is_maximized() != 0 || window.is_minimized() != 0 || window.is_fullscreen() != 0 {
                 return;
             }

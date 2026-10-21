@@ -203,9 +203,35 @@ pub fn in_other_pane(w: &WindowState, view: &BrowserView) -> bool {
 /// notice) in the focused pane, the other panes' tabs in theirs, and every
 /// hidden tab over the whole page area, ready to be shown.
 pub fn arrange(window_id: u32) {
+    arrange_in(window_id, None);
+}
+
+thread_local! {
+    /// Placements put off because the page area had no size yet.
+    static WAITING: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// [`arrange`] in a page area of `size`, or the size it has now. One that
+/// has no size yet is tried again shortly, so the first tab isn't left 0×0.
+fn arrange_in(window_id: u32, size: Option<Rect>) {
+    let size = size.or_else(|| {
+        shell::with(|s| {
+            let w = s.windows.iter().find(|w| w.id == window_id)?;
+            w.content.as_ref().map(|c| View::from(c).bounds())
+        })
+        .flatten()
+    });
+    let Some(size) = size else { return };
+    if size.width <= 0 || size.height <= 0 {
+        if WAITING.get() < 200 {
+            WAITING.set(WAITING.get() + 1);
+            crate::client::later(50, move || arrange(window_id));
+        }
+        return;
+    }
+    WAITING.set(0);
     let Some(Some((content, tabs, notice, panes, focused))) = shell::with(|s| {
         let w = s.windows.iter().find(|w| w.id == window_id)?;
-        let size = w.content.as_ref().map(|c| View::from(c).bounds())?;
         let bounds = w.layout.bounds(size.width, size.height, GAP);
         let rect = |pane| {
             bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
@@ -278,13 +304,19 @@ pub fn arrange(window_id: u32) {
     if let Some(notice) = notice {
         View::from(&notice).set_bounds(Some(&focused));
     }
-    place_handles(window_id, &content, &focused, gap, accent);
+    place_handles(window_id, &content, &size, &focused, gap, accent);
 }
 
 /// Put a handle over each border between panes, made or removed as the
 /// borders come and go, and above the tab views so it gets the mouse.
-fn place_handles(window_id: u32, content: &Panel, focused: &Rect, gap: u32, accent: u32) {
-    let size = View::from(content).bounds();
+fn place_handles(
+    window_id: u32,
+    content: &Panel,
+    size: &Rect,
+    focused: &Rect,
+    gap: u32,
+    accent: u32,
+) {
     let Some(Some((borders, mut handles))) = shell::with(|s| {
         let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
         let borders = if w.layout.is_split() {
@@ -428,8 +460,8 @@ wrap_panel_delegate! {
     }
 
     impl ViewDelegate {
-        fn on_layout_changed(&self, _view: Option<&mut View>, _new_bounds: Option<&Rect>) {
-            arrange(self.window);
+        fn on_layout_changed(&self, _view: Option<&mut View>, new_bounds: Option<&Rect>) {
+            arrange_in(self.window, new_bounds.cloned());
         }
     }
 

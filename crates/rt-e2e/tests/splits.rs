@@ -39,6 +39,10 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     let b = Browser::start("page.html");
     let one = b.wait_until("one pane", |s| s.window().panes.len() == 1);
     let full = one.window().panes[0].bounds;
+    assert!(
+        full.width > 100 && full.height > 100,
+        "the first tab has a size: {full:?}"
+    );
     b.run(&format!("vsplit {}", b.url("second.html")));
     let s = b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
     let mut halves: Vec<_> = s.window().panes.iter().map(|p| p.bounds).collect();

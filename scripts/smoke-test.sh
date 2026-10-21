@@ -273,10 +273,14 @@ run "vsplit file://$work/split.html"
 for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == w=* && $(page_title) != w=0 ]] && break; sleep 0.1; done
 before=$(page_title)
 # The border is in the middle of the page area, which starts below the tab bar.
-xdotool mousemove --window "$window" 640 400 mousedown 1
-for x in 600 540 480 440; do nap 0.05; xdotool mousemove --window "$window" "$x" 400; done
-xdotool mouseup 1
-for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) != "$before" ]] && break; sleep 0.1; done
+# Its handle is a page of its own, so the first drag may come before it's loaded.
+for _ in 1 2 3; do
+    xdotool mousemove --window "$window" 640 400 mousedown 1
+    for x in 600 540 480 440; do nap 0.05; xdotool mousemove --window "$window" "$x" 400; done
+    xdotool mouseup 1
+    for _ in $(seq 20); do [[ $(page_title) != "$before" ]] && break; nap 0.1; done
+    [[ $(page_title) != "$before" ]] && break
+done
 after=$(page_title)
 if [[ ${after#w=} -gt $(( ${before#w=} + 100 )) ]]; then
     pass
