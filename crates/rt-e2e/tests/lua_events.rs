@@ -404,3 +404,59 @@ end)
     b.run(&format!("open {nav1}"));
     b.wait_until("nav1 loads", |s| s.tab().is_loaded(&nav1));
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn key_hooks_hear_unbound_keys_and_can_keep_them_from_the_page() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+local heard = 0
+rt.on("key", function(e)
+  heard = heard + 1
+  rt.message("unbound " .. e.keys .. " " .. heard)
+  return e.keys == "x"
+end)
+"#,
+        )
+        // Letters reach the page only with this.
+        .toml("messages.timeout = 0\ninput.forward_unbound_keys = \"all\"\n")
+        .start("page.html");
+    b.eval(
+        "window.typed = ''; addEventListener('keydown', (e) => { typed += e.key; document.title = 'typed=' + typed }); 'ok'",
+    );
+    // Chromium drops the first key a page gets after it loads.
+    let start = std::time::Instant::now();
+    while !b.eval("document.title").starts_with("typed=") {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "no key reached the page");
+        b.keys("e");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    b.eval("typed = ''; document.title = 'typed='; 'ok'");
+    b.keys("e");
+    b.wait_eval("document.title", "typed=e");
+    let before = b.wait_until("the hook heard it", |s| {
+        s.message().is_some_and(|m| m.starts_with("unbound e "))
+    });
+    let first: usize = before
+        .message()
+        .unwrap()
+        .rsplit(' ')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    b.keys("x");
+    b.wait_until("the hook heard x", |s| {
+        s.message()
+            .is_some_and(|m| m == format!("unbound x {}", first + 1))
+    });
+    // A bound key (j scrolls) isn't one of them.
+    b.keys("j");
+    b.keys("e");
+    b.wait_eval("document.title", "typed=ee");
+    b.wait_until("the hook heard e, but not j", |s| {
+        s.message()
+            .is_some_and(|m| m == format!("unbound e {}", first + 2))
+    });
+}

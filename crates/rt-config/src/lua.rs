@@ -309,6 +309,9 @@ function rt._sandbox(name, permissions, require_fn)
     if event == "command_before" and not permissions.commands then
       error("command_before needs the commands permission", 2)
     end
+    if event == "key" and not permissions.keys then
+      error("the key event needs the keys permission", 2)
+    end
     return on(event, opts, fn)
   end
   env.rt = api
@@ -633,6 +636,10 @@ pub const EVENTS: &[(&str, &str)] = &[
     (
         "command_before",
         "a command is about to run (name, args, url); a hook that returns true cancels it",
+    ),
+    (
+        "key",
+        "keys in normal mode that nothing is bound to (keys, e.g. x, gx or <Ctrl-x>; mode; url); a hook that returns true keeps them from the page",
     ),
     ("setting_changed", "a setting changed (name, value as text)"),
     (
@@ -1290,18 +1297,52 @@ pub fn command_before(
     args: &str,
     context: &Context,
 ) -> Result<(bool, Vec<Action>), String> {
+    cancellable("command_before", &[("name", name), ("args", args)], context)
+}
+
+/// How long `key` hooks get, since they run as you type.
+const KEY_LIMIT: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// Ask the `key` hooks about `keys`, unbound in normal mode: true if one
+/// keeps them from the page. What else they asked for comes back too.
+pub fn key_unbound(keys: &str, context: &Context) -> Result<(bool, Vec<Action>), String> {
+    cancellable_within(
+        KEY_LIMIT,
+        "key",
+        &[("keys", keys), ("mode", "normal")],
+        context,
+    )
+}
+
+/// Run `event`'s hooks with `fields` and the URL until one returns true.
+fn cancellable(
+    event: &str,
+    fields: &[(&str, &str)],
+    context: &Context,
+) -> Result<(bool, Vec<Action>), String> {
+    cancellable_within(CALLBACK_LIMIT, event, fields, context)
+}
+
+/// [`cancellable`], with its own time limit.
+fn cancellable_within(
+    limit: std::time::Duration,
+    event: &str,
+    fields: &[(&str, &str)],
+    context: &Context,
+) -> Result<(bool, Vec<Action>), String> {
     if RUNNING.with(std::cell::Cell::get) {
         return Ok((false, Vec::new()));
     }
     let cancelled = std::cell::Cell::new(false);
-    let actions = run_guarded(context, |lua, _| {
+    let actions = run_limited(limit, context, |lua, _| {
         let api: mlua::Table = lua.globals().get("rt")?;
         let dispatch: mlua::Function = api.get("_dispatch_cancel")?;
         let payload = lua.create_table()?;
-        payload.set("name", name)?;
-        payload.set("args", args)?;
+        for (key, value) in fields {
+            payload.set(*key, *value)?;
+        }
         payload.set("url", context.url.as_str())?;
-        cancelled.set(dispatch.call(("command_before", payload))?);
+        cancelled.set(dispatch.call((event, payload))?);
         Ok(())
     })?;
     Ok((cancelled.get(), actions))
@@ -3822,6 +3863,42 @@ assert(pcall(with.rt.on, "command_before", function() end))
             command_before("open", "fine.example", &ctx).unwrap(),
             (false, Vec::new())
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn key_hooks_keep_unbound_keys_from_the_page_and_need_the_keys_permission() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-key-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.on("key", function(e)
+  rt.message(e.keys .. " in " .. e.mode .. " on " .. e.url)
+  return e.keys == "<Ctrl-s>"
+end)
+local without = rt._sandbox("p", {}, require)
+assert(not pcall(without.rt.on, "key", function() end))
+local with = rt._sandbox("q", { keys = true }, require)
+assert(pcall(with.rt.on, "key", function() end))
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        assert!(has_hooks("key"));
+        let ctx = Context {
+            url: "https://example.com/".into(),
+            ..Context::default()
+        };
+        let (kept, actions) = key_unbound("<Ctrl-s>", &ctx).unwrap();
+        assert!(kept);
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::Message { text, .. }] if text == "<Ctrl-s> in normal on https://example.com/"
+        ));
+        assert!(!key_unbound("x", &ctx).unwrap().0);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
