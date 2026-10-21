@@ -134,10 +134,33 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                     PLUGIN_KEYS.with(|k| {
                         let mut k = k.borrow_mut();
                         let list = k.entry(source.to_string()).or_default();
-                        list.retain(|(m, key, _)| (*m, key.as_str()) != (mode, keys.as_str()));
-                        list.push((mode, keys, command));
+                        list.retain(|(m, key, _, p)| {
+                            p.is_some() || (*m, key.as_str()) != (mode, keys.as_str())
+                        });
+                        list.push((mode, keys, command, None));
                     });
                 }
+                _ => {}
+            },
+            Action::BindFor {
+                pattern,
+                mode,
+                keys,
+                command,
+            } => match shell::with(|s| {
+                s.engine
+                    .bind_for_from_lua(&pattern, mode, &keys, &command, &binding_source(source))
+            }) {
+                Some(Err(e)) => shell::show_message(Level::Error, format!("{source}: {keys}: {e}")),
+                Some(Ok(())) if source != "config.lua" => PLUGIN_KEYS.with(|k| {
+                    let mut k = k.borrow_mut();
+                    let list = k.entry(source.to_string()).or_default();
+                    list.retain(|(m, key, _, p)| {
+                        (*m, key.as_str(), p.as_deref())
+                            != (mode, keys.as_str(), Some(pattern.as_str()))
+                    });
+                    list.push((mode, keys, command, Some(pattern)));
+                }),
                 _ => {}
             },
             Action::Float { id, source, spec } => crate::float::show(id, source, spec),
@@ -182,7 +205,9 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 }
                 PLUGIN_KEYS.with(|k| {
                     for list in k.borrow_mut().values_mut() {
-                        list.retain(|(m, key, _)| (*m, key.as_str()) != (mode, keys.as_str()));
+                        list.retain(|(m, key, _, p)| {
+                            p.is_some() || (*m, key.as_str()) != (mode, keys.as_str())
+                        });
                     }
                 });
             }
@@ -268,8 +293,8 @@ fn binding_source(source: &str) -> String {
     }
 }
 
-/// A key a plugin bound: mode, keys and command.
-type PluginKey = (rt_core::Mode, String, String);
+/// A key a plugin bound: mode, keys, command, and the URL pattern of a per-site one.
+type PluginKey = (rt_core::Mode, String, String, Option<String>);
 
 thread_local! {
     /// The keys each plugin bound since the config last loaded.
@@ -295,12 +320,12 @@ pub fn plugin_keys(plugin: &str) -> Vec<serde_json::Value> {
             .get(plugin)
             .into_iter()
             .flatten()
-            .map(|(mode, keys, command)| {
+            .map(|(mode, keys, command, pattern)| {
                 // A function bound without a `desc` has nothing worth showing.
                 let what = lua::describe(command)
                     .or_else(|| (!command.starts_with("lua-call ")).then(|| command.clone()))
                     .unwrap_or_default();
-                serde_json::json!({ "mode": mode.name(), "keys": keys, "desc": what })
+                serde_json::json!({ "mode": mode.name(), "keys": keys, "desc": what, "pattern": pattern })
             })
             .collect()
     })

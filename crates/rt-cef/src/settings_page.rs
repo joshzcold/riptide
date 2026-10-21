@@ -39,6 +39,11 @@ fn data() -> Option<String> {
         let describe = |command: &str| {
             rt_config::lua::describe(command).unwrap_or_else(|| "A Lua function".into())
         };
+        for key in entries.keys.iter_mut().flat_map(|m| &mut m.site) {
+            if key.command.starts_with("lua-call ") {
+                key.desc = describe(&key.command);
+            }
+        }
         for binding in entries.keys.iter_mut().flat_map(|m| &mut m.bindings) {
             if binding.command.starts_with("lua-call ") {
                 binding.desc = describe(&binding.command);

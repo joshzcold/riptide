@@ -217,11 +217,13 @@ function rt.bind(keys, command, mode) end
 rt.keymap = {{}}
 
 ---Bind keys in one mode or several, as `vim.keymap.set`. `opts.desc` is shown
----in the key hints popup instead of the command.
+---in the key hints popup instead of the command. With `opts.pattern` (a URL
+---pattern, as `rt.on` takes), the binding is only for pages that match, and
+---wins over the usual one there.
 ---@param mode rt.Mode|rt.Mode[]
 ---@param keys string
 ---@param rhs string|fun()
----@param opts? {{ desc?: string }}
+---@param opts? {{ desc?: string, pattern?: string }}
 function rt.keymap.set(mode, keys, rhs, opts) end
 
 ---Remove a binding in one mode or several.

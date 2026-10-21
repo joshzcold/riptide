@@ -368,3 +368,35 @@ rt.pack.add({
          | zt: Take over · from plugin eager · replaces reload (config.toml)",
     );
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn per_site_keys_work_only_on_matching_pages_and_show_on_the_keys_tab() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.keymap.set("normal", "zp", function() rt.notify("site key") end, { pattern = "127.0.0.1", desc = "Only here" })
+"#,
+        )
+        .start("page.html");
+    b.keys("zp");
+    b.wait_until("the site's key ran", |s| s.message() == Some("site key"));
+
+    // Another host on the same server: the key isn't bound there.
+    let other = b.url("page.html").replace("127.0.0.1", "localhost");
+    b.run(&format!("open {other}"));
+    b.wait_until("the other host loads", |s| s.tab().is_loaded(&other));
+    b.run("clear-messages");
+    b.keys("zp");
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_ne!(b.state().message(), Some("site key"));
+
+    b.run("map z");
+    b.wait_until("the keys tab opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    b.wait_eval(
+        "[...document.querySelectorAll('.keyrow')].map((r) => r.querySelector('.seq').textContent + ': ' + r.querySelector('.what').textContent).join(' | ')",
+        "zp: Only hereon 127.0.0.1 · from config.lua",
+    );
+}
