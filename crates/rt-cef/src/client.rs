@@ -58,9 +58,6 @@ wrap_client! {
             Some(RtKeyboardHandler::new(self.role))
         }
 
-        fn focus_handler(&self) -> Option<FocusHandler> {
-            (self.role == Role::Tab).then(crate::panes::RtFocusHandler::new)
-        }
 
         fn display_handler(&self) -> Option<DisplayHandler> {
             (self.role == Role::Tab).then(RtDisplayHandler::new)
