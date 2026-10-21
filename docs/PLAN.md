@@ -86,7 +86,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - **Events** from the design not built yet: `key` (unhandled keys, with a way to swallow one) and a `command` hook before a command runs, which could cancel it (`command` fires after). Per-site keys (`rt.keymap.set(…, { site = … })`).
 - **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
 - **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.
-- **Trusted plugins and `rt.secret`:** trusted plugins run with the global `rt`, which has no plugin name, so they can't read secret options.
 
 ### Extensions (M28)
 

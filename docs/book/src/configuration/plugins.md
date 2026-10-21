@@ -36,7 +36,7 @@ A spec is a git URL, or a table:
 | `name` | Its name, which `require` uses; by default the URL's or folder's last part, without a `riptide-` prefix or a `.nvim`-style suffix. |
 | `opts` | Passed to `require(name).setup(opts)` once it loads. |
 | `config` | A function run once it loads, instead of `opts`. |
-| `trusted = true` | Skip the sandbox and give it everything, as Neovim does. Only for code you vouch for. |
+| `trusted = true` | Skip the sandbox and give it everything, as Neovim does: it shares `config.lua`'s globals. Its `rt.secret`, pages, floats and questions are still its own. Only for code you vouch for. |
 | `event`, `cmd`, `keys` | Load it only when needed; see below. |
 
 Plugins load after `config.lua` has run, so set them up with `opts` or `config` rather than calling `require` straight away.
