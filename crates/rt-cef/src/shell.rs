@@ -1104,7 +1104,6 @@ struct BarsChange {
 /// Push engine and tab state to the tab bar, status bar and completion overlay.
 /// Unchanged state is skipped, so this is cheap to call after every event.
 pub fn refresh_ui() {
-    crate::lua::remember_context();
     // Questions belong to their tab: the current tab's show, others wait.
     if let Some(effects) = with(|s| {
         let tab = s.current_browser().map(|b| b.identifier());

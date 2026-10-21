@@ -95,7 +95,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 | `commands` | run any riptide command (`rt.run`) and bind keys to command lines; this includes running programs |
 | `settings` | read and change your settings (`rt.get`, `rt.set`, `c`) |
 | `clipboard` | read and write the clipboard |
-| `keys` | hear the keys you press that aren't bound to anything (the `key` event), and keep them from the page |
+| `keys` | see every key you press |
 | `network = ["host", …]` | connect to these hosts |
 | `pages = ["*.example.com", …]` | type and fill logins into pages on these sites (`rt.page`); `["*"]` is every site |
 | `frames = ["host", …]` | show these sites inside its own pages |

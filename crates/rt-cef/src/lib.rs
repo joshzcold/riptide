@@ -153,7 +153,6 @@ wrap_browser_process_handler! {
             engine.set_clipboard_reader(clipboard::read);
             engine.set_primary_reader(clipboard::read_primary);
             engine.set_completion_source(storage::complete);
-            engine.set_command_check(lua::before_command);
             let mut errors = storage::open(&startup.paths);
             shell::install(shell::Shell::new(engine, startup.paths));
             scheme::install();

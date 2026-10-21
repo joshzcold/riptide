@@ -110,18 +110,11 @@ pub struct StatusView {
     pub message: Option<Message>,
 }
 
-/// Asked with a command's name and arguments before it runs; false cancels it.
-type CommandCheck = Box<dyn FnMut(&str, &str) -> bool>;
-
 /// The modal key-handling state machine. It has no knowledge of CEF.
 pub struct Engine {
     keymap: Keymap,
     /// Commands run since the browser last asked, for `rt.on("command")`.
     ran: Vec<(String, String)>,
-    /// Asked before each command runs (`name`, `args`); false cancels it.
-    command_check: Option<CommandCheck>,
-    /// The last key in normal mode matched no binding (see `take_unbound`).
-    unbound: bool,
     settings: Settings,
     mode: Mode,
     pending: Vec<Key>,
@@ -219,8 +212,6 @@ impl Engine {
         Self {
             keymap,
             ran: Vec::new(),
-            command_check: None,
-            unbound: false,
             settings: Settings::default(),
             mode: Mode::Normal,
             pending: Vec::new(),
@@ -1006,10 +997,6 @@ impl Engine {
                 });
             match result {
                 Ok(cmd) => {
-                    if !self.allowed(piece) {
-                        // A cancelled command stops the rest of its chain, as an error does.
-                        break;
-                    }
                     self.note_ran(piece);
                     self.execute(cmd, count, &mut effects)
                 }
@@ -1020,29 +1007,6 @@ impl Engine {
             }
         }
         effects
-    }
-
-    /// Whether the last key, in normal mode, was bound to nothing (and
-    /// didn't finish a longer key sequence); asking clears it.
-    pub fn take_unbound(&mut self) -> bool {
-        std::mem::take(&mut self.unbound)
-    }
-
-    /// Ask before each command runs, with its name and arguments; one the
-    /// check says no to doesn't run, and neither does the rest of its chain.
-    pub fn set_command_check(&mut self, check: impl FnMut(&str, &str) -> bool + 'static) {
-        self.command_check = Some(Box::new(check));
-    }
-
-    /// Whether the command check lets `piece` run. `lua-call` is how keys
-    /// reach Lua functions, so it isn't asked about.
-    fn allowed(&mut self, piece: &str) -> bool {
-        let piece = piece.trim_start_matches(':');
-        let (name, args) = piece.split_once(char::is_whitespace).unwrap_or((piece, ""));
-        match &mut self.command_check {
-            Some(check) if name != "lua-call" => check(name, args.trim()),
-            _ => true,
-        }
     }
 
     /// Keep `piece` for [`Engine::take_ran`]; `lua-call` is how keys reach Lua
@@ -1126,7 +1090,6 @@ impl Engine {
             Lookup::Partial => consumed(Vec::new()),
             Lookup::None => {
                 let had_prefix = self.pending.len() > 1 || self.count.is_some();
-                self.unbound = mode == Mode::Normal && !had_prefix;
                 self.pending.clear();
                 self.count = None;
                 // Caret mode keeps every key; the page would scroll or type.
@@ -3421,47 +3384,6 @@ mod tests {
             ]
         );
         assert!(e.take_ran().is_empty());
-    }
-
-    #[test]
-    fn unbound_keys_in_normal_mode_are_noted() {
-        let mut e = engine();
-        press(&mut e, "x");
-        assert!(e.take_unbound());
-        assert!(!e.take_unbound(), "asking clears it");
-        press(&mut e, "j");
-        assert!(!e.take_unbound());
-        press(&mut e, "gx");
-        assert!(
-            !e.take_unbound(),
-            "the end of a sequence that isn't bound isn't one key"
-        );
-        press(&mut e, "i");
-        press(&mut e, "x");
-        assert!(!e.take_unbound(), "insert mode types");
-    }
-
-    #[test]
-    fn the_command_check_can_cancel_a_command_and_the_rest_of_its_chain() {
-        let mut e = engine();
-        let asked = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let seen = asked.clone();
-        e.set_command_check(move |name, args| {
-            seen.borrow_mut().push(format!("{name} {args}"));
-            name != "reload"
-        });
-        let effects = e.execute_str("scroll down ;; reload ;; scroll up ;; lua-call 3", None);
-        let ran: Vec<Command> = effects
-            .into_iter()
-            .filter_map(|e| match e {
-                Effect::Run { command, .. } => Some(command),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(ran, [Command::Scroll(Direction::Down)]);
-        assert_eq!(*asked.borrow(), ["scroll down", "reload "]);
-        let ran = e.take_ran();
-        assert_eq!(ran, [("scroll".to_string(), "down".to_string())]);
     }
 
     #[test]

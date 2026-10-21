@@ -88,9 +88,7 @@ An empty string hides the widget. What a widget function asks for besides its te
 | `focus_gained`, `focus_lost` | a riptide window becomes, or stops being, the active window | |
 | `mode_changed` | the mode changes | `from`, `to` |
 | `insert_entered` | a text field takes focus and riptide enters insert mode | `url` |
-| `before_command` | a command is about to run | `name`, `args` |
 | `command` | a command runs: typed, bound to a key, from an alias or run by a script | `name`, `args` |
-| `key` | a key in normal mode isn't bound to anything | `key` (`x`, `<Ctrl-x>`) |
 | `setting_changed` | a setting changes (`:set`, the settings page) | `name`, `value` (as text) |
 | `theme_changed` | the theme in use changes, by `ui.theme` or, with `ui.theme = "auto"`, the system's light or dark mode | `theme` |
 | `prompt_shown` | riptide asks a question | `topic` (`dialog`, `permission`, `login`, `download`, `certificate`, `confirm`), `title`, `message`, `url` |
@@ -104,25 +102,6 @@ An empty string hides the widget. What a widget function asks for besides its te
 - `group`: a name, so `rt.off(group)` removes them all.
 
 `command` fires after the command runs, for each command in a `;;` chain, and a key reports the command it's bound to (`:` is `cmd-set-text :`). A `command` hook that runs commands itself runs again for them.
-
-A `before_command` or `key` hook that returns `false` cancels: the command doesn't run, and neither does the rest of its `;;` chain, or the key doesn't reach the page. Every hook still hears the event. What a `before_command` hook asks for, such as `rt.run`, happens just after. A plugin needs the `keys` permission for `key`:
-
-```lua
--- No quitting with more than five tabs open (aliases like :qa arrive as quit).
-rt.on("before_command", function(e)
-  if e.name == "quit" and #rt.tabs() > 5 then
-    rt.message("More than five tabs are open; close some first", "warning")
-    return false
-  end
-end)
--- Keep Ctrl-s from the page; save the session instead.
-rt.on("key", function(e)
-  if e.key == "<Ctrl-s>" then
-    rt.run("session-save")
-    return false
-  end
-end)
-```
 
 `rt.on` returns an id for `rt.off(id)`. `rt.group(name, { clear = true })` removes the group's hooks and returns its name, so a script that runs again (`:config-source`) doesn't add its hooks twice:
 
