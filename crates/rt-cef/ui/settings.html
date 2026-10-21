@@ -96,6 +96,8 @@
   .card > .keyrow:first-child { border-top: none; }
   .keyrow.changed { box-shadow: inset 3px 0 0 var(--accent); }
   .keyrow .seq { display: flex; gap: .2rem; flex-wrap: wrap; }
+  .keyrow .what { min-width: 0; }
+  .keyrow .what input { width: 100%; }
   .keyrow input { width: 100%; font-family: var(--mono); font-size: .9em; }
   .keyrow .actions { display: flex; gap: .3rem; align-items: center; }
   .addform { padding: .8rem 1rem; display: grid; grid-template-columns: minmax(8rem, 13rem) auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; }
@@ -499,8 +501,9 @@ function preview() {
 }
 
 let observer = null;
-// Which tab of the page shows: settings, or keys (with the mode picked).
-const view = { name: "settings", mode: "normal" };
+// Which tab of the page shows: settings, or keys (with the mode picked, and
+// the start of the keys to show from :map).
+const view = { name: "settings", mode: "normal", prefix: "" };
 function render() {
   draw();
   markCursor();
@@ -705,6 +708,11 @@ function renderKeys() {
   const section = el("section");
   const h2 = el("h2");
   h2.append(icon("keys"), `${mode.mode} mode`);
+  if (view.prefix) {
+    const all = el("a", null, "show all");
+    all.href = `#keys/${mode.mode}`;
+    h2.append(el("span", "note", ` keys starting with ${view.prefix} · `), all);
+  }
   section.append(h2, el("p", "blurb", "Type keys in riptide's notation (gx, <Ctrl-y>, <Space>) or press Record and the keys. Changes are saved in autoconfig.toml, like :bind."));
   if (errors.has("keys")) section.append(el("div", "banner", errors.get("keys")));
 
@@ -752,7 +760,8 @@ function renderKeys() {
   // The bindings, filtered.
   const visible = mode.bindings.filter((b) => {
     if (changedOnly.checked && !changedRow(b)) return false;
-    const hay = `${b.keys} ${b.command}`.toLowerCase();
+    if (!b.keys.startsWith(view.prefix)) return false;
+    const hay = `${b.keys} ${b.command} ${b.desc} ${b.source}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
   const card = el("div", "card");
@@ -777,7 +786,11 @@ function renderKeys() {
     remove.setAttribute("aria-label", `Unbind ${b.keys}`);
     remove.addEventListener("click", () => unbind(mode.mode, b.keys));
     actions.append(remove);
-    row.append(keyChips(b.keys), command, actions);
+    const what = el("div", "what");
+    const about = [b.desc, b.source && b.source !== "default" ? `from ${b.source}` : ""].filter(Boolean).join(" · ");
+    what.append(command);
+    if (about) what.append(el("div", "desc", about));
+    row.append(keyChips(b.keys), what, actions);
     card.append(row);
   }
   if (!visible.length) {
@@ -1314,11 +1327,11 @@ function renderExtensions() {
   if (focused) list.querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus();
 }
 
-// #settings, #keys, #keys/<mode>, #sites, #plugins or #extensions, or a place in one of them:
+// #settings, #keys, #keys/<mode>, #keys/<mode>/<keys> (:map), #sites, #plugins or #extensions, or a place in one of them:
 // #section-<id> (settings) or #site-<n> (sites).
 function route() {
   const hash = location.hash.slice(1);
-  const [name, mode] = hash.split("/");
+  const [name, mode, ...filter] = hash.split("/");
   const anchor = /^(section|site|plugin|extension)-/.test(name) ? name : null;
   const before = view.name;
   if (name === "sites" || name.startsWith("site-")) {
@@ -1330,6 +1343,7 @@ function route() {
   } else if (name === "keys") {
     view.name = "keys";
     if (mode) view.mode = mode;
+    view.prefix = decodeURIComponent(filter.join("/"));
   } else {
     view.name = "settings";
   }

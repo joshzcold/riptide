@@ -522,8 +522,14 @@ pub fn apply_config(loaded: rt_config::Loaded) -> Vec<String> {
         s.engine.reset_config();
         s.engine.set_user_commands(user_commands);
         let mut errors = loaded.errors;
-        for op in &loaded.ops {
-            if let Err(e) = s.engine.apply_config(op) {
+        for (op, file) in loaded.ops.iter().zip(&loaded.op_files) {
+            // Bindings saved in autoconfig.toml were made with :bind or the Keys tab.
+            let source = if *file == "autoconfig.toml" {
+                ":bind"
+            } else {
+                file
+            };
+            if let Err(e) = s.engine.apply_config_from(op, source) {
                 errors.push(e);
             }
         }

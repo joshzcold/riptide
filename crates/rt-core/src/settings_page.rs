@@ -61,6 +61,28 @@ pub struct Binding {
     pub command: String,
     /// The default command for these keys, if there is one.
     pub default: Option<String>,
+    /// Where the binding came from: `default`, `config.toml`, `config.lua`,
+    /// `:bind` or `plugin <name>`; empty if unknown.
+    pub source: String,
+    /// What it does: the command's one-line help. The browser fills in a Lua
+    /// function's `desc`.
+    pub desc: String,
+}
+
+/// The one-line help of a binding's (first) command, without its usage.
+fn command_help(command: &str) -> String {
+    let name = command.split_whitespace().next().unwrap_or_default();
+    crate::command::COMMANDS
+        .iter()
+        .find(|c| c.name == name)
+        .map(|c| {
+            c.description
+                .split(": :")
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .unwrap_or_default()
 }
 
 /// Every mode's bindings, compared with the defaults.
@@ -82,6 +104,8 @@ fn keys(keymap: &Keymap) -> Vec<ModeKeys> {
                     .into_iter()
                     .map(|(keys, command)| Binding {
                         default: default.get(&keys).cloned(),
+                        source: keymap.source(mode, &keys).to_string(),
+                        desc: command_help(&command),
                         keys,
                         command,
                     })
@@ -268,7 +292,9 @@ mod tests {
         keymap
             .bind(Mode::Normal, "gg", "scroll-to-perc 50")
             .unwrap();
-        keymap.bind(Mode::Normal, "<Ctrl-y>", "reload").unwrap();
+        keymap
+            .bind_from(Mode::Normal, "<Ctrl-y>", "reload", "plugin foo")
+            .unwrap();
         keymap.unbind(Mode::Normal, "d").unwrap();
         let modes = keys(&keymap);
         assert_eq!(modes.len(), Mode::ALL.len());
@@ -277,6 +303,10 @@ mod tests {
         assert_eq!(find("gg").command, "scroll-to-perc 50");
         assert_eq!(find("gg").default.as_deref(), Some("scroll-to-perc 0"));
         assert_eq!(find("<Ctrl-y>").default, None);
+        assert_eq!(find("<Ctrl-y>").source, "plugin foo");
+        assert_eq!(find("<Ctrl-y>").desc, "Reload the current page");
+        assert_eq!(find("j").source, "default");
+        assert_eq!(find("gg").source, "");
         assert!(normal.bindings.iter().all(|b| b.keys != "d"));
         assert!(normal.removed.iter().any(|(k, _)| k == "d"));
     }
