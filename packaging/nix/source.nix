@@ -75,6 +75,7 @@ assert lib.assertMsg
 
 rustPlatform.buildRustPackage {
   pname = "riptide";
+  __structuredAttrs = true;
   version = (builtins.fromTOML (builtins.readFile (src + "/Cargo.toml"))).workspace.package.version;
   inherit src;
 
