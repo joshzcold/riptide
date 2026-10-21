@@ -73,6 +73,9 @@ pub struct WindowState {
     pub split_handles: Vec<Bounds>,
     /// The notice shown in place of a crashed tab is on screen.
     pub crash_notice: bool,
+    /// Crash notices over crashed tabs in panes other than the focused one.
+    #[serde(default)]
+    pub pane_crash_notices: usize,
 }
 
 /// A split pane: the tab it shows and where it is in the page area.

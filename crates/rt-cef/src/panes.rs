@@ -230,7 +230,7 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         return;
     }
     WAITING.set(0);
-    let Some(Some((content, tabs, notice, panes, focused))) = shell::with(|s| {
+    let Some(Some((content, tabs, notice, panes, focused, pane_notices))) = shell::with(|s| {
         let w = s.windows.iter().find(|w| w.id == window_id)?;
         let bounds = w.layout.bounds(size.width, size.height, GAP);
         let rect = |pane| {
@@ -266,12 +266,21 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
                 (t.view.clone(), place)
             })
             .collect();
+        let pane_notices: Vec<(BrowserView, Rect)> = w
+            .pane_notices
+            .iter()
+            .filter_map(|(tab, notice)| {
+                let pane = w.pane_tabs.iter().find(|(_, v)| same(v, tab))?.0;
+                Some((notice.clone(), rect(pane)?))
+            })
+            .collect();
         Some((
             w.content.clone()?,
             tabs,
             w.crash_notice.clone(),
             w.layout.is_split(),
             focused,
+            pane_notices,
         ))
     }) else {
         return;
@@ -303,6 +312,9 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
     }
     if let Some(notice) = notice {
         View::from(&notice).set_bounds(Some(&focused));
+    }
+    for (notice, rect) in &pane_notices {
+        View::from(notice).set_bounds(Some(rect));
     }
     place_handles(window_id, &content, &size, &focused, gap, accent);
 }
@@ -410,6 +422,90 @@ pub fn drop_border() {
     if let Some(Some(view)) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())) {
         View::from(&view).request_focus();
     }
+}
+
+/// Cover each other pane's crashed tab with a crash notice of its own, as
+/// the focused pane's is (`tabs::show_current_in`), and drop notices whose
+/// tab is back or off screen.
+pub fn show_crashes(window_id: u32, content: &Panel) {
+    let Some(Some((crashed, mut notices))) = shell::with(|s| {
+        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
+        let crashed: Vec<(BrowserView, String)> = w
+            .tabs
+            .iter()
+            .filter(|t| in_other_pane(w, &t.view))
+            .filter_map(|t| {
+                Some((
+                    t.view.clone(),
+                    crate::ui::crashed_url(&t.url, t.crashed.as_deref()?),
+                ))
+            })
+            .collect();
+        Some((crashed, std::mem::take(&mut w.pane_notices)))
+    }) else {
+        return;
+    };
+    let mut kept = Vec::new();
+    for (tab, url) in crashed {
+        View::from(&tab).set_visible(0);
+        let notice = match notices.iter().position(|(t, _)| same(t, &tab)) {
+            Some(i) => {
+                let (_, notice) = notices.remove(i);
+                if let Some(frame) = notice.browser().and_then(|b| b.main_frame()) {
+                    frame.load_url(Some(&CefString::from(url.as_str())));
+                }
+                notice
+            }
+            None => {
+                let Some(notice) =
+                    crate::window::create_browser_view(crate::client::Role::Crashed, &url)
+                else {
+                    continue;
+                };
+                content.add_child_view(Some(&mut View::from(&notice)));
+                notice
+            }
+        };
+        View::from(&notice).set_visible(1);
+        kept.push((tab, notice));
+    }
+    for (_, gone) in notices {
+        content.remove_child_view(Some(&mut View::from(&gone)));
+    }
+    shell::with(|s| {
+        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
+            w.pane_notices = kept;
+        }
+    });
+}
+
+/// Where the focused pane is in window `window_id`, in window coordinates,
+/// for things that belong over its page, such as an extension's popup.
+pub fn focused_area(window_id: u32) -> Option<Rect> {
+    let (content, pane) = shell::with(|s| {
+        let w = s.windows.iter().find(|w| w.id == window_id)?;
+        let content = w.content.clone()?;
+        let size = View::from(&content).bounds();
+        let pane = w
+            .layout
+            .bounds(size.width, size.height, GAP)
+            .into_iter()
+            .find(|(p, _)| *p == w.layout.focused())
+            .map(|(_, b)| b)?;
+        Some((content, pane))
+    })
+    .flatten()?;
+    let mut origin = Point {
+        x: pane.x,
+        y: pane.y,
+    };
+    View::from(&content).convert_point_to_window(Some(&mut origin));
+    Some(Rect {
+        x: origin.x,
+        y: origin.y,
+        width: pane.width,
+        height: pane.height,
+    })
 }
 
 /// The window's pane border, below every tab view, made on first use.
