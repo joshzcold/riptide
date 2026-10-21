@@ -45,6 +45,10 @@ commit_preprocessors = [
     { pattern = '([^\s`]*<[\w-]+>[^\s`]*)', replace = "`${1}`" },
 ]
 commit_parsers = [
+    # Left out by hand: a feature reverted before it shipped, and a fix that landed twice.
+    { sha = "4b5e4583a634d70673b8f620b55e05be4c715caf", skip = true },
+    { sha = "4bde788f96001d11d8a717ee5b44dac44ae413c3", skip = true },
+    { sha = "2c8282f71c547efc53ff03a7112935cebf6367fb", skip = true },
     { message = "^feat", group = "<!-- 0 -->Features" },
     { message = "^fix", group = "<!-- 1 -->Bug fixes" },
     { message = "^perf", group = "<!-- 2 -->Performance" },
