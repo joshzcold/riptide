@@ -67,6 +67,8 @@ pub struct Binding {
     /// What it does: the command's one-line help. The browser fills in a Lua
     /// function's `desc`.
     pub desc: String,
+    /// The binding from another source this one replaced: `[command, source]`.
+    pub replaces: Option<(String, String)>,
 }
 
 /// The one-line help of a binding's (first) command, without its usage.
@@ -106,6 +108,9 @@ fn keys(keymap: &Keymap) -> Vec<ModeKeys> {
                         default: default.get(&keys).cloned(),
                         source: keymap.source(mode, &keys).to_string(),
                         desc: command_help(&command),
+                        replaces: keymap
+                            .replaced(mode, &keys)
+                            .map(|(c, s)| (c.to_string(), s.to_string())),
                         keys,
                         command,
                     })
@@ -307,6 +312,11 @@ mod tests {
         assert_eq!(find("<Ctrl-y>").desc, "Reload the current page");
         assert_eq!(find("j").source, "default");
         assert_eq!(find("gg").source, "");
+        assert_eq!(
+            find("gg").replaces,
+            Some(("scroll-to-perc 0".into(), "default".into()))
+        );
+        assert_eq!(find("j").replaces, None);
         assert!(normal.bindings.iter().all(|b| b.keys != "d"));
         assert!(normal.removed.iter().any(|(k, _)| k == "d"));
     }

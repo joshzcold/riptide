@@ -761,7 +761,7 @@ function renderKeys() {
   const visible = mode.bindings.filter((b) => {
     if (changedOnly.checked && !changedRow(b)) return false;
     if (!b.keys.startsWith(view.prefix)) return false;
-    const hay = `${b.keys} ${b.command} ${b.desc} ${b.source}`.toLowerCase();
+    const hay = `${b.keys} ${b.command} ${b.desc} ${b.source} ${b.replaces?.join(" ") ?? ""}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
   const card = el("div", "card");
@@ -787,7 +787,11 @@ function renderKeys() {
     remove.addEventListener("click", () => unbind(mode.mode, b.keys));
     actions.append(remove);
     const what = el("div", "what");
-    const about = [b.desc, b.source && b.source !== "default" ? `from ${b.source}` : ""].filter(Boolean).join(" · ");
+    const about = [
+      b.desc,
+      b.source && b.source !== "default" ? `from ${b.source}` : "",
+      b.replaces ? `replaces ${b.replaces[0]} (${b.replaces[1]})` : "",
+    ].filter(Boolean).join(" · ");
     what.append(command);
     if (about) what.append(el("div", "desc", about));
     row.append(keyChips(b.keys), what, actions);
