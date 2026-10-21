@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use cef::*;
+use rt_config::lua::PagePlace;
 use rt_config::plugins::Permissions;
 use rt_core::engine::Level;
 
@@ -197,6 +198,7 @@ pub fn send(source: &str, id: u32, name: &str, json: &str) {
     frames.extend(
         crate::panel::page_frames()
             .into_iter()
+            .chain(crate::popup::page_frame())
             .filter(|(url, _)| is_page(url, source, id))
             .map(|(_, frame)| frame),
     );
@@ -211,9 +213,12 @@ pub fn send(source: &str, id: u32, name: &str, json: &str) {
     }
 }
 
-/// `page:close()`: close its panel, or the tabs showing it.
+/// `page:close()`: close its panel or float, or the tabs showing it.
 pub fn close(source: &str, id: u32) {
     crate::panel::close(PANEL_IDS | id, true);
+    if crate::popup::page_frame().is_some_and(|(url, _)| is_page(&url, source, id)) {
+        crate::popup::close();
+    }
     let tabs: Vec<usize> = shell::with(|s| {
         s.tabs
             .iter()
@@ -228,8 +233,8 @@ pub fn close(source: &str, id: u32) {
     }
 }
 
-/// `rt.ui.page`: open page `id` of plugin `source` in a tab, or in a panel.
-pub fn open(source: &str, id: u32, path: &str, title: String, panel: Option<(String, u32)>) {
+/// `rt.ui.page`: open page `id` of plugin `source` in a tab, a panel or a float.
+pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) {
     if source.is_empty() {
         return shell::show_message(Level::Error, "config.lua: only plugins have pages");
     }
@@ -244,8 +249,8 @@ pub fn open(source: &str, id: u32, path: &str, title: String, panel: Option<(Str
         );
     }
     let url = url(source, path, id);
-    match panel {
-        Some((side, size)) => {
+    match place {
+        PagePlace::Panel { side, size } => {
             let spec = rt_config::lua::PanelSpec {
                 title,
                 side,
@@ -255,7 +260,17 @@ pub fn open(source: &str, id: u32, path: &str, title: String, panel: Option<(Str
             };
             crate::panel::show(PANEL_IDS | id, source.to_string(), spec);
         }
-        None => shell::open(rt_core::command::OpenTarget::Tab, true, Some(url)),
+        // The bar names the plugin, so the page can't pass for riptide's own.
+        PagePlace::Float { size } => {
+            let bar = if title.is_empty() {
+                format!("Plugin {source}")
+            } else {
+                format!("{title} · plugin {source}")
+            };
+            let size = size.map(|(w, h)| (w as i32, h as i32));
+            crate::popup::open_sized(&bar, &url, size);
+        }
+        PagePlace::Tab => shell::open(rt_core::command::OpenTarget::Tab, true, Some(url)),
     }
 }
 

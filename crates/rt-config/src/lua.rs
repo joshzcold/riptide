@@ -691,6 +691,21 @@ pub struct TabInfo {
     pub pinned: bool,
 }
 
+/// Where `rt.ui.page` shows a page (its `where`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PagePlace {
+    Tab,
+    Panel {
+        side: String,
+        size: u32,
+    },
+    /// A box over the page, as an extension's popup; sized to its content
+    /// unless `size` gives the width and height.
+    Float {
+        size: Option<(u32, u32)>,
+    },
+}
+
 /// What callbacks ask the browser to do, in order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -751,14 +766,13 @@ pub enum Action {
     PanelClose { id: u32 },
     /// A panel's `focus`: its keys work until Escape.
     PanelFocus { id: u32 },
-    /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`,
-    /// in a tab, or in a panel when `panel` gives its side and size.
+    /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`.
     PluginPage {
         source: String,
         id: u32,
         path: String,
         title: String,
-        panel: Option<(String, u32)>,
+        place: PagePlace,
     },
     /// A page handle's `close`.
     PluginPageClose { source: String, id: u32 },
@@ -2124,8 +2138,8 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             move |_, (source, id, path, opts): (String, u32, String, mlua::Table)| {
                 let title: Option<String> = opts.get("title")?;
                 let place: Option<String> = opts.get("where")?;
-                let panel = match place.as_deref() {
-                    None | Some("tab") => None,
+                let place = match place.as_deref() {
+                    None | Some("tab") => PagePlace::Tab,
                     Some("panel") => {
                         let side: Option<String> = opts.get("side")?;
                         let side = side.unwrap_or_else(|| "right".into());
@@ -2136,11 +2150,27 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                             )));
                         }
                         let size: Option<u32> = opts.get("size")?;
-                        Some((side, size.unwrap_or(400).clamp(80, 2000)))
+                        PagePlace::Panel {
+                            side,
+                            size: size.unwrap_or(400).clamp(80, 2000),
+                        }
+                    }
+                    Some("float") => {
+                        let width: Option<u32> = opts.get("width")?;
+                        let height: Option<u32> = opts.get("height")?;
+                        PagePlace::Float {
+                            size: match (width, height) {
+                                (None, None) => None,
+                                (w, h) => Some((
+                                    w.unwrap_or(400).clamp(80, 2000),
+                                    h.unwrap_or(300).clamp(40, 2000),
+                                )),
+                            },
+                        }
                     }
                     Some(other) => {
                         return Err(mlua::Error::runtime(format!(
-                            "rt.ui.page: where is \"tab\" or \"panel\", not {other:?}"
+                            "rt.ui.page: where is \"tab\", \"panel\" or \"float\", not {other:?}"
                         )));
                     }
                 };
@@ -2149,7 +2179,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     id,
                     path,
                     title: title.unwrap_or_default(),
-                    panel,
+                    place,
                 });
                 Ok(())
             },
