@@ -230,66 +230,69 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         return;
     }
     WAITING.set(0);
-    let Some(Some((content, tabs, notice, panes, focused, pane_notices))) = shell::with(|s| {
-        let w = s.windows.iter().find(|w| w.id == window_id)?;
-        let bounds = w.layout.bounds(size.width, size.height, GAP);
-        let rect = |pane| {
-            bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
-                x: b.x,
-                y: b.y,
-                width: b.width,
-                height: b.height,
-            })
-        };
-        let full = Rect {
-            x: 0,
-            y: 0,
-            width: size.width,
-            height: size.height,
-        };
-        let focused = rect(w.layout.focused()).unwrap_or(full.clone());
-        let current = w.tabs.current_index();
-        let tabs: Vec<(BrowserView, Rect)> = w
-            .tabs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let place = if i == current {
-                    focused.clone()
-                } else {
-                    w.pane_tabs
-                        .iter()
-                        .find(|(_, v)| same(v, &t.view))
-                        .and_then(|(p, _)| rect(*p))
-                        .unwrap_or_else(|| full.clone())
-                };
-                (t.view.clone(), place)
-            })
-            .collect();
-        let pane_notices: Vec<(BrowserView, Rect)> = w
-            .pane_notices
-            .iter()
-            .filter_map(|(tab, notice)| {
-                let pane = w.pane_tabs.iter().find(|(_, v)| same(v, tab))?.0;
-                Some((notice.clone(), rect(pane)?))
-            })
-            .collect();
-        Some((
-            w.content.clone()?,
-            tabs,
-            w.crash_notice.clone(),
-            w.layout.is_split(),
-            focused,
-            pane_notices,
-        ))
-    }) else {
+    let Some(Some((content, tabs, notice, panes, focused, pane_notices, current_index))) =
+        shell::with(|s| {
+            let w = s.windows.iter().find(|w| w.id == window_id)?;
+            let bounds = w.layout.bounds(size.width, size.height, GAP);
+            let rect = |pane| {
+                bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
+                    x: b.x,
+                    y: b.y,
+                    width: b.width,
+                    height: b.height,
+                })
+            };
+            let full = Rect {
+                x: 0,
+                y: 0,
+                width: size.width,
+                height: size.height,
+            };
+            let focused = rect(w.layout.focused()).unwrap_or(full.clone());
+            let current = w.tabs.current_index();
+            let tabs: Vec<(BrowserView, Rect)> = w
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let place = if i == current {
+                        focused.clone()
+                    } else {
+                        w.pane_tabs
+                            .iter()
+                            .find(|(_, v)| same(v, &t.view))
+                            .and_then(|(p, _)| rect(*p))
+                            .unwrap_or_else(|| full.clone())
+                    };
+                    (t.view.clone(), place)
+                })
+                .collect();
+            let pane_notices: Vec<(BrowserView, Rect)> = w
+                .pane_notices
+                .iter()
+                .filter_map(|(tab, notice)| {
+                    let pane = w.pane_tabs.iter().find(|(_, v)| same(v, tab))?.0;
+                    Some((notice.clone(), rect(pane)?))
+                })
+                .collect();
+            Some((
+                w.content.clone()?,
+                tabs,
+                w.crash_notice.clone(),
+                w.layout.is_split(),
+                focused,
+                pane_notices,
+                current,
+            ))
+        })
+    else {
         return;
     };
     // The gaps between panes show the page area's background, and the
     // focused pane's edges a border behind it.
     let (gap, accent) = split_colors();
     View::from(&content).set_background_color(if panes { gap } else { 0 });
-    if let Some(border) = border(window_id, &content) {
+    if let Some(border) = panes.then(|| border(window_id, &content)).flatten() {
         let size = View::from(&content).bounds();
         let around = Rect {
             x: (focused.x - GAP).max(0),
@@ -305,10 +308,31 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         let border = View::from(&border);
         border.set_background_color(accent);
         border.set_bounds(Some(&around));
-        border.set_visible(panes.into());
+        border.set_visible(1);
+    } else if let Some(Some(border)) = shell::with(|s| {
+        s.windows
+            .iter()
+            .find(|w| w.id == window_id)
+            .and_then(|w| w.pane_border.clone())
+    }) {
+        View::from(&border).set_visible(0);
     }
-    for (view, rect) in &tabs {
-        View::from(view).set_bounds(Some(rect));
+    tracing::debug!(
+        window = window_id,
+        width = size.width,
+        height = size.height,
+        split = panes,
+        "placing tabs"
+    );
+    for (i, (view, rect)) in tabs.iter().enumerate() {
+        let view = View::from(view);
+        let was_empty = view.bounds().width <= 0 || view.bounds().height <= 0;
+        view.set_bounds(Some(rect));
+        // A view can't take keyboard focus while it has no size, so the
+        // current tab asks again once it has one.
+        if was_empty && i == current_index && rect.width > 0 && rect.height > 0 {
+            focus_current(window_id, &view);
+        }
     }
     if let Some(notice) = notice {
         View::from(&notice).set_bounds(Some(&focused));
@@ -506,6 +530,26 @@ pub fn focused_area(window_id: u32) -> Option<Rect> {
         width: pane.width,
         height: pane.height,
     })
+}
+
+/// Focus the current tab's `view`, unless the window isn't the active one
+/// or a question or the command line has the keys.
+fn focus_current(window_id: u32, view: &View) {
+    let ours = shell::with(|s| {
+        s.id == window_id
+            && !matches!(
+                s.engine.mode(),
+                rt_core::Mode::Prompt | rt_core::Mode::YesNo | rt_core::Mode::Command
+            )
+    })
+    .unwrap_or(false);
+    if ours {
+        tracing::debug!(
+            window = window_id,
+            "focusing the current tab now that it has a size"
+        );
+        view.request_focus();
+    }
 }
 
 /// The window's pane border, below every tab view, made on first use.

@@ -168,7 +168,8 @@ c.window.title_format = "{mode}::{current_title}"
 c.content.blocking.adblock.update_interval = 0
 rt.bind("X", "open -t file://$work/second.html")
 EOF
-RT_LOG=${RT_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
+# Keys, modes and where tabs are placed go in the log, for a failure's report.
+RT_LOG=${RT_LOG:-info,rt_cef::client=trace,rt_cef::shell=debug,rt_cef::panes=debug} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &
 browser_pid=$!
 
 step "window opens and loads the page"
@@ -309,7 +310,9 @@ expect_exit
 
 if (( failures > 0 )); then
     echo "smoke-test: $failures check(s) failed; browser log:" >&2
-    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -vE "dbus|libva|vaapi|gpu" | tail -30 >&2
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -vE "dbus|libva|vaapi|gpu| key |placing tabs|mode changed|focusing" | tail -30 >&2
+    echo "smoke-test: the first keys, modes and tab placements:" >&2
+    sed 's/\x1b\[[0-9;]*m//g' "$work/browser.log" | grep -E " key |placing tabs|mode changed|focusing" | head -60 >&2
     exit 1
 fi
 echo "smoke-test: all checks passed"
