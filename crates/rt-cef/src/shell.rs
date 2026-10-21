@@ -931,6 +931,18 @@ pub fn current_session() -> rt_storage::Session {
                     let mut state =
                         rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())?;
                     state.geometry = w.geometry();
+                    // `from_tabs` leaves out tabs without a URL; the panes follow.
+                    let saved: Vec<Option<usize>> = w
+                        .tabs
+                        .iter()
+                        .scan(0, |kept, t| {
+                            Some((!t.url.is_empty()).then(|| {
+                                *kept += 1;
+                                *kept - 1
+                            }))
+                        })
+                        .collect();
+                    state.splits = crate::panes::saved(w, |i| saved.get(i).copied().flatten());
                     Some(state)
                 })
                 .collect(),

@@ -437,6 +437,10 @@ pub fn show_current_in(window_id: u32, focus: bool) {
     };
     for (view, current, other_pane) in &views {
         View::from(view).set_visible(((*current && crashed.is_none()) || *other_pane).into());
+        if *other_pane {
+            // A lazily restored tab loads once it's on screen.
+            load_pending(view);
+        }
     }
     if let Some(notice) = &notice {
         View::from(notice).set_visible(crashed.is_some().into());
@@ -635,13 +639,23 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
     let old = if after_call {
         0
     } else {
-        shell::with(|s| s.tabs.len()).unwrap_or(0)
+        shell::with(|s| {
+            crate::panes::reset(s);
+            s.tabs.len()
+        })
+        .unwrap_or(0)
     };
     let lazy = shell::with(|s| s.engine.settings().bool("session.lazy_restore")).unwrap_or(false);
     let active = window.active.min(window.tabs.len() - 1);
     for &i in order.iter().skip(usize::from(call.is_some())) {
         let tab = &window.tabs[i];
-        let now = !lazy || i == active;
+        // Tabs in a saved pane are on screen at once, like the active one.
+        let now = !lazy
+            || i == active
+            || window
+                .splits
+                .as_ref()
+                .is_some_and(|s| crate::panes::shows(s, i));
         open(
             if now { &tab.url } else { "about:blank" },
             Position::Last,
@@ -670,7 +684,18 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
             }
         }
     });
-    switch_to(order.iter().position(|&i| i == active).unwrap_or(0), true);
+    let active = order.iter().position(|&i| i == active).unwrap_or(0);
+    if let Some(splits) = &window.splits {
+        shell::with(|s| {
+            crate::panes::restore(
+                s,
+                splits,
+                |saved| order.iter().position(|&i| i == saved),
+                active,
+            );
+        });
+    }
+    switch_to(active, true);
 }
 
 wrap_task! {

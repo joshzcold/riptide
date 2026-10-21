@@ -125,6 +125,10 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `pp` | `open -- {clipboard}` |
 | `q` | `macro-record` |
 | `r` | `reload` |
+| `s+` | `split-resize height +10` |
+| `s-` | `split-resize height -10` |
+| `s<Greater>` | `split-resize width +10` |
+| `s<Less>` | `split-resize width -10` |
 | `s=` | `split-equal` |
 | `sc` | `split-close` |
 | `so` | `only` |

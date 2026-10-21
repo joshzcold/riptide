@@ -6,8 +6,9 @@
 use cef::*;
 use rt_core::command::{OpenTarget, PaneTarget};
 use rt_core::engine::Level;
-use rt_core::split::Axis;
+use rt_core::split::{Axis, Layout, Tree};
 use rt_core::{Command, Effect};
+use rt_storage::SplitState;
 
 use crate::shell::{self, WindowState};
 
@@ -29,6 +30,26 @@ pub fn run_command(command: &Command) -> bool {
         Command::SplitFocus(target) => focus(*target),
         Command::SplitEqual => {
             shell::with(|s| s.layout.equalize());
+            arrange_active();
+        }
+        Command::SplitResize { width, percent } => {
+            let axis = if *width {
+                Axis::Vertical
+            } else {
+                Axis::Horizontal
+            };
+            let resized = shell::with(|s| s.layout.resize(axis, f64::from(*percent) / 100.0));
+            if resized == Some(false) {
+                let way = if *width {
+                    "side by side"
+                } else {
+                    "one above the other"
+                };
+                shell::show_message(
+                    Level::Error,
+                    format!("The focused pane has no neighbour {way}"),
+                );
+            }
             arrange_active();
         }
         _ => return false,
@@ -347,4 +368,105 @@ wrap_task! {
             }
         }
     }
+}
+
+/// The window's panes to save, each with its tab's saved index (`saved`
+/// maps a tab's index to it); `None` with one pane.
+pub fn saved(w: &WindowState, saved: impl Fn(usize) -> Option<usize>) -> Option<SplitState> {
+    let focused = w.layout.focused();
+    let tree = w.layout.tree(|pane| {
+        let index = if pane == focused {
+            w.tabs.current_index()
+        } else {
+            let view = &w.pane_tabs.iter().find(|(p, _)| *p == pane)?.1;
+            index_of(w, view)?
+        };
+        saved(index)
+    })?;
+    Some(to_state(tree))
+}
+
+fn to_state(tree: Tree<usize>) -> SplitState {
+    match tree {
+        Tree::Pane(tab) => SplitState {
+            tab: Some(tab),
+            ..Default::default()
+        },
+        Tree::Split { axis, children } => SplitState {
+            vertical: axis == Axis::Vertical,
+            sizes: children
+                .iter()
+                .map(|(_, share)| (share * 1000.0).round() as u32)
+                .collect(),
+            panes: children.into_iter().map(|(c, _)| to_state(c)).collect(),
+            tab: None,
+        },
+    }
+}
+
+fn from_state(state: &SplitState, index: &impl Fn(usize) -> Option<usize>) -> Option<Tree<usize>> {
+    if let Some(tab) = state.tab {
+        return index(tab).map(Tree::Pane);
+    }
+    // Sizes that don't match the panes are ignored, and the panes share the room.
+    let sized = state.sizes.len() == state.panes.len();
+    let mut children: Vec<(Tree<usize>, f64)> = state
+        .panes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, pane)| {
+            let share = if sized {
+                f64::from(state.sizes[i])
+            } else {
+                1.0
+            };
+            Some((from_state(pane, index)?, share))
+        })
+        .collect();
+    match children.len() {
+        0 => None,
+        1 => children.pop().map(|(tree, _)| tree),
+        _ => Some(Tree::Split {
+            axis: if state.vertical {
+                Axis::Vertical
+            } else {
+                Axis::Horizontal
+            },
+            children,
+        }),
+    }
+}
+
+/// Put a saved window's panes back over its restored tabs: `index` maps a
+/// saved tab index to the window's, and the pane with `active` is focused.
+pub fn restore(
+    w: &mut WindowState,
+    state: &SplitState,
+    index: impl Fn(usize) -> Option<usize>,
+    active: usize,
+) {
+    w.layout = Layout::new();
+    w.pane_tabs.clear();
+    let Some(tree) = from_state(state, &index) else {
+        return;
+    };
+    let (layout, panes) = Layout::from_tree(tree, |&tab| tab == active);
+    let focused = layout.focused();
+    w.pane_tabs = panes
+        .into_iter()
+        .filter(|(pane, _)| *pane != focused)
+        .filter_map(|(pane, tab)| Some((pane, w.tabs.get(tab)?.view.clone())))
+        .collect();
+    w.layout = layout;
+}
+
+/// Whether a saved layout has a pane for the saved tab `tab`.
+pub fn shows(state: &SplitState, tab: usize) -> bool {
+    state.tab == Some(tab) || state.panes.iter().any(|p| shows(p, tab))
+}
+
+/// One pane again, as in a new window.
+pub fn reset(w: &mut WindowState) {
+    w.layout = Layout::new();
+    w.pane_tabs.clear();
 }

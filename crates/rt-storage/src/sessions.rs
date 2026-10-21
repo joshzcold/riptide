@@ -18,6 +18,26 @@ pub struct WindowState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub geometry: Option<Geometry>,
     pub tabs: Vec<TabState>,
+    /// Its split panes, when it has more than one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub splits: Option<SplitState>,
+}
+
+/// A pane, or a split of panes, in a saved window. The pane showing the
+/// window's active tab is the focused one.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SplitState {
+    /// The tab a pane shows, as an index into the window's tabs; none for a split.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab: Option<usize>,
+    /// A split's panes are side by side rather than one above the other.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub vertical: bool,
+    /// A split's room for each of its panes, in thousandths.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sizes: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panes: Vec<SplitState>,
 }
 
 /// Where a window was and how big, in screen DIPs. When it's maximized, these
@@ -119,6 +139,7 @@ impl WindowState {
             active,
             geometry: None,
             tabs: kept,
+            splits: None,
         })
     }
 }
@@ -291,6 +312,31 @@ mod tests {
                         call: true,
                     },
                 ],
+                splits: Some(SplitState {
+                    vertical: true,
+                    sizes: vec![400, 600],
+                    panes: vec![
+                        SplitState {
+                            tab: Some(0),
+                            ..Default::default()
+                        },
+                        SplitState {
+                            sizes: vec![500, 500],
+                            panes: vec![
+                                SplitState {
+                                    tab: Some(1),
+                                    ..Default::default()
+                                },
+                                SplitState {
+                                    tab: Some(0),
+                                    ..Default::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ],
+                    ..Default::default()
+                }),
             }],
         };
         sessions.save("work", &session).unwrap();
@@ -312,6 +358,7 @@ mod tests {
         assert_eq!(session.windows[0].call_tab(), None);
         assert!(tab.back.is_empty() && tab.forward.is_empty() && tab.scroll.is_none());
         assert_eq!(session.windows[0].geometry, None);
+        assert_eq!(session.windows[0].splits, None);
     }
 
     fn rect(x: i32, y: i32, width: i32, height: i32) -> Geometry {
@@ -358,6 +405,7 @@ mod tests {
                 active: 0,
                 geometry: None,
                 tabs: vec![tab(("https://a.org/", "A", false))],
+                splits: None,
             }],
         })
         .unwrap();

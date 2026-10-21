@@ -213,6 +213,38 @@ impl Layout {
         equalize(&mut self.root);
     }
 
+    /// Grow the focused pane along `axis` (`Vertical`: wider) by `delta` of
+    /// its split's room, taken from the pane beside it; negative shrinks it.
+    /// False if no split runs along `axis` around it.
+    pub fn resize(&mut self, axis: Axis, delta: f64) -> bool {
+        resize(&mut self.root, self.focused, axis, delta).unwrap_or(false)
+    }
+
+    /// The layout as a tree of whatever `tab` gives each pane, for saving.
+    /// Panes it gives nothing for are left out; `None` if one pane or less is left.
+    pub fn tree<T>(&self, mut tab: impl FnMut(PaneId) -> Option<T>) -> Option<Tree<T>> {
+        let tree = to_tree(&self.root, &mut tab)?;
+        matches!(tree, Tree::Split { .. }).then_some(tree)
+    }
+
+    /// A layout from a saved tree, with the pane for each item; the first
+    /// pane for which `focus` holds is focused.
+    pub fn from_tree<T>(tree: Tree<T>, focus: impl Fn(&T) -> bool) -> (Self, Vec<(PaneId, T)>) {
+        let mut panes = Vec::new();
+        let mut next_id = 0;
+        let root = from_tree(tree, &mut next_id, &mut panes);
+        let mut layout = Self {
+            root,
+            focused: 0,
+            next_id,
+        };
+        collapse(&mut layout.root);
+        if let Some((pane, _)) = panes.iter().find(|(_, t)| focus(t)) {
+            layout.focused = *pane;
+        }
+        (layout, panes)
+    }
+
     /// Each pane's place in a `width` × `height` page area, with `gap`
     /// pixels between neighbouring panes and none at the outer edges.
     pub fn bounds(&self, width: i32, height: i32, gap: i32) -> Vec<(PaneId, Bounds)> {
@@ -260,6 +292,111 @@ impl Layout {
             &mut out,
         );
         out
+    }
+}
+
+/// A layout to save and restore, with something (such as a tab's index) in
+/// each pane. Shares add up to 1 in each split.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Tree<T> {
+    Pane(T),
+    Split {
+        axis: Axis,
+        children: Vec<(Tree<T>, f64)>,
+    },
+}
+
+/// The smallest share a resize leaves a pane.
+const MIN_SHARE: f64 = 0.1;
+
+/// `Some(done)` once the focused pane is found below `node`.
+fn resize(node: &mut Node, focused: PaneId, axis: Axis, delta: f64) -> Option<bool> {
+    let Node::Split {
+        axis: split_axis,
+        children,
+    } = node
+    else {
+        return (*node == Node::Pane(focused)).then_some(false);
+    };
+    let i = children
+        .iter_mut()
+        .position(|(c, _)| contains(c, focused))?;
+    // A split further down along the same axis gets it first.
+    if let Some(true) = resize(&mut children[i].0, focused, axis, delta) {
+        return Some(true);
+    }
+    if *split_axis != axis || children.len() < 2 {
+        return Some(false);
+    }
+    let j = if i + 1 < children.len() { i + 1 } else { i - 1 };
+    let total = children[i].1 + children[j].1;
+    let grown = (children[i].1 + delta).clamp(MIN_SHARE, total - MIN_SHARE);
+    children[i].1 = grown;
+    children[j].1 = total - grown;
+    Some(true)
+}
+
+fn contains(node: &Node, pane: PaneId) -> bool {
+    match node {
+        Node::Pane(p) => *p == pane,
+        Node::Split { children, .. } => children.iter().any(|(c, _)| contains(c, pane)),
+    }
+}
+
+fn to_tree<T>(node: &Node, tab: &mut impl FnMut(PaneId) -> Option<T>) -> Option<Tree<T>> {
+    match node {
+        Node::Pane(p) => tab(*p).map(Tree::Pane),
+        Node::Split { axis, children } => {
+            let mut kept: Vec<(Tree<T>, f64)> = children
+                .iter()
+                .filter_map(|(c, share)| Some((to_tree(c, tab)?, *share)))
+                .collect();
+            let total: f64 = kept.iter().map(|(_, s)| s).sum();
+            for (_, s) in &mut kept {
+                *s /= total;
+            }
+            match kept.len() {
+                0 => None,
+                1 => kept.pop().map(|(t, _)| t),
+                _ => Some(Tree::Split {
+                    axis: *axis,
+                    children: kept,
+                }),
+            }
+        }
+    }
+}
+
+fn from_tree<T>(tree: Tree<T>, next_id: &mut PaneId, panes: &mut Vec<(PaneId, T)>) -> Node {
+    match tree {
+        Tree::Pane(item) => {
+            let id = *next_id;
+            *next_id += 1;
+            panes.push((id, item));
+            Node::Pane(id)
+        }
+        Tree::Split { axis, children } => {
+            let total: f64 = children.iter().map(|(_, s)| s.max(0.0)).sum();
+            let count = children.len() as f64;
+            let children: Vec<(Node, f64)> = children
+                .into_iter()
+                .map(|(c, share)| {
+                    // Saved shares that don't add up are made to, or shared out evenly.
+                    let share = if total > EPSILON {
+                        share.max(0.0) / total
+                    } else {
+                        1.0 / count
+                    };
+                    (from_tree(c, next_id, panes), share)
+                })
+                .collect();
+            if children.is_empty() {
+                let id = *next_id;
+                *next_id += 1;
+                return Node::Pane(id);
+            }
+            Node::Split { axis, children }
+        }
     }
 }
 
@@ -607,6 +744,114 @@ mod tests {
         layout.close(a);
         let b2 = layout.split(Axis::Vertical);
         assert_ne!(a, b2);
+    }
+
+    #[test]
+    fn resize_grows_the_focused_pane_and_shrinks_its_neighbour() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        assert!(layout.resize(Axis::Vertical, 0.1));
+        let widths: Vec<i32> = layout
+            .bounds(1000, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [400, 600], "the focused right pane is wider");
+        assert!(
+            !layout.resize(Axis::Horizontal, 0.1),
+            "no split runs that way"
+        );
+        assert!(layout.resize(Axis::Vertical, 5.0));
+        let widths: Vec<i32> = layout
+            .bounds(1000, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [100, 900], "the other pane keeps a little room");
+    }
+
+    #[test]
+    fn resize_finds_the_split_that_runs_the_right_way() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        layout.split(Axis::Horizontal);
+        // Taller within the right column, then wider against the left pane.
+        assert!(layout.resize(Axis::Horizontal, 0.2));
+        assert!(layout.resize(Axis::Vertical, -0.1));
+        assert_eq!(
+            layout.bounds(1000, 1000, 0),
+            [
+                (0, b(0, 0, 600, 1000)),
+                (1, b(600, 0, 400, 300)),
+                (2, b(600, 300, 400, 700)),
+            ]
+        );
+        assert!(!Layout::new().resize(Axis::Vertical, 0.1));
+    }
+
+    #[test]
+    fn a_layout_round_trips_through_a_tree() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below = layout.split(Axis::Horizontal);
+        layout.resize(Axis::Vertical, 0.1);
+        let tabs = |p: PaneId| {
+            Some(match p {
+                0 => "a",
+                p if p == right => "b",
+                p if p == below => "c",
+                _ => unreachable!(),
+            })
+        };
+        let tree = layout.tree(tabs).unwrap();
+        let (restored, panes) = Layout::from_tree(tree, |t| *t == "c");
+        assert_eq!(restored.bounds(1000, 1000, 2), layout.bounds(1000, 1000, 2));
+        let focused = panes
+            .iter()
+            .find(|(p, _)| *p == restored.focused())
+            .unwrap();
+        assert_eq!(focused.1, "c");
+        assert_eq!(
+            panes.iter().map(|(_, t)| *t).collect::<Vec<_>>(),
+            ["a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn panes_without_a_tab_are_left_out_of_the_tree() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below = layout.split(Axis::Horizontal);
+        let tree = layout.tree(|p| (p != below).then_some(p)).unwrap();
+        assert_eq!(
+            tree,
+            Tree::Split {
+                axis: Axis::Vertical,
+                children: vec![(Tree::Pane(0), 0.5), (Tree::Pane(right), 0.5)],
+            }
+        );
+        assert_eq!(
+            layout.tree(|p| (p == 0).then_some(p)),
+            None,
+            "one pane isn't a split"
+        );
+        assert_eq!(Layout::new().tree(Some), None);
+    }
+
+    #[test]
+    fn saved_shares_that_dont_add_up_are_fixed() {
+        let tree = Tree::Split {
+            axis: Axis::Vertical,
+            children: vec![(Tree::Pane('a'), 3.0), (Tree::Pane('b'), 1.0)],
+        };
+        let (layout, _) = Layout::from_tree(tree, |_| false);
+        let widths: Vec<i32> = layout
+            .bounds(800, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [600, 200]);
+        assert_eq!(layout.focused(), 0);
     }
 
     #[test]

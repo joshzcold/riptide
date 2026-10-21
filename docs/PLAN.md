@@ -99,12 +99,11 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Splits
 
-Built (see guide/tabs.md): `:split`, `:vsplit`, `:only`, `:split-close`, `:split-focus`, `:split-equal`, the `s` keys and `<Ctrl-h/j/k/l>`, the focused pane's border, focus by clicking, `J`/`K` moving the focus to a tab another pane shows, and panes that follow tabs closing. The layout tree is `rt_core::split`; `rt-cef/src/panes.rs` places the tab views in the page area, which has no layout manager.
+Built (see guide/tabs.md): `:split`, `:vsplit`, `:only`, `:split-close`, `:split-focus`, `:split-equal`, `:split-resize`, the `s` keys and `<Ctrl-h/j/k/l>`, layouts saved in sessions, the focused pane's border, focus by clicking, `J`/`K` moving the focus to a tab another pane shows, and panes that follow tabs closing. The layout tree is `rt_core::split`; `rt-cef/src/panes.rs` places the tab views in the page area, which has no layout manager.
 
 Still to do:
 
-- **Sessions:** save and restore the layout (the split tree, its sizes and each pane's tab).
-- **Resizing:** `:split-resize` and dragging the border between two panes.
+- **Resizing with the mouse:** dragging the border between two panes. The page area's panel gets no mouse events, so this needs a thin view over each border.
 - **The crash notice** covers the focused pane only; a crashed tab in another pane shows nothing.
 - **Extension popups** open at the top right of the whole page area, not over their own pane.
 - **Open questions:** whether `:open -t` from a pane should open its tab in that pane (it does, since the new tab becomes current), and how many panes a window allows.
