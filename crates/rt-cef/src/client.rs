@@ -627,6 +627,7 @@ wrap_display_handler! {
                 // A lazily restored tab keeps its real URL until it loads it.
                 let tab = s.tabs.get_mut(index).filter(|tab| tab.pending.is_none())?;
                 tab.url = url.clone();
+                tab.hover = None;
                 if let Some(history) = &mut tab.history {
                     history.committed(&url);
                 }
@@ -698,6 +699,18 @@ wrap_display_handler! {
                 }
             });
             shell::refresh_ui();
+        }
+
+        /// Chromium's status text: the address of the link under the mouse.
+        fn on_status_message(&self, browser: Option<&mut Browser>, value: Option<&CefString>) {
+            let text = value.map(CefString::to_string).filter(|t| !t.is_empty());
+            let changed = shell::with_tab(browser, |s, index, _| {
+                let tab = s.tabs.get_mut(index)?;
+                (tab.hover != text).then(|| tab.hover = text.clone())
+            });
+            if changed.flatten().is_some() {
+                shell::refresh_ui();
+            }
         }
 
         fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {

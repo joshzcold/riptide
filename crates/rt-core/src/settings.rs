@@ -807,6 +807,13 @@ pub static SETTINGS: &[SettingDef] = &[
         color
     ),
     def!(
+        "colors.statusbar.url.hover.fg",
+        Kind::Str,
+        s(""),
+        "The address of the link under the mouse, shown in the status bar; empty uses ui.theme's",
+        color
+    ),
+    def!(
         "colors.statusbar.url.success.http.fg",
         Kind::Str,
         s(""),

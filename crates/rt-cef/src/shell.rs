@@ -47,6 +47,8 @@ pub struct Tab {
     pub favicon: Option<String>,
     pub progress: Option<f64>,
     pub load_error: bool,
+    /// The link under the mouse, which the status bar shows instead of the URL.
+    pub hover: Option<String>,
     /// Error to draw into Chromium's error document once it commits.
     pub pending_error: Option<(String, String)>,
     /// The mode this tab was in when the user last left it.
@@ -86,6 +88,7 @@ impl Tab {
             favicon: None,
             progress: None,
             load_error: false,
+            hover: None,
             pending_error: None,
             mode: rt_core::Mode::Normal,
             zoom: 100,
@@ -1254,6 +1257,7 @@ fn collect_ui_update(
         "url": current.map_or("", |t| t.url.as_str()),
         "progress": current.and_then(|t| t.progress),
         "load_error": current.is_some_and(|t| t.load_error),
+        "hover": current.and_then(|t| t.hover.as_deref()),
         "downloads": crate::downloads::summary(),
         "tab_index": s.tabs.current_index() + 1,
         "tab_count": s.tabs.len(),

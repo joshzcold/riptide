@@ -19,6 +19,7 @@
     --https: var(--rt-statusbar-https-fg, #2ec4b6);
     --http: var(--rt-statusbar-http-fg, #e9f7f6);
     --error-fg: var(--rt-statusbar-url-error-fg, #f4c56a);
+    --hover-fg: var(--rt-statusbar-url-hover-fg, #8fb8ff);
     --font: var(--rt-font-statusbar, 10pt "DejaVu Sans Mono", "Monospace", monospace);
   }
   html, body {
@@ -55,6 +56,7 @@
   .url.https { color: var(--https); }
   .url.http { color: var(--http); }
   .url.error { color: var(--error-fg); }
+  .url.hover { color: var(--hover-fg); }
   .sharing { color: var(--error-fg); font-weight: bold; }
   /* On a coloured bar (a mode, a private window, a message), everything
      takes the bar's own text colour so it stays readable. */
@@ -130,6 +132,10 @@
       case "search_match":
         return text(state.search_match ? `Match [${state.search_match[0]}/${state.search_match[1]}]` : "");
       case "url":
+        if (state.hover) {
+          el.className = "url hover";
+          return text(state.hover);
+        }
         el.className = "url " + (state.load_error ? "error" : state.url.startsWith("https:") ? "https" : "http");
         return text(state.url);
       case "scroll": return text(scrollText(state.scroll));
