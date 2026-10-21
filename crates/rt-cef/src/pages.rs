@@ -18,6 +18,8 @@ use crate::shell;
 struct Served {
     pages: PathBuf,
     csp: String,
+    /// Its `network` lists a loopback host.
+    loopback: bool,
 }
 
 /// Loaded plugins' pages; written on the UI thread, read on the IO thread.
@@ -37,24 +39,64 @@ fn csp_source(host: &str) -> Option<String> {
     ok.then(|| format!("https://{host}"))
 }
 
+/// Hosts on this computer, which `network` may also reach over plain http
+/// and WebSockets, on any port: a program the plugin runs, say.
+const LOOPBACK: &[&str] = &["localhost", "127.0.0.1"];
+
+/// `network`'s sources for `host`: https, or any scheme and port on loopback.
+fn connect_sources(host: &str) -> Vec<String> {
+    if LOOPBACK.contains(&host) {
+        return ["http", "https", "ws", "wss"]
+            .iter()
+            .map(|scheme| format!("{scheme}://{host}:*"))
+            .collect();
+    }
+    csp_source(host).into_iter().collect()
+}
+
 fn csp(permissions: &Permissions, trusted: bool) -> String {
-    let list = |hosts: &[String]| -> String {
-        if trusted {
-            return "https:".into();
-        }
-        let sources: Vec<String> = hosts.iter().filter_map(|h| csp_source(h)).collect();
+    let join = |sources: Vec<String>| -> String {
         if sources.is_empty() {
             "'none'".into()
         } else {
             sources.join(" ")
         }
     };
+    let frames = if trusted {
+        "https:".into()
+    } else {
+        join(
+            permissions
+                .frames
+                .iter()
+                .filter_map(|h| csp_source(h))
+                .collect(),
+        )
+    };
+    let loopback = permissions
+        .network
+        .iter()
+        .filter(|h| LOOPBACK.contains(&h.as_str()))
+        .flat_map(|h| connect_sources(h));
+    let connect = if trusted {
+        join(
+            std::iter::once("https:".to_string())
+                .chain(loopback)
+                .collect(),
+        )
+    } else {
+        join(
+            permissions
+                .network
+                .iter()
+                .flat_map(|h| connect_sources(h))
+                .collect(),
+        )
+    };
     format!(
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
          img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; \
-         form-action 'none'; frame-src {}; connect-src {}",
-        list(&permissions.frames),
-        list(&permissions.network),
+         form-action 'none'; frame-src {frames}; connect-src {connect}",
     )
 }
 
@@ -68,12 +110,40 @@ pub fn register(name: &str, dir: &Path, permissions: &Permissions, trusted: bool
     match pages.canonicalize() {
         Ok(pages) if pages.is_dir() => {
             let csp = csp(permissions, trusted);
-            served.insert(name.to_string(), Served { pages, csp });
+            let loopback = permissions
+                .network
+                .iter()
+                .any(|h| LOOPBACK.contains(&h.as_str()));
+            served.insert(
+                name.to_string(),
+                Served {
+                    pages,
+                    csp,
+                    loopback,
+                },
+            );
         }
         _ => {
             served.remove(name);
         }
     }
+}
+
+/// Whether `origin` is a plugin page whose `network` permission lists a
+/// loopback host, so Chromium needn't ask before it connects there.
+pub fn reaches_loopback(origin: &str) -> bool {
+    let Some(name) = origin
+        .strip_prefix("riptide://")
+        .map(|o| o.trim_end_matches('/'))
+        .and_then(|host| host.strip_suffix(".plugin"))
+    else {
+        return false;
+    };
+    SERVED.read().ok().is_some_and(|s| {
+        s.as_ref()
+            .and_then(|s| s.get(name))
+            .is_some_and(|p| p.loopback)
+    })
 }
 
 /// The config is loading again: plugins serve pages once they've loaded.
@@ -261,14 +331,26 @@ pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) 
             crate::panel::show(PANEL_IDS | id, source.to_string(), spec);
         }
         // The bar names the plugin, so the page can't pass for riptide's own.
-        PagePlace::Float { size } => {
+        PagePlace::Float {
+            size,
+            over,
+            all_keys,
+        } => {
             let bar = if title.is_empty() {
                 format!("Plugin {source}")
             } else {
                 format!("{title} · plugin {source}")
             };
             let size = size.map(|(w, h)| (w as i32, h as i32));
-            crate::popup::open_sized(&bar, &url, size);
+            crate::popup::open_with(
+                &bar,
+                &url,
+                crate::popup::Placement {
+                    size,
+                    over,
+                    all_keys,
+                },
+            );
         }
         PagePlace::Tab => shell::open(rt_core::command::OpenTarget::Tab, true, Some(url)),
     }
@@ -311,6 +393,27 @@ mod tests {
             assert!(serve("vault", bad).is_none(), "{bad}");
         }
         assert!(serve("other", "/").is_none());
+
+        let local = Permissions {
+            network: vec!["localhost".into(), "api.example.com".into()],
+            frames: vec!["localhost".into()],
+            ..Permissions::default()
+        };
+        register("vault", &dir.join("vault"), &local, false);
+        let (_, _, csp) = serve("vault", "/").unwrap();
+        assert!(
+            csp.contains(
+                "connect-src http://localhost:* https://localhost:* ws://localhost:* \
+                 wss://localhost:* https://api.example.com"
+            ),
+            "{csp}"
+        );
+        assert!(csp.contains("frame-src https://localhost;"), "{csp}");
+        assert!(reaches_loopback("riptide://vault.plugin/"));
+        assert!(!reaches_loopback("riptide://other.plugin"));
+        assert!(!reaches_loopback("https://vault.plugin"));
+        register("vault", &dir.join("vault"), &permissions, false);
+        assert!(!reaches_loopback("riptide://vault.plugin"));
         unregister_all();
         assert!(serve("vault", "/").is_none());
         std::fs::remove_dir_all(&dir).unwrap();

@@ -454,6 +454,8 @@ function Panel:is_open() end
 ---@field size? integer In a panel: its width, or height below the page, in pixels (default 400).
 ---@field width? integer In a float: its width in pixels; without width and height it's sized to the page's content.
 ---@field height? integer In a float: its height in pixels.
+---@field over? {{ x: number, y: number, width: number, height: number }} In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them, e.g. a text field's; its bar goes just above.
+---@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included; Shift-Escape closes it.
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
 ---@class rt.Page
