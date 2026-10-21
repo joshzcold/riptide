@@ -245,6 +245,7 @@ wrap_client! {
             // Background tabs can move focus too; only the visible one drives the mode.
             // Focus the page moved by itself (autofocus) counts only with auto_load.
             let effects = shell::with_tab(browser, |s, _, current| {
+                tracing::debug!(editable, user, current, "page focus");
                 let by_page = editable && !user && !s.engine.settings().bool("input.insert_mode.auto_load");
                 if current && !by_page { s.engine.focus_changed(editable) } else { Vec::new() }
             });

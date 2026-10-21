@@ -294,6 +294,11 @@ fn adopt(
         content.add_child_view(Some(&mut child));
     }
     let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
+    // Sized at once, even in the background, so its page lays out at the
+    // size it'll be shown at and isn't still resizing when it's first used.
+    if let Some(window) = shell::with(|s| s.id) {
+        crate::panes::arrange(window);
+    }
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {
         switch_to(index, true);

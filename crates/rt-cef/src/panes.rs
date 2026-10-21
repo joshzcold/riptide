@@ -615,6 +615,7 @@ wrap_focus_handler! {
     impl FocusHandler {
         fn on_got_focus(&self, browser: Option<&mut Browser>) {
             let Some(id) = browser.map(|b| b.identifier()) else { return };
+            tracing::debug!(browser = id, "tab got focus");
             let mut task = FocusPane::new(id);
             post_task(ThreadId::UI, Some(&mut task));
         }

@@ -440,6 +440,13 @@ fn mouse_at(browser: &Browser, index: usize, click: bool) {
                 y: ((point.y + dy) * zoom).round() as i32,
                 modifiers: 0,
             };
+            tracing::debug!(
+                browser = target.identifier(),
+                x = event.x,
+                y = event.y,
+                click,
+                "hint pointer"
+            );
             host.send_mouse_move_event(Some(&event), 0);
             if click {
                 host.send_mouse_click_event(Some(&event), MouseButtonType::LEFT, 0, 1);
