@@ -96,6 +96,7 @@ An empty string hides the widget. What a widget function asks for besides its te
 | `mode_changed` | the mode changes | `from`, `to` |
 | `insert_entered` | a text field takes focus and riptide enters insert mode | `url` |
 | `command` | a command runs: typed, bound to a key, from an alias or run by a script | `name`, `args` |
+| `command_before` | a command is about to run; a hook that returns `true` cancels it | `name`, `args`, `url` |
 | `setting_changed` | a setting changes (`:set`, the settings page) | `name`, `value` (as text) |
 | `theme_changed` | the theme in use changes, by `ui.theme` or, with `ui.theme = "auto"`, the system's light or dark mode | `theme` |
 | `prompt_shown` | riptide asks a question | `topic` (`dialog`, `permission`, `login`, `download`, `certificate`, `confirm`), `title`, `message`, `url` |
@@ -109,6 +110,17 @@ An empty string hides the widget. What a widget function asks for besides its te
 - `group`: a name, so `rt.off(group)` removes them all.
 
 `command` fires after the command runs, for each command in a `;;` chain, and a key reports the command it's bound to (`:` is `cmd-set-text :`). A `command` hook that runs commands itself runs again for them.
+
+`command_before` fires just before each of those, after aliases and `{url}`-style variables are filled in. The first hook that returns `true` cancels the command, which then fires no `command`. What a hook asks for, such as `rt.run`, happens after the command, and inside the hook `rt.url()` and `rt.mode()` work but `rt.tabs()` is empty. So a broken hook can't lock you out, `config-source`, `config-edit`, `plugins`, `pack-*`, `mode-leave` and `quit` always run. A plugin needs the `commands` permission to use it.
+
+```lua
+rt.on("command_before", function(e)
+  if e.name == "open" and e.args:find("news%.example") then
+    rt.notify("Not before lunch")
+    return true
+  end
+end)
+```
 
 `rt.on` returns an id for `rt.off(id)`. `rt.group(name, { clear = true })` removes the group's hooks and returns its name, so a script that runs again (`:config-source`) doesn't add its hooks twice:
 

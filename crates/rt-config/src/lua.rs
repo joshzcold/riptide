@@ -60,6 +60,7 @@ function rt.on(event, opts, fn)
   next_id = next_id + 1
   hooks[event] = hooks[event] or {}
   table.insert(hooks[event], { id = next_id, fn = fn, pattern = opts.pattern, group = opts.group, once = opts.once })
+  rt._hooked(event)
   return next_id
 end
 
@@ -93,6 +94,20 @@ function rt._dispatch(event, payload)
   end
 end
 rt._entry[0] = rt._dispatch
+-- Like rt._dispatch, but the first hook that returns true stops it: true.
+function rt._dispatch_cancel(event, payload)
+  local list = hooks[event]
+  if not list then return false end
+  for _, hook in ipairs({ table.unpack(list) }) do
+    local wanted = hook.pattern == nil
+      or (payload.url ~= nil and rt._matches(hook.pattern, payload.url))
+    if wanted then
+      if hook.once then rt.off(hook.id) end
+      if hook.fn(payload) == true then return true end
+    end
+  end
+  return false
+end
 
 -- rt.defer and rt.every: the browser calls rt._fire(id) after the delay.
 local timers, next_timer = {}, 0
@@ -288,6 +303,14 @@ function rt._sandbox(name, permissions, require_fn)
   -- Each plugin's stores are its own.
   api.store = function(store) return rt.store(name .. "--" .. (store or "data")) end
   if permissions.settings then env.c = c end
+  -- Events that can stop what riptide does need the permission for it.
+  local on = api.on
+  api.on = function(event, opts, fn)
+    if event == "command_before" and not permissions.commands then
+      error("command_before needs the commands permission", 2)
+    end
+    return on(event, opts, fn)
+  end
   env.rt = api
   env._G = env
   return env
@@ -607,6 +630,10 @@ pub const EVENTS: &[(&str, &str)] = &[
         "command",
         "a command ran, typed, bound to a key or run by a script (name, args)",
     ),
+    (
+        "command_before",
+        "a command is about to run (name, args, url); a hook that returns true cancels it",
+    ),
     ("setting_changed", "a setting changed (name, value as text)"),
     (
         "theme_changed",
@@ -644,6 +671,8 @@ struct State {
     plugins: Vec<LoadedPlugin>,
     /// The config's own modules `require` read, and how they were then.
     modules: Vec<(PathBuf, crate::watch::Stamp)>,
+    /// Events some `rt.on` hooked since the config loaded.
+    hooked: std::collections::BTreeSet<String>,
 }
 
 /// A plugin `rt.pack.add` asked for.
@@ -1213,6 +1242,7 @@ fn run_limited(
             return Err("config.lua isn't loaded".to_string());
         };
         rt.state.borrow_mut().context = context.clone();
+        RUNNING.with(|r| r.set(true));
         // A callback runs on the browser's UI thread: one that doesn't
         // finish (a loop) would freeze the browser, so stop it instead.
         let deadline = std::time::Instant::now() + limit;
@@ -1230,12 +1260,51 @@ fn run_limited(
             },
         );
         let result = f(&rt.lua, &rt.state);
+        RUNNING.with(|r| r.set(false));
         rt.lua.remove_hook();
         let actions = std::mem::take(&mut rt.state.borrow_mut().actions);
         result
             .map(|()| actions)
             .map_err(|e| tidy_error(&e.to_string(), &rt.config_dir))
     })
+}
+
+/// Whether some `rt.on(event, …)` hook was set since the config loaded.
+pub fn has_hooks(event: &str) -> bool {
+    RUNTIME.with(|r| {
+        r.borrow()
+            .as_ref()
+            .is_some_and(|rt| rt.state.borrow().hooked.contains(event))
+    })
+}
+
+thread_local! {
+    /// A guarded call is running; another would take its actions.
+    static RUNNING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Ask the `command_before` hooks about command `name` with `args`: true if
+/// one cancelled it. What else they asked for comes back to be done after.
+pub fn command_before(
+    name: &str,
+    args: &str,
+    context: &Context,
+) -> Result<(bool, Vec<Action>), String> {
+    if RUNNING.with(std::cell::Cell::get) {
+        return Ok((false, Vec::new()));
+    }
+    let cancelled = std::cell::Cell::new(false);
+    let actions = run_guarded(context, |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        let dispatch: mlua::Function = api.get("_dispatch_cancel")?;
+        let payload = lua.create_table()?;
+        payload.set("name", name)?;
+        payload.set("args", args)?;
+        payload.set("url", context.url.as_str())?;
+        cancelled.set(dispatch.call(("command_before", payload))?);
+        Ok(())
+    })?;
+    Ok((cancelled.get(), actions))
 }
 
 /// Status bar widgets get this long each time the bar is drawn.
@@ -1658,6 +1727,7 @@ pub fn run(path: &Path, paths: &Paths, settings: Settings) -> (Vec<ConfigOp>, Op
         next_callback: 1,
         commands: Vec::new(),
         descriptions: Default::default(),
+        hooked: Default::default(),
         specs: Vec::new(),
         plugins: Vec::new(),
         modules: Vec::new(),
@@ -2015,6 +2085,15 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 Ok(command)
             },
         )?,
+    )?;
+
+    let s = state.clone();
+    api.set(
+        "_hooked",
+        lua.create_function(move |_, event: String| {
+            s.borrow_mut().hooked.insert(event);
+            Ok(())
+        })?,
     )?;
 
     let s = state.clone();
@@ -3698,6 +3777,50 @@ assert(not pcall(rt.every, 1, function() end))
                 level: Level::Info,
                 text: "hello".into()
             }]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn command_before_hooks_cancel_commands_and_need_the_commands_permission() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-before-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.on("command_before", function(e)
+  if e.name == "open" and e.args:find("blocked") then
+    rt.message("not " .. e.args .. " from " .. e.url)
+    return true
+  end
+end)
+-- A sandboxed plugin may only use it with the commands permission.
+local without = rt._sandbox("p", {}, require)
+assert(not pcall(without.rt.on, "command_before", function() end))
+assert(pcall(without.rt.on, "load_finished", function() end))
+local with = rt._sandbox("q", { commands = true }, require)
+assert(pcall(with.rt.on, "command_before", function() end))
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        assert!(has_hooks("command_before"));
+        assert!(!has_hooks("tab_closed"));
+        let ctx = Context {
+            url: "https://example.com/".into(),
+            ..Context::default()
+        };
+        let (cancelled, actions) = command_before("open", "blocked.example", &ctx).unwrap();
+        assert!(cancelled);
+        assert!(matches!(
+            actions.as_slice(),
+            [Action::Message { text, .. }] if text == "not blocked.example from https://example.com/"
+        ));
+        assert_eq!(
+            command_before("open", "fine.example", &ctx).unwrap(),
+            (false, Vec::new())
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

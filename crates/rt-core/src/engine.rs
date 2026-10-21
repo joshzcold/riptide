@@ -13,6 +13,9 @@ use crate::mode::Mode;
 use crate::prompt::{Prompt, PromptAnswer, PromptKind, PromptView};
 use crate::settings::{self, Settings, Value};
 
+/// Asked before a command runs (name, args, the page's URL, the mode); true cancels it.
+pub type CommandFilter = dyn Fn(&str, &str, &str, Mode) -> bool;
+
 /// Something the browser layer has to act on.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
@@ -132,6 +135,9 @@ pub struct Engine {
     url: String,
     clipboard: Option<Box<dyn Fn() -> Option<String>>>,
     primary: Option<Box<dyn Fn() -> Option<String>>>,
+    /// Asked before each command runs (name, args, the page's URL, the
+    /// mode); true cancels it. The browser's `command_before` hooks.
+    command_filter: Option<Box<CommandFilter>>,
     completion_source: Option<completion::Source>,
     completion: Option<CompletionState>,
     hints: Option<HintSession>,
@@ -225,6 +231,7 @@ impl Engine {
             url: String::new(),
             clipboard: None,
             primary: None,
+            command_filter: None,
             completion_source: None,
             completion: None,
             hints: None,
@@ -713,6 +720,34 @@ impl Engine {
     }
 
     /// Lets `{clipboard}` in commands read the system clipboard.
+    pub fn set_command_filter(
+        &mut self,
+        filter: impl Fn(&str, &str, &str, Mode) -> bool + 'static,
+    ) {
+        self.command_filter = Some(Box::new(filter));
+    }
+
+    /// Whether the command filter cancels `piece`. Some commands can't be
+    /// cancelled, so a broken hook can't lock you out.
+    fn cancelled(&self, piece: &str) -> bool {
+        let piece = piece.trim_start_matches(':');
+        let (name, args) = piece.split_once(char::is_whitespace).unwrap_or((piece, ""));
+        let rescue = [
+            "lua-call",
+            "config-source",
+            "config-edit",
+            "plugins",
+            "mode-leave",
+            "quit",
+        ];
+        if rescue.contains(&name) || name.starts_with("pack-") {
+            return false;
+        }
+        self.command_filter
+            .as_ref()
+            .is_some_and(|filter| filter(name, args.trim(), &self.url, self.mode))
+    }
+
     pub fn set_clipboard_reader(&mut self, reader: impl Fn() -> Option<String> + 'static) {
         self.clipboard = Some(Box::new(reader));
     }
@@ -1002,6 +1037,7 @@ impl Engine {
                     None => command::parse(&piece).map_err(|e| e.to_string()),
                 });
             match result {
+                Ok(_) if self.cancelled(piece) => {}
                 Ok(cmd) => {
                     self.note_ran(piece);
                     self.execute(cmd, count, &mut effects)
@@ -2166,6 +2202,38 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn the_command_filter_cancels_commands_but_not_the_rescue_ones() {
+        let mut e = engine();
+        e.set_url("https://example.com/");
+        let asked = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let seen = asked.clone();
+        e.set_command_filter(move |name, args, url, mode| {
+            seen.borrow_mut()
+                .push(format!("{name}|{args}|{url}|{}", mode.name()));
+            true
+        });
+        // Each part of a chain is asked about on its own; none runs.
+        let effects = e.execute_str("reload ;; scroll down", None);
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Run { .. })));
+        assert_eq!(
+            *asked.borrow(),
+            [
+                "reload||https://example.com/|normal",
+                "scroll|down|https://example.com/|normal"
+            ]
+        );
+        assert!(
+            e.take_ran().is_empty(),
+            "cancelled commands aren't reported as run"
+        );
+        // These always run, so a broken hook can't lock you out.
+        asked.borrow_mut().clear();
+        let effects = e.execute_str("quit", None);
+        assert!(effects.iter().any(|e| matches!(e, Effect::Run { .. })));
+        assert!(asked.borrow().is_empty());
     }
 
     #[test]

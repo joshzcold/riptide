@@ -352,6 +352,48 @@ pub fn spawned(callback: u32, result: &lua::SpawnResult) {
     carry_out(lua::spawned(callback, result, &context(None)));
 }
 
+/// The engine's command filter: the `command_before` hooks. It runs while
+/// the shell is borrowed, so the hooks see only the URL, mode and count,
+/// and what they ask for (or fail with) is carried out afterwards.
+pub fn command_filter(name: &str, args: &str, url: &str, mode: rt_core::Mode) -> bool {
+    if !lua::has_hooks("command_before") {
+        return false;
+    }
+    let context = Context {
+        url: url.to_string(),
+        mode: mode.name().to_string(),
+        ..Context::default()
+    };
+    let result = lua::command_before(name, args, &context);
+    let cancelled = matches!(result, Ok((true, _)));
+    let later = result.map(|(_, actions)| actions);
+    if later.as_ref().is_ok_and(Vec::is_empty) {
+        return cancelled;
+    }
+    AFTER_COMMAND.with(|a| a.borrow_mut().push(later));
+    let mut task = AfterCommand::new();
+    post_task(ThreadId::UI, Some(&mut task));
+    cancelled
+}
+
+thread_local! {
+    /// What `command_before` hooks asked for, to carry out after the command.
+    static AFTER_COMMAND: std::cell::RefCell<Vec<Result<Vec<Action>, String>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+wrap_task! {
+    struct AfterCommand {}
+
+    impl Task {
+        fn execute(&self) {
+            for result in AFTER_COMMAND.with(|a| std::mem::take(&mut *a.borrow_mut())) {
+                carry_out(result);
+            }
+        }
+    }
+}
+
 wrap_task! {
     struct LuaTimer {
         id: u32,

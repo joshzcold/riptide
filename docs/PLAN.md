@@ -70,7 +70,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M24 | The documentation website | dev/docs.md |
 | M25 | Permission questions belong to their tab, with site, icons and buttons | guide/prompts.md |
 | M26 | The e2e harness (`rt-e2e`), unit tests in the CEF layer, linters (clippy lints, cargo-deny, ShellCheck, actionlint, typos, Biome) | dev/testing.md |
-| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events, keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
+| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events (`command_before` can cancel), keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
 | M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, the focused pane's border, layouts in sessions, crash notices and extension popups per pane | guide/tabs.md |
 
@@ -84,8 +84,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Plugins (M27)
 
-- **Events** (designed 2026-10-21; per-site keys came first and are done). A hook cancels or swallows by returning `true`.
-  - **`command_before`** `{ name, args, url }`: each command after aliases and variables are expanded, from keys, the command line, `rt.run` or `riptide ':cmd'` (not `lua-call`), once per `;;` part. Returning `true` cancels it, and a cancelled command fires no `command`. `config-source`, `config-edit`, `plugins`, `pack-*`, `mode-leave` and `quit` can't be cancelled, so a broken hook can't lock you out. Sandboxed plugins need `commands`. The engine gets a command filter the browser sets, as with the clipboard; actions a hook asks for run after the command.
+- **Events** (designed 2026-10-21; per-site keys and `command_before` are done). A hook cancels or swallows by returning `true`.
   - **`key`** `{ keys, mode, url }`: in normal mode, a key or chain nothing is bound to, where riptide decides whether the page gets it. Never in insert, command or prompt mode, and not for bound keys. Returning `true` keeps it from the page. Sandboxed plugins need `keys` (declared but not enforced until now). Lua runs only when a `key` hook exists, with a 50 ms limit.
   - Open: the `command` event shows every command's arguments (URLs, searches) to any plugin; whether it should need `commands` too, which would break plugins that use it now.
 - **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
