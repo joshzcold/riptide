@@ -157,6 +157,8 @@ echo "smoke-test on $DISPLAY"
 mkdir -p "$work/base/config"
 cat >"$work/base/config/config.lua" <<EOF
 c.window.title_format = "{mode}::{current_title}"
+-- No filter list downloads during the test.
+c.content.blocking.adblock.update_interval = 0
 rt.bind("X", "open -t file://$work/second.html")
 EOF
 RT_LOG=${RT_LOG:-info} "$BIN" --basedir "$work/base" "file://$work/page.html" >"$work/browser.log" 2>&1 &

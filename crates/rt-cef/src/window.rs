@@ -149,7 +149,15 @@ pub fn create(urls: Vec<String>, commands: Vec<String>, private: bool) {
 
 /// A window for one window of a saved session.
 pub fn create_from_session(window: rt_storage::WindowState) {
-    open(Vec::new(), Vec::new(), false, Some(window), None, false);
+    let call = window.call_tab().map(|i| window.tabs[i].url.clone());
+    open(
+        call.iter().cloned().collect(),
+        Vec::new(),
+        false,
+        Some(window),
+        None,
+        call.is_some(),
+    );
 }
 
 /// A window for a page's popup, under `tabs.tabs_are_windows`.
@@ -528,7 +536,10 @@ wrap_window_delegate! {
             }
             window.show();
             if self.call {
-                // Its tab is already open.
+                // Its call tab is already open.
+                if let Some(session) = &self.session {
+                    tabs::restore_call_window(session);
+                }
             } else if let Some(popup) = &self.popup {
                 tabs::add_view(popup.clone(), Position::Last, true);
             } else if let Some(session) = &self.session {
@@ -557,6 +568,7 @@ wrap_window_delegate! {
                     storage::start_autosave();
                     crate::crash::mention_last_report();
                     crate::extensions::after_startup();
+                    crate::adblock::after_startup();
                 }
             }
             let private = shell::with(|s| s.private).unwrap_or(false).to_string();

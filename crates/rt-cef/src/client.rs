@@ -908,8 +908,10 @@ wrap_life_span_handler! {
         fn do_close(&self, browser: Option<&mut Browser>) -> ::std::os::raw::c_int {
             // A page calling `window.close()` should close its tab, not the window.
             // Closing from inside this callback is unsafe, so post it.
+            let asked = browser.as_ref().is_some_and(|b| tabs::take_close_request(b.identifier()));
             let tab = shell::with_tab(browser, |s, index, _| {
-                (!s.window_closing && s.tabs.len() > 1).then(|| (index, s.engine.settings().bool("content.javascript.can_close_tabs")))
+                (!s.window_closing && s.tabs.len() > 1)
+                    .then(|| (index, asked || s.engine.settings().bool("content.javascript.can_close_tabs")))
             });
             match tab.flatten() {
                 Some((_, false)) => {

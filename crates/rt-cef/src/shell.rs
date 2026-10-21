@@ -910,11 +910,14 @@ pub fn current_session() -> rt_storage::Session {
                 .map(|i| &s.windows[i])
                 .filter(|w| !w.private && w.window.is_some())
                 .filter_map(|w| {
-                    let tabs = w
-                        .tabs
-                        .iter()
-                        .enumerate()
-                        .map(|(i, t)| crate::history::tab_state(t, w.tabs.is_pinned(i)));
+                    let tabs = w.tabs.iter().enumerate().map(|(i, t)| {
+                        let mut state = crate::history::tab_state(t, w.tabs.is_pinned(i));
+                        state.call = w.call
+                            && t.browser()
+                                .and_then(|b| b.host())
+                                .is_some_and(|h| h.runtime_style() == cef::RuntimeStyle::CHROME);
+                        state
+                    });
                     let mut state =
                         rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())?;
                     state.geometry = w.geometry();

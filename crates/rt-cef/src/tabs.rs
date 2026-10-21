@@ -98,10 +98,14 @@ pub fn close_unless_pinned(index: usize, force: bool) {
     })
     .flatten();
     let Some((browser, title, policy)) = pinned.filter(|_| !force) else {
-        return close(index);
+        return if force {
+            close(index)
+        } else {
+            close_asking_page(index)
+        };
     };
     match policy.as_str() {
-        "close" => return close(index),
+        "close" => return close_asking_page(index),
         "refuse" => {
             return shell::show_message(
                 Level::Error,
@@ -132,11 +136,41 @@ pub fn close_unless_pinned(index: usize, force: bool) {
             })
             .flatten();
             if let Some(index) = index {
-                close(index);
+                close_asking_page(index);
                 shell::refresh_ui();
             }
         },
     );
+}
+
+/// Close a tab once its page agrees: CEF runs the page's leave-page warning
+/// first, and `do_close` closes the tab if you leave.
+pub fn close_asking_page(index: usize) {
+    let host = shell::with(|s| {
+        (s.tabs.len() > 1)
+            .then(|| s.tabs.get(index)?.browser()?.host())
+            .flatten()
+    })
+    .flatten();
+    let Some(host) = host else {
+        return close(index);
+    };
+    let Some(id) = host.browser().map(|b| b.identifier()) else {
+        return close(index);
+    };
+    if CLOSING.with_borrow_mut(|closing| closing.insert(id)) {
+        host.close_browser(0);
+    }
+}
+
+/// Whether riptide asked this tab to close, rather than its page calling `window.close()`.
+pub fn take_close_request(browser: i32) -> bool {
+    CLOSING.with_borrow_mut(|closing| closing.remove(&browser))
+}
+
+/// The page's warning kept its tab open.
+pub fn close_refused(browser: i32) {
+    CLOSING.with_borrow_mut(|closing| closing.remove(&browser));
 }
 
 fn toggle_pin(index: usize) {
@@ -542,34 +576,61 @@ pub fn close(index: usize) {
 /// Replace this window's tabs with the session's first window, and open
 /// its other windows.
 pub fn restore(session: &rt_storage::Session) {
-    let Some(window) = session.windows.first().filter(|w| !w.tabs.is_empty()) else {
+    let windows: Vec<&rt_storage::WindowState> = session
+        .windows
+        .iter()
+        .filter(|w| !w.tabs.is_empty())
+        .collect();
+    // This window isn't a call window, so it takes an ordinary one if there is.
+    let Some(main) = windows
+        .iter()
+        .position(|w| w.call_tab().is_none())
+        .or((!windows.is_empty()).then_some(0))
+    else {
         return shell::show_message(Level::Error, "That session has no tabs");
     };
+    let window = windows[main];
     restore_window(window);
     if let Some(geometry) = &window.geometry
         && let Some(open) = shell::with(|s| s.window.clone()).flatten()
     {
         crate::window::apply_geometry(&open, geometry);
     }
-    for other in session
-        .windows
-        .iter()
-        .skip(1)
-        .filter(|w| !w.tabs.is_empty())
-    {
-        crate::window::create_from_session(other.clone());
+    for (_, other) in windows.iter().enumerate().filter(|(i, _)| *i != main) {
+        crate::window::create_from_session((*other).clone());
     }
 }
 
 /// Replace the active window's tabs with a saved window's.
 pub fn restore_window(window: &rt_storage::WindowState) {
+    restore_tabs(window, false);
+}
+
+/// Fill a restored call window, whose call tab is already open, with the
+/// saved window's other tabs after it.
+pub fn restore_call_window(window: &rt_storage::WindowState) {
+    restore_tabs(window, true);
+}
+
+fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
     if window.tabs.is_empty() {
         return;
     }
-    let old = shell::with(|s| s.tabs.len()).unwrap_or(0);
+    // The saved tabs in the order they open: a call window's call tab first.
+    let call = window.call_tab().filter(|_| after_call);
+    let order: Vec<usize> = call
+        .into_iter()
+        .chain((0..window.tabs.len()).filter(|&i| Some(i) != call))
+        .collect();
+    let old = if after_call {
+        0
+    } else {
+        shell::with(|s| s.tabs.len()).unwrap_or(0)
+    };
     let lazy = shell::with(|s| s.engine.settings().bool("session.lazy_restore")).unwrap_or(false);
     let active = window.active.min(window.tabs.len() - 1);
-    for (i, tab) in window.tabs.iter().enumerate() {
+    for &i in order.iter().skip(usize::from(call.is_some())) {
+        let tab = &window.tabs[i];
         let now = !lazy || i == active;
         open(
             if now { &tab.url } else { "about:blank" },
@@ -591,15 +652,15 @@ pub fn restore_window(window: &rt_storage::WindowState) {
     for _ in 0..old {
         close(0);
     }
-    // Pinning doesn't move tabs, so each keeps its saved place.
+    // Pinning doesn't move tabs, so each keeps its place in `order`.
     shell::with(|s| {
-        for (index, tab) in window.tabs.iter().enumerate() {
-            if tab.pinned {
+        for (index, &i) in order.iter().enumerate() {
+            if window.tabs[i].pinned {
                 s.tabs.set_pinned(index, true);
             }
         }
     });
-    switch_to(window.active.min(window.tabs.len() - 1), true);
+    switch_to(order.iter().position(|&i| i == active).unwrap_or(0), true);
 }
 
 wrap_task! {
@@ -702,6 +763,8 @@ pub struct OpenTab {
 }
 
 thread_local! {
+    /// Tabs waiting for their page's leave-page warning, by browser id.
+    static CLOSING: std::cell::RefCell<std::collections::HashSet<i32>> = std::cell::RefCell::new(std::collections::HashSet::new());
     /// Taken on every redraw: completion runs inside the shell borrow and
     /// can't look at the windows itself.
     static OPEN_TABS: std::cell::RefCell<Vec<OpenTab>> = const { std::cell::RefCell::new(Vec::new()) };

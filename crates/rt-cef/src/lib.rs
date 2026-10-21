@@ -161,15 +161,16 @@ wrap_browser_process_handler! {
                 None => shell::load_config(),
             });
             errors.extend(greasemonkey::load().1);
-            if let Some((data_dir, lists, rules)) = shell::with(|s| {
+            if let Some((data_dir, lists, rules, auto)) = shell::with(|s| {
                 let settings = s.engine.settings();
                 (
                     s.paths.data_dir.clone(),
                     settings.list("content.blocking.adblock.lists").to_vec(),
                     settings.list("content.blocking.adblock.rules").to_vec(),
+                    adblock::updates_automatically(settings),
                 )
             }) {
-                adblock::load(data_dir, lists, rules);
+                adblock::load(data_dir, lists, rules, auto);
             }
             let data_dir = shell::with(|s| s.paths.data_dir.clone());
             let mut commands = startup.commands;

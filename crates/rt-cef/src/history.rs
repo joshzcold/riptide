@@ -114,6 +114,7 @@ pub fn tab_state(tab: &Tab, pinned: bool) -> TabState {
         back,
         forward,
         scroll: tab.restore_scroll.or(tab.scroll_y).filter(|&y| y > 0),
+        call: false,
     }
 }
 

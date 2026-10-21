@@ -17,7 +17,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:mode-enter` | `'` `<Ctrl-v>` `V` `` ` `` `i` `v` | Enter a key mode |
 | `:mode-leave` |  | Leave the current mode |
 | `:cmd-set-text` |  | Preset the command line text |
-| `:tab-close` | `<Ctrl-w>` `d` | Close the current tab (--force: a pinned one without asking) |
+| `:tab-close` | `<Ctrl-w>` `d` | Close the current tab (--force: without asking, even if pinned or the page has unsaved changes) |
 | `:tab-pin` | `<Ctrl-p>` | Pin or unpin the current tab (count: tab number) |
 | `:tab-next` | `<Ctrl-PgDown>` `J` | Switch to the next tab |
 | `:tab-prev` | `<Ctrl-PgUp>` `K` `gT` | Switch to the previous tab |

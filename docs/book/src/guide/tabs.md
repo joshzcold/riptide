@@ -2,6 +2,8 @@
 
 The tab keys are in [Keys and modes](keys.md#common-keys): `J`/`K` switch tabs, `d` closes one, `u` reopens it, `T` picks one by name.
 
+If the page warns about unsaved changes, `d` asks first: `y` closes the tab and `n` keeps it. `:tab-close --force` closes it without asking.
+
 ## Pinned tabs
 
 Pinned tabs stay where you put them (drag or `:tab-move` them anywhere, between unpinned tabs too), shrink to their icon and number (`tabs.pinned.shrink`), and survive `co` unless you add `--force`. `d` on a pinned tab asks first (`tabs.pinned.close`: `ask`, `refuse` or `close`); `:tab-close --force` doesn't, and `u` reopens it pinned. With `tabs.pinned.frozen` (the default), `:open` in a pinned tab opens a new tab instead. Sessions remember which tabs are pinned.
@@ -76,7 +78,7 @@ The settings page (`:settings`) and `:help content.call_sites` show the default 
 - **Only the first tab:** only the tab a call window opened with shares this way. Further tabs you open in that window are ordinary ones.
 - **Popups:** popups from the call tab open in call windows of their own.
 - **The picker's Tab list** only offers call tabs, not riptide's ordinary tabs.
-- **Sessions:** call windows are saved as ordinary windows, so a restored call shares the whole screen until you reopen it with `--call`.
+- **Sessions:** a saved call window comes back as a call window, with its call tab first and its other tabs after it.
 - **Turning it off:** `content.desktop_capture = false` still refuses screen sharing everywhere, call windows included.
 - **In the background:** a call keeps running at full speed in a tab you've switched away from, as in Chrome, since it plays sound. A silent page in a background tab has its timers slowed to once a second.
 - **Stopping a share:** see [Sharing your screen](#sharing-your-screen).

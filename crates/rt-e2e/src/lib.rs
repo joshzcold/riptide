@@ -658,6 +658,8 @@ fn spawn_browser(dir: &Path, display: &str, env: &[(String, String)], args: &[&s
         .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
         // Plugins' secrets in memory, never the desktop's keyring.
         .env("RIPTIDE_SECRET_STORE", "memory")
+        // No filter list downloads from the internet; tests that want one turn it back on.
+        .env("RIPTIDE_ADBLOCK_AUTO_UPDATE", "0")
         // Stand-ins from `Launch::command` come first.
         .env(
             "PATH",

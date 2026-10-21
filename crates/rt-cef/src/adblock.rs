@@ -47,6 +47,55 @@ struct Update {
     requests: Vec<Urlrequest>,
     pending: usize,
     failed: Vec<String>,
+    /// A background update, which only speaks up when it fails.
+    quiet: bool,
+}
+
+/// When the lists were last downloaded, as seconds since the epoch.
+const LAST_UPDATE_FILE: &str = "adblock-last-update";
+
+/// Days between background downloads of the lists (0: never). Test builds
+/// turn them off with `RIPTIDE_ADBLOCK_AUTO_UPDATE=0`, so tests stay offline.
+fn update_interval(settings: &Settings) -> i64 {
+    #[cfg(any(debug_assertions, feature = "test-control"))]
+    if std::env::var("RIPTIDE_ADBLOCK_AUTO_UPDATE").is_ok_and(|v| v == "0") {
+        return 0;
+    }
+    settings.int("content.blocking.adblock.update_interval")
+}
+
+/// Whether startup will download the lists by itself.
+pub fn updates_automatically(settings: &Settings) -> bool {
+    update_interval(settings) > 0
+}
+
+/// After startup: download lists that are missing at once, and all of them
+/// again every `content.blocking.adblock.update_interval` days.
+pub fn after_startup() {
+    crate::client::later(5_000, maybe_update);
+}
+
+fn maybe_update() {
+    let Some((days, enabled, data_dir, lists)) = shell::with(|s| {
+        let settings = s.engine.settings();
+        (
+            update_interval(settings),
+            settings.bool("content.blocking.enabled"),
+            s.paths.data_dir.clone(),
+            settings.list("content.blocking.adblock.lists").to_vec(),
+        )
+    }) else {
+        return;
+    };
+    if days <= 0 || !enabled || lists.is_empty() {
+        return;
+    }
+    let store = Store::new(&data_dir);
+    if lists.iter().any(|url| !store.list_path(url).exists()) {
+        update(false);
+    } else if crate::background::due(&data_dir.join(LAST_UPDATE_FILE), days) {
+        update(true);
+    }
 }
 
 /// Copy the settings the IO thread needs. Runs on the UI thread.
@@ -95,7 +144,8 @@ fn install(generation: u64, blocker: Option<Blocker>) {
 }
 
 /// Load the cached engine (or compile the saved lists) in the background.
-pub fn load(data_dir: PathBuf, lists: Vec<String>, rules: Vec<String>) {
+/// Without any, it says to run `:adblock-update`, unless startup will (`auto`).
+pub fn load(data_dir: PathBuf, lists: Vec<String>, rules: Vec<String>, auto: bool) {
     if let Ok(mut state) = STATE.write() {
         state.rules = Some(rules.clone());
         state.data_dir = Some(data_dir.clone());
@@ -105,7 +155,7 @@ pub fn load(data_dir: PathBuf, lists: Vec<String>, rules: Vec<String>) {
         let blocker = Store::new(&data_dir).load(&lists, &rules);
         let loaded = blocker.is_some();
         install(generation, blocker);
-        if !loaded {
+        if !loaded && !auto {
             shell::post_message(
                 Level::Info,
                 "Content blocking has no filter lists yet; run :adblock-update".into(),
@@ -296,9 +346,17 @@ pub fn run_command(command: &Command) -> bool {
     if !matches!(command, Command::AdblockUpdate) {
         return false;
     }
+    update(false);
+    true
+}
+
+/// Download every list and compile them; a `quiet` update says nothing unless it fails.
+fn update(quiet: bool) {
     if UPDATE.with(|u| u.borrow().is_some()) {
-        shell::show_message(Level::Info, "Filter lists are already being updated");
-        return true;
+        if !quiet {
+            shell::show_message(Level::Info, "Filter lists are already being updated");
+        }
+        return;
     }
     let Some((data_dir, lists)) = shell::with(|s| {
         (
@@ -309,17 +367,18 @@ pub fn run_command(command: &Command) -> bool {
                 .to_vec(),
         )
     }) else {
-        return true;
+        return;
     };
     if lists.is_empty() {
         shell::show_message(Level::Error, "content.blocking.adblock.lists is empty");
-        return true;
+        return;
     }
     let store = Store::new(&data_dir);
     let mut update = Update {
         requests: Vec::new(),
         pending: 0,
         failed: Vec::new(),
+        quiet,
     };
     for url in &lists {
         if let Some(path) = url.strip_prefix("file://") {
@@ -345,14 +404,15 @@ pub fn run_command(command: &Command) -> bool {
     }
     let pending = update.pending;
     UPDATE.with(|u| *u.borrow_mut() = Some(update));
-    shell::show_message(
-        Level::Info,
-        format!("Downloading {} filter list(s)…", lists.len()),
-    );
+    if !quiet {
+        shell::show_message(
+            Level::Info,
+            format!("Downloading {} filter list(s)…", lists.len()),
+        );
+    }
     if pending == 0 {
         finish();
     }
-    true
 }
 
 /// One list finished downloading (or failed). Runs on the UI thread.
@@ -404,8 +464,10 @@ fn finish() {
         let message = match compiled {
             Some((blocker, rules)) => {
                 install(generation, Some(blocker));
+                crate::background::record(&data_dir.join(LAST_UPDATE_FILE));
                 let ok = lists.len() - update.failed.len();
                 match update.failed.as_slice() {
+                    [] if update.quiet => return,
                     [] => (
                         Level::Info,
                         format!("Content blocking: {rules} rules from {ok} list(s)"),
