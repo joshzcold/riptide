@@ -2,7 +2,7 @@
 
 ## Content blocking
 
-Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Run `:adblock-update` once to download the lists in `content.blocking.adblock.lists` (by default EasyList, EasyPrivacy, and uBlock Origin's own lists: uBlock filters, Privacy, Quick fixes and Unbreak, as uBlock Origin enables them; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup. Hosts files (lines like `0.0.0.0 ads.example.com`, as in [StevenBlack's lists](https://github.com/StevenBlack/hosts)) work in the same setting; riptide recognizes them and blocks each listed host:
+Ads and trackers are blocked at the network level with Adblock Plus filter lists, using Brave's [adblock-rust](https://github.com/brave/adblock-rust). Riptide downloads the lists in `content.blocking.adblock.lists` a few seconds after it first starts, and again every day in the background (`content.blocking.adblock.update_interval`, in days; 0 leaves it to you). `:adblock-update` downloads them now. The lists are, by default, EasyList, EasyPrivacy, and uBlock Origin's own lists: uBlock filters, Privacy, Quick fixes and Unbreak, as uBlock Origin enables them; `file://` lists work too). The compiled engine is cached in the data directory and loads in the background at startup. Hosts files (lines like `0.0.0.0 ads.example.com`, as in [StevenBlack's lists](https://github.com/StevenBlack/hosts)) work in the same setting; riptide recognizes them and blocks each listed host:
 
 ```toml
 "content.blocking.adblock.lists" = [
@@ -32,7 +32,7 @@ If you set `content.blocking.adblock.lists` yourself before uBlock Origin's list
 ]
 ```
 
-Run `:adblock-update` after changing the lists.
+Lists you add are downloaded at the next start, or at once with `:adblock-update`.
 
 Procedural element hiding works too, for elements CSS alone can't pick out: `:has-text()`, `:upward()`, `:matches-css()` (and `-before`, `-after`), `:matches-attr()`, `:matches-path()`, `:min-text-length()` and `:xpath()`, with the actions `:remove()`, `:style()`, `:remove-attr()` and `:remove-class()`. They're applied as the page loads and again whenever it changes, so content added later is caught too.
 
@@ -68,7 +68,7 @@ Chromium calls Google in the background. riptide turns off the calls that only s
 | `www.google.com` preconnects | Default search engine warm-up | off (Chrome's default search engine is disabled; riptide has its own `url.searchengines`) |
 | `accounts.google.com/ListAccounts` | Google accounts in the cookie jar | **still sent** once at startup. Google sign-in is off, but something still asks for the cookie jar; it carries your google.com cookies if you have any. |
 
-Beyond the pages you visit, riptide goes online for what you set up or ask for: `:adblock-update` downloads the filter lists (from `easylist.to` and `ublockorigin.github.io` by default), `:extension-install` and `:extension-update` ask the Chrome Web Store (`clients2.google.com`), and plugins added with `rt.pack.add` are fetched with git the first time riptide starts with them, and when you check for updates.
+Beyond the pages you visit, riptide goes online for what you set up or ask for: it downloads the filter lists at the first start and then daily, and with `:adblock-update` (from `easylist.to` and `ublockorigin.github.io` by default), `:extension-install` and `:extension-update` ask the Chrome Web Store (`clients2.google.com`), and plugins added with `rt.pack.add` are fetched with git the first time riptide starts with them, and when you check for updates.
 
 The preferences are written into the profile (`Local State`, `Default/Preferences`) before Chromium starts, since most of these services start within 100 ms. To check for yourself: `riptide --basedir /tmp/t --log-net-log=/tmp/net.json about:blank`, then `grep -o '"url":"[^"]*' /tmp/net.json | sort -u`.
 

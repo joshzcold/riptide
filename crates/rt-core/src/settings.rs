@@ -1035,6 +1035,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Your own filter rules, in Adblock Plus syntax (e.g. example.com##.banner); they apply at once, without :adblock-update"
     ),
     def!(
+        "content.blocking.adblock.update_interval",
+        Kind::Int { min: 0, max: 365 },
+        Value::Int(1),
+        "Every this many days, download content.blocking.adblock.lists again in the background; lists not downloaded yet are fetched soon after startup (0: only with :adblock-update)"
+    ),
+    def!(
         "content.blocking.enabled",
         Kind::Bool,
         Value::Bool(true),

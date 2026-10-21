@@ -179,3 +179,65 @@ fn the_picker_hides_an_element_and_keeps_the_rule() {
     b.open("picker.html");
     b.wait_eval("document.title", "promo=none,none content=block");
 }
+
+/// Waits until a saved filter list contains `text`.
+fn wait_for_saved_list(b: &Browser, text: &str) {
+    let dir = b.data_dir().join("adblock/lists");
+    let start = std::time::Instant::now();
+    loop {
+        let found = std::fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| std::fs::read_to_string(e.path()).is_ok_and(|t| t.contains(text)));
+        if found {
+            return;
+        }
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "no saved list has {text:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+fn last_update(b: &Browser) -> u64 {
+    std::fs::read_to_string(b.data_dir().join("adblock-last-update"))
+        .ok()
+        .and_then(|t| t.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn missing_filter_lists_download_soon_after_startup() {
+    let b = Browser::launch()
+        .toml("content.blocking.adblock.lists = [\"{server}/filters.txt\"]\nmessages.timeout = 0\n")
+        .env("RIPTIDE_ADBLOCK_AUTO_UPDATE", "1")
+        .start("page.html");
+    b.wait_until("the list is downloaded without :adblock-update", |s| {
+        s.message().is_some_and(|m| m.contains("rules from 1 list"))
+    });
+    assert!(last_update(&b) > 0, "the download's time is kept");
+    b.open("adblock.html");
+    b.wait_eval("document.title", "ads b=no a=yes");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn filter_lists_update_in_the_background_when_due() {
+    let b = Browser::launch()
+        .toml("content.blocking.adblock.lists = [\"file://{scratch}/mine.txt\"]\n")
+        .file("../scratch/mine.txt", "||first.example^\n")
+        .env("RIPTIDE_ADBLOCK_AUTO_UPDATE", "1")
+        .start("page.html");
+    wait_for_saved_list(&b, "first.example");
+    std::fs::write(b.scratch().join("mine.txt"), "||second.example^\n").unwrap();
+    // Downloaded long ago: the next update is due.
+    b.run("quit");
+    assert!(b.wait_exit().success());
+    std::fs::write(b.data_dir().join("adblock-last-update"), "1").unwrap();
+    b.restart();
+    wait_for_saved_list(&b, "second.example");
+    assert!(last_update(&b) > 1, "the update's time is kept");
+}

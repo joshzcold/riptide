@@ -97,7 +97,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Ad blocking (M8)
 
 - Scriptlets in frames from another site (separate DevTools targets; needs `Target.setAutoAttach`).
-- Automatic filter list updates.
 - A tab keeps a host's scriptlets until it closes, even after the site is whitelisted.
 
 ### Tabs, windows and sessions

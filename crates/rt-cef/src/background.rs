@@ -21,6 +21,14 @@ pub fn due(file: &Path, days: i64) -> bool {
     due
 }
 
+/// Record now as the last run of the check `file` holds, after it ran some other way.
+pub fn record(file: &Path) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let _ = std::fs::write(file, now.to_string());
+}
+
 /// Whether to run now, and whether to record now as the last run. The first
 /// time only starts the clock, so what was just installed counts as current.
 fn decide(last: Option<u64>, now: u64, days: i64) -> (bool, bool) {

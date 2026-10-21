@@ -557,6 +557,7 @@ wrap_window_delegate! {
                     storage::start_autosave();
                     crate::crash::mention_last_report();
                     crate::extensions::after_startup();
+                    crate::adblock::after_startup();
                 }
             }
             let private = shell::with(|s| s.private).unwrap_or(false).to_string();
