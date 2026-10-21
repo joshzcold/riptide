@@ -135,7 +135,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - The documentation site doesn't show the version it was built from.
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
 - The crash tests don't cover a native abort in the browser process.
-- `remote::tests::replaces_a_stale_socket` fails now and then on macOS CI (the second `Server::bind` errors); it passed on rerun.
+- Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
 - `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
 
 ### Not planned

@@ -6,7 +6,15 @@ use rt_e2e::{Browser, State};
 /// Hint mode with the elements `ready` wants; tries again while frames load.
 fn hints_once(b: &Browser, ready: impl Fn(&State) -> bool) -> State {
     let start = std::time::Instant::now();
+    let mut reloaded = false;
     loop {
+        // Under load, CEF can time out setting up the iframe's renderer
+        // ("Timeout of new browser info response"), and only a reload fixes it.
+        if !reloaded && start.elapsed() > rt_e2e::TIMEOUT / 3 {
+            reloaded = true;
+            b.run("reload");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
         b.run("hint");
         let s = b.wait_until("hints are shown", |s| {
             s.mode == "hint" && !s.hints.is_empty()
