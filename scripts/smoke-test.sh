@@ -197,8 +197,18 @@ done
 # Focus the field through a hint (a real CEF click), which doesn't depend on
 # where the window lands on the display, unlike an xdotool click.
 step "focusing a field enters insert mode; typed keys reach it"
-xdotool key a
-wait_mode insert || true
+# On CI's runners since 2026-10-21 the first click after startup is often
+# lost, also on commits that passed before; hint again until it lands.
+for _ in 1 2 3; do
+    xdotool key a
+    wait_mode insert && break
+    xdotool key Escape
+    wait_mode normal || true
+    for _ in 1 2 3 4 5; do
+        xdotool key f
+        wait_mode hint && break
+    done
+done
 xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc c=no"
 

@@ -124,6 +124,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - Greasemonkey: scripts run in the page's main world; `GM_xmlhttpRequest` has no binary responses.
 - Downloads from private windows go to the usual folder and list.
 - The documentation site doesn't show the version it was built from.
+- On CI's runners since 2026-10-21, the smoke test's first hint click after startup often doesn't reach the page, on commits that passed there before too (seen with 0.4's main, `f704b7d`). The smoke test hints again; find out what changed on the runners.
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
 - The crash tests don't cover a native abort in the browser process.
 - Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
