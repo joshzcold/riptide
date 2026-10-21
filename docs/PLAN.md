@@ -101,7 +101,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Tabs, windows and sessions
 
-- Call windows are restored as ordinary windows.
 - Favicons aren't kept in sessions (they're fetched again on load).
 
 ### Calls (M22)

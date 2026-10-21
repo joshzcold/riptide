@@ -81,6 +81,9 @@ pub struct TabState {
     /// How far down the page was scrolled, in CSS pixels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scroll: Option<u32>,
+    /// A call window's call tab: its window is restored as a call window.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub call: bool,
 }
 
 /// A page in a tab's back/forward history.
@@ -92,6 +95,11 @@ pub struct PageState {
 }
 
 impl WindowState {
+    /// The index of the call tab, in a call window.
+    pub fn call_tab(&self) -> Option<usize> {
+        self.tabs.iter().position(|t| t.call)
+    }
+
     /// A window's tabs, with `current` the index of the current one. Tabs
     /// without a URL yet (a popup still opening) are left out, and `active`
     /// still points at the same tab. `None` if none are left.
@@ -280,6 +288,7 @@ mod tests {
                         back: vec![page("https://a.org/"), page("https://a.org/2")],
                         forward: vec![page("https://c.org/")],
                         scroll: Some(1200),
+                        call: true,
                     },
                 ],
             }],
@@ -299,7 +308,8 @@ mod tests {
         let old = "[[windows]]\nactive = 0\n[[windows.tabs]]\nurl = \"https://a.org/\"\n";
         let session: Session = toml::from_str(old).unwrap();
         let tab = &session.windows[0].tabs[0];
-        assert!(!tab.pinned);
+        assert!(!tab.pinned && !tab.call);
+        assert_eq!(session.windows[0].call_tab(), None);
         assert!(tab.back.is_empty() && tab.forward.is_empty() && tab.scroll.is_none());
         assert_eq!(session.windows[0].geometry, None);
     }

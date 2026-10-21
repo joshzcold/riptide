@@ -139,3 +139,39 @@ fn call_sites_open_in_a_call_window_from_open_and_from_links() {
                 .all(|w| w.tabs.len() == 1)
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_saved_call_window_comes_back_as_a_call_window() {
+    let b = Browser::launch()
+        .toml("url.start_pages = [\"about:blank\"]\nauto_save.session = true\n")
+        .start("page.html");
+    let call = b.url("second.html");
+    b.run(&format!("open --call {call}"));
+    b.wait_until("a call window", |s| {
+        s.window().call && s.tab().is_loaded(&call)
+    });
+    let more = b.url("dialogs.html");
+    b.run(&format!("open -t {more}"));
+    b.wait_until("a second tab in the call window", |s| {
+        s.window().call && s.tabs().len() == 2 && s.tab().is_loaded(&more)
+    });
+    b.run("wq");
+    assert!(b.wait_exit().success());
+    let session = std::fs::read_to_string(b.data_dir().join("sessions/default.toml")).unwrap();
+    assert!(session.contains("call = true"), "{session}");
+
+    b.restart();
+    let page = b.url("page.html");
+    let s = b.wait_until("both windows are back", |s| {
+        s.windows.len() == 2
+            && s.windows
+                .iter()
+                .any(|w| !w.call && w.tabs.len() == 1 && w.tabs[0].url == page)
+            && s.windows.iter().any(|w| {
+                w.call && w.tabs.len() == 2 && w.tabs[0].url == call && w.tabs[1].url == more
+            })
+    });
+    let window = s.windows.iter().find(|w| w.call).unwrap();
+    assert_eq!(window.current_tab, 1, "the tab that was current still is");
+}
