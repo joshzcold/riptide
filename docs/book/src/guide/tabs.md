@@ -48,6 +48,24 @@ Where new tabs go is set by `tabs.new_position.related` (tabs opened from a page
 
 With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab while typing in insert mode, and you're back in insert mode when you return. The default `normal` leaves insert mode on every switch, and `persist` keeps the current mode.
 
+## Splits
+
+Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts a new pane on the right and `ss` (`:split [url]`) one below, each with `url`, or the default page, in a new tab. The new pane takes half of the focused pane's room and gets the focus.
+
+| Key | Command | Does |
+|---|---|---|
+| `sv` | `:vsplit [url]` | Split side by side |
+| `ss` | `:split [url]` | Split one above the other |
+| `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` | `:split-focus left\|down\|up\|right` | Move to the pane on that side |
+| `sw` | `:split-focus next` | Move to the next pane |
+| `s=` | `:split-equal` | Give every pane the same room |
+| `sc` | `:split-close` | Close the focused pane |
+| `so` | `:only` | Keep only the focused pane |
+
+The focused pane has a border in the theme's accent color and shows the current tab, so keys, hints, the status bar and every command act on it. Clicking a pane focuses it. `J`, `K` and `:tab-select` change the focused pane's tab; picking a tab that another pane already shows moves the focus there instead, since a tab can only be in one pane. Closing a pane or using `:only` keeps its tab open; closing a pane's tab shows another tab that isn't on screen, or closes the pane when there's none.
+
+Splits aren't saved in sessions yet: a restored window has one pane.
+
 ## Windows and private windows
 
 `:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.

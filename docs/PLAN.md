@@ -98,26 +98,15 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Splits
 
-Show two or more tabs side by side in one window, as in vim.
+Built (see guide/tabs.md): `:split`, `:vsplit`, `:only`, `:split-close`, `:split-focus`, `:split-equal`, the `s` keys and `<Ctrl-h/j/k/l>`, the focused pane's border, focus by clicking, `J`/`K` moving the focus to a tab another pane shows, and panes that follow tabs closing. The layout tree is `rt_core::split`; `rt-cef/src/panes.rs` places the tab views in the page area, which has no layout manager.
 
-- **Commands:** `:split [url]` and `:vsplit [url]` split the current pane in two, one above the other or side by side, with `url` in a new tab in the new pane. `:only` goes back to one pane and `:split-close` closes the current pane. `:split-focus left|down|up|right|next` moves between panes, and `:split-resize` and `:split-equal` change their sizes. With no URL, the new pane shows another tab (or a new one), since a tab is one browser and can't be in two panes.
-- **Keys:** vim's `<Ctrl-w>` keys under the free `s` prefix (`<Ctrl-w>` is `:tab-close`), and `<Ctrl>` with `hjkl` to move between panes, as in many vim and tmux setups:
+Still to do:
 
-  | Key | Command |
-  |---|---|
-  | `ss` | `:split` |
-  | `sv` | `:vsplit` |
-  | `so` | `:only` |
-  | `sc` | `:split-close` |
-  | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` | `:split-focus left/down/up/right` (normal mode; command and prompt mode keep `<Ctrl-h>` and `<Ctrl-k>` for editing) |
-  | `sw` | `:split-focus next` |
-  | `s=` | `:split-equal` |
-
-- **Behaviour:** keys, hints, scrolling, the status bar and the command line all follow the focused pane, which gets a thin border in `colors.split.focused`. Each pane shows a tab from the window's tab list; the tab bar marks the tabs that are on screen, and `J`/`K` and `:tab-select` change the focused pane's tab. Closing a pane's tab shows the next tab in that pane, or closes the pane when no tab is left that isn't on screen elsewhere.
-- **Mouse:** clicking a pane focuses it, and dragging the border between two panes resizes them.
-- **Sessions:** the layout (the split tree, its sizes and each pane's tab) is saved and restored with the window.
-- **Building it:** the content panel becomes a tree of CEF `BoxLayout` panels with a `BrowserView` in each leaf. The engine keeps the layout and the focused pane in `rt-core`, so splitting, closing and moving between panes is unit tested without CEF; e2e tests cover the keys, focus following clicks and a restored layout. Call windows and floats stay outside the split tree.
-- **Open questions:** whether `:open -t` from a pane opens its tab in that pane (likely) or in the background, and how many panes a window allows.
+- **Sessions:** save and restore the layout (the split tree, its sizes and each pane's tab).
+- **Resizing:** `:split-resize` and dragging the border between two panes.
+- **The crash notice** covers the focused pane only; a crashed tab in another pane shows nothing.
+- **Extension popups** open at the top right of the whole page area, not over their own pane.
+- **Open questions:** whether `:open -t` from a pane should open its tab in that pane (it does, since the new tab becomes current), and how many panes a window allows.
 
 ### Tabs, windows and sessions
 

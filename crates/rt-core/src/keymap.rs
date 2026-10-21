@@ -138,6 +138,17 @@ impl Keymap {
         }
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
             .expect("valid default binding");
+        // <Ctrl-j> is Return where Return accepts; in normal mode it moves between splits.
+        for (mode, cmd) in [
+            (Mode::Command, "command-accept"),
+            (Mode::Hint, "hint-follow"),
+            (Mode::Prompt, "prompt-accept"),
+            (Mode::YesNo, "prompt-accept"),
+            (Mode::Caret, "yank selection"),
+        ] {
+            map.bind(mode, "<Ctrl-j>", cmd)
+                .expect("valid default binding");
+        }
         for source in map.sources.values_mut() {
             *source = "default".to_string();
         }
@@ -301,6 +312,17 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("gK", "tab-move -"),
     ("gm", "tab-move"),
     ("co", "tab-only"),
+    // Splits: vim's <Ctrl-w> keys under s, and <Ctrl> with hjkl to move.
+    ("ss", "split"),
+    ("sv", "vsplit"),
+    ("so", "only"),
+    ("sc", "split-close"),
+    ("sw", "split-focus next"),
+    ("s=", "split-equal"),
+    ("<Ctrl-h>", "split-focus left"),
+    ("<Ctrl-j>", "split-focus down"),
+    ("<Ctrl-k>", "split-focus up"),
+    ("<Ctrl-l>", "split-focus right"),
     ("cm", "call-mute"),
     ("gp", "pip"),
     ("<Ctrl-p>", "tab-pin"),
@@ -445,6 +467,27 @@ mod tests {
         );
         assert_eq!(map.lookup(Mode::Normal, &seq("gx")), Lookup::None);
         assert_eq!(map.lookup(Mode::Insert, &seq("j")), Lookup::None);
+    }
+
+    #[test]
+    fn ctrl_j_moves_between_splits_but_accepts_elsewhere() {
+        let map = Keymap::defaults();
+        assert_eq!(
+            map.lookup(Mode::Normal, &seq("<Ctrl-j>")),
+            Lookup::Exact("split-focus down")
+        );
+        assert_eq!(
+            map.lookup(Mode::Command, &seq("<Ctrl-j>")),
+            Lookup::Exact("command-accept")
+        );
+        assert_eq!(
+            map.lookup(Mode::Prompt, &seq("<Ctrl-j>")),
+            Lookup::Exact("prompt-accept")
+        );
+        assert_eq!(
+            map.lookup(Mode::Normal, &seq("sv")),
+            Lookup::Exact("vsplit")
+        );
     }
 
     #[test]

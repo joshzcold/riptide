@@ -30,6 +30,7 @@ mod notifications;
 mod page;
 mod pages;
 mod panel;
+mod panes;
 mod permissions;
 mod plugins;
 mod popup;

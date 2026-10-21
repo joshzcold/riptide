@@ -24,6 +24,12 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:tab-focus` | `<Alt-1>` `<Alt-2>` `<Alt-3>` `<Alt-4>` `<Alt-5>` `<Alt-6>` `<Alt-7>` `<Alt-8>` `<Alt-9>` `<Ctrl-Tab>` `<Ctrl-^>` `g$` `g0` `g^` | Select a tab by number, 'last', or 'stack-prev'/'stack-next' through recently focused tabs |
 | `:tab-move` | `gJ` `gK` `gm` | Move the current tab: +, -, start, end or a number |
 | `:tab-only` | `co` | Close all tabs except the current one |
+| `:split` | `ss` | Split the page area, with a new pane below showing url (or the default page): :split [url] |
+| `:vsplit` | `sv` | Split the page area, with a new pane on the right showing url (or the default page): :vsplit [url] |
+| `:split-close` | `sc` | Close the focused pane; its tab stays open |
+| `:only` | `so` | Keep only the focused pane; the other panes' tabs stay open |
+| `:split-focus` | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` `sw` | Focus the pane to the left, below, above or to the right, or the next one: :split-focus left\|down\|up\|right\|next |
+| `:split-equal` | `s=` | Give every pane the same room |
 | `:tab-clone` |  | Duplicate the current tab: :tab-clone [-b] [-w] |
 | `:tab-give` | `gD` | Move the current tab to window N, or to a new window: :tab-give [N] |
 | `:tab-call` |  | Reopen the current tab in a call window, where screen sharing picks a tab, window or screen |

@@ -22,6 +22,7 @@ pub mod prompt;
 pub mod settings;
 pub mod settings_page;
 pub mod shell_words;
+pub mod split;
 pub mod tab_history;
 pub mod tabs;
 pub mod theme;
