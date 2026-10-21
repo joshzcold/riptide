@@ -450,7 +450,7 @@ wrap_window_delegate! {
             let (Some(tabbar), Some(row), Some(content), Some(statusbar), Some(completion)) = (
                 create_browser_view(Role::Tabbar, ui::TABBAR_URL),
                 panel_create(None),
-                panel_create(None),
+                panel_create(Some(&mut crate::panes::ContentDelegate::new(self.id))),
                 create_browser_view(Role::Statusbar, ui::STATUSBAR_URL),
                 create_browser_view(Role::Completion, ui::COMPLETION_URL),
             ) else {
@@ -481,8 +481,8 @@ wrap_window_delegate! {
                 layout.set_flex_for_view(Some(&mut row_view), 1);
             }
 
-            // All tab views share the content panel; only the current one is visible.
-            content.set_to_fill_layout();
+            // All tab views share the content panel, which places them itself
+            // (`panes::arrange`): the current one fills it, or each pane has one.
             let mut content_view = View::from(&content);
             row.add_child_view(Some(&mut content_view));
             if let Some(layout) = row_layout {

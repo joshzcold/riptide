@@ -1,0 +1,618 @@
+//! Split panes: a window's page area as a tree of panes, each showing one
+//! tab. The browser layer gives each pane a view; the tree, the focused pane
+//! and moving between panes live here, so they're tested without CEF.
+
+/// A pane's id within its window. Ids aren't reused while the window is open.
+pub type PaneId = u32;
+
+/// How a split arranges its panes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Axis {
+    /// One above the other (`:split`).
+    Horizontal,
+    /// Side by side (`:vsplit`).
+    Vertical,
+}
+
+/// Where `:split-focus` moves to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Direction {
+    Left,
+    Down,
+    Up,
+    Right,
+}
+
+impl Direction {
+    pub fn parse(text: &str) -> Option<Self> {
+        Some(match text {
+            "left" => Self::Left,
+            "down" => Self::Down,
+            "up" => Self::Up,
+            "right" => Self::Right,
+            _ => return None,
+        })
+    }
+}
+
+/// A pane's place in the window, in pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Node {
+    Pane(PaneId),
+    /// Children with their share of the split, adding up to 1.
+    Split {
+        axis: Axis,
+        children: Vec<(Node, f64)>,
+    },
+}
+
+/// A pane's place as fractions of the page area.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Rect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl Rect {
+    fn center(&self) -> (f64, f64) {
+        (self.x + self.width / 2.0, self.y + self.height / 2.0)
+    }
+}
+
+const EPSILON: f64 = 1e-9;
+
+/// A window's panes. A new layout has one pane, `0`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Layout {
+    root: Node,
+    focused: PaneId,
+    next_id: PaneId,
+}
+
+impl Default for Layout {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Layout {
+    pub fn new() -> Self {
+        Self {
+            root: Node::Pane(0),
+            focused: 0,
+            next_id: 1,
+        }
+    }
+
+    pub fn focused(&self) -> PaneId {
+        self.focused
+    }
+
+    /// Whether there's more than one pane.
+    pub fn is_split(&self) -> bool {
+        matches!(self.root, Node::Split { .. })
+    }
+
+    /// Every pane, top-left first.
+    pub fn panes(&self) -> Vec<PaneId> {
+        let mut panes = Vec::new();
+        collect(&self.root, &mut panes);
+        panes
+    }
+
+    pub fn contains(&self, pane: PaneId) -> bool {
+        self.panes().contains(&pane)
+    }
+
+    /// Focus `pane`; false if there's no such pane.
+    pub fn focus(&mut self, pane: PaneId) -> bool {
+        let found = self.contains(pane);
+        if found {
+            self.focused = pane;
+        }
+        found
+    }
+
+    /// Split the focused pane in two along `axis`. The new pane comes after
+    /// it (below or to the right), takes half its room, and is focused.
+    pub fn split(&mut self, axis: Axis) -> PaneId {
+        let new = self.next_id;
+        self.next_id += 1;
+        split_node(&mut self.root, self.focused, new, axis);
+        self.focused = new;
+        new
+    }
+
+    /// Close `pane`, giving its room to its neighbours. The last pane can't
+    /// be closed. If it was focused, the pane before it in its split (or
+    /// after, for the first) is focused instead.
+    pub fn close(&mut self, pane: PaneId) -> bool {
+        if !self.is_split() || !self.contains(pane) {
+            return false;
+        }
+        let neighbour = remove_node(&mut self.root, pane);
+        collapse(&mut self.root);
+        if self.focused == pane {
+            self.focused = neighbour
+                .filter(|p| self.contains(*p))
+                .unwrap_or_else(|| self.panes()[0]);
+        }
+        true
+    }
+
+    /// Keep only the focused pane; returns the panes that went.
+    pub fn only(&mut self) -> Vec<PaneId> {
+        let gone: Vec<PaneId> = self
+            .panes()
+            .into_iter()
+            .filter(|&p| p != self.focused)
+            .collect();
+        self.root = Node::Pane(self.focused);
+        gone
+    }
+
+    /// The pane after the focused one, wrapping around.
+    pub fn next(&self) -> PaneId {
+        let panes = self.panes();
+        let i = panes.iter().position(|&p| p == self.focused).unwrap_or(0);
+        panes[(i + 1) % panes.len()]
+    }
+
+    /// The pane next to the focused one in `direction`: of the panes that
+    /// touch its edge, the one level with its middle, or else the closest.
+    pub fn neighbour(&self, direction: Direction) -> Option<PaneId> {
+        let rects = self.rects();
+        let (_, here) = *rects.iter().find(|(p, _)| *p == self.focused)?;
+        let (cx, cy) = here.center();
+        rects
+            .iter()
+            .filter(|(p, _)| *p != self.focused)
+            .filter_map(|&(pane, r)| {
+                // How far the edges are apart, and how far the other pane's
+                // span is from this one's middle (0 when it's level with it).
+                let (gap, along, overlap) = match direction {
+                    Direction::Left => (
+                        here.x - (r.x + r.width),
+                        span_distance(cy, r.y, r.height),
+                        overlap(here.y, here.height, r.y, r.height),
+                    ),
+                    Direction::Right => (
+                        r.x - (here.x + here.width),
+                        span_distance(cy, r.y, r.height),
+                        overlap(here.y, here.height, r.y, r.height),
+                    ),
+                    Direction::Up => (
+                        here.y - (r.y + r.height),
+                        span_distance(cx, r.x, r.width),
+                        overlap(here.x, here.width, r.x, r.width),
+                    ),
+                    Direction::Down => (
+                        r.y - (here.y + here.height),
+                        span_distance(cx, r.x, r.width),
+                        overlap(here.x, here.width, r.x, r.width),
+                    ),
+                };
+                (gap.abs() < EPSILON && overlap > EPSILON).then_some((pane, along))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(pane, _)| pane)
+    }
+
+    /// Give every pane in each split the same room.
+    pub fn equalize(&mut self) {
+        equalize(&mut self.root);
+    }
+
+    /// Each pane's place in a `width` × `height` page area, with `gap`
+    /// pixels between neighbouring panes and none at the outer edges.
+    pub fn bounds(&self, width: i32, height: i32, gap: i32) -> Vec<(PaneId, Bounds)> {
+        let (w, h) = (f64::from(width), f64::from(height));
+        let half = f64::from(gap) / 2.0;
+        self.rects()
+            .into_iter()
+            .map(|(pane, r)| {
+                // Shrink only edges inside the area, so neighbours split the gap.
+                let inner = |edge: f64| {
+                    if edge > EPSILON && edge < 1.0 - EPSILON {
+                        half
+                    } else {
+                        0.0
+                    }
+                };
+                let left = r.x * w + inner(r.x);
+                let right = (r.x + r.width) * w - inner(r.x + r.width);
+                let top = r.y * h + inner(r.y);
+                let bottom = (r.y + r.height) * h - inner(r.y + r.height);
+                let (x, y) = (left.round() as i32, top.round() as i32);
+                (
+                    pane,
+                    Bounds {
+                        x,
+                        y,
+                        width: (right.round() as i32 - x).max(0),
+                        height: (bottom.round() as i32 - y).max(0),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn rects(&self) -> Vec<(PaneId, Rect)> {
+        let mut out = Vec::new();
+        place(
+            &self.root,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            &mut out,
+        );
+        out
+    }
+}
+
+fn collect(node: &Node, out: &mut Vec<PaneId>) {
+    match node {
+        Node::Pane(p) => out.push(*p),
+        Node::Split { children, .. } => children.iter().for_each(|(c, _)| collect(c, out)),
+    }
+}
+
+fn place(node: &Node, rect: Rect, out: &mut Vec<(PaneId, Rect)>) {
+    match node {
+        Node::Pane(p) => out.push((*p, rect)),
+        Node::Split { axis, children } => {
+            let mut offset = 0.0;
+            for (child, share) in children {
+                let r = match axis {
+                    Axis::Vertical => Rect {
+                        x: rect.x + offset * rect.width,
+                        width: share * rect.width,
+                        ..rect
+                    },
+                    Axis::Horizontal => Rect {
+                        y: rect.y + offset * rect.height,
+                        height: share * rect.height,
+                        ..rect
+                    },
+                };
+                place(child, r, out);
+                offset += share;
+            }
+        }
+    }
+}
+
+/// Split the pane `target` within `node`; true once it's found.
+fn split_node(node: &mut Node, target: PaneId, new: PaneId, axis: Axis) -> bool {
+    match node {
+        Node::Pane(p) if *p == target => {
+            *node = Node::Split {
+                axis,
+                children: vec![(Node::Pane(target), 0.5), (Node::Pane(new), 0.5)],
+            };
+            true
+        }
+        Node::Pane(_) => false,
+        Node::Split {
+            axis: split_axis,
+            children,
+        } => {
+            // A pane in a split along the same axis gets a sibling, as in vim.
+            if *split_axis == axis
+                && let Some(i) = children.iter().position(|(c, _)| *c == Node::Pane(target))
+            {
+                let half = children[i].1 / 2.0;
+                children[i].1 = half;
+                children.insert(i + 1, (Node::Pane(new), half));
+                return true;
+            }
+            children
+                .iter_mut()
+                .any(|(c, _)| split_node(c, target, new, axis))
+        }
+    }
+}
+
+/// Remove the pane `target`; returns the pane that should take focus.
+fn remove_node(node: &mut Node, target: PaneId) -> Option<PaneId> {
+    let Node::Split { children, .. } = node else {
+        return None;
+    };
+    if let Some(i) = children.iter().position(|(c, _)| *c == Node::Pane(target)) {
+        let (_, share) = children.remove(i);
+        let rest: f64 = children.iter().map(|(_, s)| s).sum();
+        for (_, s) in children.iter_mut() {
+            *s += share * (*s / rest);
+        }
+        let neighbour = &children[i.saturating_sub(1).min(children.len() - 1)].0;
+        return Some(first_pane(neighbour));
+    }
+    children
+        .iter_mut()
+        .find_map(|(c, _)| remove_node(c, target))
+}
+
+fn first_pane(node: &Node) -> PaneId {
+    match node {
+        Node::Pane(p) => *p,
+        Node::Split { children, .. } => first_pane(&children[0].0),
+    }
+}
+
+/// Replace splits left with one child by that child, and merge a split into
+/// its parent when both run along the same axis.
+fn collapse(node: &mut Node) {
+    let Node::Split { axis, children } = node else {
+        return;
+    };
+    for (child, _) in children.iter_mut() {
+        collapse(child);
+    }
+    let axis = *axis;
+    let mut merged = Vec::new();
+    for (child, share) in std::mem::take(children) {
+        match child {
+            Node::Split {
+                axis: a,
+                children: inner,
+            } if a == axis => merged.extend(inner.into_iter().map(|(c, s)| (c, s * share))),
+            other => merged.push((other, share)),
+        }
+    }
+    *children = merged;
+    if children.len() == 1 {
+        *node = children.remove(0).0;
+    }
+}
+
+fn equalize(node: &mut Node) {
+    if let Node::Split { children, .. } = node {
+        let share = 1.0 / children.len() as f64;
+        for (child, s) in children.iter_mut() {
+            *s = share;
+            equalize(child);
+        }
+    }
+}
+
+/// How far `point` is from the span `start..start + length` (0 inside it).
+fn span_distance(point: f64, start: f64, length: f64) -> f64 {
+    if point < start {
+        start - point
+    } else if point > start + length {
+        point - (start + length)
+    } else {
+        0.0
+    }
+}
+
+fn overlap(a: f64, a_len: f64, b: f64, b_len: f64) -> f64 {
+    ((a + a_len).min(b + b_len) - a.max(b)).max(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn b(x: i32, y: i32, width: i32, height: i32) -> Bounds {
+        Bounds {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn a_new_layout_is_one_pane() {
+        let layout = Layout::new();
+        assert!(!layout.is_split());
+        assert_eq!(layout.panes(), [0]);
+        assert_eq!(layout.bounds(800, 600, 2), [(0, b(0, 0, 800, 600))]);
+    }
+
+    #[test]
+    fn vsplit_puts_the_new_pane_on_the_right_and_focuses_it() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        assert_eq!(layout.focused(), right);
+        assert_eq!(
+            layout.bounds(800, 600, 2),
+            [(0, b(0, 0, 399, 600)), (right, b(401, 0, 399, 600))]
+        );
+    }
+
+    #[test]
+    fn split_puts_the_new_pane_below() {
+        let mut layout = Layout::new();
+        let below = layout.split(Axis::Horizontal);
+        assert_eq!(
+            layout.bounds(800, 600, 0),
+            [(0, b(0, 0, 800, 300)), (below, b(0, 300, 800, 300))]
+        );
+    }
+
+    #[test]
+    fn splitting_the_same_way_again_adds_a_sibling_with_half_the_room() {
+        let mut layout = Layout::new();
+        let second = layout.split(Axis::Vertical);
+        let third = layout.split(Axis::Vertical);
+        assert_eq!(
+            layout.bounds(800, 600, 0),
+            [
+                (0, b(0, 0, 400, 600)),
+                (second, b(400, 0, 200, 600)),
+                (third, b(600, 0, 200, 600)),
+            ]
+        );
+        layout.equalize();
+        let widths: Vec<i32> = layout
+            .bounds(900, 600, 0)
+            .iter()
+            .map(|(_, b)| b.width)
+            .collect();
+        assert_eq!(widths, [300, 300, 300]);
+    }
+
+    #[test]
+    fn splitting_the_other_way_nests() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below_right = layout.split(Axis::Horizontal);
+        assert_eq!(
+            layout.bounds(800, 600, 0),
+            [
+                (0, b(0, 0, 400, 600)),
+                (right, b(400, 0, 400, 300)),
+                (below_right, b(400, 300, 400, 300)),
+            ]
+        );
+    }
+
+    #[test]
+    fn hjkl_move_to_the_pane_beside_or_level_with_the_middle() {
+        // +---+---+
+        // |   | R |
+        // | L +---+
+        // |   | B |
+        // +---+---+
+        let mut layout = Layout::new();
+        let r = layout.split(Axis::Vertical);
+        let bottom = layout.split(Axis::Horizontal);
+        assert_eq!(layout.neighbour(Direction::Up), Some(r));
+        assert_eq!(layout.neighbour(Direction::Left), Some(0));
+        assert_eq!(layout.neighbour(Direction::Down), None);
+        assert_eq!(layout.neighbour(Direction::Right), None);
+        layout.focus(0);
+        // Both touch L's right edge and meet at its middle; the upper one wins.
+        assert_eq!(layout.neighbour(Direction::Right), Some(r));
+        layout.focus(r);
+        assert_eq!(layout.neighbour(Direction::Down), Some(bottom));
+        assert_eq!(layout.neighbour(Direction::Left), Some(0));
+    }
+
+    #[test]
+    fn moving_sideways_picks_the_pane_level_with_the_middle() {
+        // +---+---+
+        // | A |   |
+        // +---+   |
+        // | B | C |
+        // +---+   |
+        // | D |   |
+        // +---+---+
+        let mut layout = Layout::new();
+        let c = layout.split(Axis::Vertical);
+        layout.focus(0);
+        let b2 = layout.split(Axis::Horizontal);
+        let d = layout.split(Axis::Horizontal);
+        layout.equalize();
+        layout.focus(c);
+        assert_eq!(layout.neighbour(Direction::Left), Some(b2));
+        layout.focus(d);
+        assert_eq!(layout.neighbour(Direction::Right), Some(c));
+        assert_eq!(layout.neighbour(Direction::Up), Some(b2));
+    }
+
+    #[test]
+    fn next_cycles_through_the_panes() {
+        let mut layout = Layout::new();
+        let second = layout.split(Axis::Vertical);
+        let third = layout.split(Axis::Horizontal);
+        assert_eq!(layout.next(), 0);
+        layout.focus(0);
+        assert_eq!(layout.next(), second);
+        layout.focus(second);
+        assert_eq!(layout.next(), third);
+    }
+
+    #[test]
+    fn closing_a_pane_gives_its_room_back_and_focuses_its_neighbour() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        assert!(layout.close(right));
+        assert!(!layout.is_split());
+        assert_eq!(layout.focused(), 0);
+        assert_eq!(layout.bounds(800, 600, 2), [(0, b(0, 0, 800, 600))]);
+        assert!(!layout.close(0), "the last pane stays");
+    }
+
+    #[test]
+    fn closing_a_nested_pane_unnests_its_sibling() {
+        let mut layout = Layout::new();
+        let right = layout.split(Axis::Vertical);
+        let below = layout.split(Axis::Horizontal);
+        layout.close(right);
+        assert_eq!(
+            layout.focused(),
+            below,
+            "closing another pane keeps the focus"
+        );
+        assert_eq!(
+            layout.bounds(800, 600, 0),
+            [(0, b(0, 0, 400, 600)), (below, b(400, 0, 400, 600))]
+        );
+        // The split collapsed into one along the same axis, so a new vsplit is a sibling.
+        layout.focus(below);
+        layout.split(Axis::Vertical);
+        assert_eq!(layout.bounds(800, 600, 0).len(), 3);
+        assert!(
+            layout
+                .bounds(800, 600, 0)
+                .iter()
+                .all(|(_, b)| b.height == 600)
+        );
+    }
+
+    #[test]
+    fn closing_an_unfocused_pane_keeps_the_focus() {
+        let mut layout = Layout::new();
+        let second = layout.split(Axis::Vertical);
+        layout.split(Axis::Vertical);
+        layout.close(second);
+        assert_eq!(layout.panes().len(), 2);
+        assert_ne!(layout.focused(), second);
+        assert!(layout.contains(layout.focused()));
+    }
+
+    #[test]
+    fn only_keeps_the_focused_pane() {
+        let mut layout = Layout::new();
+        let second = layout.split(Axis::Vertical);
+        let third = layout.split(Axis::Horizontal);
+        layout.focus(second);
+        let mut gone = layout.only();
+        gone.sort();
+        assert_eq!(gone, [0, third]);
+        assert_eq!(layout.panes(), [second]);
+        assert!(!layout.is_split());
+    }
+
+    #[test]
+    fn pane_ids_arent_reused() {
+        let mut layout = Layout::new();
+        let a = layout.split(Axis::Vertical);
+        layout.close(a);
+        let b2 = layout.split(Axis::Vertical);
+        assert_ne!(a, b2);
+    }
+
+    #[test]
+    fn directions_parse() {
+        assert_eq!(Direction::parse("left"), Some(Direction::Left));
+        assert_eq!(Direction::parse("down"), Some(Direction::Down));
+        assert_eq!(Direction::parse("sideways"), None);
+    }
+}

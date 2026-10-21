@@ -173,12 +173,28 @@ mod enabled {
                         let b = cef::View::from(window).bounds_in_screen();
                         json!({ "x": b.x, "y": b.y, "width": b.width, "height": b.height })
                     });
+                    // The tabs on screen, one per pane, with where they are in the page area.
+                    let panes: Vec<Value> = w
+                        .tabs
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, t)| cef::View::from(&t.view).is_visible() != 0)
+                        .map(|(i, t)| {
+                            let b = cef::View::from(&t.view).bounds();
+                            json!({
+                                "tab": i,
+                                "focused": i == w.tabs.current_index(),
+                                "bounds": { "x": b.x, "y": b.y, "width": b.width, "height": b.height },
+                            })
+                        })
+                        .collect();
                     json!({
                         "private": w.private,
                         "call": w.call,
                         "bounds": bounds,
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
+                        "panes": panes,
                         "crash_notice": crash_notice,
                     })
                 })

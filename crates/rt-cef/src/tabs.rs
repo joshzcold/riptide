@@ -359,6 +359,7 @@ fn switch_to(index: usize, force: bool) {
         if let Some(tab) = s.tabs.get_mut(leaving) {
             tab.mode = mode;
         }
+        crate::panes::before_switch(s, index);
         if !s.tabs.focus(index) && !force {
             return None;
         }
@@ -388,13 +389,21 @@ pub fn show_current_in(window_id: u32, focus: bool) {
     // An extension's popup belongs to the tab it was opened over.
     crate::popup::close();
     let Some(Some((views, crashed, content, notice))) = shell::with(|s| {
-        let w = s.windows.iter().find(|w| w.id == window_id)?;
+        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
+        crate::panes::reconcile(w);
         let current = w.tabs.current_index();
-        let views: Vec<(BrowserView, bool)> = w
+        // (view, current, shown in another pane)
+        let views: Vec<(BrowserView, bool, bool)> = w
             .tabs
             .iter()
             .enumerate()
-            .map(|(i, t)| (t.view.clone(), i == current))
+            .map(|(i, t)| {
+                (
+                    t.view.clone(),
+                    i == current,
+                    crate::panes::in_other_pane(w, &t.view),
+                )
+            })
             .collect();
         let crashed = w
             .tabs
@@ -426,12 +435,13 @@ pub fn show_current_in(window_id: u32, focus: bool) {
         }
         (None, view) => view,
     };
-    for (view, current) in &views {
-        View::from(view).set_visible((*current && crashed.is_none()).into());
+    for (view, current, other_pane) in &views {
+        View::from(view).set_visible(((*current && crashed.is_none()) || *other_pane).into());
     }
     if let Some(notice) = &notice {
         View::from(notice).set_visible(crashed.is_some().into());
     }
+    crate::panes::arrange(window_id);
     if !focus {
         return;
     }
@@ -439,8 +449,8 @@ pub fn show_current_in(window_id: u32, focus: bool) {
         (Some(_), Some(notice)) => Some(notice),
         _ => views
             .into_iter()
-            .find(|(_, current)| *current)
-            .map(|(v, _)| v),
+            .find(|(_, current, _)| *current)
+            .map(|(v, _, _)| v),
     };
     if let Some(view) = shown {
         View::from(&view).request_focus();

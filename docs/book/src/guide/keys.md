@@ -104,7 +104,7 @@ Clicking into a text field enters insert mode (`input.insert_mode.auto_enter`), 
 
 Digits before a binding are a count (`3j`); `input.match_counts = false` lets you bind digits themselves. A half-typed chain like `g` waits for the next key, or for `input.partial_timeout` milliseconds if you set one. `:cmd-repeat 3 tab-next` runs a command several times and `:cmd-run-with-count 3 tab-focus` gives it a count, which helps in bindings. `:debug-keytester` shows the name and binding of each key you press, until `Escape`, which helps when writing bindings.
 
-`bindings.key_mappings` treats one key as another in every mode, before bindings are looked up. By default `Ctrl-[` is `Escape`, `Ctrl-m` and `Ctrl-j` are `Return`, `Ctrl-i` is `Tab` and `Ctrl-6` is `Ctrl-^`. To add your own, include the defaults you want to keep:
+`bindings.key_mappings` treats one key as another in every mode, before bindings are looked up. By default `Ctrl-[` is `Escape`, `Ctrl-m` is `Return`, `Ctrl-i` is `Tab` and `Ctrl-6` is `Ctrl-^`. `Ctrl-j` is bound as `Return` in the command line, prompts, hints and caret mode instead, since in normal mode it moves to the split below. To add your own, include the defaults you want to keep:
 
 ```toml
 [bindings.key_mappings]

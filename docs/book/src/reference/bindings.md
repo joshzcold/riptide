@@ -48,6 +48,10 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-b>` | `scroll-page 0 -1` |
 | `<Ctrl-d>` | `scroll-page 0 0.5` |
 | `<Ctrl-f>` | `scroll-page 0 1` |
+| `<Ctrl-h>` | `split-focus left` |
+| `<Ctrl-j>` | `split-focus down` |
+| `<Ctrl-k>` | `split-focus up` |
+| `<Ctrl-l>` | `split-focus right` |
 | `<Ctrl-p>` | `tab-pin` |
 | `<Ctrl-q>` | `quit` |
 | `<Ctrl-r>` | `reload -f` |
@@ -121,6 +125,12 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `pp` | `open -- {clipboard}` |
 | `q` | `macro-record` |
 | `r` | `reload` |
+| `s=` | `split-equal` |
+| `sc` | `split-close` |
+| `so` | `only` |
+| `ss` | `split` |
+| `sv` | `vsplit` |
+| `sw` | `split-focus next` |
 | `u` | `undo` |
 | `v` | `mode-enter caret` |
 | `wi` | `devtools` |
@@ -157,6 +167,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-e>` | `rl-end-of-line` |
 | `<Ctrl-f>` | `rl-forward-char` |
 | `<Ctrl-h>` | `rl-backward-delete-char` |
+| `<Ctrl-j>` | `command-accept` |
 | `<Ctrl-k>` | `rl-kill-line` |
 | `<Ctrl-n>` | `command-history-next` |
 | `<Ctrl-p>` | `command-history-prev` |
@@ -187,6 +198,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Ctrl-j>` | `hint-follow` |
 | `<Escape>` | `mode-leave` |
 | `<Return>` | `hint-follow` |
 
@@ -206,6 +218,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-e>` | `rl-end-of-line` |
 | `<Ctrl-f>` | `rl-forward-char` |
 | `<Ctrl-h>` | `rl-backward-delete-char` |
+| `<Ctrl-j>` | `prompt-accept` |
 | `<Ctrl-k>` | `rl-kill-line` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
 | `<Ctrl-v>` | `rl-paste` |
@@ -227,6 +240,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | Keys | Command |
 |---|---|
 | `<Alt-y>` | `prompt-yank` |
+| `<Ctrl-j>` | `prompt-accept` |
 | `<Escape>` | `mode-leave` |
 | `<Return>` | `prompt-accept` |
 | `A` | `prompt-accept --save yes` |
@@ -265,6 +279,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `$` | `move-to-end-of-line` |
 | `0` | `move-to-start-of-line` |
 | `<Ctrl-Space>` | `selection-drop` |
+| `<Ctrl-j>` | `yank selection` |
 | `<Escape>` | `mode-leave` |
 | `<Return>` | `yank selection` |
 | `<Space>` | `selection-toggle` |

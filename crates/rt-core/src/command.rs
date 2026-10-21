@@ -57,6 +57,13 @@ pub enum TabTarget {
     StackNext,
 }
 
+/// Which pane `split-focus` moves to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaneTarget {
+    Direction(crate::split::Direction),
+    Next,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TabMoveTarget {
     /// `+` or `-`, multiplied by the count.
@@ -223,6 +230,18 @@ pub enum Command {
     TabOnly {
         force: bool,
     },
+    /// Split the focused pane (`vertical`: side by side), with `url` (or
+    /// the default page) in a new tab in the new pane.
+    Split {
+        vertical: bool,
+        url: Option<String>,
+    },
+    /// Close the focused pane; its tab stays open.
+    SplitClose,
+    /// Keep only the focused pane.
+    SplitOnly,
+    SplitFocus(PaneTarget),
+    SplitEqual,
     Undo,
     Hint(HintRequest),
     Yank(YankWhat),
@@ -779,6 +798,24 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Move the current tab: +, -, start, end or a number",
     ),
     spec("tab-only", "Close all tabs except the current one"),
+    spec(
+        "split",
+        "Split the page area, with a new pane below showing url (or the default page): :split [url]",
+    ),
+    spec(
+        "vsplit",
+        "Split the page area, with a new pane on the right showing url (or the default page): :vsplit [url]",
+    ),
+    spec("split-close", "Close the focused pane; its tab stays open"),
+    spec(
+        "only",
+        "Keep only the focused pane; the other panes' tabs stay open",
+    ),
+    spec(
+        "split-focus",
+        "Focus the pane to the left, below, above or to the right, or the next one: :split-focus left|down|up|right|next",
+    ),
+    spec("split-equal", "Give every pane the same room"),
     spec(
         "tab-clone",
         "Duplicate the current tab: :tab-clone [-b] [-w]",
@@ -1416,6 +1453,23 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-only" => Command::TabOnly {
             force: args.flag(&["-f", "--force"]).is_some(),
         },
+        "split" | "vsplit" => {
+            let url = args.rest();
+            Command::Split {
+                vertical: name == "vsplit",
+                url: (!url.is_empty()).then(|| url.to_string()),
+            }
+        }
+        "split-close" => Command::SplitClose,
+        "only" => Command::SplitOnly,
+        "split-focus" => Command::SplitFocus(match args.required("direction")? {
+            "next" => PaneTarget::Next,
+            other => PaneTarget::Direction(
+                crate::split::Direction::parse(other)
+                    .ok_or_else(|| args.error(format!("invalid direction: {other}")))?,
+            ),
+        }),
+        "split-equal" => Command::SplitEqual,
         "tab-clone" => {
             let (mut background, mut window) = (false, false);
             while let Some(flag) = args.flag(&["-b", "--bg", "-w", "--window"]) {
@@ -2255,6 +2309,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parses_splits() {
+        assert_eq!(
+            parse("vsplit example.com/a b").unwrap(),
+            Command::Split {
+                vertical: true,
+                url: Some("example.com/a b".into())
+            }
+        );
+        assert_eq!(
+            parse("split").unwrap(),
+            Command::Split {
+                vertical: false,
+                url: None
+            }
+        );
+        assert_eq!(
+            parse("split-focus up").unwrap(),
+            Command::SplitFocus(PaneTarget::Direction(crate::split::Direction::Up))
+        );
+        assert_eq!(
+            parse("split-focus next").unwrap(),
+            Command::SplitFocus(PaneTarget::Next)
+        );
+        assert!(parse("split-focus sideways").is_err());
+        assert_eq!(parse("only").unwrap(), Command::SplitOnly);
+    }
+
+    #[test]
     fn parses_map() {
         assert_eq!(
             parse("map").unwrap(),
@@ -2694,6 +2776,7 @@ mod tests {
     #[test]
     fn every_spec_parses() {
         let needs_args = [
+            "split-focus",
             "pack-add",
             "pack-load",
             "scroll",

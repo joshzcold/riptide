@@ -65,8 +65,19 @@ pub struct WindowState {
     pub bounds: Option<Bounds>,
     pub current_tab: usize,
     pub tabs: Vec<TabState>,
+    /// The tabs on screen, one per split pane.
+    #[serde(default)]
+    pub panes: Vec<Pane>,
     /// The notice shown in place of a crashed tab is on screen.
     pub crash_notice: bool,
+}
+
+/// A split pane: the tab it shows and where it is in the page area.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Pane {
+    pub tab: usize,
+    pub focused: bool,
+    pub bounds: Bounds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

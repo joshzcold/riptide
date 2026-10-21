@@ -143,6 +143,12 @@ pub struct WindowState {
     earlier_bounds: Option<rt_storage::Geometry>,
     pub content: Option<Panel>,
     pub tabs: TabList<Tab>,
+    /// Split panes; the focused one shows the current tab.
+    pub layout: rt_core::split::Layout,
+    /// The tab each other pane shows (see `panes`).
+    pub pane_tabs: Vec<(rt_core::split::PaneId, BrowserView)>,
+    /// Behind the focused pane, showing through the gaps around it.
+    pub pane_border: Option<Panel>,
     /// Closed tabs as (index, url), newest last, for `undo`.
     /// Closed tabs for `u`: index, URL and whether it was pinned.
     pub closed: Vec<(usize, String, bool)>,
@@ -222,6 +228,9 @@ impl WindowState {
             earlier_bounds: None,
             content: None,
             tabs: TabList::default(),
+            layout: rt_core::split::Layout::new(),
+            pane_tabs: Vec::new(),
+            pane_border: None,
             closed: Vec::new(),
             tabbar: None,
             row: None,
@@ -710,6 +719,7 @@ pub fn apply(effects: Vec<Effect>) {
 
 fn run_command(command: Command, count: Option<u32>) {
     if tabs::run_command(&command, count)
+        || crate::panes::run_command(&command)
         || crate::help::run_command(&command)
         || crate::settings_page::run_command(&command)
         || crate::plugins::run_command(&command)

@@ -584,7 +584,6 @@ pub static SETTINGS: &[SettingDef] = &[
             ("<Ctrl-[>", "<Escape>"),
             ("<Ctrl-6>", "<Ctrl-^>"),
             ("<Ctrl-m>", "<Return>"),
-            ("<Ctrl-j>", "<Return>"),
             ("<Ctrl-i>", "<Tab>"),
             ("<Shift-Return>", "<Return>"),
         ]),

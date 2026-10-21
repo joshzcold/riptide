@@ -9,7 +9,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `aliases` | table<string, string> | `{"q":"close","qa":"quit","w":"session-save","wq":"quit --save","wqa":"quit --save"}` | Command aliases: name → command. :q closes the window, :qa quits, :w saves the session and :wq saves and quits |
 | `auto_save.interval` | integer | `15000` | Milliseconds between crash-recovery saves of the open tabs (0 turns them off) |
 | `auto_save.session` | boolean | `false` | Save the open tabs as the 'default' session on quit, and restore them at startup |
-| `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-j>":"<Return>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
+| `bindings.key_mappings` | table<string, string> | `{"<Ctrl-6>":"<Ctrl-^>","<Ctrl-[>":"<Escape>","<Ctrl-i>":"<Tab>","<Ctrl-m>":"<Return>","<Shift-Return>":"<Return>"}` | Keys treated as other keys in every mode, before bindings are looked up, e.g. Ctrl-[ as Escape |
 | `changelog_after_upgrade` | major \| minor \| patch \| never | `minor` | Open the changelog in a tab after an upgrade of at least this size: major, minor, patch or never |
 | `colors.completion.category.bg` | string | `` | Background of completion category headers; empty uses ui.theme's |
 | `colors.completion.category.fg` | string | `` | Text of completion category headers; empty uses ui.theme's |
