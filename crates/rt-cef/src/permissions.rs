@@ -309,6 +309,36 @@ pub fn apply_site_settings(entries: Vec<(String, ContentSettingTypes, ContentSet
     }
 }
 
+/// Chromium's local network access to this computer (`LOOPBACK_NETWORK`,
+/// and the older `LOCAL_NETWORK_ACCESS`).
+const LOOPBACK_NETWORK: u32 = 134_217_728 | 33_554_432;
+
+// Popups and panel pages: a plugin page may reach this computer when the
+// plugin's `network` permission lists a loopback host, without asking again.
+// Anything else gets Chromium's default.
+wrap_permission_handler! {
+    pub struct PluginPagePermissionHandler {}
+
+    impl PermissionHandler {
+        fn on_show_permission_prompt(
+            &self,
+            _browser: Option<&mut Browser>,
+            _prompt_id: u64,
+            requesting_origin: Option<&CefString>,
+            requested_permissions: u32,
+            callback: Option<&mut PermissionPromptCallback>,
+        ) -> ::std::os::raw::c_int {
+            let origin = requesting_origin.map(CefString::to_string).unwrap_or_default();
+            let Some(callback) = callback else { return 0 };
+            if requested_permissions & !LOOPBACK_NETWORK != 0 || !crate::pages::reaches_loopback(&origin) {
+                return 0;
+            }
+            callback.cont(PermissionRequestResult::ACCEPT);
+            1
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

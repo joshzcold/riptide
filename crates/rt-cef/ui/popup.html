@@ -34,10 +34,14 @@
 </style>
 </head>
 <body>
-<div id="bar"><span id="title"></span><kbd>Esc</kbd><button id="close" title="Close the popup (Escape)">✕</button></div>
+<div id="bar"><span id="title"></span><kbd id="key">Esc</kbd><button id="close" title="Close the popup (Escape)">✕</button></div>
 <script>
-  // rtPopup({ title }) from the browser once it's loaded.
-  window.rtPopup = ({ title }) => { document.getElementById("title").textContent = title; };
+  // rtPopup({ title, key }) from the browser once it's loaded; `key` closes it.
+  window.rtPopup = ({ title, key }) => {
+    document.getElementById("title").textContent = title;
+    document.getElementById("key").textContent = key;
+    document.getElementById("close").title = `Close the popup (${key})`;
+  };
   const close = document.getElementById("close");
   close.addEventListener("mousedown", (e) => e.preventDefault());
   close.addEventListener("click", () => rt.send("close", "{}"));

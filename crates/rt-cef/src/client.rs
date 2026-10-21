@@ -99,7 +99,13 @@ wrap_client! {
         }
 
         fn permission_handler(&self) -> Option<PermissionHandler> {
-            (self.role == Role::Tab).then(crate::permissions::RtPermissionHandler::new)
+            match self.role {
+                Role::Tab => Some(crate::permissions::RtPermissionHandler::new()),
+                Role::Popup | Role::PanelPage => {
+                    Some(crate::permissions::PluginPagePermissionHandler::new())
+                }
+                _ => None,
+            }
         }
 
         fn on_process_message_received(
@@ -449,6 +455,18 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
     if SENDING_TO_PAGE.with(Cell::get) {
         return false;
     }
+    if role == Role::Popup && crate::popup::takes_all_keys() {
+        return popup_key_event(event);
+    }
+    // The tab keeps the keyboard while such a popup is open; it gets the keys.
+    if let Some(host) = crate::popup::all_keys_host().filter(|_| role == Role::Tab) {
+        if !popup_key_event(event) {
+            SENDING_TO_PAGE.with(|s| s.set(true));
+            host.send_key_event(Some(event));
+            SENDING_TO_PAGE.with(|s| s.set(false));
+        }
+        return true;
+    }
     let consumed = handle_key_event(event);
     if consumed || matches!(role, Role::Tab | Role::PanelPage | Role::Popup) {
         return consumed;
@@ -471,6 +489,30 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
     }
     View::from(&tab).request_focus();
     true
+}
+
+/// A float page that takes every key (`keys = "all"`) gets each one but
+/// Shift-Escape, which closes it, as it leaves passthrough mode.
+fn popup_key_event(event: &KeyEvent) -> bool {
+    let down = matches!(
+        event.type_,
+        KeyEventType::RAWKEYDOWN | KeyEventType::KEYDOWN
+    );
+    let others = EVENTFLAG_CONTROL_DOWN | EVENTFLAG_ALT_DOWN | EVENTFLAG_COMMAND_DOWN;
+    let shift_escape = down
+        && event.windows_key_code == 0x1B
+        && event.modifiers & others == 0
+        && event.modifiers & EVENTFLAG_SHIFT_DOWN != 0;
+    if event.type_ == KeyEventType::CHAR {
+        return shell::with(|s| s.suppress_char).unwrap_or(false);
+    }
+    if down {
+        shell::with(|s| s.suppress_char = shift_escape);
+    }
+    if shift_escape {
+        crate::popup::close();
+    }
+    shift_escape
 }
 
 /// Returns true when the key is consumed and must not reach the page.
