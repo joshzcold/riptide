@@ -947,7 +947,10 @@ wrap_life_span_handler! {
             }
         }
 
-        fn on_before_close(&self, _browser: Option<&mut Browser>) {
+        fn on_before_close(&self, browser: Option<&mut Browser>) {
+            if let Some(browser) = browser {
+                crate::adblock::forget_tab(browser.identifier());
+            }
             let remaining = shell::with(|s| {
                 s.open_browsers = s.open_browsers.saturating_sub(1);
                 s.open_browsers

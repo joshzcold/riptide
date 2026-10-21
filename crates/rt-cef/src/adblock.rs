@@ -281,46 +281,152 @@ pub fn take_stand_in(request: u64) -> Option<(Vec<u8>, &'static str)> {
 }
 
 /// Scriptlets (`##+js(...)`) must run before the page's own scripts, and
-/// procedural filters (`:has-text()`) watch the page from the start. Each
-/// tab gets a site's page script once, through DevTools, which runs it in
-/// every new document whose host is that site's, before anything else.
+/// procedural filters (`:has-text()`) watch the page from the start. A tab
+/// gets a site's page script through DevTools, which runs it in every new
+/// document whose host is that site's, before anything else. Each load
+/// checks it again: whitelisting the site (or new rules) takes it back.
 pub fn before_navigation(browser: &Browser, url: &str) {
-    let Some(blocker) = blocker_for(url) else {
-        return;
-    };
     let host = rt_core::url::host(url).to_string();
     if host.is_empty() {
         return;
     }
+    let script = blocker_for(url)
+        .map(|blocker| blocker.cosmetic(url).page_script())
+        .unwrap_or_default();
     let key = (browser.identifier(), host.clone());
-    if SCRIPTLETS_SENT.with(|s| s.borrow().contains(&key)) {
+    let sent = SCRIPTLETS.with(|s| s.borrow().get(&key).map(|sent| sent.script.clone()));
+    if sent.as_deref().unwrap_or_default() == script {
         return;
     }
-    let script = blocker.cosmetic(url).page_script();
-    SCRIPTLETS_SENT.with(|s| s.borrow_mut().insert(key));
+    let Some(devtools) = browser.host() else {
+        return;
+    };
+    if let Some(old) = SCRIPTLETS.with(|s| s.borrow_mut().remove(&key)) {
+        match old.identifier {
+            Some(identifier) => remove_script(&devtools, &identifier),
+            // Its registration hasn't answered yet: take it back when it does.
+            None => SCRIPTLET_REPLIES.with(|r| {
+                for pending in r.borrow_mut().values_mut() {
+                    if *pending == key {
+                        pending.1.clear();
+                    }
+                }
+            }),
+        }
+    }
     if script.is_empty() {
         return;
     }
+    watch_replies(browser.identifier(), &devtools);
+    let id = NEXT_SCRIPTLET_ID.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    });
+    SCRIPTLET_REPLIES.with(|r| r.borrow_mut().insert(id, key.clone()));
+    SCRIPTLETS.with(|s| {
+        s.borrow_mut().insert(
+            key,
+            SentScript {
+                script: script.clone(),
+                identifier: None,
+            },
+        )
+    });
     let host_json = serde_json::to_string(&host).unwrap_or_default();
     let source = format!("if (location.hostname === {host_json}) {{\n{script}}}");
     let message = serde_json::json!({
-        "id": 1,
+        "id": id,
         "method": "Page.addScriptToEvaluateOnNewDocument",
         "params": { "source": source },
     })
     .to_string();
-    if let Some(host) = browser.host() {
-        // The registration only takes with the Page domain on.
-        let enable = serde_json::json!({ "id": 1, "method": "Page.enable" }).to_string();
-        host.send_dev_tools_message(Some(enable.as_bytes()));
-        host.send_dev_tools_message(Some(message.as_bytes()));
+    // The registration only takes with the Page domain on.
+    let enable = serde_json::json!({ "id": 1, "method": "Page.enable" }).to_string();
+    devtools.send_dev_tools_message(Some(enable.as_bytes()));
+    devtools.send_dev_tools_message(Some(message.as_bytes()));
+}
+
+fn remove_script(devtools: &BrowserHost, identifier: &str) {
+    let message = serde_json::json!({
+        "id": 1,
+        "method": "Page.removeScriptToEvaluateOnNewDocument",
+        "params": { "identifier": identifier },
+    })
+    .to_string();
+    devtools.send_dev_tools_message(Some(message.as_bytes()));
+}
+
+/// Listen for `browser`'s answers to scriptlet registrations, once.
+fn watch_replies(browser: i32, devtools: &BrowserHost) {
+    if SCRIPTLET_OBSERVERS.with(|o| o.borrow().contains_key(&browser)) {
+        return;
+    }
+    let mut observer = ScriptletReplies::new();
+    if let Some(registration) = devtools.add_dev_tools_message_observer(Some(&mut observer)) {
+        SCRIPTLET_OBSERVERS.with(|o| o.borrow_mut().insert(browser, registration));
     }
 }
 
+/// Tab `browser` closed: forget its scriptlets.
+pub fn forget_tab(browser: i32) {
+    SCRIPTLETS.with(|s| s.borrow_mut().retain(|(b, _), _| *b != browser));
+    SCRIPTLET_REPLIES.with(|r| r.borrow_mut().retain(|_, (b, _)| *b != browser));
+    SCRIPTLET_OBSERVERS.with(|o| o.borrow_mut().remove(&browser));
+}
+
+/// A site's page script given to a tab, and DevTools' name for it once known.
+struct SentScript {
+    script: String,
+    identifier: Option<String>,
+}
+
 thread_local! {
-    /// Which tabs (browser ids) have been given which hosts' scriptlets.
-    static SCRIPTLETS_SENT: RefCell<std::collections::HashSet<(i32, String)>> =
-        RefCell::new(std::collections::HashSet::new());
+    /// Each tab's (browser id's) page script for each host.
+    static SCRIPTLETS: RefCell<std::collections::HashMap<(i32, String), SentScript>> =
+        RefCell::new(std::collections::HashMap::new());
+    /// Registrations waiting for their identifier, by DevTools message id. A
+    /// cleared host means it was taken back before the answer came.
+    static SCRIPTLET_REPLIES: RefCell<std::collections::HashMap<i32, (i32, String)>> =
+        RefCell::new(std::collections::HashMap::new());
+    static SCRIPTLET_OBSERVERS: RefCell<std::collections::HashMap<i32, Registration>> =
+        RefCell::new(std::collections::HashMap::new());
+    /// Far from the ids other DevTools messages use.
+    static NEXT_SCRIPTLET_ID: std::cell::Cell<i32> = const { std::cell::Cell::new(1 << 24) };
+}
+
+wrap_dev_tools_message_observer! {
+    struct ScriptletReplies {}
+
+    impl DevToolsMessageObserver {
+        fn on_dev_tools_method_result(
+            &self,
+            browser: Option<&mut Browser>,
+            message_id: ::std::os::raw::c_int,
+            success: ::std::os::raw::c_int,
+            result: Option<&[u8]>,
+        ) {
+            let Some((tab, host)) = SCRIPTLET_REPLIES.with(|r| r.borrow_mut().remove(&message_id)) else {
+                return;
+            };
+            let identifier = (success != 0)
+                .then(|| serde_json::from_slice::<serde_json::Value>(result.unwrap_or_default()).ok())
+                .flatten()
+                .and_then(|json| json["identifier"].as_str().map(String::from));
+            let Some(identifier) = identifier else { return };
+            if host.is_empty() {
+                if let Some(devtools) = browser.and_then(|b| b.host()) {
+                    remove_script(&devtools, &identifier);
+                }
+                return;
+            }
+            SCRIPTLETS.with(|s| {
+                if let Some(sent) = s.borrow_mut().get_mut(&(tab, host)) {
+                    sent.identifier = Some(identifier);
+                }
+            });
+        }
+    }
 }
 
 /// The adblock request type. Top-level pages are never blocked, so a
