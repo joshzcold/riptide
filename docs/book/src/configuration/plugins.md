@@ -227,6 +227,12 @@ rt.send("ready", JSON.stringify({}));
 
 `where = "panel"` docks the page beside the page area instead, with `side` (`left`, `right` or `bottom`) and `size` in pixels: a sidebar that shows a web app in an iframe, say. Clicking a field in it types there, as in a tab, and `:panel-focus` moves the keyboard to it and back. `page:close()` closes it.
 
+`where = "float"` shows the page in a box over the page, as an extension's popup: a password picker or a quick note, say. The bar above it names the plugin (and the page's `title`), so it can't pass for riptide's own. It takes the keyboard while open, is sized to its content unless you give `width` and `height` in pixels, and can be dragged by its bar. One float page shows at a time; Escape, its ✕, switching tabs or `page:close()` closes it.
+
+```lua
+rt.ui.page({ path = "pick.html", where = "float", title = "Pick a login", width = 420, height = 320 })
+```
+
 Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
 
 ### Testing

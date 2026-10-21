@@ -1,7 +1,8 @@
 //! An extension's toolbar popup, shown as Chrome shows it: a box over the
 //! top right of the page, sized to its content, with a bar above it naming
 //! the extension and a close button. Escape, switching tabs or opening
-//! another popup closes it. One popup at a time.
+//! another popup closes it. One popup at a time. A plugin's page in a float
+//! (`rt.ui.page { where = "float" }`) is shown the same way.
 
 use std::cell::RefCell;
 
@@ -31,6 +32,8 @@ struct Popup {
     page_overlay: Option<OverlayController>,
     bar_overlay: Option<OverlayController>,
     size: (i32, i32),
+    /// The size was given, so the page isn't measured.
+    fixed: bool,
     /// Where it was dragged to, from its usual place at the top right.
     offset: (i32, i32),
 }
@@ -43,6 +46,11 @@ thread_local! {
 
 /// Show `url`, an extension's popup page, for the current window.
 pub fn open(title: &str, url: &str) {
+    open_sized(title, url, None);
+}
+
+/// [`open`], at `size` rather than the size its page measures.
+pub fn open_sized(title: &str, url: &str, size: Option<(i32, i32)>) {
     close();
     let Some((window_id, window)) = shell::with(|s| Some((s.id, s.window.clone()?))).flatten()
     else {
@@ -67,7 +75,10 @@ pub fn open(title: &str, url: &str) {
             bar,
             page_overlay,
             bar_overlay,
-            size: DEFAULT_SIZE,
+            size: size
+                .map(|(w, h)| (w.clamp(MIN_WIDTH, MAX_SIZE.0), h.clamp(40, MAX_SIZE.1)))
+                .unwrap_or(DEFAULT_SIZE),
+            fixed: size.is_some(),
             offset: LAST_OFFSET.with(std::cell::Cell::get),
         })
     });
@@ -118,7 +129,8 @@ pub fn bar_loaded(browser: &Browser) {
 
 /// The popup page has loaded: size the box to what it draws.
 pub fn page_loaded(browser: &Browser) {
-    if !is_ours(browser, false) {
+    let fixed = POPUP.with(|p| p.borrow().as_ref().is_some_and(|p| p.fixed));
+    if fixed || !is_ours(browser, false) {
         return;
     }
     // Its natural size, not the box's: measured at max-content width.
@@ -213,6 +225,14 @@ pub fn move_by(dx: i32, dy: i32) {
     if moved.is_some() {
         reposition();
     }
+}
+
+/// The popup page's URL and main frame, if one is open.
+pub fn page_frame() -> Option<(String, Frame)> {
+    POPUP.with(|p| {
+        let frame = p.borrow().as_ref()?.page.browser()?.main_frame()?;
+        Some((CefString::from(&frame.url()).to_string(), frame))
+    })
 }
 
 /// Escape in normal mode closes an open popup in the focused window.

@@ -320,6 +320,17 @@ rt.command("open-notes-panel", function()
   })
 end)
 rt.command("close-notes-panel", function() panel_page:close() end)
+local float_page
+rt.command("open-notes-float", function()
+  float_page = rt.ui.page({
+    where = "float",
+    title = "Notes",
+    width = 300,
+    height = 200,
+    on_message = function(name, data) rt.notify("float got " .. name .. " " .. data.n) end,
+  })
+end)
+rt.command("close-notes-float", function() float_page:close() end)
 rt.command("open-notes", function()
   rt.ui.page({
     path = "index.html",
@@ -373,6 +384,23 @@ rt.send("hello", JSON.stringify({ n: 1 }));"#,
     });
     b.run("close-notes-panel");
     b.wait_until("closed", |s| s.panels.is_empty());
+
+    // In a float: over the page at its size, named after the plugin.
+    b.run("open-notes-float");
+    let s = b.wait_until("the float page's message arrived", |s| {
+        s.message() == Some("float got hello 1")
+    });
+    assert_eq!(s.popup["title"], "Notes · plugin notes");
+    assert_eq!(s.popup["size"], serde_json::json!([300, 200]));
+    assert!(
+        s.popup["url"]
+            .as_str()
+            .is_some_and(|u| u.starts_with("riptide://notes.plugin/index.html?page=")),
+        "{}",
+        s.popup
+    );
+    b.run("close-notes-float");
+    b.wait_until("the float closed", |s| s.popup.is_null());
 }
 
 #[test]

@@ -449,9 +449,11 @@ function Panel:is_open() end
 
 ---@class rt.PageOpts
 ---@field path? string A file in the plugin's `pages/` folder (default `index.html`).
----@field where? "tab"|"panel" Default tab.
+---@field where? "tab"|"panel"|"float" Default tab. A float is a box over the page, like an extension's popup: one at a time, closed by Escape or switching tabs.
 ---@field side? "left"|"right"|"bottom" In a panel; default right.
 ---@field size? integer In a panel: its width, or height below the page, in pixels (default 400).
+---@field width? integer In a float: its width in pixels; without width and height it's sized to the page's content.
+---@field height? integer In a float: its height in pixels.
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
 ---@class rt.Page
@@ -461,7 +463,7 @@ local Page = {{}}
 ---@param name string
 ---@param data any Anything `rt.json.encode` takes.
 function Page:send(name, data) end
----Close its panel, or the tabs showing it.
+---Close its panel or float, or the tabs showing it.
 function Page:close() end
 
 rt.secret = {{}}
@@ -474,7 +476,7 @@ rt.secret = {{}}
 ---@param fn fun(value: string|nil, err: string|nil)
 function rt.secret.get(option, fn) end
 
----Open one of this plugin's pages in a tab or a panel. Only plugins have pages.
+---Open one of this plugin's pages in a tab, a panel or a float. Only plugins have pages.
 ---@param opts? rt.PageOpts
 ---@return rt.Page
 function rt.ui.page(opts) end
