@@ -14,6 +14,8 @@ pub enum Lookup<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct Keymap {
     bindings: HashMap<Mode, HashMap<Vec<Key>, String>>,
+    /// Where each binding came from, e.g. `default`, `config.toml` or `plugin foo`.
+    sources: HashMap<(Mode, Vec<Key>), String>,
 }
 
 impl Keymap {
@@ -133,20 +135,44 @@ impl Keymap {
         }
         map.bind(Mode::Passthrough, "<Shift-Escape>", "mode-leave")
             .expect("valid default binding");
+        for source in map.sources.values_mut() {
+            *source = "default".to_string();
+        }
         map
     }
 
     pub fn bind(&mut self, mode: Mode, keys: &str, command: &str) -> Result<(), KeyParseError> {
+        self.bind_from(mode, keys, command, "")
+    }
+
+    /// Bind, noting where the binding came from; see [`Self::source`].
+    pub fn bind_from(
+        &mut self,
+        mode: Mode,
+        keys: &str,
+        command: &str,
+        source: &str,
+    ) -> Result<(), KeyParseError> {
         let seq = Key::parse_sequence(keys)?;
         self.bindings
             .entry(mode)
             .or_default()
-            .insert(seq, command.to_string());
+            .insert(seq.clone(), command.to_string());
+        self.sources.insert((mode, seq), source.to_string());
         Ok(())
+    }
+
+    /// Where the binding for `keys` came from; empty if unknown or unbound.
+    pub fn source(&self, mode: Mode, keys: &str) -> &str {
+        Key::parse_sequence(keys)
+            .ok()
+            .and_then(|seq| self.sources.get(&(mode, seq)))
+            .map_or("", String::as_str)
     }
 
     pub fn unbind(&mut self, mode: Mode, keys: &str) -> Result<bool, KeyParseError> {
         let seq = Key::parse_sequence(keys)?;
+        self.sources.remove(&(mode, seq.clone()));
         Ok(self
             .bindings
             .get_mut(&mode)

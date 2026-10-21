@@ -295,3 +295,38 @@ fn per_site_values_can_be_added_and_j_k_return_work_on_the_page() {
     b.keys("gg");
     assert_eq!(b.state().mode, "normal");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn map_lists_bindings_with_where_each_came_from() {
+    let b = Browser::launch()
+        .toml("[bindings.normal]\n\"zt\" = \"reload\"\n")
+        .file(
+            "scratch-plugins/zapper/lua/zapper/init.lua",
+            "return { setup = function() rt.keymap.set('normal', 'zp', function() end, { desc = 'Zap the page' }) end }",
+        )
+        .lua(
+            r#"
+rt.keymap.set("normal", "zl", function() end, { desc = "Say hi" })
+rt.pack.add({ { dir = rt.config_dir .. "/../scratch-plugins/zapper", opts = {} } })
+"#,
+        )
+        .start("page.html");
+    b.run("bind zb tab-close");
+    b.run("map z");
+    b.wait_until("the keys tab opens", |s| {
+        s.tab().url.starts_with("riptide://settings")
+    });
+    // Only the z bindings, each with what it does and where it came from.
+    b.wait_eval(
+        "[...document.querySelectorAll('.keyrow')].map((r) => r.querySelector('.seq').textContent + ': ' + r.querySelector('.desc')?.textContent).join(' | ')",
+        "zb: Close the current tab (--force: a pinned one without asking) · from :bind \
+         | zl: Say hi · from config.lua \
+         | zp: Zap the page · from plugin zapper \
+         | zt: Reload the current page · from config.toml",
+    );
+    assert!(
+        b.eval("document.querySelector('h2').textContent")
+            .contains("keys starting with z")
+    );
+}

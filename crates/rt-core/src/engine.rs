@@ -258,6 +258,11 @@ impl Engine {
 
     /// Apply a change from a config file. Values must already be validated.
     pub fn apply_config(&mut self, op: &ConfigOp) -> Result<(), String> {
+        self.apply_config_from(op, "")
+    }
+
+    /// [`Self::apply_config`], noting that bindings came from `source`, e.g. `config.toml`.
+    pub fn apply_config_from(&mut self, op: &ConfigOp, source: &str) -> Result<(), String> {
         match op {
             ConfigOp::Set { name, value } => self.settings.set(name, value.clone()),
             ConfigOp::SetFor {
@@ -273,7 +278,7 @@ impl Engine {
                 self.check_command(command)
                     .map_err(|e| format!("{keys}: {e}"))?;
                 self.keymap
-                    .bind(*mode, keys, command)
+                    .bind_from(*mode, keys, command, source)
                     .map_err(|e| e.to_string())
             }
             ConfigOp::Unbind { mode, keys } => self
@@ -1796,7 +1801,7 @@ impl Engine {
         self.check_command(command)?;
         let keys = format_sequence(&seq);
         self.keymap
-            .bind(mode, &keys, command)
+            .bind_from(mode, &keys, command, ":bind")
             .map_err(|e| e.to_string())?;
         self.show_message(Level::Info, format!("{keys} → {command} in {mode} mode"));
         Ok(vec![Effect::ConfigChanged(ConfigOp::Bind {
@@ -1964,7 +1969,7 @@ impl Engine {
             self.show_message(Level::Error, e);
             return;
         }
-        match self.keymap.bind(mode, &keys, &command) {
+        match self.keymap.bind_from(mode, &keys, &command, ":bind") {
             Ok(()) => effects.push(Effect::ConfigChanged(ConfigOp::Bind {
                 mode,
                 keys,
@@ -1978,11 +1983,18 @@ impl Engine {
 
     /// A binding from Lua: like `:bind`, but not saved, because `config.lua`
     /// and plugins make their bindings again at each start.
-    pub fn bind_from_lua(&mut self, mode: Mode, keys: &str, command: &str) -> Result<(), String> {
+    /// `source` is where it came from, e.g. `config.lua` or `plugin foo`.
+    pub fn bind_from_lua(
+        &mut self,
+        mode: Mode,
+        keys: &str,
+        command: &str,
+        source: &str,
+    ) -> Result<(), String> {
         crate::key::Key::parse_sequence(keys).map_err(|e| e.to_string())?;
         self.check_command(command)?;
         self.keymap
-            .bind(mode, keys, command)
+            .bind_from(mode, keys, command, source)
             .map_err(|e| e.to_string())
     }
 

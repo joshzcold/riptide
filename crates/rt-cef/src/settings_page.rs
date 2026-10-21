@@ -30,12 +30,18 @@ fn data() -> Option<String> {
     let catalog = crate::plugins::catalog_data();
     let extensions = crate::extensions::page_data();
     shell::with(|s| {
-        let entries = rt_core::settings_page::build(
+        let mut entries = rt_core::settings_page::build(
             s.engine.settings(),
             s.engine.keymap(),
             &s.setting_sources,
             &s.overridden,
         );
+        for binding in entries.keys.iter_mut().flat_map(|m| &mut m.bindings) {
+            if binding.command.starts_with("lua-call ") {
+                binding.desc = rt_config::lua::describe(&binding.command)
+                    .unwrap_or_else(|| "A Lua function".into());
+            }
+        }
         let mut json = serde_json::to_value(&entries).unwrap_or_default();
         json["plugins"] = plugins;
         json["catalog"] = catalog;
@@ -96,6 +102,11 @@ pub fn run_command(command: &Command) -> bool {
         Command::Settings => URL.to_string(),
         Command::Plugins => format!("{URL}#plugins"),
         Command::Extensions => format!("{URL}#extensions"),
+        Command::Map { mode, keys } => format!(
+            "{URL}#keys/{}/{}",
+            mode.name(),
+            rt_core::url::encode_query(keys.as_deref().unwrap_or_default())
+        ),
         _ => return false,
     };
     refresh();

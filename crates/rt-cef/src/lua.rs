@@ -125,7 +125,10 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 mode,
                 keys,
                 command,
-            } => match shell::with(|s| s.engine.bind_from_lua(mode, &keys, &command)) {
+            } => match shell::with(|s| {
+                s.engine
+                    .bind_from_lua(mode, &keys, &command, &binding_source(source))
+            }) {
                 Some(Err(e)) => shell::show_message(Level::Error, format!("{source}: {keys}: {e}")),
                 Some(Ok(_)) if source != "config.lua" => {
                     PLUGIN_KEYS.with(|k| {
@@ -255,6 +258,14 @@ pub fn current_context() -> Context {
 pub fn emit(event: &str, fields: &[(&str, &str)]) {
     crate::plugins::on_event(event);
     carry_out(lua::emit(event, fields, &context(None)));
+}
+
+/// Where a binding made by `source` came from, for the Keys tab.
+fn binding_source(source: &str) -> String {
+    match source {
+        "config.lua" => source.to_string(),
+        plugin => format!("plugin {plugin}"),
+    }
 }
 
 /// A key a plugin bound: mode, keys and command.

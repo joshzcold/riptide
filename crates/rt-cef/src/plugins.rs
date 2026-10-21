@@ -395,7 +395,10 @@ fn ready(spec: PluginSpec, dir: PathBuf, permissions: Permissions, dependencies:
     let name = spec.name.clone();
     for (mode, keys) in &spec.keys {
         let command = format!("pack-load {name} {keys}");
-        if let Some(Err(e)) = shell::with(|s| s.engine.bind_from_lua(*mode, keys, &command)) {
+        if let Some(Err(e)) = shell::with(|s| {
+            s.engine
+                .bind_from_lua(*mode, keys, &command, &format!("plugin {name}"))
+        }) {
             shell::show_message(Level::Error, format!("Plugin {name}: {keys}: {e}"));
         }
     }

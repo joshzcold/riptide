@@ -562,6 +562,11 @@ pub enum Command {
     Settings,
     /// Open the settings page's Plugins tab.
     Plugins,
+    /// Open the Keys tab on `mode`, showing the bindings that match `keys`.
+    Map {
+        mode: Mode,
+        keys: Option<String>,
+    },
     /// Fetch plugins from git and list their new commits, without updating:
     /// one plugin's repository, or all of them.
     PackCheck {
@@ -808,6 +813,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "Show or set a key binding: :bind [--mode m] keys [command]",
     ),
     spec("unbind", "Remove a key binding: :unbind [--mode m] keys"),
+    spec(
+        "map",
+        "List key bindings, with where each came from: :map [--mode m] [keys]",
+    ),
     spec("config-source", "Reload the configuration files"),
     spec(
         "help",
@@ -1905,6 +1914,10 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         },
         "settings" => Command::Settings,
         "plugins" => Command::Plugins,
+        "map" => Command::Map {
+            mode: args.mode()?,
+            keys: args.optional().map(String::from),
+        },
         "pack-check" => Command::PackCheck {
             name: args.optional().map(String::from),
         },
@@ -2240,6 +2253,24 @@ impl<'a> Args<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_map() {
+        assert_eq!(
+            parse("map").unwrap(),
+            Command::Map {
+                mode: Mode::Normal,
+                keys: None
+            }
+        );
+        assert_eq!(
+            parse("map --mode insert <Ctrl").unwrap(),
+            Command::Map {
+                mode: Mode::Insert,
+                keys: Some("<Ctrl".into())
+            }
+        );
+    }
 
     #[test]
     fn parses_open_with_flags_and_spaces() {

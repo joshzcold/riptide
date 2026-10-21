@@ -36,6 +36,8 @@ pub use paths::{Paths, Platform};
 
 pub struct Loaded {
     pub ops: Vec<ConfigOp>,
+    /// The file each of `ops` came from: `autoconfig.toml`, `config.toml` or `config.lua`.
+    pub op_files: Vec<&'static str>,
     /// Settings that `config.toml` or `config.lua` set, which override `:set`.
     pub overridden: BTreeSet<String>,
     /// Which file last set each setting, for the help page.
@@ -98,14 +100,16 @@ pub fn load(paths: &Paths) -> Loaded {
         lua::clear_runtime();
     }
 
+    let op_files: Vec<&'static str> = (0..ops.len())
+        .map(|i| match i {
+            i if i < auto_ops => "autoconfig.toml",
+            i if i < toml_ops => "config.toml",
+            _ => "config.lua",
+        })
+        .collect();
     let mut sources = BTreeMap::new();
-    for (i, op) in ops.iter().enumerate() {
+    for (op, file) in ops.iter().zip(&op_files) {
         if let ConfigOp::Set { name, .. } = op {
-            let file = match i {
-                i if i < auto_ops => "autoconfig.toml",
-                i if i < toml_ops => "config.toml",
-                _ => "config.lua",
-            };
             sources.insert(name.clone(), file.to_string());
         }
     }
@@ -123,6 +127,7 @@ pub fn load(paths: &Paths) -> Loaded {
     watched.extend(lua::config_modules());
     Loaded {
         ops,
+        op_files,
         overridden,
         sources,
         files,

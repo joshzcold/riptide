@@ -34,6 +34,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:set` |  | Show or change an option: :set name [value], :set name! toggles |
 | `:bind` |  | Show or set a key binding: :bind [--mode m] keys [command] |
 | `:unbind` |  | Remove a key binding: :unbind [--mode m] keys |
+| `:map` |  | List key bindings, with where each came from: :map [--mode m] [keys] |
 | `:config-source` |  | Reload the configuration files |
 | `:help` | `<F1>` | Show help: :help [-t] [:command \| setting \| section] |
 | `:version` |  | Show version, paths and loaded config files |
