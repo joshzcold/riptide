@@ -184,3 +184,60 @@ fn tab_focus_stack_prev_and_next_walk_the_recently_focused_tabs() {
         });
     }
 }
+
+/// Opens leave.html in a second tab and types into it, so its leave-page warning counts.
+fn typed_into_a_page_that_warns(b: &Browser) {
+    b.run(&format!("open -t {}", b.url("leave.html")));
+    b.wait_until("the second tab loads", |s| {
+        s.tabs().len() == 2 && s.tab().title == "leave"
+    });
+    b.run("hint inputs");
+    b.wait_mode("hint");
+    b.keys("a");
+    b.wait_mode("insert");
+    b.keys("draft");
+    b.wait_eval("document.getElementById('f').value", "draft");
+    b.keys("<Escape>");
+    b.wait_mode("normal");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn d_asks_before_closing_a_page_with_unsaved_changes() {
+    let b = Browser::start("page.html");
+    typed_into_a_page_that_warns(&b);
+    b.keys("d");
+    let s = b.wait_mode("yesno");
+    assert!(
+        s.prompt
+            .as_ref()
+            .is_some_and(|p| p.to_string().contains("unsaved changes")),
+        "{:?}",
+        s.prompt
+    );
+    b.keys("n");
+    b.wait_mode("normal");
+    assert_eq!(b.state().tabs().len(), 2);
+    assert_eq!(b.eval("document.getElementById('f').value"), "draft");
+
+    b.keys("d");
+    b.wait_mode("yesno");
+    b.keys("y");
+    let s = b.wait_until("one tab", |s| s.tabs().len() == 1);
+    assert_eq!(s.tab().title, "ready");
+    // Undo still has it.
+    b.keys("u");
+    b.wait_until("the tab is back", |s| {
+        s.tabs().len() == 2 && s.tab().title == "leave"
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_close_force_skips_the_leave_page_warning() {
+    let b = Browser::start("page.html");
+    typed_into_a_page_that_warns(&b);
+    b.run("tab-close --force");
+    let s = b.wait_until("one tab", |s| s.tabs().len() == 1);
+    assert_eq!(s.mode, "normal");
+}

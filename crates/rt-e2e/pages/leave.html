@@ -1,0 +1,6 @@
+<!doctype html><title>leave</title>
+<input id="f">
+<script>
+// Chromium only warns after you've used the page, which the tests do through a hint.
+addEventListener('beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
+</script>

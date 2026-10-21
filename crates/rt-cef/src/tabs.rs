@@ -98,10 +98,14 @@ pub fn close_unless_pinned(index: usize, force: bool) {
     })
     .flatten();
     let Some((browser, title, policy)) = pinned.filter(|_| !force) else {
-        return close(index);
+        return if force {
+            close(index)
+        } else {
+            close_asking_page(index)
+        };
     };
     match policy.as_str() {
-        "close" => return close(index),
+        "close" => return close_asking_page(index),
         "refuse" => {
             return shell::show_message(
                 Level::Error,
@@ -132,11 +136,41 @@ pub fn close_unless_pinned(index: usize, force: bool) {
             })
             .flatten();
             if let Some(index) = index {
-                close(index);
+                close_asking_page(index);
                 shell::refresh_ui();
             }
         },
     );
+}
+
+/// Close a tab once its page agrees: CEF runs the page's leave-page warning
+/// first, and `do_close` closes the tab if you leave.
+pub fn close_asking_page(index: usize) {
+    let host = shell::with(|s| {
+        (s.tabs.len() > 1)
+            .then(|| s.tabs.get(index)?.browser()?.host())
+            .flatten()
+    })
+    .flatten();
+    let Some(host) = host else {
+        return close(index);
+    };
+    let Some(id) = host.browser().map(|b| b.identifier()) else {
+        return close(index);
+    };
+    if CLOSING.with_borrow_mut(|closing| closing.insert(id)) {
+        host.close_browser(0);
+    }
+}
+
+/// Whether riptide asked this tab to close, rather than its page calling `window.close()`.
+pub fn take_close_request(browser: i32) -> bool {
+    CLOSING.with_borrow_mut(|closing| closing.remove(&browser))
+}
+
+/// The page's warning kept its tab open.
+pub fn close_refused(browser: i32) {
+    CLOSING.with_borrow_mut(|closing| closing.remove(&browser));
 }
 
 fn toggle_pin(index: usize) {
@@ -702,6 +736,8 @@ pub struct OpenTab {
 }
 
 thread_local! {
+    /// Tabs waiting for their page's leave-page warning, by browser id.
+    static CLOSING: std::cell::RefCell<std::collections::HashSet<i32>> = std::cell::RefCell::new(std::collections::HashSet::new());
     /// Taken on every redraw: completion runs inside the shell borrow and
     /// can't look at the windows itself.
     static OPEN_TABS: std::cell::RefCell<Vec<OpenTab>> = const { std::cell::RefCell::new(Vec::new()) };

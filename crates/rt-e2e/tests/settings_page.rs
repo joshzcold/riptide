@@ -320,7 +320,7 @@ rt.pack.add({ { dir = rt.config_dir .. "/../scratch-plugins/zapper", opts = {} }
     // Only the z bindings, each with what it does and where it came from.
     b.wait_eval(
         "[...document.querySelectorAll('.keyrow')].map((r) => r.querySelector('.seq').textContent + ': ' + r.querySelector('.desc')?.textContent).join(' | ')",
-        "zb: Close the current tab (--force: a pinned one without asking) · from :bind \
+        "zb: Close the current tab (--force: without asking, even if pinned or the page has unsaved changes) · from :bind \
          | zl: Say hi · from config.lua \
          | zp: Zap the page · from plugin zapper \
          | zt: Reload the current page · from config.toml",

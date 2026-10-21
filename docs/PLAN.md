@@ -79,7 +79,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-20)
 
-1. **Pick from the open work below.** Candidates: plugin pages in floats, and a tab's leave-page warning on `d`.
+1. **Pick from the open work below.** Candidates: plugin pages in floats.
 
 ### Plugins (M27)
 
@@ -102,7 +102,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Tabs, windows and sessions
 
-- Closing a tab with `d` skips the page's leave-page warning.
 - Call windows are restored as ordinary windows.
 - Favicons aren't kept in sessions (they're fetched again on load).
 

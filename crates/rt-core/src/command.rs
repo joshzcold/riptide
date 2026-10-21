@@ -762,7 +762,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("cmd-set-text", "Preset the command line text"),
     spec(
         "tab-close",
-        "Close the current tab (--force: a pinned one without asking)",
+        "Close the current tab (--force: without asking, even if pinned or the page has unsaved changes)",
     ),
     spec(
         "tab-pin",

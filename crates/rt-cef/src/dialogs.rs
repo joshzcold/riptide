@@ -61,14 +61,18 @@ wrap_jsdialog_handler! {
         ) -> ::std::os::raw::c_int {
             let Some(callback) = callback.map(|c| c.clone()) else { return 0 };
             let action = if is_reload != 0 { "Reload" } else { "Leave" };
+            let id = browser.map(|b| b.identifier());
             prompts::ask(
-                browser.map(|b| b.identifier()),
+                id,
                 Scope::JsDialog, rt_core::prompt::Topic::Dialog,
                 "Unsaved changes",
                 format!("This page may have unsaved changes. {action} anyway?"),
                 PromptKind::YesNo { default: false, remember: Remember::Never },
                 move |answer| {
                     let leave = matches!(answer, PromptAnswer::Yes { .. });
+                    if !leave && let Some(id) = id {
+                        crate::tabs::close_refused(id);
+                    }
                     callback.cont(leave.into(), None);
                 },
             );
