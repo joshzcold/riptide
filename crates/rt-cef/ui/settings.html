@@ -1357,6 +1357,8 @@ measure();
 search.addEventListener("input", render);
 changedOnly.addEventListener("change", render);
 route();
+// The data baked into the page may be older than the page.
+rt.send("ready", "{}");
 </script>
 </body>
 </html>

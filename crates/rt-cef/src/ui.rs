@@ -36,6 +36,7 @@ pub fn handle_message(message: UiMessage) {
             pattern,
         } => crate::settings_page::set(&name, &value, pattern.as_deref()),
         UiMessage::SettingsReset { name } => crate::settings_page::reset(&name),
+        UiMessage::SettingsReady => crate::settings_page::refresh(),
         UiMessage::SettingsBind {
             mode,
             keys,

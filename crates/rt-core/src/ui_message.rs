@@ -37,6 +37,9 @@ pub enum UiMessage {
     },
     /// The settings page's reset button.
     SettingsReset { name: String },
+    /// The settings page has loaded and wants current data: changes made
+    /// while it loaded reached it too late.
+    SettingsReady,
     /// The Keys tab bound `keys` to `command`; checked like `:bind`.
     SettingsBind {
         mode: crate::mode::Mode,
@@ -173,6 +176,7 @@ impl UiMessage {
                 | UiMessage::RowHeight { .. }
                 | UiMessage::FloatSize { .. }
                 | UiMessage::ColorScheme { .. }
+                | UiMessage::SettingsReady
         )
     }
 }
@@ -523,6 +527,10 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 value,
                 pattern,
             })
+        }
+        ("settings", "ready") => {
+            let Nothing {} = payload(name, json)?;
+            Ok(UiMessage::SettingsReady)
         }
         ("settings", "bind") => {
             let (mode, keys, command) = bind_message(name, json)?;
@@ -1036,6 +1044,9 @@ mod tests {
         ] {
             assert!(parse(page, "pack-add", bad).is_err(), "{bad}");
         }
+        assert_eq!(parse(page, "ready", "{}"), Ok(UiMessage::SettingsReady));
+        // Loading isn't the user picking that page's window.
+        assert!(!UiMessage::SettingsReady.is_input());
         assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
         assert!(
