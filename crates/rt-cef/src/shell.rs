@@ -151,6 +151,8 @@ pub struct WindowState {
     pub pane_border: Option<Panel>,
     /// Over each border between panes, to drag it: its id and view.
     pub pane_handles: Vec<(String, BrowserView)>,
+    /// The crash notices over other panes' crashed tabs: (tab, notice).
+    pub pane_notices: Vec<(BrowserView, BrowserView)>,
     /// Closed tabs as (index, url), newest last, for `undo`.
     /// Closed tabs for `u`: index, URL and whether it was pinned.
     pub closed: Vec<(usize, String, bool)>,
@@ -234,6 +236,7 @@ impl WindowState {
             pane_tabs: Vec::new(),
             pane_border: None,
             pane_handles: Vec::new(),
+            pane_notices: Vec::new(),
             closed: Vec::new(),
             tabbar: None,
             row: None,

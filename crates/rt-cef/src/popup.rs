@@ -155,16 +155,12 @@ pub fn page_loaded(browser: &Browser) {
     });
 }
 
-/// Place the popup at the top right of its window's page area.
+/// Place the popup at the top right of its tab's page: the focused pane.
 pub fn reposition() {
     let placed = POPUP.with(|p| {
         let p = p.borrow();
         let popup = p.as_ref()?;
-        let area = shell::with(|s| {
-            let window = s.windows.iter().find(|w| w.id == popup.window)?;
-            Some(View::from(window.row.as_ref()?).bounds())
-        })
-        .flatten()?;
+        let area = crate::panes::focused_area(popup.window)?;
         let width = popup.size.0.min(area.width - 2 * MARGIN).max(1);
         let height = popup
             .size

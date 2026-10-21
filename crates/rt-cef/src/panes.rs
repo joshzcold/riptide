@@ -230,57 +230,69 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         return;
     }
     WAITING.set(0);
-    let Some(Some((content, tabs, notice, panes, focused))) = shell::with(|s| {
-        let w = s.windows.iter().find(|w| w.id == window_id)?;
-        let bounds = w.layout.bounds(size.width, size.height, GAP);
-        let rect = |pane| {
-            bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
-                x: b.x,
-                y: b.y,
-                width: b.width,
-                height: b.height,
-            })
-        };
-        let full = Rect {
-            x: 0,
-            y: 0,
-            width: size.width,
-            height: size.height,
-        };
-        let focused = rect(w.layout.focused()).unwrap_or(full.clone());
-        let current = w.tabs.current_index();
-        let tabs: Vec<(BrowserView, Rect)> = w
-            .tabs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let place = if i == current {
-                    focused.clone()
-                } else {
-                    w.pane_tabs
-                        .iter()
-                        .find(|(_, v)| same(v, &t.view))
-                        .and_then(|(p, _)| rect(*p))
-                        .unwrap_or_else(|| full.clone())
-                };
-                (t.view.clone(), place)
-            })
-            .collect();
-        Some((
-            w.content.clone()?,
-            tabs,
-            w.crash_notice.clone(),
-            w.layout.is_split(),
-            focused,
-        ))
-    }) else {
+    let Some(Some((content, tabs, notice, panes, focused, pane_notices, current_index))) =
+        shell::with(|s| {
+            let w = s.windows.iter().find(|w| w.id == window_id)?;
+            let bounds = w.layout.bounds(size.width, size.height, GAP);
+            let rect = |pane| {
+                bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
+                    x: b.x,
+                    y: b.y,
+                    width: b.width,
+                    height: b.height,
+                })
+            };
+            let full = Rect {
+                x: 0,
+                y: 0,
+                width: size.width,
+                height: size.height,
+            };
+            let focused = rect(w.layout.focused()).unwrap_or(full.clone());
+            let current = w.tabs.current_index();
+            let tabs: Vec<(BrowserView, Rect)> = w
+                .tabs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let place = if i == current {
+                        focused.clone()
+                    } else {
+                        w.pane_tabs
+                            .iter()
+                            .find(|(_, v)| same(v, &t.view))
+                            .and_then(|(p, _)| rect(*p))
+                            .unwrap_or_else(|| full.clone())
+                    };
+                    (t.view.clone(), place)
+                })
+                .collect();
+            let pane_notices: Vec<(BrowserView, Rect)> = w
+                .pane_notices
+                .iter()
+                .filter_map(|(tab, notice)| {
+                    let pane = w.pane_tabs.iter().find(|(_, v)| same(v, tab))?.0;
+                    Some((notice.clone(), rect(pane)?))
+                })
+                .collect();
+            Some((
+                w.content.clone()?,
+                tabs,
+                w.crash_notice.clone(),
+                w.layout.is_split(),
+                focused,
+                pane_notices,
+                current,
+            ))
+        })
+    else {
         return;
     };
     // The gaps between panes show the page area's background, and the
     // focused pane's edges a border behind it.
     let (gap, accent) = split_colors();
     View::from(&content).set_background_color(if panes { gap } else { 0 });
-    if let Some(border) = border(window_id, &content) {
+    if let Some(border) = panes.then(|| border(window_id, &content)).flatten() {
         let size = View::from(&content).bounds();
         let around = Rect {
             x: (focused.x - GAP).max(0),
@@ -296,13 +308,37 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         let border = View::from(&border);
         border.set_background_color(accent);
         border.set_bounds(Some(&around));
-        border.set_visible(panes.into());
+        border.set_visible(1);
+    } else if let Some(Some(border)) = shell::with(|s| {
+        s.windows
+            .iter()
+            .find(|w| w.id == window_id)
+            .and_then(|w| w.pane_border.clone())
+    }) {
+        View::from(&border).set_visible(0);
     }
-    for (view, rect) in &tabs {
-        View::from(view).set_bounds(Some(rect));
+    tracing::debug!(
+        window = window_id,
+        width = size.width,
+        height = size.height,
+        split = panes,
+        "placing tabs"
+    );
+    for (i, (view, rect)) in tabs.iter().enumerate() {
+        let view = View::from(view);
+        let was_empty = view.bounds().width <= 0 || view.bounds().height <= 0;
+        view.set_bounds(Some(rect));
+        // A view can't take keyboard focus while it has no size, so the
+        // current tab asks again once it has one.
+        if was_empty && i == current_index && rect.width > 0 && rect.height > 0 {
+            focus_current(window_id, &view);
+        }
     }
     if let Some(notice) = notice {
         View::from(&notice).set_bounds(Some(&focused));
+    }
+    for (notice, rect) in &pane_notices {
+        View::from(notice).set_bounds(Some(rect));
     }
     place_handles(window_id, &content, &size, &focused, gap, accent);
 }
@@ -409,6 +445,110 @@ pub fn drag(border: &str, delta: i32) {
 pub fn drop_border() {
     if let Some(Some(view)) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())) {
         View::from(&view).request_focus();
+    }
+}
+
+/// Cover each other pane's crashed tab with a crash notice of its own, as
+/// the focused pane's is (`tabs::show_current_in`), and drop notices whose
+/// tab is back or off screen.
+pub fn show_crashes(window_id: u32, content: &Panel) {
+    let Some(Some((crashed, mut notices))) = shell::with(|s| {
+        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
+        let crashed: Vec<(BrowserView, String)> = w
+            .tabs
+            .iter()
+            .filter(|t| in_other_pane(w, &t.view))
+            .filter_map(|t| {
+                Some((
+                    t.view.clone(),
+                    crate::ui::crashed_url(&t.url, t.crashed.as_deref()?),
+                ))
+            })
+            .collect();
+        Some((crashed, std::mem::take(&mut w.pane_notices)))
+    }) else {
+        return;
+    };
+    let mut kept = Vec::new();
+    for (tab, url) in crashed {
+        View::from(&tab).set_visible(0);
+        let notice = match notices.iter().position(|(t, _)| same(t, &tab)) {
+            Some(i) => {
+                let (_, notice) = notices.remove(i);
+                if let Some(frame) = notice.browser().and_then(|b| b.main_frame()) {
+                    frame.load_url(Some(&CefString::from(url.as_str())));
+                }
+                notice
+            }
+            None => {
+                let Some(notice) =
+                    crate::window::create_browser_view(crate::client::Role::Crashed, &url)
+                else {
+                    continue;
+                };
+                content.add_child_view(Some(&mut View::from(&notice)));
+                notice
+            }
+        };
+        View::from(&notice).set_visible(1);
+        kept.push((tab, notice));
+    }
+    for (_, gone) in notices {
+        content.remove_child_view(Some(&mut View::from(&gone)));
+    }
+    shell::with(|s| {
+        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
+            w.pane_notices = kept;
+        }
+    });
+}
+
+/// Where the focused pane is in window `window_id`, in window coordinates,
+/// for things that belong over its page, such as an extension's popup.
+pub fn focused_area(window_id: u32) -> Option<Rect> {
+    let (content, pane) = shell::with(|s| {
+        let w = s.windows.iter().find(|w| w.id == window_id)?;
+        let content = w.content.clone()?;
+        let size = View::from(&content).bounds();
+        let pane = w
+            .layout
+            .bounds(size.width, size.height, GAP)
+            .into_iter()
+            .find(|(p, _)| *p == w.layout.focused())
+            .map(|(_, b)| b)?;
+        Some((content, pane))
+    })
+    .flatten()?;
+    let mut origin = Point {
+        x: pane.x,
+        y: pane.y,
+    };
+    View::from(&content).convert_point_to_window(Some(&mut origin));
+    Some(Rect {
+        x: origin.x,
+        y: origin.y,
+        width: pane.width,
+        height: pane.height,
+    })
+}
+
+/// Focus the current tab's `view`, unless the window isn't the active one
+/// or a question or the command line has the keys.
+fn focus_current(window_id: u32, view: &View) {
+    let ours = shell::with(|s| {
+        s.id == window_id
+            && !matches!(
+                s.engine.mode(),
+                rt_core::Mode::Prompt | rt_core::Mode::YesNo | rt_core::Mode::Command
+            )
+    })
+    .unwrap_or(false);
+    if ours {
+        tracing::debug!(
+            window = window_id,
+            "focusing the current tab now that it has a size"
+        );
+        view.request_focus();
     }
 }
 
