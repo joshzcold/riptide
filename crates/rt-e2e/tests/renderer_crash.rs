@@ -50,3 +50,32 @@ fn the_notice_follows_the_crashed_tab() {
         s.window().current_tab == 1 && s.window().crash_notice && s.tab().crashed
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_crashed_tab_in_another_split_keeps_its_notice() {
+    let b = Browser::start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("vsplit {second}"));
+    b.wait_until("the right pane loads", |s| {
+        s.window().panes.len() == 2 && s.tab().is_loaded(&second)
+    });
+    b.crash_tab();
+    b.wait_until("the right pane's tab is crashed", |s| {
+        s.tab().crashed && s.window().crash_notice
+    });
+    b.keys("<Ctrl-h>");
+    b.wait_until("the right pane keeps a notice of its own", |s| {
+        s.window().current_tab == 0
+            && !s.window().crash_notice
+            && s.window().pane_crash_notices == 1
+    });
+    b.keys("<Ctrl-l>");
+    b.wait_until("focused again, it has the usual notice", |s| {
+        s.tab().crashed && s.window().crash_notice && s.window().pane_crash_notices == 0
+    });
+    b.keys("r");
+    b.wait_until("the page is back", |s| {
+        !s.tab().crashed && !s.window().crash_notice && s.tab().is_loaded(&second)
+    });
+}

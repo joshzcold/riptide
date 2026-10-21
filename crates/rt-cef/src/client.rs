@@ -44,6 +44,8 @@ pub enum Role {
     Popup,
     /// The bar above an extension's popup, with its close button.
     PopupBar,
+    /// A handle over the border between two split panes, to drag.
+    SplitHandle,
 }
 
 wrap_client! {
@@ -871,6 +873,7 @@ wrap_load_handler! {
                     }
                     return;
                 }
+                Role::SplitHandle => return,
             };
             shell::refresh_ui();
         }

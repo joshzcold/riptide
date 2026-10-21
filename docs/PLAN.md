@@ -72,6 +72,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M26 | The e2e harness (`rt-e2e`), unit tests in the CEF layer, linters (clippy lints, cargo-deny, ShellCheck, actionlint, typos, Biome) | dev/testing.md |
 | M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events, keys, commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
+| M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, the focused pane's border, layouts in sessions, crash notices and extension popups per pane | guide/tabs.md |
 
 ---
 
@@ -96,18 +97,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 - Scriptlets in frames from another site (separate DevTools targets; needs `Target.setAutoAttach`).
 - A tab keeps a host's scriptlets until it closes, even after the site is whitelisted.
-
-### Splits
-
-Built (see guide/tabs.md): `:split`, `:vsplit`, `:only`, `:split-close`, `:split-focus`, `:split-equal`, the `s` keys and `<Ctrl-h/j/k/l>`, the focused pane's border, focus by clicking, `J`/`K` moving the focus to a tab another pane shows, and panes that follow tabs closing. The layout tree is `rt_core::split`; `rt-cef/src/panes.rs` places the tab views in the page area, which has no layout manager.
-
-Still to do:
-
-- **Sessions:** save and restore the layout (the split tree, its sizes and each pane's tab).
-- **Resizing:** `:split-resize` and dragging the border between two panes.
-- **The crash notice** covers the focused pane only; a crashed tab in another pane shows nothing.
-- **Extension popups** open at the top right of the whole page area, not over their own pane.
-- **Open questions:** whether `:open -t` from a pane should open its tab in that pane (it does, since the new tab becomes current), and how many panes a window allows.
 
 ### Tabs, windows and sessions
 

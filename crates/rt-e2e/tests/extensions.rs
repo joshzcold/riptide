@@ -146,6 +146,31 @@ fn extensions_from_folders_run_in_tabs_and_block() {
     b.run("tab-prev");
     b.wait_until("switching tabs closes it", |s| s.popup.is_null());
 
+    // In a split, it opens over its own pane's page.
+    b.run("vsplit about:blank");
+    b.wait_until("two panes", |s| s.window().panes.len() == 2);
+    b.keys("<Ctrl-h>");
+    let s = b.wait_until("the left pane", |s| {
+        s.window()
+            .panes
+            .iter()
+            .any(|p| p.focused && p.bounds.x == 0)
+    });
+    let left = s.window().panes.iter().find(|p| p.focused).unwrap().bounds;
+    b.run("extension-open riptide probe");
+    let s = b.wait_until("it floats over the left pane", |s| {
+        s.popup["bounds"].is_array()
+    });
+    assert!(
+        at(&s, 0) + at(&s, 2) <= i64::from(left.width),
+        "{} past the left pane's {}",
+        s.popup["bounds"],
+        left.width
+    );
+    b.keys("<Escape>");
+    b.wait_until("Escape closes it", |s| s.popup.is_null());
+    b.run("only");
+
     // :extension-open completes names and opens the options page.
     b.keys(":extension-open rip<Tab>");
     b.wait_until("names complete", |s| {
