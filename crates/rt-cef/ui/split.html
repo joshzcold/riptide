@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+</style>
+</head>
+<body>
+<script>
+  // The fragment says which border this is: "v/<id>" moves left and right, "h/<id>" up and down.
+  const [axis, border, color] = location.hash.slice(1).split("/");
+  document.body.style.cursor = axis === "v" ? "col-resize" : "row-resize";
+  document.body.style.background = "#" + color;
+  // rtColor("#rrggbb") from the browser when the focused pane changes.
+  window.rtColor = (c) => { document.body.style.background = c; };
+  // Screen coordinates, since the border moves under the pointer; the pointer stays captured meanwhile.
+  let last = null;
+  const at = (e) => (axis === "v" ? e.screenX : e.screenY);
+  document.body.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    last = at(e);
+    document.body.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  document.body.addEventListener("pointermove", (e) => {
+    if (last === null) return;
+    const delta = at(e) - last;
+    if (!delta) return;
+    last = at(e);
+    rt.send("drag", JSON.stringify({ border, delta }));
+  });
+  const stop = () => {
+    if (last !== null) rt.send("drop", "{}");
+    last = null;
+  };
+  document.body.addEventListener("pointerup", stop);
+  document.body.addEventListener("pointercancel", stop);
+</script>
+</body>
+</html>

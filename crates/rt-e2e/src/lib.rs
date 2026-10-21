@@ -68,6 +68,9 @@ pub struct WindowState {
     /// The tabs on screen, one per split pane.
     #[serde(default)]
     pub panes: Vec<Pane>,
+    /// The handles over the borders between panes, to drag them.
+    #[serde(default)]
+    pub split_handles: Vec<Bounds>,
     /// The notice shown in place of a crashed tab is on screen.
     pub crash_notice: bool,
 }

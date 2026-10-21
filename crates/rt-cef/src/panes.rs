@@ -12,8 +12,11 @@ use rt_storage::SplitState;
 
 use crate::shell::{self, WindowState};
 
-/// Pixels between panes, where the page area's background shows.
-const GAP: i32 = 2;
+/// Pixels between panes, where the page area's background shows and the
+/// borders can be dragged.
+const GAP: i32 = 4;
+
+const HANDLE_URL: &str = "riptide://ui/split.html";
 
 pub fn run_command(command: &Command) -> bool {
     match command {
@@ -274,6 +277,106 @@ pub fn arrange(window_id: u32) {
     }
     if let Some(notice) = notice {
         View::from(&notice).set_bounds(Some(&focused));
+    }
+    place_handles(window_id, &content, &focused, gap, accent);
+}
+
+/// Put a handle over each border between panes, made or removed as the
+/// borders come and go, and above the tab views so it gets the mouse.
+fn place_handles(window_id: u32, content: &Panel, focused: &Rect, gap: u32, accent: u32) {
+    let size = View::from(content).bounds();
+    let Some(Some((borders, mut handles))) = shell::with(|s| {
+        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
+        let borders = if w.layout.is_split() {
+            w.layout.borders(size.width, size.height, GAP)
+        } else {
+            Vec::new()
+        };
+        Some((borders, std::mem::take(&mut w.pane_handles)))
+    }) else {
+        return;
+    };
+    let hex = |argb: u32| format!("{:06x}", argb & 0x00ff_ffff);
+    let mut kept = Vec::new();
+    for border in &borders {
+        let b = border.bounds;
+        let rect = Rect {
+            x: b.x,
+            y: b.y,
+            width: b.width,
+            height: b.height,
+        };
+        // A border along the focused pane's edge shows the focus color.
+        let touches = rect.x < focused.x + focused.width + GAP
+            && focused.x < rect.x + rect.width + GAP
+            && rect.y < focused.y + focused.height + GAP
+            && focused.y < rect.y + rect.height + GAP;
+        let color = if touches { accent } else { gap };
+        let axis = if border.axis == Axis::Vertical {
+            "v"
+        } else {
+            "h"
+        };
+        let view = match handles.iter().position(|(id, _)| *id == border.id) {
+            Some(i) => {
+                let (_, view) = handles.remove(i);
+                if let Some(frame) = view.browser().and_then(|b| b.main_frame()) {
+                    shell::exec_js(
+                        &frame,
+                        &format!("window.rtColor && rtColor('#{}')", hex(color)),
+                    );
+                }
+                view
+            }
+            None => {
+                let url = format!("{HANDLE_URL}#{axis}/{}/{}", border.id, hex(color));
+                let Some(view) =
+                    crate::window::create_browser_view(crate::client::Role::SplitHandle, &url)
+                else {
+                    continue;
+                };
+                View::from(&view).set_focusable(0);
+                content.add_child_view(Some(&mut View::from(&view)));
+                view
+            }
+        };
+        View::from(&view).set_bounds(Some(&rect));
+        View::from(&view).set_visible(1);
+        content.reorder_child_view(Some(&mut View::from(&view)), -1);
+        kept.push((border.id.clone(), view));
+    }
+    for (_, gone) in handles {
+        content.remove_child_view(Some(&mut View::from(&gone)));
+    }
+    shell::with(|s| {
+        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
+            w.pane_handles = kept;
+        }
+    });
+}
+
+/// A border's handle was dragged `delta` pixels right or down.
+pub fn drag(border: &str, delta: i32) {
+    let moved = shell::with(|s| {
+        let size = s.content.as_ref().map(|c| View::from(c).bounds())?;
+        let extent = s
+            .layout
+            .borders(size.width, size.height, GAP)
+            .into_iter()
+            .find(|b| b.id == border)?
+            .extent;
+        s.layout.move_border(border, delta, extent).then_some(())
+    })
+    .flatten();
+    if moved.is_some() {
+        arrange_active();
+    }
+}
+
+/// The drag ended: the keys go back to the focused pane's page.
+pub fn drop_border() {
+    if let Some(Some(view)) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())) {
+        View::from(&view).request_focus();
     }
 }
 

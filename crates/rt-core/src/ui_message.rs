@@ -83,6 +83,10 @@ pub enum UiMessage {
     PopupClose,
     /// Dragging the bar above an extension's popup, by this many pixels.
     PopupMove { dx: i32, dy: i32 },
+    /// A split's border dragged `delta` pixels right or down.
+    SplitDrag { border: String, delta: i32 },
+    /// The drag of a split's border ended.
+    SplitDrop,
     /// The recover page: reopen these `(window, tab)`s of a crash's session.
     RecoverReopen {
         session: String,
@@ -375,6 +379,13 @@ struct FloatSize {
     id: u32,
     width: u32,
     height: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SplitDrag {
+    border: String,
+    delta: i32,
 }
 
 #[derive(Deserialize)]
@@ -723,6 +734,22 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
             }
             Ok(UiMessage::FloatSize { id, width, height })
         }
+        ("split.html", "drag") => {
+            let SplitDrag { border, delta } = payload(name, json)?;
+            let id_ok = border.len() <= 64
+                && border.contains(':')
+                && border
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, '.' | ':'));
+            if !id_ok || delta.abs() > 10_000 {
+                return Err(format!("{name}: bad drag of {border:?} by {delta}"));
+            }
+            Ok(UiMessage::SplitDrag { border, delta })
+        }
+        ("split.html", "drop") => {
+            let Nothing {} = payload(name, json)?;
+            Ok(UiMessage::SplitDrop)
+        }
         ("popup.html", "close") => Ok(UiMessage::PopupClose),
         ("popup.html", "move") => {
             let PopupMove { dx, dy } = payload(name, json)?;
@@ -1047,6 +1074,24 @@ mod tests {
         assert_eq!(parse(page, "ready", "{}"), Ok(UiMessage::SettingsReady));
         // Loading isn't the user picking that page's window.
         assert!(!UiMessage::SettingsReady.is_input());
+        let handle = "riptide://ui/split.html#v/1.0:0/333333";
+        assert_eq!(
+            parse(handle, "drag", r#"{"border":"1.0:0","delta":-12}"#),
+            Ok(UiMessage::SplitDrag {
+                border: "1.0:0".into(),
+                delta: -12
+            })
+        );
+        assert!(parse(handle, "drag", r#"{"border":"<script>","delta":1}"#).is_err());
+        assert_eq!(parse(handle, "drop", "{}"), Ok(UiMessage::SplitDrop));
+        assert!(
+            parse(
+                "https://example.com/",
+                "drag",
+                r#"{"border":":0","delta":1}"#
+            )
+            .is_err()
+        );
         assert!(parse(page, "clear-site", r#"{"site": "file:///etc"}"#).is_err());
         assert!(parse(page, "clear-site", r#"{"site": "a b"}"#).is_err());
         assert!(

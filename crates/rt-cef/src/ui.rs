@@ -10,6 +10,7 @@ pub const FLOAT_HTML: &str = include_str!("../ui/float.html");
 pub const PANEL_HTML: &str = include_str!("../ui/panel.html");
 pub const CRASHED_HTML: &str = include_str!("../ui/crashed.html");
 pub const POPUP_HTML: &str = include_str!("../ui/popup.html");
+pub const SPLIT_HTML: &str = include_str!("../ui/split.html");
 
 pub const TABBAR_URL: &str = "riptide://ui/tabbar.html";
 pub const STATUSBAR_URL: &str = "riptide://ui/statusbar.html";
@@ -83,6 +84,8 @@ pub fn handle_message(message: UiMessage) {
         UiMessage::ExtensionInstall { source } => crate::extensions::install_from_page(&source),
         UiMessage::PopupClose => crate::popup::close(),
         UiMessage::PopupMove { dx, dy } => crate::popup::move_by(dx, dy),
+        UiMessage::SplitDrag { border, delta } => crate::panes::drag(&border, delta),
+        UiMessage::SplitDrop => crate::panes::drop_border(),
         UiMessage::Restart => {
             if let Some(effects) = crate::shell::with(|s| s.engine.execute_str("restart", None)) {
                 crate::shell::apply(effects);

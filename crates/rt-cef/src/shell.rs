@@ -149,6 +149,8 @@ pub struct WindowState {
     pub pane_tabs: Vec<(rt_core::split::PaneId, BrowserView)>,
     /// Behind the focused pane, showing through the gaps around it.
     pub pane_border: Option<Panel>,
+    /// Over each border between panes, to drag it: its id and view.
+    pub pane_handles: Vec<(String, BrowserView)>,
     /// Closed tabs as (index, url), newest last, for `undo`.
     /// Closed tabs for `u`: index, URL and whether it was pinned.
     pub closed: Vec<(usize, String, bool)>,
@@ -231,6 +233,7 @@ impl WindowState {
             layout: rt_core::split::Layout::new(),
             pane_tabs: Vec::new(),
             pane_border: None,
+            pane_handles: Vec::new(),
             closed: Vec::new(),
             tabbar: None,
             row: None,

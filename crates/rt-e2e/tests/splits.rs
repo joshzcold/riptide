@@ -54,6 +54,14 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     );
     assert!((left.width - right.width).abs() <= 1, "{halves:?}");
     assert_eq!(s.tabs().len(), 2);
+    // A handle to drag sits over the gap.
+    let s = b.wait_until("a handle", |s| s.window().split_handles.len() == 1);
+    let handle = s.window().split_handles[0];
+    assert!(
+        handle.x <= left.x + left.width && handle.x + handle.width >= right.x,
+        "{handle:?} {halves:?}"
+    );
+    assert_eq!(handle.height, full.height);
 }
 
 #[test]
@@ -109,8 +117,10 @@ fn sc_and_so_close_panes_but_keep_their_tabs() {
     let s = b.wait_until("two panes", |s| s.window().panes.len() == 2);
     assert_eq!(s.tabs().len(), 3, "the pane's tab stays open");
     assert_eq!(panes(&s), ["ready", "*second"]);
+    assert_eq!(s.window().split_handles.len(), 1);
     b.keys("so");
     let s = b.wait_until("one pane", |s| s.window().panes.len() == 1);
+    assert!(s.window().split_handles.is_empty());
     assert_eq!(s.tabs().len(), 3);
     assert_eq!(s.tab().title, "second");
 }

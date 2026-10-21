@@ -220,6 +220,48 @@ impl Layout {
         resize(&mut self.root, self.focused, axis, delta).unwrap_or(false)
     }
 
+    /// The borders between neighbouring panes in a `width` × `height` page
+    /// area, each `grab` pixels across, centred on the gap between them.
+    pub fn borders(&self, width: i32, height: i32, grab: i32) -> Vec<Border> {
+        let mut out = Vec::new();
+        let full = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        };
+        let size = (f64::from(width), f64::from(height));
+        borders(&self.root, full, &mut Vec::new(), size, grab, &mut out);
+        out
+    }
+
+    /// Move the border `id` by `delta` pixels (right or down) in a split
+    /// `extent` pixels across. False if there's no such border.
+    pub fn move_border(&mut self, id: &str, delta: i32, extent: i32) -> bool {
+        let Some((path, after)) = parse_border(id) else {
+            return false;
+        };
+        let mut node = &mut self.root;
+        for i in path {
+            match node {
+                Node::Split { children, .. } if i < children.len() => node = &mut children[i].0,
+                _ => return false,
+            }
+        }
+        let Node::Split { children, .. } = node else {
+            return false;
+        };
+        if after + 1 >= children.len() || extent <= 0 {
+            return false;
+        }
+        let total = children[after].1 + children[after + 1].1;
+        let moved = (children[after].1 + f64::from(delta) / f64::from(extent))
+            .clamp(MIN_SHARE, total - MIN_SHARE);
+        children[after].1 = moved;
+        children[after + 1].1 = total - moved;
+        true
+    }
+
     /// The layout as a tree of whatever `tab` gives each pane, for saving.
     /// Panes it gives nothing for are left out; `None` if one pane or less is left.
     pub fn tree<T>(&self, mut tab: impl FnMut(PaneId) -> Option<T>) -> Option<Tree<T>> {
@@ -304,6 +346,95 @@ pub enum Tree<T> {
         axis: Axis,
         children: Vec<(Tree<T>, f64)>,
     },
+}
+
+/// A border between two neighbouring panes, to drag.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Border {
+    /// Stays the same while the layout keeps its shape (see `move_border`).
+    pub id: String,
+    /// `Vertical` for a border between panes side by side, which moves left and right.
+    pub axis: Axis,
+    pub bounds: Bounds,
+    /// How many pixels across its split is, along `axis`.
+    pub extent: i32,
+}
+
+/// A border's id: the child indices down to its split, then the pane it follows.
+fn border_id(path: &[usize], after: usize) -> String {
+    let path: Vec<String> = path.iter().map(usize::to_string).collect();
+    format!("{}:{after}", path.join("."))
+}
+
+fn parse_border(id: &str) -> Option<(Vec<usize>, usize)> {
+    let (path, after) = id.split_once(':')?;
+    let path = if path.is_empty() {
+        Vec::new()
+    } else {
+        path.split('.')
+            .map(|i| i.parse().ok())
+            .collect::<Option<_>>()?
+    };
+    Some((path, after.parse().ok()?))
+}
+
+fn borders(
+    node: &Node,
+    rect: Rect,
+    path: &mut Vec<usize>,
+    (w, h): (f64, f64),
+    grab: i32,
+    out: &mut Vec<Border>,
+) {
+    let Node::Split { axis, children } = node else {
+        return;
+    };
+    let mut offset = 0.0;
+    for (i, (child, share)) in children.iter().enumerate() {
+        let child_rect = match axis {
+            Axis::Vertical => Rect {
+                x: rect.x + offset * rect.width,
+                width: share * rect.width,
+                ..rect
+            },
+            Axis::Horizontal => Rect {
+                y: rect.y + offset * rect.height,
+                height: share * rect.height,
+                ..rect
+            },
+        };
+        path.push(i);
+        borders(child, child_rect, path, (w, h), grab, out);
+        path.pop();
+        offset += share;
+        if i + 1 == children.len() {
+            continue;
+        }
+        let bounds = match axis {
+            Axis::Vertical => Bounds {
+                x: ((rect.x + offset * rect.width) * w).round() as i32 - grab / 2,
+                y: (rect.y * h).round() as i32,
+                width: grab,
+                height: (rect.height * h).round() as i32,
+            },
+            Axis::Horizontal => Bounds {
+                x: (rect.x * w).round() as i32,
+                y: ((rect.y + offset * rect.height) * h).round() as i32 - grab / 2,
+                width: (rect.width * w).round() as i32,
+                height: grab,
+            },
+        };
+        let extent = match axis {
+            Axis::Vertical => rect.width * w,
+            Axis::Horizontal => rect.height * h,
+        };
+        out.push(Border {
+            id: border_id(path, i),
+            axis: *axis,
+            bounds,
+            extent: extent.round() as i32,
+        });
+    }
 }
 
 /// The smallest share a resize leaves a pane.
@@ -852,6 +983,49 @@ mod tests {
             .collect();
         assert_eq!(widths, [600, 200]);
         assert_eq!(layout.focused(), 0);
+    }
+
+    #[test]
+    fn borders_sit_between_panes_and_move_by_pixels() {
+        let mut layout = Layout::new();
+        layout.split(Axis::Vertical);
+        layout.split(Axis::Horizontal);
+        let borders = layout.borders(1000, 800, 6);
+        assert_eq!(
+            borders,
+            [
+                Border {
+                    id: ":0".into(),
+                    axis: Axis::Vertical,
+                    bounds: b(497, 0, 6, 800),
+                    extent: 1000,
+                },
+                Border {
+                    id: "1:0".into(),
+                    axis: Axis::Horizontal,
+                    bounds: b(500, 397, 500, 6),
+                    extent: 800,
+                },
+            ]
+        );
+        assert!(layout.move_border(":0", 100, 1000));
+        assert!(layout.move_border("1:0", -200, 800));
+        assert_eq!(
+            layout.bounds(1000, 800, 0),
+            [
+                (0, b(0, 0, 600, 800)),
+                (1, b(600, 0, 400, 200)),
+                (2, b(600, 200, 400, 600)),
+            ]
+        );
+        assert!(
+            layout.move_border(":0", 5000, 1000),
+            "it stops short of the edge"
+        );
+        assert_eq!(layout.bounds(1000, 800, 0)[0].1.width, 900);
+        assert!(!layout.move_border("1:1", 10, 800));
+        assert!(!layout.move_border("bad", 10, 800));
+        assert!(Layout::new().borders(1000, 800, 6).is_empty());
     }
 
     #[test]

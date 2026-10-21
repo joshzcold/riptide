@@ -64,7 +64,7 @@ Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts
 | `sc` | `:split-close` | Close the focused pane |
 | `so` | `:only` | Keep only the focused pane |
 
-The focused pane has a border in the theme's accent color and shows the current tab, so keys, hints, the status bar and every command act on it. Clicking a pane focuses it. `J`, `K` and `:tab-select` change the focused pane's tab; picking a tab that another pane already shows moves the focus there instead, since a tab can only be in one pane. Closing a pane or using `:only` keeps its tab open; closing a pane's tab shows another tab that isn't on screen, or closes the pane when there's none.
+The focused pane has a border in the theme's accent color and shows the current tab, so keys, hints, the status bar and every command act on it. Clicking a pane focuses it, and dragging the border between two panes resizes them. `J`, `K` and `:tab-select` change the focused pane's tab; picking a tab that another pane already shows moves the focus there instead, since a tab can only be in one pane. Closing a pane or using `:only` keeps its tab open; closing a pane's tab shows another tab that isn't on screen, or closes the pane when there's none.
 
 Sessions save each window's panes, their sizes and their tabs, so a restored window comes back split. With `session.lazy_restore`, the tabs on screen in other panes load straight away too.
 
