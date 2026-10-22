@@ -678,6 +678,8 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
             let last = s.tabs.len().checked_sub(1)?;
             let opened = s.tabs.get_mut(last)?;
             crate::history::restore(opened, tab);
+            // Its site's icon from last time, until the page sends its own.
+            opened.favicon = crate::storage::icon_for(&tab.url);
             if !now {
                 opened.url = tab.url.clone();
                 opened.title = tab.title.clone();

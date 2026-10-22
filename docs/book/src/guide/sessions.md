@@ -22,7 +22,7 @@ Unnamed saves and the restore at startup use `session.default_name`. Left empty 
 
 `:save` writes everything to disk now: `config`, `cookies`, `quickmarks`, `bookmarks` and the `session`. Name some of them to save only those, e.g. `:save cookies session`.
 
-With `session.lazy_restore = true`, a restored session loads only the tab you're on. The others keep their titles in the tab bar and load when you first switch to them, which makes restoring many tabs fast.
+With `session.lazy_restore = true`, a restored session loads only the tab you're on. The others keep their titles and site icons in the tab bar and load when you first switch to them, which makes restoring many tabs fast.
 
 `confirm_quit` asks before `:quit`, or before closing the last window, quits the browser. List the reasons to ask: `multiple-tabs` (more than one tab is open), `downloads` (downloads are still running), `always`, or the default `never`:
 
