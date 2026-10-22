@@ -1153,7 +1153,7 @@ fn plugins_with_the_history_permission_read_history_bookmarks_and_quickmarks() {
     local found = entries and entries[1] and entries[1].url:match("nav1%.html") and "nav1" or tostring(err)
     rt.bookmarks(function(marks)
       rt.quickmarks(function(quick)
-        rt.notify("finder " .. found .. " " .. #marks .. " " .. type(quick))
+        rt.notify("finder " .. found .. " " .. #marks .. " " .. type(quick) .. " " .. type(rt.set_quickmarks))
       end)
     end)
   end)
@@ -1177,12 +1177,13 @@ rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/nosy" })"#,
     b.keys("y");
     b.wait_mode("normal");
     b.run("bookmark-add");
-    b.run("open -t links.html");
+    b.run(&format!("open -t {}", b.url("links.html")));
     b.wait_until("the second tab", |s| s.tab().url.ends_with("links.html"));
 
     b.run("finder");
     b.wait_until("the lists arrived", |s| {
-        s.message() == Some("finder nav1 1 table")
+        // It may read, but not change: that's the marks permission.
+        s.message() == Some("finder nav1 1 table nil")
     });
     b.run("finder-first");
     b.wait_until("the first tab is shown", |s| {
@@ -1194,4 +1195,64 @@ rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/nosy" })"#,
     b.wait_until("nosy can't read history", |s| {
         s.message() == Some("nosy nil")
     });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_move_and_close_tabs_and_replace_quickmarks() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/tidy/plugin/tidy.lua",
+            r#"rt.command("tidy-marks", function()
+  rt.set_quickmarks({ { name = "one", url = "https://one.example/" }, { name = "two", url = "https://two.example/" } }, function(ok)
+    rt.quickmarks(function(marks) rt.notify("marks " .. tostring(ok) .. " " .. marks[1].name .. " " .. marks[2].name) end)
+  end)
+end)
+rt.command("tidy-float", function()
+  rt.ui.page({ where = "float", on_message = function(name) rt.notify("float " .. name) end })
+end)
+rt.command("tidy-move", function() rt.move_tab(1, 2) end)
+rt.command("tidy-close", function() rt.close_tab(1) end)"#,
+        )
+        .file("scratch-plugins/tidy/pages/index.html", r#"<script src="app.js"></script>"#)
+        .file(
+            "scratch-plugins/tidy/pages/app.js",
+            r#"rt.send("hello", JSON.stringify({}));"#,
+        )
+        .file(
+            "scratch-plugins/tidy/riptide-plugin.toml",
+            "[permissions]\nhistory = true\nmarks = true\n",
+        )
+        .lua(r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/tidy" })"#)
+        .start("nav1.html");
+    b.wait_until("tidy asks", |s| s.mode == "yesno");
+    b.keys("y");
+    b.wait_mode("normal");
+
+    b.run("tidy-marks");
+    b.wait_until("the quickmarks were replaced", |s| {
+        s.message() == Some("marks true one two")
+    });
+
+    b.run(&format!("open -t {}", b.url("links.html")));
+    // Loaded, not just known by its URL, as the harness notes.
+    b.wait_until("the second tab", |s| {
+        s.tab().url.ends_with("links.html") && !s.tab().loading && s.tab().title == "links"
+    });
+    b.run("tidy-float");
+    b.wait_until("the float page loaded", |s| {
+        s.message() == Some("float hello")
+    });
+    // links.html is the current tab, second; moving nav1 after it leaves the
+    // current tab shown, and the float with it.
+    b.run("tidy-move");
+    let s = b.wait_until("nav1 moved last", |s| {
+        s.windows[0]
+            .tabs
+            .last()
+            .is_some_and(|t| t.url.ends_with("nav1.html"))
+    });
+    assert!(!s.popup.is_null(), "moving tabs closed the float");
+    b.run("tidy-close");
+    b.wait_until("one tab left", |s| s.windows[0].tabs.len() == 1);
 }

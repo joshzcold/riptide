@@ -340,6 +340,16 @@ function rt.tabs() end
 ---@param index integer
 function rt.select_tab(index) end
 
+---Close tab `index` of the current window. A float stays open unless the
+---tab it was opened over goes.
+---@param index integer
+function rt.close_tab(index) end
+
+---Move tab `from` of the current window to `to`, the others making room.
+---@param from integer
+---@param to integer
+function rt.move_tab(from, to) end
+
 ---History entries whose URL or title contain `pattern` (all of them for
 ---`""`), the most recent first, at most 500: `fn(entries)`, or
 ---`fn(nil, why)`. Plugins need the `history` permission.
@@ -354,6 +364,20 @@ function rt.bookmarks(fn) end
 ---Your quickmarks: `fn(quickmarks)`. Plugins need the `history` permission.
 ---@param fn fun(quickmarks: {{ name: string, url: string }}[]|nil, err: string|nil)
 function rt.quickmarks(fn) end
+
+---Replace every bookmark with `bookmarks`, in order, and save them:
+---`fn(true)`, or `fn(nil, why)`. The file as it was is kept with `.prev`
+---added to its name. Plugins need the `marks` permission.
+---@param bookmarks {{ url: string, title?: string }}[]
+---@param fn? fun(ok: true|nil, err: string|nil)
+function rt.set_bookmarks(bookmarks, fn) end
+
+---Replace every quickmark with `quickmarks`, in order, and save them:
+---`fn(true)`, or `fn(nil, why)`. The file as it was is kept as
+---`quickmarks.prev`. Plugins need the `marks` permission.
+---@param quickmarks {{ name: string, url: string }}[]
+---@param fn? fun(ok: true|nil, err: string|nil)
+function rt.set_quickmarks(quickmarks, fn) end
 
 ---The count typed before the key, if any (in callbacks).
 ---@return integer?

@@ -392,7 +392,12 @@ fn switch_to(index: usize, force: bool) {
 /// to draw the page.
 pub fn show_current_in(window_id: u32, focus: bool) {
     // An extension's popup belongs to the tab it was opened over.
-    crate::popup::close();
+    let shown = shell::with(|s| {
+        let w = s.windows.iter().find(|w| w.id == window_id)?;
+        w.tabs.current()?.browser().map(|b| b.identifier())
+    })
+    .flatten();
+    crate::popup::tab_shown(window_id, shown);
     let Some(Some((views, crashed, content, notice))) = shell::with(|s| {
         let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
         crate::panes::reconcile(w);

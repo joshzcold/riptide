@@ -244,6 +244,7 @@ local SAFE = {
 local GATED = {
   spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings",
   history = "history", bookmarks = "history", quickmarks = "history",
+  set_bookmarks = "marks", set_quickmarks = "marks",
 }
 -- Defined further down, with rt.ui and rt.page.
 local ui_for, page_for, secret_for
@@ -432,6 +433,43 @@ end
 function rt.quickmarks(fn)
   if type(fn) ~= "function" then error("rt.quickmarks takes a function", 2) end
   rt._read("quickmarks", "", page_result(fn))
+end
+-- rt.set_bookmarks, rt.set_quickmarks: replace a list; see rt.meta.lua.
+local function marks_arg(list, a, b, what)
+  if type(list) ~= "table" then error(what .. " takes a list", 3) end
+  local out = {}
+  for i, mark in ipairs(list) do
+    if type(mark) ~= "table" or type(mark[a]) ~= "string" or mark[a] == ""
+      or (mark[b] ~= nil and type(mark[b]) ~= "string") then
+      error(("%s: entry %d needs %s and %s, as text"):format(what, i, a, b), 3)
+    end
+    out[i] = { mark[a], mark[b] or "" }
+  end
+  return out
+end
+function rt.set_bookmarks(list, fn)
+  rt._write("bookmarks", marks_arg(list, "url", "title", "rt.set_bookmarks"), page_result(fn or function() end))
+end
+function rt.set_quickmarks(list, fn)
+  local marks = marks_arg(list, "name", "url", "rt.set_quickmarks")
+  local names = {}
+  for i, mark in ipairs(marks) do
+    if mark[2] == "" then error(("rt.set_quickmarks: entry %d needs a url"):format(i), 2) end
+    if mark[1]:find("%s") then error(("rt.set_quickmarks: entry %d's name has a space"):format(i), 2) end
+    if names[mark[1]] then error(("rt.set_quickmarks: %q is named twice"):format(mark[1]), 2) end
+    names[mark[1]] = true
+  end
+  rt._write("quickmarks", marks, page_result(fn or function() end))
+end
+function rt.close_tab(index)
+  if math.type(index) ~= "integer" or index < 1 then error("rt.close_tab takes a tab's index, from 1", 2) end
+  rt._tab_action("close", index, 0)
+end
+function rt.move_tab(from, to)
+  if math.type(from) ~= "integer" or math.type(to) ~= "integer" or from < 1 or to < 1 then
+    error("rt.move_tab takes two tabs' indexes, from 1", 2)
+  end
+  rt._tab_action("move", from, to)
 end
 function rt.select_tab(index)
   if math.type(index) ~= "integer" or index < 1 then error("rt.select_tab takes a tab's index, from 1", 2) end
@@ -915,6 +953,17 @@ pub enum Action {
     },
     /// `rt.select_tab`: show tab `index` (from 0) of the current window.
     SelectTab(usize),
+    /// `rt.close_tab`: close tab `index` (from 0) of the current window.
+    CloseTab(usize),
+    /// `rt.move_tab`: move tab `from` to `to` (from 0) in the current window.
+    MoveTab { from: usize, to: usize },
+    /// `rt.set_bookmarks`, `rt.set_quickmarks`: replace list `kind` with
+    /// `marks`, then answer callback `callback`.
+    Write {
+        kind: String,
+        marks: Vec<(String, String)>,
+        callback: u32,
+    },
     /// The plugin test runner is done: quit with this exit code.
     Exit(i32),
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
@@ -2869,6 +2918,52 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 Ok(())
             },
         )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_write",
+        lua.create_function(
+            move |lua, (kind, marks, callback): (String, Vec<Vec<String>>, mlua::Function)| {
+                let marks = marks
+                    .into_iter()
+                    .map(|pair| {
+                        let mut pair = pair.into_iter();
+                        (
+                            pair.next().unwrap_or_default(),
+                            pair.next().unwrap_or_default(),
+                        )
+                    })
+                    .collect();
+                let id = {
+                    let mut state = s.borrow_mut();
+                    state.next_callback += 1;
+                    state.next_callback - 1
+                };
+                let api: mlua::Table = lua.globals().get("rt")?;
+                api.get::<mlua::Table>("_answers")?.set(id, callback)?;
+                s.borrow_mut().actions.push(Action::Write {
+                    kind,
+                    marks,
+                    callback: id,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_tab_action",
+        lua.create_function(move |_, (what, a, b): (String, usize, usize)| {
+            let action = match what.as_str() {
+                "close" => Action::CloseTab(a.saturating_sub(1)),
+                _ => Action::MoveTab {
+                    from: a.saturating_sub(1),
+                    to: b.saturating_sub(1),
+                },
+            };
+            s.borrow_mut().actions.push(action);
+            Ok(())
+        })?,
     )?;
     let s = state.clone();
     api.set(
