@@ -1,0 +1,8 @@
+<!doctype html><title>samesite</title>
+<iframe id="f"></iframe>
+<script>
+  // Opened as www.rt-test.com; ads.rt-test.com is the same site, in this process.
+  const other = (page) => location.href.replace("//www.", "//ads.").replace(/[^/]*$/, page);
+  document.getElementById("f").src = other("samesite-inner.html");
+  addEventListener("message", (e) => { document.title = e.data; });
+</script>

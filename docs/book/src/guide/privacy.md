@@ -36,7 +36,7 @@ Lists you add are downloaded at the next start, or at once with `:adblock-update
 
 Procedural element hiding works too, for elements CSS alone can't pick out: `:has-text()`, `:upward()`, `:matches-css()` (and `-before`, `-after`), `:matches-attr()`, `:matches-path()`, `:min-text-length()` and `:xpath()`, with the actions `:remove()`, `:style()`, `:remove-attr()` and `:remove-class()`. They're applied as the page loads and again whenever it changes, so content added later is caught too.
 
-Frames get element hiding and scriptlets too, by the rules for their own site: an ad or an anti-adblock check in a frame from another site, such as an embedded video player, is handled like one in the page. The page's site still decides whether anything is blocked, so allowing a site (`content.blocking.whitelist`) covers its frames.
+Frames get element hiding and scriptlets too, by the rules for their own site: an ad or an anti-adblock check in a frame from another site, such as an embedded video player, or from another host of the page's site (`ads.example.com` in `www.example.com`), is handled like one in the page. The page's site still decides whether anything is blocked, so allowing a site (`content.blocking.whitelist`) covers its frames.
 
 ## Your own rules
 

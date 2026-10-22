@@ -2009,6 +2009,7 @@ name = "rt-adblock"
 version = "0.7.0"
 dependencies = [
  "adblock",
+ "psl",
  "serde_json",
  "tracing",
 ]

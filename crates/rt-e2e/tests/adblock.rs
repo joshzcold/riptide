@@ -9,11 +9,15 @@ fn with_filters() -> Browser {
 }
 
 fn with_lists(lists: &[&str]) -> Browser {
+    with_lists_on(Browser::launch(), lists)
+}
+
+fn with_lists_on(launch: rt_e2e::Launch, lists: &[&str]) -> Browser {
     let lists: Vec<String> = lists
         .iter()
         .map(|l| format!("\"file://{{pages}}/{l}\""))
         .collect();
-    let b = Browser::launch()
+    let b = launch
         .toml(&format!(
             "content.blocking.adblock.lists = [{}]\n",
             lists.join(", ")
@@ -111,6 +115,27 @@ fn scriptlets_run_first_in_frames_from_other_sites() {
     b.run("config-list-remove content.blocking.whitelist 127.0.0.1");
     b.run("reload");
     b.wait_eval("document.title", blocked);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn scriptlets_run_first_in_frames_from_another_host_of_the_same_site() {
+    let b = with_lists_on(
+        Browser::launch().arg("--host-resolver-rules=MAP *.rt-test.com 127.0.0.1"),
+        &["filters-scriptlets.txt"],
+    );
+    let url = b
+        .url("samesite.html")
+        .replace("127.0.0.1", "www.rt-test.com");
+    b.run(&format!("open {url}"));
+    b.wait_eval("document.title", "same-site constant=false");
+    // The page decides, as for frames from other sites.
+    b.run("config-list-add content.blocking.whitelist www.rt-test.com");
+    b.run("reload");
+    b.wait_eval("document.title", "same-site constant=true");
+    b.run("config-list-remove content.blocking.whitelist www.rt-test.com");
+    b.run("reload");
+    b.wait_eval("document.title", "same-site constant=false");
 }
 
 #[test]

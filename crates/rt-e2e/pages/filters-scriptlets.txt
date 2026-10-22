@@ -7,3 +7,5 @@ $removeparam=utm_source
 ! And in a frame from another site (scriptframe-inner.html on localhost).
 localhost##+js(set-constant, rtFrameAdsEnabled, false)
 localhost##+js(aopr, rtFrameDetectAdblock)
+! And in a frame from another host of the page's site (samesite-inner.html).
+ads.rt-test.com##+js(set-constant, rtSameAdsEnabled, false)

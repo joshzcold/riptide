@@ -30,6 +30,7 @@ Things CEF, Chromium and the `cef` crate do that cost time to find out. Add to t
 - **`Page.addScriptToEvaluateOnNewDocument` silently does nothing without `Page.enable` first** (`adblock::before_navigation`).
 - **DevTools refuses a command whose `id` is still pending** ("Duplicate `id` in protocol request"), so every message needs its own id (`adblock::send`).
 - **A frame from another site paused by `Target.setAutoAttach` (`waitForDebuggerOnStart`) never starts if `Runtime.runIfWaitingForDebugger` is sent from inside the `Target.attachedToTarget` callback**, while Chromium is still pausing it. Answer from a posted task. Its `targetInfo.url` is empty then too; `Page.frameStartedNavigating` on its parent's session has it (`adblock::frame_attached`).
+- **A frame from the page's own site shares its process and target**, so `Target.setAutoAttach` never pauses it. Registering its host's script when `Page.frameStartedNavigating` arrives still comes before its document is made (`adblock::same_process_frame`).
 - **`Notification` is defined after the context is created**, so the renderer's stand-in takes its place on the first microtask, `DOMContentLoaded` and `load`.
 - **A page starting to load clears every status message**, so startup messages wait for the first load (`shell::show_message_after_load`).
 - **A stored default for Chromium's `PROTOCOL_HANDLERS` content setting fails a `CHECK`** when a private window's profile inherits it.

@@ -300,6 +300,33 @@ pub fn before_navigation(browser: &Browser, url: &str) {
     {
         watch(browser.identifier(), &devtools);
     }
+    register(browser, host, script);
+}
+
+/// A frame of the tab's own process is starting to load `url`, from another
+/// host than the page's (`ads.example.com` in `www.example.com`): give the
+/// tab that host's page script, before the frame's document is made. The
+/// page decides whether anything is blocked, as for its requests.
+fn same_process_frame(browser: &Browser, url: &str) {
+    let host = rt_core::url::host(url);
+    let page = browser
+        .main_frame()
+        .map(|f| CefString::from(&f.url()).to_string())
+        .unwrap_or_default();
+    // Frames from other sites get theirs in their own process (`frame_attached`).
+    let page_host = rt_core::url::host(&page);
+    if host.is_empty() || host == page_host || !rt_adblock::same_site(host, page_host) {
+        return;
+    }
+    let script = blocker_for(&page)
+        .map(|blocker| blocker.cosmetic(url).page_script())
+        .unwrap_or_default();
+    register(browser, host.to_string(), script);
+}
+
+/// Make `script` the tab's page script for documents from `host`, taking
+/// back the one it had: none when `script` is empty.
+fn register(browser: &Browser, host: String, script: String) {
     let key = (browser.identifier(), host.clone());
     let sent = SCRIPTLETS.with(|s| s.borrow().get(&key).map(|sent| sent.script.clone()));
     if sent.as_deref().unwrap_or_default() == script {
@@ -473,18 +500,33 @@ wrap_task! {
     }
 }
 
-/// A frame started loading `url`: remember it until its process starts.
-fn frame_navigating(params: &serde_json::Value) {
+/// A frame started loading `url`: remember it until its process starts, and
+/// if it stays in the tab's process, give the tab its host's page script.
+fn frame_navigating(browser: Option<&Browser>, params: &serde_json::Value) {
     let (Some(frame), Some(url)) = (params["frameId"].as_str(), params["url"].as_str()) else {
         return;
     };
-    FRAME_URLS.with(|u| {
-        let mut urls = u.borrow_mut();
-        // Same-site frames never start a process of their own; keep it small.
-        if urls.len() > 256 {
-            urls.clear();
+    bounded_insert(&FRAME_URLS, frame.to_string(), url.to_string());
+    let child = CHILD_FRAMES.with(|c| c.borrow().contains_key(frame));
+    if let Some(browser) = browser
+        && child
+    {
+        same_process_frame(browser, url);
+    }
+}
+
+/// Frames come and go without telling us; keep these maps small.
+fn bounded_insert<V>(
+    map: &'static std::thread::LocalKey<RefCell<std::collections::HashMap<String, V>>>,
+    key: String,
+    value: V,
+) {
+    map.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() > 256 {
+            m.clear();
         }
-        urls.insert(frame.to_string(), url.to_string());
+        m.insert(key, value);
     });
 }
 
@@ -510,6 +552,9 @@ thread_local! {
         RefCell::new(std::collections::HashSet::new());
     /// The address each frame is loading, by DevTools frame id.
     static FRAME_URLS: RefCell<std::collections::HashMap<String, String>> =
+        RefCell::new(std::collections::HashMap::new());
+    /// DevTools ids of frames inside a page, as opposed to tabs' main frames.
+    static CHILD_FRAMES: RefCell<std::collections::HashMap<String, ()>> =
         RefCell::new(std::collections::HashMap::new());
     /// Far from the ids other DevTools messages use.
     static NEXT_SCRIPTLET_ID: std::cell::Cell<i32> = const { std::cell::Cell::new(1 << 24) };
@@ -554,7 +599,10 @@ wrap_dev_tools_message_observer! {
             params: Option<&[u8]>,
         ) {
             let method = method.map(|m| m.to_string()).unwrap_or_default();
-            if !matches!(method.as_str(), "Target.attachedToTarget" | "Page.frameStartedNavigating") {
+            if !matches!(
+                method.as_str(),
+                "Target.attachedToTarget" | "Page.frameAttached" | "Page.frameStartedNavigating"
+            ) {
                 return;
             }
             let Ok(params) = serde_json::from_slice(params.unwrap_or_default()) else {
@@ -567,7 +615,12 @@ wrap_dev_tools_message_observer! {
                     let mut task = FrameAttached::new(browser.clone(), params);
                     post_task(ThreadId::UI, Some(&mut task));
                 }
-                _ => frame_navigating(&params),
+                _ if method == "Page.frameAttached" => {
+                    if let Some(frame) = params["frameId"].as_str() {
+                        bounded_insert(&CHILD_FRAMES, frame.to_string(), ());
+                    }
+                }
+                _ => frame_navigating(browser.as_deref(), &params),
             }
         }
     }
