@@ -41,6 +41,9 @@ pub struct Permissions {
     /// Replace bookmarks and quickmarks (`rt.set_bookmarks`,
     /// `rt.set_quickmarks`).
     pub marks: bool,
+    /// Style riptide's own bars, overlay, floats and panels (`rt.ui.css`).
+    /// Those show riptide's questions, so the CSS could disguise one.
+    pub ui: bool,
     /// Hosts it may fetch from.
     pub network: Vec<String>,
     /// Sites whose pages it may script or style.
@@ -69,6 +72,10 @@ impl Permissions {
         flag(self.keys, "see every key you press");
         flag(self.history, "read your history, bookmarks and quickmarks");
         flag(self.marks, "change your bookmarks and quickmarks");
+        flag(
+            self.ui,
+            "change how riptide's bars and questions look, which could disguise what riptide asks you",
+        );
         let mut list = |hosts: &[String], text: &str| {
             if hosts.iter().any(|h| h == "*") {
                 out.push(format!("{text} every site"));
@@ -100,6 +107,7 @@ impl Permissions {
             keys: self.keys && !approved.keys,
             history: self.history && !approved.history,
             marks: self.marks && !approved.marks,
+            ui: self.ui && !approved.ui,
             network: more(&self.network, &approved.network),
             pages: more(&self.pages, &approved.pages),
             frames: more(&self.frames, &approved.frames),

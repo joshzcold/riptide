@@ -167,6 +167,7 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
             Action::FloatClose { id } => crate::float::close(id, true),
             Action::Panel { id, source, spec } => crate::panel::show(id, source, spec),
             Action::PanelClose { id } => crate::panel::close(id, true),
+            Action::UiCss { source, css } => crate::userstyle::set_plugin_css(&source, css),
             Action::PanelFocus { id } => crate::panel::focus(id),
             Action::PluginPage {
                 source,

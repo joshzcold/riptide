@@ -1,9 +1,9 @@
-//! Custom CSS: `ui.css` in the config directory styles riptide's own bars and
-//! overlay, and `content.user_stylesheets` styles web pages (per site too).
-//! Both are read again when their files change.
+//! Custom CSS: `ui.css` in the config directory and plugins' `rt.ui.css`
+//! style riptide's own bars and overlay, and `content.user_stylesheets`
+//! styles web pages (per site too). The files are read again when they change.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -14,6 +14,8 @@ use crate::shell;
 thread_local! {
     /// Files read, by path, with the modification time they were read at.
     static FILES: RefCell<HashMap<PathBuf, (Option<SystemTime>, String)>> = RefCell::new(HashMap::new());
+    /// `rt.ui.css` stylesheets, by the plugin that set them ("" for config.lua).
+    static PLUGIN_CSS: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
 }
 
 /// How often the files are checked for changes.
@@ -50,10 +52,40 @@ fn ui_css_path() -> Option<PathBuf> {
     config_dir().map(|d| d.join("ui.css"))
 }
 
-/// The text of `ui.css` in `config_dir`, for riptide's own pages. Takes
-/// the folder because it's called while the shell is borrowed.
+/// The CSS for riptide's own pages: plugins' `rt.ui.css`, then `ui.css` in
+/// `config_dir`, so yours wins. Takes the folder because it's called while
+/// the shell is borrowed.
 pub fn ui_css(config_dir: &Path) -> String {
-    read(&config_dir.join("ui.css"))
+    let mut css: Vec<String> = PLUGIN_CSS.with(|p| p.borrow().values().cloned().collect());
+    css.push(read(&config_dir.join("ui.css")));
+    css.join("\n")
+}
+
+/// `rt.ui.css` from `source`: replace its stylesheet, or remove it when
+/// `css` is empty, and redraw riptide's own pages.
+pub fn set_plugin_css(source: &str, css: String) {
+    let changed = PLUGIN_CSS.with(|p| {
+        let mut p = p.borrow_mut();
+        if css.is_empty() {
+            p.remove(source).is_some()
+        } else {
+            p.insert(source.to_string(), css.clone()).as_ref() != Some(&css)
+        }
+    });
+    if changed {
+        shell::refresh_ui();
+    }
+}
+
+/// The config is loading again; plugins set their stylesheets again as they load.
+pub fn forget_plugin_css() {
+    if PLUGIN_CSS
+        .with(|p| std::mem::take(&mut *p.borrow_mut()))
+        .is_empty()
+    {
+        return;
+    }
+    shell::refresh_ui();
 }
 
 /// The text of `hints.css` in the config directory, added to hint labels'

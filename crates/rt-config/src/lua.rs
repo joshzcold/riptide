@@ -298,6 +298,12 @@ function rt._sandbox(name, permissions, require_fn)
   api.ui.float = rt._float_for(name)
   api.ui.panel = rt._panel_for(name)
   api.ui.page = rt._page_for(name)
+  -- The bars show riptide's questions; CSS could hide or reword one.
+  if permissions.ui then
+    api.ui.css = rt._css_for(name)
+  else
+    api.ui.css = function() error("rt.ui.css needs the ui permission", 2) end
+  end
   api.secret = secret_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
@@ -638,6 +644,15 @@ function rt._panel_closed(id)
 end
 rt.ui.panel = rt._panel_for(nil)
 
+-- rt.ui.css(css): a stylesheet for riptide's own parts; see rt.meta.lua.
+function rt._css_for(source)
+  return function(css)
+    if css ~= nil and type(css) ~= "string" then error("rt.ui.css takes a string or nil", 2) end
+    rt._ui_css(source or "", css or "")
+  end
+end
+rt.ui.css = rt._css_for(nil)
+
 -- rt.ui.page(opts): one of a plugin's own pages, in a tab; see rt.meta.lua.
 local plugin_pages, last_page = {}, 0
 function rt._page_for(source)
@@ -938,6 +953,9 @@ pub enum Action {
     },
     /// A panel's `close`.
     PanelClose { id: u32 },
+    /// `rt.ui.css`: `source`'s stylesheet for riptide's own bars, overlay,
+    /// floats and panels, replacing its last one; empty removes it.
+    UiCss { source: String, css: String },
     /// A panel's `focus`: its keys work until Escape.
     PanelFocus { id: u32 },
     /// `rt.ui.page`: open page `id` of plugin `source`, its `pages/<path>`.
@@ -2681,6 +2699,14 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     )?;
     let s = state.clone();
     api.set(
+        "_ui_css",
+        lua.create_function(move |_, (source, css): (String, String)| {
+            s.borrow_mut().actions.push(Action::UiCss { source, css });
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
         "_panel_close",
         lua.create_function(move |_, id: u32| {
             s.borrow_mut().actions.push(Action::PanelClose { id });
@@ -3236,6 +3262,92 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
             })]
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn ui_css_names_who_set_it() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-ui-css-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for name in ["painter", "smudger"] {
+            std::fs::create_dir_all(dir.join(format!("plugins/{name}/plugin"))).unwrap();
+            std::fs::write(
+                dir.join(format!("plugins/{name}/plugin/{name}.lua")),
+                "rt.ui.css('.tab { color: red; }')",
+            )
+            .unwrap();
+        }
+        let dir_text = dir.display().to_string();
+        std::fs::write(
+            dir.join("config.lua"),
+            format!(
+                r##"
+rt.pack.add({{ dir = [[{dir_text}/plugins/painter]] }})
+rt.pack.add({{ dir = [[{dir_text}/plugins/smudger]] }})
+rt.command("paint", function() rt.ui.css("#bar {{ color: blue; }}") end)
+rt.command("unpaint", function() rt.ui.css() end)
+rt.command("bad-css", function() rt.ui.css({{}}) end)
+"##
+            ),
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        assert_eq!(
+            run(&dir.join("config.lua"), &paths, Settings::default()).1,
+            None
+        );
+        let ctx = Context::default();
+        assert_eq!(
+            run_command("paint", "", &ctx).unwrap(),
+            [Action::UiCss {
+                source: String::new(),
+                css: "#bar { color: blue; }".into()
+            }]
+        );
+        assert_eq!(
+            run_command("unpaint", "", &ctx).unwrap(),
+            [Action::UiCss {
+                source: String::new(),
+                css: String::new()
+            }]
+        );
+        assert!(run_command("bad-css", "", &ctx).is_err());
+        // A plugin needs the ui permission: the bars show riptide's questions.
+        let none = crate::plugins::Permissions::default();
+        let refused = load_plugin(
+            "smudger",
+            &dir.join("plugins/smudger"),
+            &none,
+            false,
+            &[],
+            &ctx,
+        );
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("needs the ui permission")),
+            "{refused:?}"
+        );
+        let ui = crate::plugins::Permissions {
+            ui: true,
+            ..Default::default()
+        };
+        let actions = load_plugin(
+            "painter",
+            &dir.join("plugins/painter"),
+            &ui,
+            false,
+            &[],
+            &ctx,
+        )
+        .unwrap();
+        assert!(
+            actions.contains(&Action::UiCss {
+                source: "painter".into(),
+                css: ".tab { color: red; }".into()
+            }),
+            "{actions:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
