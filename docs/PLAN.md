@@ -83,10 +83,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 1. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
 2. **macOS and Windows packages** (M10), the largest milestone left.
 
-### Plugins (M27)
-
-- **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
-
 ### Extensions (M28)
 
 - Not checked yet: real autofill with a vault, passkeys, `chrome.commands` shortcuts.
