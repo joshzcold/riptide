@@ -1,11 +1,13 @@
 name: release
 
 # Releases go through pull requests, since main only takes changes that way:
-#   1. Actions → release → Run workflow works out the version (the one you
-#      type, or git-cliff's next version from the Conventional Commits since
-#      the last tag; feat bumps the minor version in 0.x), commits
-#      `chore(release): vX.Y.Z` with Cargo.toml, Cargo.lock and CHANGELOG.md
-#      to a release/vX.Y.Z branch, and opens a pull request for it.
+#   1. Every push to main with changelog-worthy commits since the last tag
+#      rebuilds one standing pull request from the release/next branch:
+#      `chore(release): vX.Y.Z` with Cargo.toml, Cargo.lock and CHANGELOG.md,
+#      where X.Y.Z is git-cliff's next version from the Conventional Commits
+#      (feat bumps the minor version in 0.x, fix the patch version).
+#      Actions → release → Run workflow does the same on demand, and can take
+#      a version to use instead (until main next changes).
 #   2. Merging that pull request is the release: on the push to main, a
 #      Cargo.toml version with no tag yet is built (build-release.yml: the
 #      Linux tarball, AppImage and .deb, smoke-tested, plus experimental macOS
@@ -66,20 +68,29 @@ jobs:
         run: |
           current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 
+          branch=release/next
+          open_pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+
           if [[ $GITHUB_EVENT_NAME == push ]]; then
-            # Every push to main lands here; only a version without a tag (a
-            # merged release pull request) is released.
-            if git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
-              echo "v$current is already released; nothing to do"
-              echo "build=false" >> "$GITHUB_OUTPUT"
+            # A version without a tag is a merged release pull request: release it.
+            if ! git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+              echo "Releasing v$current from $GITHUB_SHA"
+              { echo "build=true"; echo "version=$current"; echo "ref=$GITHUB_SHA"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "Releasing v$current from $GITHUB_SHA"
-            { echo "build=true"; echo "version=$current"; echo "ref=$GITHUB_SHA"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ $DRY_RUN != true && $GITHUB_REF != refs/heads/main ]]; then
+            # Otherwise keep the release pull request up to date with main, or
+            # close it when nothing since the last tag would be in the changelog.
+            releasable=$(scripts/git-cliff.sh --unreleased --context 2>/dev/null | jq '[.[].commits[]] | length')
+            if (( releasable == 0 )); then
+              echo "Nothing to release since v$current"
+              echo "build=false" >> "$GITHUB_OUTPUT"
+              if [[ -n $open_pr ]]; then
+                gh pr close "$open_pr" --delete-branch --comment "Nothing since v$current would be in the changelog any more."
+              fi
+              exit 0
+            fi
+            DRY_RUN=false
+          elif [[ $DRY_RUN != true && $GITHUB_REF != refs/heads/main ]]; then
             echo "::error::releases are cut from main; this run is on $GITHUB_REF_NAME (a dry run works anywhere)"
             exit 1
           fi
@@ -113,10 +124,18 @@ jobs:
             exit 0
           fi
 
-          branch=release/v$version
-          git push -q origin "HEAD:refs/heads/$branch"
-          scripts/open-pr.sh "$branch" "chore(release): v$version" \
-            "Merging this releases **v$version**: the push to main builds, tags and publishes it. The version and \`CHANGELOG.md\` were updated by the release workflow."
+          # One standing pull request, rebuilt from main each time it changes.
+          git push -q --force origin "HEAD:refs/heads/$branch"
+          title="chore(release): v$version"
+          body="Merging this releases **v$version**: the push to main builds, tags and publishes it. The release workflow keeps this pull request up to date with main, so change the notes through commit messages or \`cliff.toml\`, not here.
+
+          $(scripts/git-cliff.sh --unreleased --tag "v$version" --strip header 2>/dev/null)"
+          if [[ -n $open_pr ]]; then
+            gh pr edit "$open_pr" --title "$title" --body "$body"
+            echo "Updated #$open_pr: $title" >> "$GITHUB_STEP_SUMMARY"
+          else
+            scripts/open-pr.sh "$branch" "$title" "$body"
+          fi
           echo "build=false" >> "$GITHUB_OUTPUT"
 
   build:
