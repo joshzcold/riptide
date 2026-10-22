@@ -192,9 +192,13 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
             let Some(target) = target else {
                 return refuse("that frame is gone".into());
             };
-            // A frame may be another site's.
+            // A frame may be another site's. One without a URL hasn't loaded
+            // its document yet, which may be another site's too.
             let frame_url = CefString::from(&target.url()).to_string();
-            if !frame_url.is_empty() && !allowed(&frame_url, pages) {
+            if frame_url.is_empty() {
+                return refuse("that frame isn't ready".into());
+            }
+            if !allowed(&frame_url, pages) {
                 return refuse(format!(
                     "may not act on {}, a frame in this page",
                     rt_core::url::host(&frame_url)
