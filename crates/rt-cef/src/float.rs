@@ -274,9 +274,19 @@ pub fn reposition() {
             })
             .collect()
     });
+    let mut shown = false;
     for (overlay, rect) in placed {
         overlay.set_bounds(Some(&rect));
-        overlay.set_visible(1);
+        // Showing an overlay takes the keyboard from the tab, and a float's
+        // keys reach it through the tab: show it once, then give them back.
+        if overlay.is_visible() == 0 {
+            overlay.set_visible(1);
+            shown = true;
+        }
+    }
+    if shown && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
+    {
+        View::from(&tab).request_focus();
     }
 }
 
