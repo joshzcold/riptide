@@ -33,6 +33,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         | Command::TabMute
         | Command::CallMute
         | Command::ShareStop
+        | Command::ShareSwitch
         | Command::Pip
         | Command::DevToolsFocus
         | Command::DebugDumpPage { .. }
@@ -191,6 +192,7 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
         }
         Command::CallMute => call_mute(),
         Command::ShareStop => share_stop(),
+        Command::ShareSwitch => share_switch(),
         Command::Pip => pip(),
         Command::TabMute => {
             let muted = host.is_audio_muted() == 0;
@@ -332,6 +334,51 @@ fn share_stop() {
         }
     }
     shell::show_message(Level::Info, "Stopped sharing");
+}
+
+/// `:share-switch`: the sharing tab opens the picker again and sends what's
+/// picked in place of its share, so the call carries on. Only a call
+/// window's tab has a picker, and a picker only opens right after a real
+/// key, so riptide goes to that tab and presses F23 there.
+fn share_switch() {
+    let found = shell::with(|s| {
+        s.windows.iter().find_map(|w| {
+            let index = w.tabs.iter().position(|t| t.sharing.is_some())?;
+            Some((w.id, index, w.tabs.get(index)?.browser()?))
+        })
+    })
+    .flatten();
+    let Some((window, index, browser)) = found else {
+        return shell::show_message(Level::Error, "Nothing is being shared");
+    };
+    let picker = browser
+        .host()
+        .is_some_and(|h| h.runtime_style() == cef::RuntimeStyle::CHROME);
+    if !picker {
+        return shell::show_message(
+            Level::Error,
+            "Only a call window can switch what it shares; :tab-call opens the call in one",
+        );
+    }
+    let target = shell::with(|s| {
+        s.active = s.window_index(window)?;
+        s.window.clone()
+    })
+    .flatten();
+    if let Some(target) = target {
+        target.activate();
+    }
+    crate::tabs::select(index);
+    for frame in crate::hints::all_frames(&browser) {
+        if let Some(mut message) = process_message_create(Some(&CefString::from(
+            crate::renderer::SHARE_SWITCH_MESSAGE,
+        ))) {
+            frame.send_process_message(ProcessId::RENDERER, Some(&mut message));
+        }
+    }
+    shell::show_message(Level::Info, "Pick what to share instead");
+    let f23 = rt_core::Key::plain(rt_core::KeyCode::F(23));
+    crate::client::send_when_ready(vec![f23], || {});
 }
 
 /// `:call-mute`: the call is the tab using a microphone. Its site's own

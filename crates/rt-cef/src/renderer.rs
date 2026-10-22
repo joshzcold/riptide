@@ -103,6 +103,8 @@ impl MediaChoices {
 pub const MEDIA_LIST_MESSAGE: &str = "rt.media-list";
 /// Renderer → browser: the page's devices, as JSON `[{kind, label}]`.
 pub const MEDIA_DEVICES_MESSAGE: &str = "rt.media-devices";
+/// Browser → renderer: the next F23 key switches what the frame shares (`:share-switch`).
+pub const SHARE_SWITCH_MESSAGE: &str = "rt.share-switch";
 
 /// Renderer → browser: a page's notification for the status bar; arguments
 /// are the title and the body.
@@ -391,7 +393,11 @@ wrap_render_process_handler! {
                 return 1;
             }
             if name == MEDIA_LIST_MESSAGE {
-                list_media(frame);
+                call_frame_helpers(frame, "list");
+                return 1;
+            }
+            if name == SHARE_SWITCH_MESSAGE {
+                call_frame_helpers(frame, "share");
                 return 1;
             }
             if name == GM_VALUES_MESSAGE {
@@ -683,8 +689,8 @@ fn set_media(context: &V8Context, helper: &V8Value, chosen: &[(&str, &str); 3]) 
     );
 }
 
-/// `:media-devices`: the frame's contexts report their devices.
-fn list_media(frame: &Frame) {
+/// Call `method()` on the media helper of each of the frame's contexts.
+fn call_frame_helpers(frame: &Frame, method: &str) {
     let id = CefString::from(&frame.identifier()).to_string();
     let helpers: Vec<(V8Context, V8Value)> = MEDIA_HELPERS.with(|h| {
         h.borrow()
@@ -698,7 +704,7 @@ fn list_media(frame: &Frame) {
             .collect()
     });
     for (context, helper) in helpers {
-        call_helper(&context, &helper, "list", std::iter::once([]));
+        call_helper(&context, &helper, method, std::iter::once([]));
     }
 }
 

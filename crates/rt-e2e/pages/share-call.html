@@ -1,0 +1,30 @@
+<!doctype html>
+<title>share call</title>
+<button id="share" onclick="share()">share screen</button>
+<script>
+  // A call sharing a screen over a loopback RTCPeerConnection. window.__sent
+  // is the id of the track the call sends, and window.__share says "ended"
+  // once the track the site was given ends.
+  window.__share = "";
+  async function share() {
+    window.__share = "waiting";
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const track = stream.getVideoTracks()[0];
+    track.addEventListener("ended", () => { window.__share = "ended"; });
+    const near = new RTCPeerConnection(), far = new RTCPeerConnection();
+    near.onicecandidate = (e) => e.candidate && far.addIceCandidate(e.candidate);
+    far.onicecandidate = (e) => e.candidate && near.addIceCandidate(e.candidate);
+    near.addTrack(track, stream);
+    await near.setLocalDescription();
+    await far.setRemoteDescription(near.localDescription);
+    await far.setLocalDescription();
+    await near.setRemoteDescription(far.localDescription);
+    window.__near = near;
+    window.__given = track.id;
+    window.__share = track.getSettings().displaySurface || "unknown";
+  }
+  window.sent = () => {
+    const track = __near.getSenders()[0].track;
+    return `${track.id === __given ? "given" : "new"} ${track.readyState}`;
+  };
+</script>

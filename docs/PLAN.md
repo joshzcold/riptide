@@ -96,7 +96,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Calls (M22)
 
 - **Check by hand on a real desktop:** fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open, `cm` from another window keeping that window in front (the tests have no window manager), VA-API and GPU background blur on a stock distribution, and a matrix of Meet, Zoom, Teams, Jitsi, Slack huddles, Discord and Whereby (camera, microphone, screen, window and tab sharing, calls in a background tab).
-- Switching the shared source mid-call; shared tabs highlighted in the tab bar.
 
 ### Packaging (M10)
 
@@ -119,6 +118,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Not planned
 
+- Highlighting the tab a call shares: the picker's Tab list only offers call tabs (CEF lists only Chrome-style tabs), so it's rare, and telling which tab is captured would mean giving sites an id for your tabs (Capture Handle). Revisit if riptide's ordinary tabs become shareable.
 - Extensions seeing riptide's tabs in `chrome.tabs`: CEF lists only Chrome-style tabs, so it needs a CEF change (see Risks).
 - Reading `RIPTIDE_FIFO` live (it's read when the userscript exits), Greasemonkey scripts in an isolated world, and binary `GM_xmlhttpRequest` responses, until someone needs them.
 - Proprietary codecs (H.264/AAC): they need a CEF source build, which works against goal 1 and raises patent questions. Revisit only if VP9/AV1 isn't enough, preferring a documented "build your own CEF" path.
