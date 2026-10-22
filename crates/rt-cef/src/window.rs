@@ -260,6 +260,14 @@ pub fn apply_geometry(window: &Window, geometry: &rt_storage::Geometry) {
     }
 }
 
+/// Whether `browser` uses the private windows' in-memory profile. Safe on any thread.
+pub fn is_private(browser: &Browser) -> bool {
+    browser
+        .host()
+        .and_then(|h| h.request_context())
+        .is_some_and(|c| c.is_global() == 0)
+}
+
 /// The request context for new tabs in the active window: the shared
 /// in-memory one for private windows, the profile's otherwise.
 pub fn request_context() -> Option<RequestContext> {
@@ -611,6 +619,9 @@ wrap_window_delegate! {
             })
             .flatten();
             drop(state);
+            if shell::with(|s| !s.windows.iter().any(|w| w.private && !w.window_closing)).unwrap_or(false) {
+                crate::downloads::forget_private();
+            }
             crate::lua::emit("window_closed", &[]);
             shell::refresh_ui();
         }
@@ -621,6 +632,7 @@ wrap_window_delegate! {
             // so save the session only the first time, and only when the
             // last window closes (`:quit` saves all windows itself).
             let id = self.id;
+            let window = window.map(|w| w.clone());
             // Closing the last window quits, so confirm_quit may ask first.
             let last = shell::with(|s| {
                 let index = s.window_index(id)?;
@@ -629,18 +641,32 @@ wrap_window_delegate! {
             })
             .flatten()
             .unwrap_or(false);
-            if last {
-                let window = window.map(|w| w.clone());
-                let go_ahead = shell::confirm_quit(move || {
+            let close = {
+                let window = window.clone();
+                move || {
                     if let Some(window) = window {
                         window.close();
                     }
-                });
-                if !go_ahead {
+                }
+            };
+            if last {
+                if !shell::confirm_quit(close) {
                     return 0;
                 }
                 // `:quit` keeps the active window's itself.
                 storage::save_window_geometry(Some(id));
+            } else {
+                // The last private window takes its downloads with it.
+                let last_private = shell::with(|s| {
+                    let index = s.window_index(id)?;
+                    let open = s.windows.iter().filter(|w| w.private && !w.window_closing).count();
+                    Some(!s.quitting && s.windows[index].private && !s.windows[index].window_closing && open == 1)
+                })
+                .flatten()
+                .unwrap_or(false);
+                if last_private && !crate::downloads::confirm_close_private(close) {
+                    return 0;
+                }
             }
             let save = shell::with(|s| {
                 let index = s.window_index(id)?;

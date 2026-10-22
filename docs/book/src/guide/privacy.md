@@ -123,6 +123,8 @@ content.cookies.accept = "no-3rdparty"
 
 `:open -p url` opens a private window. Private windows share an in-memory profile: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray.
 
+Files you download in a private window are saved where downloads usually go, but they're listed only in private windows (`:downloads` there shows "Private downloads"), and the save prompt doesn't remember their folder. Closing the last private window forgets the list; if any are still running, it asks first, since closing cancels them.
+
 ## The sandbox
 
 Riptide runs Chromium's sandbox wherever Linux allows it. See [Installing](installing.md#the-sandbox) for how to enable it on Ubuntu.

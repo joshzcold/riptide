@@ -1258,7 +1258,7 @@ fn collect_ui_update(
         "progress": current.and_then(|t| t.progress),
         "load_error": current.is_some_and(|t| t.load_error),
         "hover": current.and_then(|t| t.hover.as_deref()),
-        "downloads": crate::downloads::summary(),
+        "downloads": crate::downloads::summary(s.private),
         "tab_index": s.tabs.current_index() + 1,
         "tab_count": s.tabs.len(),
         "private": s.private,

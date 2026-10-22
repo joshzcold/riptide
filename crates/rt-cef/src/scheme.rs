@@ -42,7 +42,7 @@ fn themed(html: Arc<[u8]>) -> Arc<[u8]> {
 }
 
 /// Pages served under `riptide://`, by host and path.
-fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
+fn page(host: &str, path: &str, private: bool) -> Option<(Arc<[u8]>, &'static str)> {
     let html = "text/html";
     let embedded = |text: &'static str| Some((Arc::from(text.as_bytes()), html));
     match (host, path) {
@@ -62,7 +62,7 @@ fn page(host: &str, path: &str) -> Option<(Arc<[u8]>, &'static str)> {
         ("messages", "/") => Some((crate::view::messages_page(), html)),
         ("config-diff", "/") => Some((crate::configcmd::diff_page(), html)),
         ("bookmarks", "/") => Some((crate::storage::bookmarks_page(), html)),
-        ("downloads", "/") => Some((themed(crate::downloads::page()), html)),
+        ("downloads", "/") => Some((themed(crate::downloads::page(private)), html)),
         ("settings", "/") => Some((themed(crate::settings_page::page()), html)),
         ("process", "/") => Some((crate::spawn::output_page(), html)),
         _ => None,
@@ -197,19 +197,20 @@ wrap_scheme_handler_factory! {
     impl SchemeHandlerFactory {
         fn create(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             _scheme_name: Option<&CefString>,
             request: Option<&mut Request>,
         ) -> Option<ResourceHandler> {
             let url = request.map(|r| CefString::from(&r.url()).to_string()).unwrap_or_default();
+            let private = browser.is_some_and(|b| crate::window::is_private(b));
             let plugin = rt_core::ui_message::plugin_page(&url).and_then(|name| {
                 let (_, path) = split_url(&url)?;
                 crate::pages::serve(name, path)
             });
             let found = plugin.or_else(|| {
                 split_url(&url)
-                    .and_then(|(host, path)| page(host, path))
+                    .and_then(|(host, path)| page(host, path, private))
                     .map(|(body, mime)| (body, mime, CSP.to_string()))
             });
             let (body, mime, csp, status) = match found {
@@ -323,7 +324,7 @@ mod tests {
             "/panel.html",
             "/crashed.html",
         ] {
-            let (body, mime) = page("ui", path).unwrap_or_else(|| panic!("{path}"));
+            let (body, mime) = page("ui", path, false).unwrap_or_else(|| panic!("{path}"));
             assert_eq!(mime, "text/html");
             assert!(
                 body.starts_with(b"<!doctype html>") || body.starts_with(b"<!DOCTYPE html>"),
@@ -342,7 +343,7 @@ mod tests {
             ("evil", "/"),
             ("", "/"),
         ] {
-            assert!(page(host, path).is_none(), "{host}{path}");
+            assert!(page(host, path, false).is_none(), "{host}{path}");
         }
     }
 }

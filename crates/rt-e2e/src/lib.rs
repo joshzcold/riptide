@@ -824,6 +824,19 @@ fn serve(mut stream: std::net::TcpStream, root: &Path) {
         .next()
         .unwrap_or("/")
         .trim_start_matches('/');
+    // `/slow-download` starts a download that never finishes while the test runs.
+    if path == "slow-download" {
+        let _ = write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n\
+             Content-Disposition: attachment; filename=slow.bin\r\nContent-Length: 1000000\r\n\r\n"
+        );
+        let start = Instant::now();
+        while start.elapsed() < TIMEOUT * 2 && stream.write_all(&[0; 100]).is_ok() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        return;
+    }
     let file = (!path.contains("..")).then(|| root.join(path));
     // `/headers` echoes the request's headers, lowercased, for header tests.
     let echo = (path == "headers").then(|| {
