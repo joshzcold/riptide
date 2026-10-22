@@ -2,12 +2,14 @@
 <title>call</title>
 <script>
   // A stand-in for a call site: a microphone in use, and Ctrl-d toggling
-  // mute as Google Meet's does. window.__mutes counts the presses; only real
-  // key events count, as sites ignore ones made up by scripts.
+  // mute as Google Meet's does. window.__mutes counts the presses, and the
+  // title says it for tests in another window; only real key events count,
+  // as sites ignore ones made up by scripts.
   window.__mutes = 0;
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey && e.key === "d" && e.isTrusted) {
       window.__mutes++;
+      document.title = `call, ${window.__mutes} mutes`;
       e.preventDefault();
     }
   });

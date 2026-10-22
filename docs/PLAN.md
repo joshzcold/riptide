@@ -95,10 +95,9 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Calls (M22)
 
-- **Check by hand on a real desktop:** fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open, VA-API and GPU background blur on a stock distribution, and a matrix of Meet, Zoom, Teams, Jitsi, Slack huddles, Discord and Whereby (camera, microphone, screen, window and tab sharing, calls in a background tab).
+- **Check by hand on a real desktop:** fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open, `cm` from another window keeping that window in front (the tests have no window manager), VA-API and GPU background blur on a stock distribution, and a matrix of Meet, Zoom, Teams, Jitsi, Slack huddles, Discord and Whereby (camera, microphone, screen, window and tab sharing, calls in a background tab).
 - Switching the shared source mid-call; shared tabs highlighted in the tab bar.
 - `:media-devices` to pick the camera, microphone and speaker per site; the permission question naming the device.
-- `cm` for a call in another window.
 
 ### Packaging (M10)
 

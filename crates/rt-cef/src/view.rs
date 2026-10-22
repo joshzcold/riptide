@@ -356,12 +356,18 @@ fn call_mute() {
             .iter()
             .find(|(pattern, _)| rt_core::url::pattern_matches(pattern, &tab.url))
             .map(|(_, key)| key.clone());
-        let here = window == s.active;
         let current = s.windows[window].tabs.current_index();
-        Some((tab.url.clone(), key, here, index, current))
+        // The call's tab, and the one in front of it that comes back after.
+        let browsers: Vec<i32> = [Some(index), Some(current)]
+            .into_iter()
+            .filter_map(|i| Some(s.windows[window].tabs.get(i?)?.browser()?.identifier()))
+            .collect();
+        // By id, since a window can close while the key waits.
+        let ids = (s.windows[window].id, s.windows[s.active].id);
+        Some((tab.url.clone(), key, ids, index, current, browsers))
     })
     .flatten();
-    let Some((url, key, here, index, current)) = call else {
+    let Some((url, key, (window, active), index, current, browsers)) = call else {
         return shell::show_message(Level::Error, "No tab is using a microphone");
     };
     let site = rt_core::url::host(&url).to_string();
@@ -380,20 +386,43 @@ fn call_mute() {
             );
         }
     };
-    if !here {
-        return shell::show_message(
-            Level::Error,
-            format!("The call ({site}) is in another window; press {key} there"),
-        );
+    // A page only takes keys while it has the focus, so the call's window
+    // gets it for the moment the key takes, then the one you were in.
+    let elsewhere = window != active;
+    if elsewhere {
+        for browser in browsers {
+            crate::panes::lend_focus(browser);
+        }
+        focus_window(window);
     }
+    let place = if elsewhere { " (another window)" } else { "" };
     shell::show_message(
         Level::Info,
-        format!("Pressed {key} in {site} to mute or unmute"),
+        format!("Pressed {key} in {site}{place} to mute or unmute"),
     );
     if index != current {
         crate::tabs::select(index);
     }
-    crate::client::send_when_ready(keys, move || crate::tabs::select(current));
+    crate::client::send_when_ready(keys, move || {
+        crate::tabs::select(current);
+        if elsewhere {
+            focus_window(active);
+        }
+    });
+}
+
+/// Make window `id` the active one and focus its tab's page, without
+/// raising the window.
+fn focus_window(id: u32) {
+    let host = shell::with(|s| {
+        s.active = s.window_index(id)?;
+        s.current_browser()?.host()
+    })
+    .flatten();
+    if let Some(host) = host {
+        host.set_focus(1);
+    }
+    shell::refresh_ui();
 }
 
 /// `:pip`: float the page's main video in a picture-in-picture window, or
