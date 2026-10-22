@@ -1784,12 +1784,49 @@ impl Engine {
                 self.count = None;
                 self.dirty = true;
             }
+            Command::AdblockToggle => self.adblock_toggle(effects),
             command => effects.push(Effect::Run { command, count }),
         }
     }
 
     /// A setting's current value if it's a `list` or a `map`, as `kind` says;
     /// otherwise shows why not.
+    /// `:adblock-toggle`: put the page's host on `content.blocking.whitelist`,
+    /// or take off the entries that cover it (a parent domain too), then reload.
+    fn adblock_toggle(&mut self, effects: &mut Vec<Effect>) {
+        const WHITELIST: &str = "content.blocking.whitelist";
+        let host = crate::url::host(&self.url).to_string();
+        if host.is_empty() {
+            self.show_message(Level::Error, "adblock-toggle: this page has no site");
+            return;
+        }
+        let Some(Value::List(list)) = self.setting_of_kind(WHITELIST, "list") else {
+            return;
+        };
+        let covers = |entry: &String| {
+            let entry = entry.trim_start_matches("*.").trim_end_matches('.');
+            host == entry
+                || host
+                    .strip_suffix(entry)
+                    .is_some_and(|rest| rest.ends_with('.'))
+        };
+        let (covering, mut rest): (Vec<String>, Vec<String>) =
+            list.into_iter().partition(|entry| covers(entry));
+        let text = if covering.is_empty() {
+            rest.push(host.clone());
+            format!("Content blocking off on {host}")
+        } else {
+            format!("Content blocking on for {host}")
+        };
+        self.set_value(WHITELIST, Value::List(rest), effects);
+        self.show_message(Level::Info, text);
+        // Past the cache, which may hold stand-ins for what was blocked.
+        effects.push(Effect::Run {
+            command: Command::Reload { force: true },
+            count: None,
+        });
+    }
+
     fn setting_of_kind(&mut self, name: &str, kind: &str) -> Option<Value> {
         let value = self.settings.get(name).cloned();
         let fits = matches!(
@@ -2246,6 +2283,43 @@ mod tests {
         let effects = e.execute_str("quit", None);
         assert!(effects.iter().any(|e| matches!(e, Effect::Run { .. })));
         assert!(asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn adblock_toggle_allows_the_site_then_blocks_it_again_and_reloads() {
+        let mut e = engine();
+        let whitelist = |e: &Engine| e.settings().get("content.blocking.whitelist").cloned();
+        e.set_url("https://www.example.com/page");
+        let effects = e.execute_str("adblock-toggle", None);
+        assert_eq!(
+            whitelist(&e),
+            Some(Value::List(vec!["www.example.com".into()]))
+        );
+        assert!(
+            effects
+                .iter()
+                .any(|e| matches!(e, Effect::ConfigChanged(_)))
+        );
+        assert!(effects.iter().any(|e| matches!(
+            e,
+            Effect::Run {
+                command: Command::Reload { force: true },
+                ..
+            }
+        )));
+        e.execute_str("adblock-toggle", None);
+        assert_eq!(whitelist(&e), Some(Value::List(Vec::new())));
+        // An entry for a parent domain covers the site, so it's what comes off.
+        e.execute_str(
+            "config-list-add content.blocking.whitelist example.com",
+            None,
+        );
+        e.execute_str("config-list-add content.blocking.whitelist other.org", None);
+        e.execute_str("adblock-toggle", None);
+        assert_eq!(whitelist(&e), Some(Value::List(vec!["other.org".into()])));
+        e.set_url("about:blank");
+        let effects = e.execute_str("adblock-toggle", None);
+        assert!(!effects.iter().any(|e| matches!(e, Effect::Run { .. })));
     }
 
     #[test]

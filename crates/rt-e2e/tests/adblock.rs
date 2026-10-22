@@ -140,6 +140,32 @@ fn scriptlets_run_first_in_frames_from_another_host_of_the_same_site() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn tb_turns_blocking_off_on_the_site_and_remembers_it() {
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    let blocked = "constant=false aopr=aborted script=loaded image=loaded";
+    let allowed = "constant=true aopr=read script=error image=error";
+    b.open("scriptlets.html");
+    b.wait_eval("document.title", blocked);
+    // It reloads by itself, and the site is kept for next time.
+    b.keys("tb");
+    b.wait_eval("document.title", allowed);
+    let autoconfig = b.config_dir().join("autoconfig.toml");
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(&autoconfig).is_ok_and(|t| t.contains("127.0.0.1")) {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the site wasn't saved");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.run("quit");
+    assert!(b.wait_exit().success());
+    b.restart();
+    b.open("scriptlets.html");
+    b.wait_eval("document.title", allowed);
+    b.keys("tb");
+    b.wait_eval("document.title", blocked);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn tracking_parameters_come_off_page_addresses() {
     let b = with_lists(&["filters-scriptlets.txt"]);
     let url = b.url("page.html");

@@ -367,6 +367,8 @@ pub enum Command {
     },
     /// Download the filter lists and rebuild the content blocker.
     AdblockUpdate,
+    /// Turn content blocking off on the page's site, or back on, and reload.
+    AdblockToggle,
     /// Run an external program, or a userscript with `userscript`.
     Spawn {
         userscript: bool,
@@ -925,6 +927,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "adblock-update",
         "Download the filter lists in content.blocking.adblock.lists",
+    ),
+    spec(
+        "adblock-toggle",
+        "Turn content blocking off on this site, or back on, and reload; remembered in content.blocking.whitelist",
     ),
     spec(
         "spell-suggest",
@@ -1693,6 +1699,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "download-delete" => Command::DownloadDelete,
         "download-clear" => Command::DownloadClear,
         "adblock-update" => Command::AdblockUpdate,
+        "adblock-toggle" => Command::AdblockToggle,
         "spawn" => {
             let (mut userscript, mut verbose, mut output_messages, mut output, mut detach) =
                 (false, false, false, false, false);

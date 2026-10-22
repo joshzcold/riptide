@@ -135,6 +135,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `ss` | `split` |
 | `sv` | `vsplit` |
 | `sw` | `split-focus next` |
+| `tb` | `adblock-toggle` |
 | `u` | `undo` |
 | `v` | `mode-enter caret` |
 | `wi` | `devtools` |

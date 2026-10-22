@@ -252,7 +252,10 @@ wrap_resource_request_handler! {
             let page = browser
                 .main_frame()
                 .map(|f| CefString::from(&f.url()).to_string())
-                .unwrap_or_default();
+                .filter(|u| !u.is_empty())
+                // A reload's new main frame can have no URL yet; the request
+                // still knows the page it's for.
+                .unwrap_or_else(|| CefString::from(&request.first_party_for_cookies()).to_string());
             // A new page starts its count here, on the thread that counts, so
             // none of its own blocked requests can come before the reset.
             if request.resource_type() == ResourceType::MAIN_FRAME {
