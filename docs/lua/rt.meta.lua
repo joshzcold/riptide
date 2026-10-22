@@ -194,6 +194,11 @@ function rt.mode() end
 ---@return { index: integer, title: string, url: string, current: boolean, pinned: boolean }[]
 function rt.tabs() end
 
+---Switch to normal, insert, caret or passthrough mode, as `:mode-enter`
+---does. Caret mode starts at the page's selection when it's on screen.
+---@param mode "normal"|"insert"|"caret"|"passthrough"
+function rt.enter_mode(mode) end
+
 ---Show tab `index` of the current window, as `rt.tabs()` numbers them.
 ---@param index integer
 function rt.select_tab(index) end
