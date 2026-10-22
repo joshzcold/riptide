@@ -370,7 +370,7 @@ local function page_result(fn)
     local ok, answer = pcall(rt.json.decode, json or "")
     if not ok or type(answer) ~= "table" then return fn(nil, "the page's answer wasn't JSON") end
     if answer.error ~= nil then return fn(nil, tostring(answer.error)) end
-    return fn(answer.ok)
+    return fn(answer.ok, nil, answer.frame)
   end
 end
 function page_for(source)
@@ -378,9 +378,11 @@ function page_for(source)
     type = function(text) rt._page(source, "type", text) end,
     key = function(keys) rt._page(source, "key", keys) end,
     fill_login = function(login) rt._page(source, "fill_login", login) end,
-    eval = function(code, fn)
+    eval = function(code, fn, opts)
       if type(code) ~= "string" or type(fn) ~= "function" then error("rt.page.eval takes code and a function", 2) end
-      rt._page(source, "eval", { code = code, fn = page_result(fn) })
+      local frame = opts and opts.frame
+      if frame ~= nil and type(frame) ~= "string" then error("rt.page.eval: frame is \"focused\" or a frame's id", 2) end
+      rt._page(source, "eval", { code = code, fn = page_result(fn), frame = frame })
     end,
     css = function(css) rt._page(source, "css", css) end,
     selection = function(fn)
@@ -780,6 +782,8 @@ pub enum PagePlace {
         over: Option<PageRect>,
         /// From where `over` puts it, in CSS pixels.
         offset: Option<(i32, i32)>,
+        /// The frame `over` is measured in, by id; the main frame without one.
+        frame: Option<String>,
         all_keys: bool,
     },
 }
@@ -912,8 +916,13 @@ pub enum PageRequest {
         submit: bool,
     },
     /// Evaluate a JavaScript expression in the page; its JSON value goes to
-    /// callback `callback` (in `rt._answers`).
-    Eval { code: String, callback: u32 },
+    /// callback `callback` (in `rt._answers`). `frame` is `"focused"` or a
+    /// frame's id, and the main frame without one.
+    Eval {
+        code: String,
+        callback: u32,
+        frame: Option<String>,
+    },
     /// Add a stylesheet to the page.
     Css(String),
     /// The selected text goes to callback `callback`.
@@ -2380,6 +2389,10 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                         let width: Option<u32> = opts.get("width")?;
                         let height: Option<u32> = opts.get("height")?;
                         let over: Option<mlua::Table> = opts.get("over")?;
+                        let frame: Option<String> = match &over {
+                            Some(t) => t.get("frame")?,
+                            None => None,
+                        };
                         let over = over
                             .map(|t| -> mlua::Result<PageRect> {
                                 let [x, y, width, height]: [f64; 4] = [
@@ -2436,6 +2449,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                             },
                             over,
                             offset,
+                            frame,
                             all_keys,
                         }
                     }
@@ -2872,6 +2886,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                             "eval" => PageRequest::Eval {
                                 code: opts.get("code")?,
                                 callback: id,
+                                frame: opts.get("frame")?,
                             },
                             "hint" => PageRequest::Hint {
                                 selector: opts.get("selector")?,

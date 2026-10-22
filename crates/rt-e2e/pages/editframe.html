@@ -1,0 +1,7 @@
+<!doctype html><title>editframe</title>
+<iframe id="f" style="width: 400px; height: 120px; border: 0; margin-left: 30px"></iframe>
+<script>
+  // The same server as localhost: another origin.
+  const other = (page) => location.href.replace("127.0.0.1", "localhost").replace(/[^/]*$/, page);
+  document.getElementById("f").src = other("editframe-inner.html");
+</script>
