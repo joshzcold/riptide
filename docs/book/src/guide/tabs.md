@@ -121,7 +121,7 @@ Some tiling window managers don't float it by themselves; it's titled "Picture i
 
 ### Muting a call from another tab
 
-`cm` (`:call-mute`) mutes or unmutes your microphone in the call while you're in another tab. It presses the call site's own mute key in the tab that's using the microphone, so the site's mute button stays right. `content.call_mute_keys` has each site's key (Meet `<Ctrl-d>`, Teams `<Ctrl-Shift-m>`, Zoom `<Alt-a>`, Webex `<Ctrl-m>`, Jitsi `m`); add others the same way.
+`cm` (`:call-mute`) mutes or unmutes your microphone in the call while you're in another tab, or in another window such as when the call has its own call window. It presses the call site's own mute key in the tab that's using the microphone, so the site's mute button stays right, and you stay where you were. `content.call_mute_keys` has each site's key (Meet `<Ctrl-d>`, Teams `<Ctrl-Shift-m>`, Zoom `<Alt-a>`, Webex `<Ctrl-m>`, Jitsi `m`); add others the same way.
 
 - **A flash of the call:** Chromium only takes keys in the tab that's showing, so the call tab shows for a moment and then the tab you were on comes back. The first time, it shows for under a second, while the page gets ready for keys.
 - **Another window:** a call in another window isn't reached; riptide names the key to press there.

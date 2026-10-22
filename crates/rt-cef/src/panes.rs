@@ -608,6 +608,25 @@ wrap_panel_delegate! {
     impl PanelDelegate {}
 }
 
+thread_local! {
+    /// Tabs focused only to take keys riptide sends, such as a call's mute key
+    /// in another window, and when: for a moment their focus doesn't switch windows.
+    static LENT: std::cell::RefCell<Vec<(i32, std::time::Instant)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Keep `browser`'s focus over the next moment from switching windows.
+pub fn lend_focus(browser: i32) {
+    LENT.with(|l| l.borrow_mut().push((browser, std::time::Instant::now())));
+}
+
+fn focus_lent(browser: i32) -> bool {
+    LENT.with(|l| {
+        let mut l = l.borrow_mut();
+        l.retain(|(_, at)| at.elapsed() < std::time::Duration::from_secs(2));
+        l.iter().any(|(id, _)| *id == browser)
+    })
+}
+
 // A click in another pane focuses that pane.
 wrap_focus_handler! {
     pub struct RtFocusHandler;
@@ -629,6 +648,9 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
+            if focus_lent(self.browser) {
+                return;
+            }
             shell::activate_browser(self.browser);
             let index = shell::with(|s| {
                 let index = s

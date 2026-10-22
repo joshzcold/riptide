@@ -1,12 +1,11 @@
 //! `:call-mute` (`cm`) presses the call site's mute key in the call's tab,
-//! from another tab.
+//! from another tab or window.
 #![cfg(unix)]
 
 use rt_e2e::Browser;
 
-#[test]
-#[ignore = "starts a browser; run with ./task e2e"]
-fn cm_presses_the_mute_key_in_the_call_tab_from_another_tab() {
+/// A browser with a call using the microphone in its first tab.
+fn start_call() -> Browser {
     let b = Browser::launch()
         // Chromium's test microphone; the setting skips the prompt.
         .arg("--use-fake-device-for-media-stream")
@@ -23,6 +22,57 @@ fn cm_presses_the_mute_key_in_the_call_tab_from_another_tab() {
         b.eval_bar("tabbar", "document.body.innerText")
             .contains("[A] 1:")
     });
+    b
+}
+
+/// Press `cm` twice in the second window: the call in the first window's
+/// tab `tab` hears both, and the second window stays the active one.
+fn mute_from_another_window(b: &Browser, tab: usize) {
+    for presses in [1, 2] {
+        b.keys("cm");
+        b.wait_until(&format!("{presses} mutes in the other window"), |s| {
+            s.windows[0].tabs[tab].title == format!("call, {presses} mutes")
+        });
+    }
+    let s = b.state();
+    assert_eq!(s.current_window, 1, "the call's window didn't take over");
+    assert!(
+        s.message().unwrap_or_default().contains("(another window)"),
+        "{s:?}"
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn cm_mutes_a_call_in_another_window() {
+    let b = start_call();
+    b.run(&format!("open -w {}", b.url("second.html")));
+    b.wait_until("the second window is in front", |s| {
+        s.windows.len() == 2 && s.current_window == 1
+    });
+    mute_from_another_window(&b, 0);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn cm_mutes_a_call_in_a_background_tab_of_another_window() {
+    let b = start_call();
+    b.run(&format!("open -t {}", b.url("second.html")));
+    b.wait_until("the call is behind another tab", |s| {
+        s.window().current_tab == 1
+    });
+    b.run(&format!("open -w {}", b.url("page.html")));
+    b.wait_until("the second window is in front", |s| {
+        s.windows.len() == 2 && s.current_window == 1
+    });
+    mute_from_another_window(&b, 0);
+    assert_eq!(b.state().windows[0].current_tab, 1, "the call stays behind");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn cm_presses_the_mute_key_in_the_call_tab_from_another_tab() {
+    let b = start_call();
     b.run(&format!("open -t {}", b.url("second.html")));
     b.wait_until("another tab is in front", |s| {
         s.window().current_tab == 1 && s.tab().is_loaded(&b.url("second.html"))
