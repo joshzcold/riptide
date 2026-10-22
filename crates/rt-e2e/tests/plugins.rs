@@ -339,6 +339,17 @@ rt.command("open-notes-over", function()
     on_message = function(name) rt.notify("over got " .. name) end,
   })
 end)
+rt.command("open-notes-offset", function()
+  float_page = rt.ui.page({
+    where = "float",
+    over = { x = 20, y = 60, width = 500, height = 260 },
+    offset = { x = 100, y = 30 },
+    on_message = function(name, _, page)
+      if name == "hello" then page:resize(420, 200) end
+      rt.notify("offset got " .. name)
+    end,
+  })
+end)
 rt.command("open-notes", function()
   rt.ui.page({
     path = "index.html",
@@ -429,6 +440,19 @@ rt.send("hello", JSON.stringify({ n: 1 }));"#,
     );
     b.keys("<Escape>");
     assert!(!b.state().popup.is_null(), "Escape closed the float");
+    b.run("close-notes-float");
+    b.wait_until("the float closed", |s| s.popup.is_null());
+
+    // Moved from there by `offset`, and resized by its plugin.
+    b.run("open-notes-offset");
+    b.wait_until("the float page loaded", |s| {
+        s.message() == Some("offset got hello")
+    });
+    let s = b.wait_until("the float was resized", |s| {
+        s.popup["bounds"][2] == 420 && s.popup["bounds"][3] == 200
+    });
+    assert_eq!(s.popup["bounds"][0], 120, "{}", s.popup);
+    assert_eq!(s.popup["bounds"][1].as_i64(), Some(top + 30), "{}", s.popup);
     b.run("close-notes-float");
     b.wait_until("the float closed", |s| s.popup.is_null());
 }

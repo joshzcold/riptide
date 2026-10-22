@@ -458,12 +458,15 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
     if role == Role::Popup && crate::popup::takes_all_keys() {
         return popup_key_event(event);
     }
-    // The tab keeps the keyboard while such a popup is open; it gets the keys.
-    if let Some(host) = crate::popup::all_keys_host().filter(|_| role == Role::Tab) {
-        if !popup_key_event(event) {
-            SENDING_TO_PAGE.with(|s| s.set(true));
-            host.send_key_event(Some(event));
-            SENDING_TO_PAGE.with(|s| s.set(false));
+    // The tab keeps the keyboard while such a popup is open, or its bar has it
+    // after a drag. The popup's page isn't focused, so it would drop key
+    // events; it gets each key as a `keydown` event instead.
+    if crate::popup::all_keys_host().is_some() && matches!(role, Role::Tab | Role::PopupBar) {
+        if !popup_key_event(event)
+            && event.type_ == KeyEventType::RAWKEYDOWN
+            && let Some(key) = vk::translate(raw_key(event))
+        {
+            crate::popup::type_key(&key, raw_key(event).mods);
         }
         return true;
     }
@@ -515,16 +518,10 @@ fn popup_key_event(event: &KeyEvent) -> bool {
     shift_escape
 }
 
-/// Returns true when the key is consumed and must not reach the page.
-fn handle_key_event(event: &KeyEvent) -> bool {
-    if event.type_ == KeyEventType::CHAR {
-        return shell::with(|s| s.suppress_char).unwrap_or(false);
-    }
-    if event.type_ != KeyEventType::RAWKEYDOWN && event.type_ != KeyEventType::KEYDOWN {
-        return false;
-    }
+/// The key as riptide reads it from CEF's event.
+fn raw_key(event: &KeyEvent) -> RawKey {
     let has = |flag: u32| event.modifiers & flag != 0;
-    let raw = RawKey {
+    RawKey {
         windows_key_code: event.windows_key_code,
         character: event.character,
         unmodified_character: event.unmodified_character,
@@ -534,8 +531,18 @@ fn handle_key_event(event: &KeyEvent) -> bool {
             shift: has(EVENTFLAG_SHIFT_DOWN),
             meta: has(EVENTFLAG_COMMAND_DOWN),
         },
-    };
-    let Some(key) = vk::translate(raw) else {
+    }
+}
+
+/// Returns true when the key is consumed and must not reach the page.
+fn handle_key_event(event: &KeyEvent) -> bool {
+    if event.type_ == KeyEventType::CHAR {
+        return shell::with(|s| s.suppress_char).unwrap_or(false);
+    }
+    if event.type_ != KeyEventType::RAWKEYDOWN && event.type_ != KeyEventType::KEYDOWN {
+        return false;
+    }
+    let Some(key) = vk::translate(raw_key(event)) else {
         return false;
     };
     if crate::popup::forward_key(&key)

@@ -176,6 +176,12 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 place,
             } => crate::pages::open(&source, id, &path, title, place),
             Action::PluginPageClose { source, id } => crate::pages::close(&source, id),
+            Action::PluginPageResize {
+                source,
+                id,
+                width,
+                height,
+            } => crate::pages::resize(&source, id, width, height),
             Action::Secret {
                 plugin,
                 option,

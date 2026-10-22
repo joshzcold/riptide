@@ -42,6 +42,18 @@ struct Popup {
     over: Option<(PageRect, BrowserView)>,
     /// Every key goes to it, riptide's bindings and Escape included.
     all_keys: bool,
+    /// Which opening this is, so timers of an older popup stop.
+    opened: u32,
+    /// `tab`'s scroll position when `over` was measured, and how far it has
+    /// scrolled since, in CSS pixels: the popup follows the part it covers.
+    scroll_from: Option<(f64, f64)>,
+    scrolled: (f64, f64),
+    /// The plugin page it shows (plugin, page id), told where it's dragged.
+    plugin_page: Option<(String, u32)>,
+    /// Drags so far, so only the last one of a run is told.
+    moves: u32,
+    /// Resized by its page, so `size` holds even over part of a page.
+    resized: bool,
 }
 
 /// Where a popup goes and what it takes; by default the top right, sized to
@@ -50,11 +62,23 @@ struct Popup {
 pub struct Placement {
     pub size: Option<(i32, i32)>,
     pub over: Option<PageRect>,
+    /// From where `over` puts it, in CSS pixels, as `on_move` reported.
+    pub offset: Option<(i32, i32)>,
     pub all_keys: bool,
+    /// The plugin page it shows, told where it's dragged.
+    pub plugin_page: Option<(String, u32)>,
 }
+
+/// How often a popup over part of a page reads where the page has scrolled.
+const FOLLOW_MS: i64 = 40;
+/// A drag is told once the bar has been still this long.
+const MOVED_MS: i64 = 400;
+/// Where a popup over part of the page waits while that part is scrolled away.
+const OFF_SCREEN: i32 = 100_000;
 
 thread_local! {
     static POPUP: RefCell<Option<Popup>> = const { RefCell::new(None) };
+    static OPENED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     /// Where the last popup was left, for the next one.
     static LAST_OFFSET: std::cell::Cell<(i32, i32)> = const { std::cell::Cell::new((0, 0)) };
 }
@@ -69,13 +93,19 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
     let Placement {
         size,
         over,
+        offset,
         all_keys,
+        plugin_page,
     } = placement;
     let over = over.and_then(|rect| {
         let tab = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()?;
         Some((rect, tab))
     });
     close();
+    let opened = OPENED.with(|o| {
+        o.set(o.get().wrapping_add(1));
+        o.get()
+    });
     let Some((window_id, window)) = shell::with(|s| Some((s.id, s.window.clone()?))).flatten()
     else {
         return;
@@ -103,16 +133,26 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
                 .map(|(w, h)| (w.clamp(MIN_WIDTH, MAX_SIZE.0), h.clamp(40, MAX_SIZE.1)))
                 .unwrap_or(DEFAULT_SIZE),
             fixed: size.is_some() || over.is_some(),
-            offset: if over.is_some() {
-                (0, 0)
-            } else {
-                LAST_OFFSET.with(std::cell::Cell::get)
+            offset: match &over {
+                Some((_, tab)) => {
+                    let zoom = zoom_of(tab);
+                    let (x, y) = offset.unwrap_or_default();
+                    (scale(x, zoom), scale(y, zoom))
+                }
+                None => LAST_OFFSET.with(std::cell::Cell::get),
             },
-            over,
             all_keys,
+            opened,
+            scroll_from: None,
+            scrolled: (0.0, 0.0),
+            plugin_page,
+            moves: 0,
+            resized: false,
+            over,
         })
     });
     reposition();
+    follow_scroll(opened);
     // Overlays only get the keyboard from a click, so the tab keeps it and
     // passes keys on to a popup that takes them all.
     if all_keys {
@@ -214,6 +254,8 @@ pub fn reposition() {
     let placed = POPUP.with(|p| {
         let p = p.borrow();
         let popup = p.as_ref()?;
+        // Over part of the page, it's hidden while scrolled out of view.
+        let mut shown = true;
         let (x, y, width, height) = match &popup.over {
             Some((rect, tab)) => {
                 let (area, content) = shell::with(|s| {
@@ -224,9 +266,24 @@ pub fn reposition() {
                     ))
                 })
                 .flatten()?;
-                let (x, y, width, height) = cover(&area, &content, rect, tab)?;
-                let (dx, dy) = popup.offset;
-                let (x, y) = clamp_to(&area, (width, height), (x + dx, y + dy));
+                let (x, y, width, height) = cover(&area, &content, rect, popup.scrolled, tab)?;
+                let (width, height) = if popup.resized {
+                    (
+                        popup
+                            .size
+                            .0
+                            .clamp(MIN_WIDTH.min(area.width), area.width.max(1)),
+                        popup.size.1.clamp(40, (area.height - BAR_HEIGHT).max(40)),
+                    )
+                } else {
+                    (width, height)
+                };
+                let (x, y) = (x + popup.offset.0, y + popup.offset.1);
+                shown = y + BAR_HEIGHT + height > area.y
+                    && y < area.y + area.height
+                    && x + width > area.x
+                    && x < area.x + area.width;
+                let (x, y) = clamp_to(&area, (width, height), (x, y));
                 (x, y, width, height)
             }
             None => {
@@ -242,6 +299,7 @@ pub fn reposition() {
             }
         };
         Some((
+            shown,
             popup.bar_overlay.clone(),
             Rect {
                 x,
@@ -258,13 +316,26 @@ pub fn reposition() {
             },
         ))
     });
-    let Some((bar, bar_rect, page, page_rect)) = placed else {
+    let Some((shown, bar, bar_rect, page, page_rect)) = placed else {
         return;
     };
     for (overlay, rect) in [(bar, bar_rect), (page, page_rect)] {
         if let Some(overlay) = overlay.filter(|o| o.is_valid() != 0) {
+            // Out of view, it's moved away rather than hidden: showing an
+            // overlay again takes the keyboard from the tab.
+            let rect = if shown {
+                rect
+            } else {
+                Rect {
+                    x: -OFF_SCREEN,
+                    y: -OFF_SCREEN,
+                    ..rect
+                }
+            };
             overlay.set_bounds(Some(&rect));
-            overlay.set_visible(1);
+            if overlay.is_visible() == 0 {
+                overlay.set_visible(1);
+            }
         }
     }
 }
@@ -294,25 +365,129 @@ fn cover(
     area: &Rect,
     content: &Rect,
     rect: &PageRect,
+    scrolled: (f64, f64),
     tab: &BrowserView,
 ) -> Option<(i32, i32, i32, i32)> {
     let zoom = 1.2_f64.powf(tab.browser()?.host()?.zoom_level());
     let pane = View::from(tab).bounds();
     let origin = (area.x + content.x + pane.x, area.y + content.y + pane.y);
-    let scale = |v: i32| (f64::from(v) * zoom).round() as i32;
-    let width = scale(rect.width).clamp(MIN_WIDTH.min(area.width), area.width.max(1));
-    let height = scale(rect.height).clamp(40, (area.height - BAR_HEIGHT).max(40));
-    Some((
-        origin.0 + scale(rect.x),
-        origin.1 + scale(rect.y) - BAR_HEIGHT,
-        width,
-        height,
-    ))
+    let width = scale(rect.width, zoom).clamp(MIN_WIDTH.min(area.width), area.width.max(1));
+    let height = scale(rect.height, zoom).clamp(40, (area.height - BAR_HEIGHT).max(40));
+    let x = ((f64::from(rect.x) - scrolled.0) * zoom).round() as i32;
+    let y = ((f64::from(rect.y) - scrolled.1) * zoom).round() as i32;
+    Some((origin.0 + x, origin.1 + y - BAR_HEIGHT, width, height))
+}
+
+/// CSS pixels at `zoom`, in the window's pixels.
+fn scale(v: i32, zoom: f64) -> i32 {
+    (f64::from(v) * zoom).round() as i32
+}
+
+fn zoom_of(tab: &BrowserView) -> f64 {
+    tab.browser()
+        .and_then(|b| b.host())
+        .map_or(1.0, |host| 1.2_f64.powf(host.zoom_level()))
+}
+
+/// While popup `opened` covers part of its tab's page, follow the page's
+/// scrolling. Pages can't tell us they scrolled, so it's read every few
+/// milliseconds, as the status bar's `scroll` widget does more slowly.
+fn follow_scroll(opened: u32) {
+    let tab = POPUP.with(|p| {
+        let p = p.borrow();
+        let popup = p.as_ref().filter(|p| p.opened == opened)?;
+        popup.over.as_ref().map(|(_, tab)| tab.clone())
+    });
+    let Some(browser) = tab.and_then(|t| t.browser()) else {
+        return;
+    };
+    crate::eval::eval(
+        &browser,
+        "JSON.stringify([scrollX, scrollY])",
+        move |result| {
+            let at = result
+                .ok()
+                .and_then(|json| serde_json::from_str::<[f64; 2]>(&json).ok());
+            let moved = at.and_then(|[x, y]| {
+                POPUP.with(|p| {
+                    let mut p = p.borrow_mut();
+                    let popup = p.as_mut().filter(|p| p.opened == opened)?;
+                    let from = *popup.scroll_from.get_or_insert((x, y));
+                    let scrolled = (x - from.0, y - from.1);
+                    (scrolled != popup.scrolled).then(|| popup.scrolled = scrolled)
+                })
+            });
+            if moved.is_some() {
+                reposition();
+            }
+            crate::client::later(FOLLOW_MS, move || follow_scroll(opened));
+        },
+    );
+}
+
+/// Tell the plugin page where its popup was dragged to, once the drag is over.
+fn report_move(opened: u32, moves: u32) {
+    let report = POPUP.with(|p| {
+        let p = p.borrow();
+        let popup = p
+            .as_ref()
+            .filter(|p| p.opened == opened && p.moves == moves)?;
+        let (source, id) = popup.plugin_page.clone()?;
+        let zoom = popup.over.as_ref().map_or(1.0, |(_, tab)| zoom_of(tab));
+        let (x, y) = popup.offset;
+        let css = |v: i32| (f64::from(v) / zoom).round() as i32;
+        Some((source, id, css(x), css(y)))
+    });
+    if let Some((source, id, x, y)) = report {
+        crate::pages::moved(&source, id, x, y);
+    }
 }
 
 /// The popup takes every key: riptide's bindings and Escape don't apply.
 pub fn takes_all_keys() -> bool {
     POPUP.with(|p| p.borrow().as_ref().is_some_and(|p| p.all_keys))
+}
+
+/// Hand `key` to a popup that takes every key, as the `keydown` event the
+/// page would see. `mods` are the keys held, shift included.
+pub fn type_key(key: &rt_core::key::Key, mods: rt_core::key::Modifiers) {
+    use rt_core::key::KeyCode;
+    let name = match key.code {
+        KeyCode::Char(c) => c.to_string(),
+        KeyCode::Escape => "Escape".into(),
+        KeyCode::Enter => "Enter".into(),
+        KeyCode::Backspace => "Backspace".into(),
+        KeyCode::Delete => "Delete".into(),
+        KeyCode::Tab => "Tab".into(),
+        KeyCode::Insert => "Insert".into(),
+        KeyCode::Home => "Home".into(),
+        KeyCode::End => "End".into(),
+        KeyCode::PageUp => "PageUp".into(),
+        KeyCode::PageDown => "PageDown".into(),
+        KeyCode::Up => "ArrowUp".into(),
+        KeyCode::Down => "ArrowDown".into(),
+        KeyCode::Left => "ArrowLeft".into(),
+        KeyCode::Right => "ArrowRight".into(),
+        KeyCode::F(n) => format!("F{n}"),
+    };
+    let init = serde_json::json!({
+        "key": name,
+        "ctrlKey": mods.ctrl,
+        "altKey": mods.alt,
+        "shiftKey": mods.shift,
+        "metaKey": mods.meta,
+        "bubbles": true,
+        "cancelable": true,
+    });
+    let frame = all_keys_host()
+        .and_then(|host| host.browser())
+        .and_then(|b| b.main_frame());
+    if let Some(frame) = frame {
+        shell::exec_js(
+            &frame,
+            &format!("document.dispatchEvent(new KeyboardEvent('keydown', {init}))"),
+        );
+    }
 }
 
 /// The browser of a popup that takes every key, in the focused window.
@@ -325,6 +500,21 @@ pub fn all_keys_host() -> Option<BrowserHost> {
     })
 }
 
+/// `page:resize`: the popup's page at this size, in its place.
+pub fn resize(width: i32, height: i32) {
+    let resized = POPUP.with(|p| {
+        let mut p = p.borrow_mut();
+        let popup = p.as_mut()?;
+        popup.size = (width.max(MIN_WIDTH), height.max(40));
+        popup.fixed = true;
+        popup.resized = true;
+        Some(())
+    });
+    if resized.is_some() {
+        reposition();
+    }
+}
+
 /// The bar was dragged by `dx`, `dy` pixels.
 pub fn move_by(dx: i32, dy: i32) {
     let moved = POPUP.with(|p| {
@@ -334,10 +524,12 @@ pub fn move_by(dx: i32, dy: i32) {
         if popup.over.is_none() {
             LAST_OFFSET.with(|l| l.set(popup.offset));
         }
-        Some(())
+        popup.moves = popup.moves.wrapping_add(1);
+        Some((popup.opened, popup.moves))
     });
-    if moved.is_some() {
+    if let Some((opened, moves)) = moved {
         reposition();
+        crate::client::later(MOVED_MS, move || report_move(opened, moves));
     }
 }
 
