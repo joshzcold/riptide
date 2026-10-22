@@ -23,6 +23,8 @@ struct Status {
     update: Option<(String, Vec<String>)>,
     /// From the last health check: each finding's level and text.
     health: Option<Vec<rt_config::lua::HealthItem>>,
+    /// Loaded despite its riptide requirement, because the user named this build.
+    note: Option<String>,
 }
 
 thread_local! {
@@ -53,6 +55,10 @@ thread_local! {
 
 thread_local! {
     static WAITING: std::cell::RefCell<Vec<Waiting>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn set_note(name: &str, note: Option<String>) {
+    STATUS.with(|s| s.borrow_mut().entry(name.to_string()).or_default().note = note);
 }
 
 fn set_state(name: &str, state: &'static str, error: Option<String>) {
@@ -310,8 +316,9 @@ fn prepare(name: &str) {
         Ok(manifest) => manifest,
         Err(e) => return failed(e.to_string()),
     };
-    if let Some(why) = manifest.unsupported() {
-        return failed(why);
+    match manifest.check_riptide(env!("RT_GIT_COMMIT"), spec.riptide.as_deref()) {
+        Err(why) => return failed(why),
+        Ok(note) => set_note(&spec.name, note),
     }
     let dependencies = manifest.dependencies;
     for dependency in &dependencies {
@@ -760,6 +767,7 @@ pub fn page_data() -> serde_json::Value {
                 "keys": crate::lua::plugin_keys(&spec.name),
                 "state": if state.state.is_empty() { "pending" } else { state.state },
                 "error": state.error,
+                "note": state.note,
                 "update": state.update.map(|(commit, log)| serde_json::json!({ "commit": commit, "log": log })),
                 "health": state.health.map(|items| {
                     items

@@ -1290,3 +1290,50 @@ end)"#,
     });
     assert_eq!(b.state().mode, "normal");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_plugin_for_a_newer_riptide_loads_on_the_build_its_spec_names() {
+    // This build's commit, as riptide --version shows it: "riptide 0.7.0 (517d039d27, CEF …)".
+    let version = std::process::Command::new(rt_e2e::binary())
+        .arg("--version")
+        .output()
+        .unwrap();
+    let version = String::from_utf8_lossy(&version.stdout).into_owned();
+    let commit = version
+        .split_once('(')
+        .and_then(|(_, rest)| rest.split_once(','))
+        .map(|(commit, _)| commit.trim().to_string())
+        .unwrap();
+    let short = &commit[..7];
+    let b = Browser::launch()
+        .file("scratch-plugins/named/plugin/named.lua", "")
+        .file(
+            "scratch-plugins/named/riptide-plugin.toml",
+            "riptide = \">=99\"\n",
+        )
+        .file("scratch-plugins/misnamed/plugin/misnamed.lua", "")
+        .file(
+            "scratch-plugins/misnamed/riptide-plugin.toml",
+            "riptide = \">=99\"\n",
+        )
+        .lua(&format!(
+            r#"rt.pack.add({{
+  {{ dir = rt.config_dir .. "/../scratch-plugins/named", riptide = "{short}" }},
+  {{ dir = rt.config_dir .. "/../scratch-plugins/misnamed", riptide = "abcdef1" }},
+}})"#
+        ))
+        .start("page.html");
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).sort().join(' ')",
+        "misnamed:failed named:loaded",
+    );
+    let note = b.eval("page.plugins.find((p) => p.name === 'named').note");
+    assert!(note.contains("loaded anyway"), "{note}");
+    let error = b.eval("page.plugins.find((p) => p.name === 'misnamed').error");
+    assert!(
+        error.contains(&format!("names another build; this one is {commit}")),
+        "{error}"
+    );
+}

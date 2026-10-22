@@ -286,6 +286,7 @@ function rt.store(name) end
 ---@field name? string Its name for `require`; by default from the URL or folder.
 ---@field version? string A tag, branch or commit.
 ---@field subdir? string The plugin's folder in a repository of several plugins.
+---@field riptide? string A riptide build's commit, as `riptide --version` shows it: on that build only, it loads even though its manifest asks for a newer riptide.
 ---@field trusted? boolean Skip the sandbox and allow everything.
 ---@field opts? table Passed to `require(name).setup(opts)` once it loads.
 ---@field config? fun() Run once it loads, instead of `opts`.

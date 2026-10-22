@@ -253,12 +253,57 @@ impl Manifest {
         self.unsupported_by(&current)
     }
 
+    /// Its `riptide` requirement for this build, whose commit is `commit`:
+    /// `Err(why)` if it leaves this riptide out, `Ok(Some(note))` if
+    /// `build`, a commit the user gave for it, names this build and so
+    /// loads it anyway, and `Ok(None)` if the requirement is met.
+    pub fn check_riptide(
+        &self,
+        commit: &str,
+        build: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        let current =
+            semver::Version::parse(env!("CARGO_PKG_VERSION")).map_err(|e| e.to_string())?;
+        self.check_riptide_for(&current, commit, build)
+    }
+
+    fn check_riptide_for(
+        &self,
+        current: &semver::Version,
+        commit: &str,
+        build: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        let Some(why) = self.unsupported_by(current) else {
+            return Ok(None);
+        };
+        let wanted = self.riptide.as_deref().unwrap_or_default();
+        match build {
+            Some(build) if same_commit(commit, build) => Ok(Some(format!(
+                "needs riptide {wanted}, and this is {current}; loaded anyway, as riptide = \"{build}\" names this build"
+            ))),
+            Some(build) => Err(format!(
+                "{why}. Its riptide = \"{build}\" names another build; this one is {commit}"
+            )),
+            None => Err(why),
+        }
+    }
+
     fn unsupported_by(&self, current: &semver::Version) -> Option<String> {
         let wanted = self.riptide.as_deref()?;
         let req = semver::VersionReq::parse(wanted).ok()?;
         (!req.matches(current))
             .then(|| format!("needs riptide {wanted}, and this is {current}; update riptide"))
     }
+}
+
+/// Whether `given` (from a plugin's `riptide = "…"`) names the build whose
+/// commit is `commit`: either may be the shorter, from 7 hex digits.
+fn same_commit(commit: &str, given: &str) -> bool {
+    let (commit, given) = (commit.to_ascii_lowercase(), given.to_ascii_lowercase());
+    commit != "unknown"
+        && commit.len() >= 7
+        && given.len() >= 7
+        && (commit.starts_with(&given) || given.starts_with(&commit))
 }
 
 /// What the lockfile keeps for a plugin.
@@ -339,6 +384,10 @@ pub struct FileSpec {
     pub name: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub version: String,
+    /// A riptide build, by its commit, that loads it whatever its manifest's
+    /// `riptide` requirement says.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub riptide: String,
     /// Passed to the plugin's `setup`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub opts: Option<toml::Table>,
@@ -732,6 +781,55 @@ mod tests {
         write("riptide = \"at least 0.4\"\n");
         assert!(Manifest::read(&dir).unwrap_err().contains("at least 0.4"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_build_named_by_its_commit_loads_a_plugin_for_a_newer_riptide() {
+        let manifest = Manifest {
+            riptide: Some(">=0.8".into()),
+            ..Manifest::default()
+        };
+        let old = semver::Version::parse("0.7.0").unwrap();
+        let new = semver::Version::parse("0.8.0").unwrap();
+        // This build is 517d039d27; a prefix of its commit, or the whole of it, names it.
+        for given in [
+            "517d039",
+            "517D039D27",
+            "517d039d27a1b2c3d4e5f60718293a4b5c6d7e8f",
+        ] {
+            let note = manifest
+                .check_riptide_for(&old, "517d039d27", Some(given))
+                .unwrap()
+                .unwrap();
+            assert!(note.contains("loaded anyway"), "{note}");
+        }
+        let why = manifest
+            .check_riptide_for(&old, "517d039d27", Some("abcdef1"))
+            .unwrap_err();
+        assert!(
+            why.contains("names another build; this one is 517d039d27"),
+            "{why}"
+        );
+        assert!(
+            manifest
+                .check_riptide_for(&old, "517d039d27", None)
+                .is_err()
+        );
+        // Without a commit to compare, or once the requirement is met, it doesn't apply.
+        assert!(
+            manifest
+                .check_riptide_for(&old, "unknown", Some("517d039"))
+                .is_err()
+        );
+        assert!(
+            manifest
+                .check_riptide_for(&old, "517d039d27", Some("517d"))
+                .is_err()
+        );
+        assert_eq!(
+            manifest.check_riptide_for(&new, "517d039d27", Some("abcdef1")),
+            Ok(None)
+        );
     }
 
     #[test]
