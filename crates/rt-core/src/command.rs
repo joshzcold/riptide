@@ -451,6 +451,8 @@ pub enum Command {
     CallMute,
     /// Stop every screen, window or tab share, in any tab or window.
     ShareStop,
+    /// `:media-devices`: pick the camera, microphone and speaker for the current site.
+    MediaDevices,
     /// Float the page's main video in picture-in-picture, or bring it back.
     Pip,
     /// Show the messages of this session.
@@ -1115,6 +1117,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "share-stop",
         "Stop sharing your screen, a window or a tab, from any tab or window",
+    ),
+    spec(
+        "media-devices",
+        "Pick the camera, microphone and speaker for the current site; a call in progress switches at once",
     ),
     spec("messages", "Show this session's messages"),
     spec("repeat-command", "Run the last command again (.)"),
@@ -1823,6 +1829,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-mute" => Command::TabMute,
         "call-mute" => Command::CallMute,
         "share-stop" => Command::ShareStop,
+        "media-devices" => Command::MediaDevices,
         "pip" => Command::Pip,
         "messages" => Command::Messages,
         "repeat-command" | "cmd-repeat-last" => Command::RepeatCommand,

@@ -142,6 +142,13 @@ wrap_client! {
                 shell::show_message(Level::Info, format!("{origin}{title}{body}"));
                 return 1;
             }
+            if name == crate::renderer::MEDIA_DEVICES_MESSAGE {
+                let json = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
+                if let Some(browser) = &browser {
+                    crate::media::listed(browser.identifier(), &json);
+                }
+                return 1;
+            }
             if name == crate::renderer::SHARE_MESSAGE {
                 let surface = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
                 let started = shell::with_tab(browser, |s, index, _| {

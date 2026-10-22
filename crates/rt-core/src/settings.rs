@@ -1195,6 +1195,24 @@ pub static SETTINGS: &[SettingDef] = &[
         "Let sites use your microphone: ask, true or false"
     ),
     def!(
+        "content.media.camera",
+        Kind::Str,
+        s(""),
+        "The camera sites get, by the name :media-devices shows (empty: the site's own choice); set it per site, as :media-devices does"
+    ),
+    def!(
+        "content.media.microphone",
+        Kind::Str,
+        s(""),
+        "The microphone sites get, by the name :media-devices shows (empty: the site's own choice)"
+    ),
+    def!(
+        "content.media.speaker",
+        Kind::Str,
+        s(""),
+        "The speaker sites play sound on, by the name :media-devices shows (empty: the site's own choice)"
+    ),
+    def!(
         "content.media.video_capture",
         Kind::Enum(ASK),
         s("ask"),
@@ -2267,6 +2285,9 @@ pub const PER_DOMAIN: &[&str] = &[
     "content.mouse_lock",
     "content.mute",
     "content.media.audio_capture",
+    "content.media.camera",
+    "content.media.microphone",
+    "content.media.speaker",
     "content.media.video_capture",
     "content.notifications.enabled",
     "content.register_protocol_handler",

@@ -48,7 +48,61 @@ pub struct Scripts {
     /// `content.notifications.presenter = messages`.
     #[serde(default)]
     pub notification_messages: bool,
+    /// The devices `:media-devices` picked.
+    #[serde(default)]
+    pub media: MediaChoices,
 }
+
+/// `content.media.camera`, `.microphone` and `.speaker`, which pages apply themselves.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MediaChoices {
+    /// The global values, in [`MEDIA_KINDS`] order.
+    pub global: [String; 3],
+    /// Per-site values as (pattern, kind, name), in the order set: the last match wins.
+    pub sites: Vec<(String, String, String)>,
+}
+
+/// The page script's names for the devices, after `content.media.`.
+pub const MEDIA_KINDS: [&str; 3] = ["camera", "microphone", "speaker"];
+
+impl MediaChoices {
+    pub fn from_settings(settings: &rt_core::settings::Settings) -> Self {
+        let global =
+            MEDIA_KINDS.map(|kind| settings.str(&format!("content.media.{kind}")).to_string());
+        let sites = settings
+            .all_overrides()
+            .into_iter()
+            .filter_map(|(pattern, name, value)| {
+                let kind = name
+                    .strip_prefix("content.media.")
+                    .filter(|k| MEDIA_KINDS.contains(k))?;
+                let rt_core::settings::Value::Str(device) = value else {
+                    return None;
+                };
+                Some((pattern, kind.to_string(), device))
+            })
+            .collect();
+        Self { global, sites }
+    }
+
+    /// Each kind's device for a page at `url` (empty: the site's own choice).
+    pub fn for_url(&self, url: &str) -> [(&'static str, &str); 3] {
+        let mut chosen = [0, 1, 2].map(|i| (MEDIA_KINDS[i], self.global[i].as_str()));
+        for (pattern, kind, device) in &self.sites {
+            if let Some(slot) = chosen.iter_mut().find(|(k, _)| k == kind)
+                && rt_core::url::pattern_matches(pattern, url)
+            {
+                slot.1 = device;
+            }
+        }
+        chosen
+    }
+}
+
+/// Browser → renderer: report the main frame's devices (`:media-devices`).
+pub const MEDIA_LIST_MESSAGE: &str = "rt.media-list";
+/// Renderer → browser: the page's devices, as JSON `[{kind, label}]`.
+pub const MEDIA_DEVICES_MESSAGE: &str = "rt.media-devices";
 
 /// Renderer → browser: a page's notification for the status bar; arguments
 /// are the title and the body.
@@ -74,6 +128,9 @@ thread_local! {
         RefCell::new(std::collections::HashMap::new());
     /// Each page context's function that stops its shares.
     static SHARE_STOPPERS: RefCell<Vec<(V8Context, V8Value)>> = const { RefCell::new(Vec::new()) };
+    static MEDIA: RefCell<MediaChoices> = RefCell::new(MediaChoices::default());
+    /// Each page context's media device helper, from [`MEDIA_JS`].
+    static MEDIA_HELPERS: RefCell<Vec<(V8Context, V8Value)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// JavaScript for the APIs a script must `@grant`, built on the private
@@ -96,10 +153,11 @@ fn granted_api(script: &Script) -> String {
 fn set_scripts(json: &str) {
     match serde_json::from_str::<Scripts>(json) {
         Ok(scripts) => {
-            let (generation, rocker, messages) = (
+            let (generation, rocker, messages, media) = (
                 scripts.generation,
                 scripts.rocker_gestures,
                 scripts.notification_messages,
+                scripts.media.clone(),
             );
             let current = SCRIPTS.with(|s| {
                 let mut state = s.borrow_mut();
@@ -109,6 +167,9 @@ fn set_scripts(json: &str) {
             if current == generation {
                 ROCKER.with(|r| r.set(rocker));
                 NOTIFICATION_MESSAGES.with(|n| n.set(messages));
+                if MEDIA.with(|m| m.replace(media.clone())) != media {
+                    apply_media();
+                }
             }
         }
         Err(e) => tracing::warn!("bad greasemonkey scripts from the browser: {e}"),
@@ -254,6 +315,7 @@ wrap_render_process_handler! {
             if !may_send {
                 if !url.starts_with("riptide://") {
                     install_share_watch(context);
+                    install_media(context, &url);
                     run_greasemonkey(frame, context, &url);
                     if ROCKER.with(std::cell::Cell::get) {
                         install_rocker(context);
@@ -326,6 +388,10 @@ wrap_render_process_handler! {
             }
             if name == SHARE_STOP_MESSAGE {
                 stop_shares(frame);
+                return 1;
+            }
+            if name == MEDIA_LIST_MESSAGE {
+                list_media(frame);
                 return 1;
             }
             if name == GM_VALUES_MESSAGE {
@@ -508,6 +574,8 @@ fn install_notification_messages(context: &V8Context) {
 /// returns the function `:share-stop` calls. Stopping a track doesn't fire
 /// `ended` on the page's own track, so it's dispatched for the page's
 /// "stopped sharing" handling, and stops by the page itself are polled for.
+const MEDIA_JS: &str = include_str!("media_devices.js");
+
 const SHARE_JS: &str = r#"(function (report) {
   const streams = new Set();
   let timer = 0, last = "";
@@ -566,6 +634,95 @@ fn install_share_watch(context: &V8Context) {
             stoppers.push((context.clone(), stop));
         });
     }
+}
+
+/// [`MEDIA_JS`] in a page, told the devices picked for its site.
+fn install_media(context: &V8Context, url: &str) {
+    let mut handler = RtMediaHandler::new();
+    let helper = install_with(
+        context,
+        MEDIA_JS,
+        "riptide:media",
+        v8_value_create_function(Some(&CefString::from("report")), Some(&mut handler)),
+    );
+    let Some(helper) = helper.filter(|h| h.is_object() != 0) else {
+        return;
+    };
+    MEDIA_HELPERS.with(|h| {
+        let mut helpers = h.borrow_mut();
+        helpers.retain(|(c, _)| c.is_valid() != 0);
+        helpers.push((context.clone(), helper.clone()));
+    });
+    let choices = MEDIA.with(|m| m.borrow().clone());
+    set_media(context, &helper, &choices.for_url(url));
+}
+
+/// The choices changed: tell every page, which switches a running call.
+fn apply_media() {
+    let choices = MEDIA.with(|m| m.borrow().clone());
+    let helpers: Vec<(V8Context, V8Value)> = MEDIA_HELPERS.with(|h| {
+        let mut helpers = h.borrow_mut();
+        helpers.retain(|(c, _)| c.is_valid() != 0);
+        helpers.clone()
+    });
+    for (context, helper) in helpers {
+        let url = context
+            .frame()
+            .map(|f| CefString::from(&f.url()).to_string())
+            .unwrap_or_default();
+        set_media(&context, &helper, &choices.for_url(&url));
+    }
+}
+
+fn set_media(context: &V8Context, helper: &V8Value, chosen: &[(&str, &str); 3]) {
+    call_helper(
+        context,
+        helper,
+        "set",
+        chosen.iter().map(|(kind, name)| [*kind, *name]),
+    );
+}
+
+/// `:media-devices`: the frame's contexts report their devices.
+fn list_media(frame: &Frame) {
+    let id = CefString::from(&frame.identifier()).to_string();
+    let helpers: Vec<(V8Context, V8Value)> = MEDIA_HELPERS.with(|h| {
+        h.borrow()
+            .iter()
+            .filter(|(c, _)| {
+                c.is_valid() != 0
+                    && c.frame()
+                        .is_some_and(|f| CefString::from(&f.identifier()).to_string() == id)
+            })
+            .cloned()
+            .collect()
+    });
+    for (context, helper) in helpers {
+        call_helper(&context, &helper, "list", std::iter::once([]));
+    }
+}
+
+/// Call `helper.method(...args)` in `context` once per argument list.
+fn call_helper<'a, const N: usize>(
+    context: &V8Context,
+    helper: &V8Value,
+    method: &str,
+    calls: impl Iterator<Item = [&'a str; N]>,
+) {
+    if context.enter() == 0 {
+        return;
+    }
+    if let Some(function) = helper.value_bykey(Some(&CefString::from(method))) {
+        for args in calls {
+            let args: Vec<Option<V8Value>> = args
+                .iter()
+                .map(|a| v8_value_create_string(Some(&CefString::from(*a))))
+                .collect();
+            let mut this = helper.clone();
+            function.execute_function(Some(&mut this), Some(&args));
+        }
+    }
+    context.exit();
 }
 
 /// `:share-stop` for one frame: run the stop function of each of its contexts.
@@ -666,6 +823,28 @@ wrap_v8_handler! {
                 return 1;
             };
             send_to_browser(SHARE_MESSAGE, &[&CefString::from(&surface.string_value())]);
+            1
+        }
+    }
+}
+
+// The media device helper's way to the browser.
+wrap_v8_handler! {
+    struct RtMediaHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            let Some(json) = arguments.and_then(|a| a.first().cloned().flatten()).filter(|v| v.is_string() != 0) else {
+                return 1;
+            };
+            send_to_browser(MEDIA_DEVICES_MESSAGE, &[&CefString::from(&json.string_value())]);
             1
         }
     }
@@ -846,6 +1025,36 @@ mod tests {
     }
 
     #[test]
+    fn media_choices_take_the_last_matching_site_over_the_global_one() {
+        let mut settings = rt_core::settings::Settings::default();
+        let str = |s: &str| rt_core::settings::Value::Str(s.into());
+        settings.set("content.media.speaker", str("Desk")).unwrap();
+        settings
+            .set_for(
+                "https://meet.example",
+                "content.media.microphone",
+                str("USB"),
+            )
+            .unwrap();
+        settings
+            .set_for("*.example", "content.media.microphone", str("Headset"))
+            .unwrap();
+        let choices = MediaChoices::from_settings(&settings);
+        assert_eq!(
+            choices.for_url("https://meet.example/abc"),
+            [
+                ("camera", ""),
+                ("microphone", "Headset"),
+                ("speaker", "Desk")
+            ]
+        );
+        assert_eq!(
+            choices.for_url("https://other.test/"),
+            [("camera", ""), ("microphone", ""), ("speaker", "Desk")]
+        );
+    }
+
+    #[test]
     fn an_older_script_list_never_replaces_a_newer_one() {
         let mut state = (2, vec![script("new")]);
         apply_scripts(
@@ -855,6 +1064,7 @@ mod tests {
                 scripts: vec![script("old")],
                 rocker_gestures: false,
                 notification_messages: false,
+                media: MediaChoices::default(),
             },
         );
         assert_eq!(state.1[0].name, "new");
@@ -865,6 +1075,7 @@ mod tests {
                 scripts: vec![script("newer")],
                 rocker_gestures: false,
                 notification_messages: false,
+                media: MediaChoices::default(),
             },
         );
         assert_eq!((state.0, state.1[0].name.as_str()), (3, "newer"));
@@ -894,6 +1105,7 @@ mod tests {
                 scripts: vec![script("b")],
                 rocker_gestures: false,
                 notification_messages: false,
+                media: MediaChoices::default(),
             },
         );
         assert_eq!(state.1[1].values, values);

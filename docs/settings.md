@@ -100,6 +100,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.javascript.log_message.levels` | string[] | `[]` | Console messages from pages shown in the status bar and :messages, by level: debug, info, warning, error (can be set per site) |
 | `content.local_content_can_access_file_urls` | boolean | `false` | Let file:// pages read other local files, which a downloaded page could misuse (after a restart) |
 | `content.media.audio_capture` | ask \| true \| false | `ask` | Let sites use your microphone: ask, true or false |
+| `content.media.camera` | string | `` | The camera sites get, by the name :media-devices shows (empty: the site's own choice); set it per site, as :media-devices does |
+| `content.media.microphone` | string | `` | The microphone sites get, by the name :media-devices shows (empty: the site's own choice) |
+| `content.media.speaker` | string | `` | The speaker sites play sound on, by the name :media-devices shows (empty: the site's own choice) |
 | `content.media.video_capture` | ask \| true \| false | `ask` | Let sites use your camera: ask, true or false |
 | `content.mouse_lock` | ask \| true \| false | `ask` | Let sites lock your mouse pointer, as games do: ask, true or false |
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
