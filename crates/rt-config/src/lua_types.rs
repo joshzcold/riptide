@@ -484,7 +484,8 @@ function rt.ui.float(opts) end
 
 ---CSS for riptide's tab bar, status bar, overlay, floats and panels, like
 ---`ui.css` but kept by riptide: each call replaces this plugin's last one, and
----nil or "" removes it. `ui.css` comes after, so it wins.
+---nil or "" removes it. `ui.css` comes after, so it wins. A plugin needs the
+---`ui` permission.
 ---@param css string?
 function rt.ui.css(css) end
 

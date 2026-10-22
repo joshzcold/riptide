@@ -166,7 +166,7 @@ body.prompt-permission { --prompt-accent: #e06c75; }
 body.prompt-download { --prompt-accent: #98c379; }
 ```
 
-Plugins add CSS the same way with `rt.ui.css(css)`, which needs no permission. A plugin's stylesheet also reaches floats and panels, replaces the one it set before, and goes away with `rt.ui.css(nil)` or when the plugin is no longer loaded. `ui.css` comes after every plugin's, so your rules win:
+Plugins add CSS the same way with `rt.ui.css(css)`, with the `ui` permission. A plugin's stylesheet also reaches floats and panels, replaces the one it set before, and goes away with `rt.ui.css(nil)` or when the plugin is no longer loaded. `ui.css` comes after every plugin's, so your rules win:
 
 ```lua
 rt.ui.css(".tab { border-radius: 6px 6px 0 0; }")

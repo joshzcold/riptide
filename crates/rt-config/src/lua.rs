@@ -298,7 +298,12 @@ function rt._sandbox(name, permissions, require_fn)
   api.ui.float = rt._float_for(name)
   api.ui.panel = rt._panel_for(name)
   api.ui.page = rt._page_for(name)
-  api.ui.css = rt._css_for(name)
+  -- The bars show riptide's questions; CSS could hide or reword one.
+  if permissions.ui then
+    api.ui.css = rt._css_for(name)
+  else
+    api.ui.css = function() error("rt.ui.css needs the ui permission", 2) end
+  end
   api.secret = secret_for(name)
   if permissions.pages and #permissions.pages > 0 then
     api.page = page_for(name)
@@ -3263,18 +3268,21 @@ rt.command("fire", function() rt.spawn("notify-send 'hi there'") end)
     fn ui_css_names_who_set_it() {
         let dir = std::env::temp_dir().join(format!("rt-lua-ui-css-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("plugins/painter/plugin")).unwrap();
-        std::fs::write(
-            dir.join("plugins/painter/plugin/painter.lua"),
-            "rt.ui.css('.tab { color: red; }')",
-        )
-        .unwrap();
+        for name in ["painter", "smudger"] {
+            std::fs::create_dir_all(dir.join(format!("plugins/{name}/plugin"))).unwrap();
+            std::fs::write(
+                dir.join(format!("plugins/{name}/plugin/{name}.lua")),
+                "rt.ui.css('.tab { color: red; }')",
+            )
+            .unwrap();
+        }
         let dir_text = dir.display().to_string();
         std::fs::write(
             dir.join("config.lua"),
             format!(
                 r##"
 rt.pack.add({{ dir = [[{dir_text}/plugins/painter]] }})
+rt.pack.add({{ dir = [[{dir_text}/plugins/smudger]] }})
 rt.command("paint", function() rt.ui.css("#bar {{ color: blue; }}") end)
 rt.command("unpaint", function() rt.ui.css() end)
 rt.command("bad-css", function() rt.ui.css({{}}) end)
@@ -3303,11 +3311,30 @@ rt.command("bad-css", function() rt.ui.css({{}}) end)
             }]
         );
         assert!(run_command("bad-css", "", &ctx).is_err());
+        // A plugin needs the ui permission: the bars show riptide's questions.
         let none = crate::plugins::Permissions::default();
+        let refused = load_plugin(
+            "smudger",
+            &dir.join("plugins/smudger"),
+            &none,
+            false,
+            &[],
+            &ctx,
+        );
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains("needs the ui permission")),
+            "{refused:?}"
+        );
+        let ui = crate::plugins::Permissions {
+            ui: true,
+            ..Default::default()
+        };
         let actions = load_plugin(
             "painter",
             &dir.join("plugins/painter"),
-            &none,
+            &ui,
             false,
             &[],
             &ctx,

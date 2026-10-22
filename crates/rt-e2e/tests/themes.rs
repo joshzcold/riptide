@@ -128,9 +128,21 @@ fn plugins_style_the_bars_with_rt_ui_css_under_ui_css() {
             "rt.ui.css('#bar { background: rgb(1, 2, 3) !important; color: rgb(4, 5, 6) !important; }')\n\
              rt.command('painter-off', function() rt.ui.css(nil) end)",
         )
+        .file(
+            "scratch-plugins/painter/riptide-plugin.toml",
+            "[permissions]\nui = true\n",
+        )
         .file("config/ui.css", "#bar { color: rgb(7, 8, 9) !important; }")
         .lua("rt.pack.add({ dir = rt.config_dir .. '/../scratch-plugins/painter' })")
         .start("page.html");
+    let s = b.wait_until("painter asks", |s| s.mode == "yesno");
+    let message = s
+        .prompt
+        .as_ref()
+        .map(|p| p["message"].to_string())
+        .unwrap_or_default();
+    assert!(message.contains("disguise what riptide asks"), "{message}");
+    b.keys("y");
     let bar = |b: &Browser| {
         b.eval_bar(
             "statusbar",

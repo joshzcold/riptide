@@ -98,6 +98,7 @@ Plugins run in a sandbox. Without asking, a plugin can react to events, bind key
 | `keys` | hear the keys you press that aren't bound to anything (the `key` event), and keep them from the page |
 | `history` | read your history, bookmarks and quickmarks (`rt.history`, `rt.bookmarks`, `rt.quickmarks`) |
 | `marks` | change your bookmarks and quickmarks (`rt.set_bookmarks`, `rt.set_quickmarks`); the files as they were are kept with `.prev` added to their names |
+| `ui` | style riptide's own bars, questions, floats and panels (`rt.ui.css`); the status bar shows riptide's questions, such as a site asking for your camera, so its CSS could disguise one |
 | `network = ["host", …]` | connect to these hosts; `localhost` or `127.0.0.1` lets its pages reach programs on your computer, on any port and over plain `http://` and `ws://` |
 | `pages = ["*.example.com", …]` | type and fill logins into pages on these sites (`rt.page`); `["*"]` is every site |
 | `frames = ["host", …]` | show these sites inside its own pages |
