@@ -303,11 +303,12 @@ function rt._sandbox(name, permissions, require_fn)
   -- Each plugin's stores are its own.
   api.store = function(store) return rt.store(name .. "--" .. (store or "data")) end
   if permissions.settings then env.c = c end
-  -- Events that can stop what riptide does need the permission for it.
+  -- Events that can stop what riptide does, or show every command's
+  -- arguments (the URLs and searches you type), need the permission for it.
   local on = api.on
   api.on = function(event, opts, fn)
-    if event == "command_before" and not permissions.commands then
-      error("command_before needs the commands permission", 2)
+    if (event == "command" or event == "command_before") and not permissions.commands then
+      error(event .. " needs the commands permission", 2)
     end
     if event == "key" and not permissions.keys then
       error("the key event needs the keys permission", 2)
@@ -3838,9 +3839,11 @@ end)
 -- A sandboxed plugin may only use it with the commands permission.
 local without = rt._sandbox("p", {}, require)
 assert(not pcall(without.rt.on, "command_before", function() end))
+assert(not pcall(without.rt.on, "command", function() end))
 assert(pcall(without.rt.on, "load_finished", function() end))
 local with = rt._sandbox("q", { commands = true }, require)
 assert(pcall(with.rt.on, "command_before", function() end))
+assert(pcall(with.rt.on, "command", function() end))
 "#,
         )
         .unwrap();
