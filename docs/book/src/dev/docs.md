@@ -1,6 +1,6 @@
 # Writing documentation
 
-This book is the documentation. It's built with [mdBook](https://rust-lang.github.io/mdBook/) from `docs/book/` and published to <https://joshzcold.github.io/riptide/> on every push to `main`. A change that users or contributors would notice updates the book in the same commit.
+This book is the documentation. It's built with [mdBook](https://rust-lang.github.io/mdBook/) from `docs/book/` and published to <https://joshzcold.github.io/riptide/> on every push to `main`. Its title says the release it was built from, or how far past one (`Riptide 0.7.0+3 (6acf73e)`); `scripts/mdbook.sh` works it out with `git describe`. A change that users or contributors would notice updates the book in the same commit.
 
 ## Where things go
 

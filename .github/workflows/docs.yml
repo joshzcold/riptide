@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The tags, for the version in the book's title.
+          fetch-depth: 0
       - name: Build the book
         run: scripts/mdbook.sh build docs/book
       - name: Check external links

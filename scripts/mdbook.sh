@@ -18,6 +18,18 @@ expected_sha512() {
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 
+# The book's title says which release it was built from, or how far past one:
+# "Riptide 0.7.0", or "Riptide 0.7.0+3 (6acf73e)". Without tags it's left alone.
+if [[ -z ${MDBOOK_BOOK__TITLE:-} ]] &&
+    described=$(git describe --tags --match 'v[0-9]*' --long 2>/dev/null) &&
+    [[ $described =~ ^v(.+)-([0-9]+)-g([0-9a-f]+)$ ]]; then
+    if [[ ${BASH_REMATCH[2]} == 0 ]]; then
+        export MDBOOK_BOOK__TITLE="Riptide ${BASH_REMATCH[1]}"
+    else
+        export MDBOOK_BOOK__TITLE="Riptide ${BASH_REMATCH[1]}+${BASH_REMATCH[2]} (${BASH_REMATCH[3]})"
+    fi
+fi
+
 if command -v mdbook >/dev/null && [[ $(mdbook --version) == "mdbook v$VERSION" ]]; then
     exec mdbook "$@"
 fi
