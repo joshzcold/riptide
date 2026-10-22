@@ -277,11 +277,11 @@ pub fn request_context() -> Option<RequestContext> {
     })
     .unwrap_or((None, false));
     // Outside the shell borrow: setting preferences can call back into us.
-    if created
-        && let Some(context) = &context
-        && let Some(settings) = shell::with(|s| s.engine.settings().clone())
-    {
-        crate::content::apply_prefs(context, &settings);
+    if created && let Some(context) = &context {
+        crate::scheme::install_in(context);
+        if let Some(settings) = shell::with(|s| s.engine.settings().clone()) {
+            crate::content::apply_prefs(context, &settings);
+        }
     }
     context
 }

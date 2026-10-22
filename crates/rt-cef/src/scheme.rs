@@ -126,6 +126,25 @@ pub fn install() {
     }
 }
 
+/// The same pages for the private windows' profile, which doesn't share the
+/// global one's handlers.
+pub fn install_in(context: &RequestContext) {
+    let mut factory = RtSchemeFactory::new();
+    context.register_scheme_handler_factory(
+        Some(&CefString::from(SCHEME)),
+        None,
+        Some(&mut factory),
+    );
+    if TEST_PAGES.get().is_some() {
+        let mut pages = RtTestPagesFactory::new();
+        context.register_scheme_handler_factory(
+            Some(&CefString::from("http")),
+            Some(&CefString::from(TEST_HOST)),
+            Some(&mut pages),
+        );
+    }
+}
+
 /// `riptide --plugin-test`: the plugin's `test/` folder, which its specs
 /// open as ordinary web pages at `http://plugin-test.localhost/<path>`.
 pub static TEST_PAGES: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
