@@ -96,7 +96,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Ad blocking (M8)
 
-- Scriptlets in frames from another site (separate DevTools targets; needs `Target.setAutoAttach`).
+- Scriptlets in a frame from another host of the page's own site (`ads.example.com` in `www.example.com`): it shares the page's process, so it isn't attached, and the page's script only runs for the page's host.
 
 ### Tabs, windows and sessions
 

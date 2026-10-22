@@ -4,3 +4,6 @@
 ||127.0.0.1^*/ad-stand-in.js$script,redirect=noop.js
 ||127.0.0.1^*/beacon.gif$image,redirect=1x1.gif
 $removeparam=utm_source
+! And in a frame from another site (scriptframe-inner.html on localhost).
+localhost##+js(set-constant, rtFrameAdsEnabled, false)
+localhost##+js(aopr, rtFrameDetectAdblock)

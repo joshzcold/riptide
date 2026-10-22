@@ -1,0 +1,8 @@
+<!doctype html><title>scriptframe</title>
+<iframe id="f"></iframe>
+<script>
+  // The same server as localhost: another site, in a process of its own.
+  const other = (page) => location.href.replace("127.0.0.1", "localhost").replace(/[^/]*$/, page);
+  document.getElementById("f").src = other("scriptframe-inner.html");
+  addEventListener("message", (e) => { document.title = e.data; });
+</script>
