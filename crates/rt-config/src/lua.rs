@@ -244,7 +244,7 @@ local SAFE = {
 local GATED = {
   spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings",
   history = "history", bookmarks = "history", quickmarks = "history",
-  set_bookmarks = "history", set_quickmarks = "history",
+  set_bookmarks = "marks", set_quickmarks = "marks",
 }
 -- Defined further down, with rt.ui and rt.page.
 local ui_for, page_for, secret_for
@@ -452,9 +452,12 @@ function rt.set_bookmarks(list, fn)
 end
 function rt.set_quickmarks(list, fn)
   local marks = marks_arg(list, "name", "url", "rt.set_quickmarks")
+  local names = {}
   for i, mark in ipairs(marks) do
     if mark[2] == "" then error(("rt.set_quickmarks: entry %d needs a url"):format(i), 2) end
     if mark[1]:find("%s") then error(("rt.set_quickmarks: entry %d's name has a space"):format(i), 2) end
+    if names[mark[1]] then error(("rt.set_quickmarks: %q is named twice"):format(mark[1]), 2) end
+    names[mark[1]] = true
   end
   rt._write("quickmarks", marks, page_result(fn or function() end))
 end

@@ -39,6 +39,20 @@ fn save_to(path: &Option<PathBuf>, lines: impl Iterator<Item = String>) -> std::
     }
 }
 
+/// Copy `path` to `<path>.prev` before a plugin replaces it, so a bad
+/// replace can be undone by hand. Nothing to keep if it doesn't exist yet.
+fn keep_previous(path: &Option<PathBuf>) -> std::io::Result<()> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut previous = path.clone().into_os_string();
+    previous.push(".prev");
+    std::fs::copy(path, PathBuf::from(previous)).map(|_| ())
+}
+
 #[derive(Debug)]
 pub struct Quickmarks {
     /// `None` when the file exists but could not be read; see [`save_to`].
@@ -114,8 +128,10 @@ impl Quickmarks {
         Ok(removed)
     }
 
-    /// Replace every quickmark with `marks`, as (name, URL), in order.
+    /// Replace every quickmark with `marks`, as (name, URL), in order; the
+    /// file as it was is kept as `quickmarks.prev`.
     pub fn replace(&mut self, marks: Vec<(String, String)>) -> std::io::Result<()> {
+        keep_previous(&self.path)?;
         self.marks = marks;
         self.save()
     }
@@ -185,8 +201,10 @@ impl Bookmarks {
         Ok(removed)
     }
 
-    /// Replace every bookmark with `marks`, as (URL, title), in order.
+    /// Replace every bookmark with `marks`, as (URL, title), in order; the
+    /// file as it was is kept with `.prev` added to its name.
     pub fn replace(&mut self, marks: Vec<(String, String)>) -> std::io::Result<()> {
+        keep_previous(&self.path)?;
         self.marks = marks
             .into_iter()
             .map(|(url, title)| (url, title.trim().to_string()))
@@ -277,5 +295,24 @@ mod tests {
         );
         assert!(b.remove("https://x.org/").unwrap());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "https://y.org/\n");
+    }
+
+    #[test]
+    fn replacing_keeps_the_file_as_it_was() {
+        let dir = TempDir::new("replace");
+        let path = dir.0.join("quickmarks");
+        std::fs::write(&path, "old https://old.example/\n").unwrap();
+        let mut marks = Quickmarks::load(&path).unwrap();
+        marks
+            .replace(vec![("new".into(), "https://new.example/".into())])
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.0.join("quickmarks.prev")).unwrap(),
+            "old https://old.example/\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap().trim(),
+            "new https://new.example/"
+        );
     }
 }

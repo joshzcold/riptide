@@ -224,13 +224,15 @@ function rt.bookmarks(fn) end
 function rt.quickmarks(fn) end
 
 ---Replace every bookmark with `bookmarks`, in order, and save them:
----`fn(true)`, or `fn(nil, why)`. Plugins need the `history` permission.
+---`fn(true)`, or `fn(nil, why)`. The file as it was is kept with `.prev`
+---added to its name. Plugins need the `marks` permission.
 ---@param bookmarks { url: string, title?: string }[]
 ---@param fn? fun(ok: true|nil, err: string|nil)
 function rt.set_bookmarks(bookmarks, fn) end
 
 ---Replace every quickmark with `quickmarks`, in order, and save them:
----`fn(true)`, or `fn(nil, why)`. Plugins need the `history` permission.
+---`fn(true)`, or `fn(nil, why)`. The file as it was is kept as
+---`quickmarks.prev`. Plugins need the `marks` permission.
 ---@param quickmarks { name: string, url: string }[]
 ---@param fn? fun(ok: true|nil, err: string|nil)
 function rt.set_quickmarks(quickmarks, fn) end
