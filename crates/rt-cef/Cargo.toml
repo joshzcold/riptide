@@ -19,7 +19,6 @@ rt-config.workspace = true
 rt-storage.workspace = true
 cef.workspace = true
 arboard.workspace = true
-keyring.workspace = true
 keyring-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -30,7 +29,14 @@ tracing.workspace = true
 libc.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store.workspace = true
 linux-keyutils-keyring-store.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store.workspace = true
 
 [lints]
 workspace = true
