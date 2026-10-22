@@ -2,7 +2,7 @@
 
 A keyboard-driven, vim-like browser built on [CEF](https://github.com/chromiumembedded/cef) (modern Chromium) and controlled entirely from Rust.
 
-This file tracks what's left to do. Finished work is one line per milestone below: the [user guide](book/src/introduction.md) documents what it does, the [developer guide](book/src/dev/architecture.md) how it's built and [CEF pitfalls](book/src/dev/cef-pitfalls.md) what it taught us, and `git log -p docs/PLAN.md` keeps the old notes (this file was condensed on 2026-10-09).
+This file tracks what's left to do. Finished work is one line per milestone below: the [user guide](book/src/introduction.md) documents what it does, the [developer guide](book/src/dev/architecture.md) how it's built and [CEF pitfalls](book/src/dev/cef-pitfalls.md) what it taught us, and `git log -p docs/PLAN.md` keeps the old notes (this file was condensed on 2026-10-09 and tidied on 2026-10-22).
 
 ## Goals
 
@@ -61,7 +61,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M15 | `riptide ':cmd' url` hands over to the running instance (Unix) | guide/terminal.md |
 | M16 | `:help` generated from the registries, `:version` | guide/terminal.md |
 | M17 | Spell checking with keyboard suggestions, `:spell-install` | guide/pages.md |
-| M18 | Versions, changelog, CI on three platforms, one-click and nightly releases (v0.1.0, v0.2.0, v0.3.0, v0.4.0) | dev/releasing.md |
+| M18 | Versions, changelog, CI on three platforms, nightlies, and a release pull request kept up to date with `main` (v0.1.0 to v0.7.0) | dev/releasing.md |
 | M19 | Command and setting sweep: tabs, status bar, key hints, completion, hints, URLs, downloads, content, input, sessions, tools, config commands | the reference pages |
 | M20 | Themes, fonts, `ui.css`, user themes and importers, bars sized by their pages, floating overlay and prompts | configuration/themes.md |
 | M21 | The settings page: Settings, Keys (where each binding came from and what it replaced, `:map`), Sites, Plugins and Extensions tabs | configuration/files.md |
@@ -70,7 +70,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M24 | The documentation website | dev/docs.md |
 | M25 | Permission questions belong to their tab, with site, icons and buttons | guide/prompts.md |
 | M26 | The e2e harness (`rt-e2e`), unit tests in the CEF layer, linters (clippy lints, cargo-deny, ShellCheck, actionlint, typos, Biome) | dev/testing.md |
-| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events (`command_before` and `key` can cancel), keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
+| M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events (`command_before` and `key` can cancel; both, and `command`, need a permission), keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
 | M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, the focused pane's border, layouts in sessions, crash notices and extension popups per pane | guide/tabs.md |
 
@@ -78,37 +78,32 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ## Open work
 
-### Next up (as of 2026-10-20)
+### Next up (as of 2026-10-22)
 
-1. **Pick from the open work below.**
+1. **The Widevine licensing review** (see Risks): a decision, not code.
+2. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
+3. **Small features:** a default key binding for spell checking, favicons kept in sessions, the version on the documentation site.
+4. **Scriptlets in same-site frames from another host** (Ad blocking, below).
+5. **macOS and Windows packages** (M10), the largest milestone left.
 
 ### Plugins (M27)
 
-- **Events** (designed 2026-10-21; per-site keys, `command_before` and `key` are done). A hook cancels or swallows by returning `true`.
-  - The `command` event needs the `commands` permission too (2026-10-22), since its arguments include the URLs and searches you type.
 - **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
 - **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.
 
 ### Extensions (M28)
 
-- Popups and keyboard commands can't see riptide's tabs: CEF lists only Chrome-style tabs in `chrome.tabs`. Needs a CEF change, or an upstream issue.
 - Not checked yet: real autofill with a vault, passkeys, `chrome.commands` shortcuts.
 
 ### Ad blocking (M8)
 
 - Scriptlets in a frame from another host of the page's own site (`ads.example.com` in `www.example.com`): it shares the page's process, so it isn't attached, and the page's script only runs for the page's host.
 
-### Tabs, windows and sessions
-
-- Favicons aren't kept in sessions (they're fetched again on load).
-
 ### Calls (M22)
 
-- Check by hand on a real desktop: fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open.
+- **Check by hand on a real desktop:** fullscreen, Chrome's accelerators and context menu in call windows, keys while the picker is open, VA-API and GPU background blur on a stock distribution, and a matrix of Meet, Zoom, Teams, Jitsi, Slack huddles, Discord and Whereby (camera, microphone, screen, window and tab sharing, calls in a background tab).
 - Switching the shared source mid-call; shared tabs highlighted in the tab bar.
 - `:media-devices` to pick the camera, microphone and speaker per site; the permission question naming the device.
-- VA-API decode and encode, and GPU background blur, on a stock distribution.
-- A manual matrix: Meet, Zoom, Teams, Jitsi, Slack huddles, Discord, Whereby — camera, microphone, screen, window and tab sharing, and calls in a background tab.
 - `cm` for a call in another window.
 
 ### Packaging (M10)
@@ -116,22 +111,32 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - macOS: an app bundle, signing and notarization. Windows: an installer, and named pipes for the remote command (each start is a new instance there).
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
-### Smaller gaps
+### Bugs
 
-- Widevine: never updated after the first download, not removed when turned off, and protected playback against a real stream isn't verified. **The licensing review is still open** (Google's terms for third-party browsers, GPL-3.0 loading a proprietary CDM).
-- Spell checking: a default key binding, and hints for misspelled words.
-- `RIPTIDE_FIFO` is read when the userscript exits, not live.
-- Greasemonkey: scripts run in the page's main world; `GM_xmlhttpRequest` has no binary responses.
 - Downloads from private windows go to the usual folder and list.
-- The documentation site doesn't show the version it was built from.
-- On CI's runners since 2026-10-21, the smoke test's first hint click after startup often doesn't reach the page, on commits that passed there before too (seen with 0.4's main, `f704b7d`). The smoke test hints again; find out what changed on the runners.
-- Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop. Check there and on Wayland.
-- The crash tests don't cover a native abort in the browser process.
+- Widevine is never updated after the first download, isn't removed when turned off, and protected playback against a real stream isn't verified.
+
+### Small features
+
+- Spell checking: a default key binding, and hints for misspelled words.
+- Favicons kept in sessions (today they're fetched again on load).
+- The documentation site showing the version it was built from.
+
+### Test reliability
+
+- Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop.
 - Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
+- Since 2026-10-21 on CI's runners, the smoke test's first hint click after startup is often lost; the smoke test hints again.
+- The crash tests don't cover a native abort in the browser process.
+
+### Upkeep
+
 - `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
 
 ### Not planned
 
+- Extensions seeing riptide's tabs in `chrome.tabs`: CEF lists only Chrome-style tabs, so it needs a CEF change (see Risks).
+- Reading `RIPTIDE_FIFO` live (it's read when the userscript exits), Greasemonkey scripts in an isolated world, and binary `GM_xmlhttpRequest` responses, until someone needs them.
 - Proprietary codecs (H.264/AAC): they need a CEF source build, which works against goal 1 and raises patent questions. Revisit only if VP9/AV1 isn't enough, preferring a documented "build your own CEF" path.
 
 ---
@@ -155,11 +160,12 @@ Unit tests in every crate, end-to-end tests in `rt-e2e` (a browser per test over
 | Wayland support in CEF | X11 first; track CEF's Ozone/Wayland status |
 | Large downloads (~150 MB) | Expected for any CEF application; documented |
 | DRM: Widevine only for VP9/AV1 | Opt-in Widevine (M11); H.264/AAC not planned |
+| Widevine licensing: Google's terms for third-party browsers, and GPL-3.0 loading a proprietary CDM | **Review still open**; Widevine stays opt-in and downloaded by the user meanwhile |
 | Background traffic to Google services | Reviewed in M8; re-check on CEF upgrades |
 | Plugins and extensions run other people's code | Sandbox, declared permissions asked for, keyring-only secrets, pinned commits reviewed before updating |
 
 ## Open questions
 
-1. **Plugin compatibility across releases:** `riptide = ">=0.4"` in a manifest handles new keys; should riptide-plugins keep a branch per riptide release?
+None right now. (Plugin compatibility: plugins declare the riptide versions they need, such as `riptide = ">=0.5"`; releases come too often for a riptide-plugins branch per release.)
 
 > riptide is GPL-3.0 (`LICENSE`). Dependency licenses must stay GPL-compatible; `cargo-deny` checks them.
