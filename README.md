@@ -93,4 +93,4 @@ Riptide owes its design to [qutebrowser](https://qutebrowser.org/) by Florian Br
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE), with an additional permission under section 7 for loading a content decryption module such as Widevine at run time ([LICENSE-EXCEPTION](LICENSE-EXCEPTION)).

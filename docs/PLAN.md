@@ -80,9 +80,8 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-22)
 
-1. **The Widevine licensing review** (see Risks): a decision, not code.
-2. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
-3. **macOS and Windows packages** (M10), the largest milestone left.
+1. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
+2. **macOS and Windows packages** (M10), the largest milestone left.
 
 ### Plugins (M27)
 
@@ -144,7 +143,7 @@ Unit tests in every crate, end-to-end tests in `rt-e2e` (a browser per test over
 | Wayland support in CEF | X11 first; track CEF's Ozone/Wayland status |
 | Large downloads (~150 MB) | Expected for any CEF application; documented |
 | DRM: Widevine only for VP9/AV1 | Opt-in Widevine (M11); H.264/AAC not planned |
-| Widevine licensing: Google's terms for third-party browsers, and GPL-3.0 loading a proprietary CDM | **Review still open**; Widevine stays opt-in and downloaded by the user meanwhile |
+| Widevine licensing: Google's terms for third-party browsers, and GPL-3.0 loading a proprietary CDM | Decided 2026-10-22: opt-in, off by default, never bundled; the setting, guide and download message say Google provides it under its own terms; `LICENSE-EXCEPTION` allows loading a CDM. Revisit before the macOS and Windows packages, where signing (VMP) needs Google |
 | Background traffic to Google services | Reviewed in M8; re-check on CEF upgrades |
 | Plugins and extensions run other people's code | Sandbox, declared permissions asked for, keyring-only secrets, pinned commits reviewed before updating |
 

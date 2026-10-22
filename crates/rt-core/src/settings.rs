@@ -1339,7 +1339,7 @@ pub static SETTINGS: &[SettingDef] = &[
         "content.widevine",
         Kind::Bool,
         Value::Bool(false),
-        "Allow Widevine DRM: Chromium downloads Google's CDM (takes effect after a restart; turning it off deletes the CDM)"
+        "Allow Widevine DRM: Chromium downloads Google's CDM from Google, under Google's terms, which riptide doesn't distribute or license (after a restart; turning it off deletes the CDM)"
     ),
     def!(
         "content.widevine_update_interval",

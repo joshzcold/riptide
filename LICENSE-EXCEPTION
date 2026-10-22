@@ -1,0 +1,20 @@
+Additional permission under GNU GPL version 3 section 7
+
+riptide is free software under the GNU General Public License, version 3 or
+(at your option) any later version; see LICENSE.
+
+If you modify this Program, or any covered work, by linking or combining it
+with a content decryption module (CDM), such as Google's Widevine CDM, or a
+modified version of one, that is loaded at run time by the Chromium Embedded
+Framework or Chromium the Program runs on, the licensors of this Program grant
+you additional permission to convey the resulting work. Corresponding Source
+for a non-source form of such a combination does not need to include the
+source code of the content decryption module.
+
+This permission covers the content decryption module only. It doesn't change
+the terms of anything else, and it doesn't grant any right to the content
+decryption module itself, which its own supplier licenses under its own terms.
+riptide doesn't distribute a content decryption module.
+
+You may extend this permission to your modified versions of the Program, or
+remove it from them, as section 7 of the GNU GPL allows.

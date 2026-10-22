@@ -38,7 +38,7 @@ fn global_prefs(component_updates: bool) -> Vec<(&'static str, Value)> {
 pub fn watch_widevine_download(data_dir: std::path::PathBuf) {
     crate::shell::show_message(
         rt_core::engine::Level::Info,
-        "Downloading Widevine from Google; this takes a minute",
+        "Chromium is downloading Widevine from Google, under Google's terms; riptide doesn't distribute or license it",
     );
     std::thread::spawn(move || {
         for _ in 0..120 {

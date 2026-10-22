@@ -45,7 +45,7 @@ else
         ! -name 'bootstrap*.exe' -exec cp {} "$stage/" \;
     cp -R "$cef/locales" "$stage/"
 fi
-cp LICENSE README.md CHANGELOG.md "$stage/"
+cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
 cat >"$stage/EXPERIMENTAL.txt" <<EOF
 This $os build of riptide $version is experimental and does not run yet: it
 still needs an app bundle (macOS) or installer (Windows). Linux is the only
