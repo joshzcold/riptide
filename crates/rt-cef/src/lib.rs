@@ -25,6 +25,7 @@ mod hints;
 mod history;
 mod lua;
 mod marks;
+mod media;
 mod navigate;
 mod notifications;
 mod page;

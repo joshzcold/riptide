@@ -142,6 +142,13 @@ wrap_client! {
                 shell::show_message(Level::Info, format!("{origin}{title}{body}"));
                 return 1;
             }
+            if name == crate::renderer::MEDIA_DEVICES_MESSAGE {
+                let json = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
+                if let Some(browser) = &browser {
+                    crate::media::listed(browser.identifier(), &json);
+                }
+                return 1;
+            }
             if name == crate::renderer::SHARE_MESSAGE {
                 let surface = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
                 let started = shell::with_tab(browser, |s, index, _| {
@@ -287,10 +294,13 @@ wrap_keyboard_handler! {
             _os_event: Option<&mut OsEvent>,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
-            // Keys go to the window they were typed in.
+            // Keys go to the window they were typed in; keys riptide sends,
+            // such as a call's mute key in another window, don't switch it.
             if let Some(browser) = browser {
                 HAD_KEYS.with(|h| h.borrow_mut().insert(browser.identifier()));
-                shell::activate_browser(browser.identifier());
+                if !SENDING_TO_PAGE.with(Cell::get) && !crate::panes::focus_lent(browser.identifier()) {
+                    shell::activate_browser(browser.identifier());
+                }
             }
             event.is_some_and(|e| route_key_event(self.role, e)).into()
         }
@@ -303,7 +313,10 @@ wrap_keyboard_handler! {
             _os_event: *mut u8,
             _is_keyboard_shortcut: Option<&mut ::std::os::raw::c_int>,
         ) -> ::std::os::raw::c_int {
-            if let Some(browser) = browser {
+            if let Some(browser) = browser
+                && !SENDING_TO_PAGE.with(Cell::get)
+                && !crate::panes::focus_lent(browser.identifier())
+            {
                 shell::activate_browser(browser.identifier());
             }
             event.is_some_and(|e| route_key_event(self.role, e)).into()

@@ -9,7 +9,7 @@ use cef::*;
 use rt_core::Command;
 use rt_core::engine::Level;
 
-use crate::renderer::{GM_VALUES_MESSAGE, GREASEMONKEY_MESSAGE, Scripts};
+use crate::renderer::{GM_VALUES_MESSAGE, GREASEMONKEY_MESSAGE, MediaChoices, Scripts};
 use crate::shell;
 
 thread_local! {
@@ -20,6 +20,8 @@ thread_local! {
     static GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// `input.mouse.rocker_gestures`, handed to renderers with the scripts.
     static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// `content.media.*` devices, likewise.
+    static MEDIA: RefCell<MediaChoices> = RefCell::new(MediaChoices::default());
     /// `content.notifications.presenter = messages`, likewise.
     static NOTIFICATION_MESSAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// `@require` URLs already tried this session, so a failing one isn't
@@ -52,8 +54,11 @@ pub fn sync_settings(settings: &rt_core::settings::Settings) {
     let rocker = settings.bool("input.mouse.rocker_gestures");
     // Both take notifications from riptide's stand-in instead of Chromium.
     let messages = settings.str("content.notifications.presenter") != "auto";
+    let media = MediaChoices::from_settings(settings);
     let changed = ROCKER.with(|r| r.replace(rocker))
-        != rocker | (NOTIFICATION_MESSAGES.with(|n| n.replace(messages)) != messages);
+        != rocker
+            | (NOTIFICATION_MESSAGES.with(|n| n.replace(messages)) != messages)
+            | (MEDIA.with(|m| m.replace(media.clone())) != media);
     if changed {
         publish();
         send_to_renderers();
@@ -72,6 +77,7 @@ fn publish() -> u64 {
             scripts: s.borrow().clone(),
             rocker_gestures: ROCKER.with(std::cell::Cell::get),
             notification_messages: NOTIFICATION_MESSAGES.with(std::cell::Cell::get),
+            media: MEDIA.with(|m| m.borrow().clone()),
         })
         .unwrap_or_default()
     });

@@ -1,0 +1,41 @@
+<!doctype html>
+<title>call devices</title>
+<audio id="far" autoplay></audio>
+<script>
+  // A stand-in for a call: the camera and microphone sent over a loopback
+  // RTCPeerConnection, and the far end's sound playing in an autoplaying
+  // <audio>, as call sites do. Results land in window.__* for tests to poll.
+  window.call = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    const near = new RTCPeerConnection(), far = new RTCPeerConnection();
+    near.onicecandidate = (e) => e.candidate && far.addIceCandidate(e.candidate);
+    far.onicecandidate = (e) => e.candidate && near.addIceCandidate(e.candidate);
+    far.ontrack = (e) => { document.getElementById("far").srcObject = e.streams[0]; };
+    for (const track of stream.getTracks()) near.addTrack(track, stream);
+    await near.setLocalDescription();
+    await far.setRemoteDescription(near.localDescription);
+    await far.setLocalDescription();
+    await near.setRemoteDescription(far.localDescription);
+    window.__stream = stream;
+    window.__near = near;
+    window.__tracks = stream.getTracks();
+    return "on";
+  };
+  // What the call uses: the stream's and the sent tracks' devices, and the speaker.
+  window.inUse = async () => {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const sink = document.getElementById("far").sinkId;
+    window.__inUse = JSON.stringify({
+      stream: __stream.getTracks().map((t) => t.label).sort(),
+      sent: __near.getSenders().map((s) => s.track?.label).sort(),
+      speaker: devices.find((d) => d.kind === "audiooutput" && d.deviceId === sink)?.label ?? "",
+      // The site mutes the track it was given.
+      enabled: __near.getSenders().map((s) => s.track?.enabled),
+      live: __near.getSenders().every((s) => s.track?.readyState === "live"),
+    });
+  };
+  window.listDevices = async () => {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    window.__devices = JSON.stringify(devices.map((d) => [d.kind, d.label]));
+  };
+</script>

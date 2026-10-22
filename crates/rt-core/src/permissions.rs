@@ -182,12 +182,29 @@ pub fn decide(
     if !ask {
         return Decision::Allow;
     }
-    let mut labels: Vec<&str> = requested.iter().map(|f| f.label).collect();
+    let mut labels: Vec<String> = requested
+        .iter()
+        .map(|f| match chosen_device(f, origin, settings) {
+            Some(name) => format!("{} ({name})", f.label),
+            None => f.label.to_string(),
+        })
+        .collect();
     labels.dedup();
     if labels.is_empty() {
-        labels.push("use a browser feature");
+        labels.push("use a browser feature".into());
     }
+    let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
     Decision::Ask(format!("{origin} wants to {}", join(&labels)))
+}
+
+/// The camera or microphone `:media-devices` picked for the site, if any.
+fn chosen_device<'a>(feature: &Feature, origin: &str, settings: &'a Settings) -> Option<&'a str> {
+    let device = match feature.setting? {
+        "content.media.video_capture" => "content.media.camera",
+        "content.media.audio_capture" => "content.media.microphone",
+        _ => return None,
+    };
+    Some(settings.str_for(device, origin)).filter(|name| !name.is_empty())
 }
 
 /// One thing a site asks for, as a permission question shows it.
@@ -266,6 +283,32 @@ mod tests {
             d,
             Decision::Ask(
                 "https://meet.example wants to use your camera and use your microphone".into()
+            )
+        );
+    }
+
+    #[test]
+    fn the_question_names_the_device_picked_for_the_site() {
+        let mut settings = Settings::default();
+        settings
+            .set_for(
+                "https://meet.example",
+                "content.media.microphone",
+                Value::Str("USB Mic".into()),
+            )
+            .unwrap();
+        let d = decide(
+            "https://meet.example",
+            4 | 4096,
+            PROMPT_FEATURES,
+            &settings,
+            &Remembered::default(),
+        );
+        assert_eq!(
+            d,
+            Decision::Ask(
+                "https://meet.example wants to use your camera and use your microphone (USB Mic)"
+                    .into()
             )
         );
     }

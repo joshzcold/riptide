@@ -126,6 +126,18 @@ Some tiling window managers don't float it by themselves; it's titled "Picture i
 - **A flash of the call:** Chromium only takes keys in the tab that's showing, so the call tab shows for a moment and then the tab you were on comes back. The first time, it shows for under a second, while the page gets ready for keys.
 - **Another window:** riptide lends the call's window the keyboard for the key press, without raising it, then gives it back to yours. The message says "(another window)".
 
+### Choosing the camera, microphone and speaker
+
+`:media-devices` picks the camera, microphone and speaker the current site gets: pick which one, then the device. A call in progress switches at once, without rejoining, and the site's own mute button keeps working. The choice is kept for the site, so its next call starts on it, and the permission question names it ("wants to use your microphone (USB Mic)").
+
+Device names show once the site may use your camera or microphone, so pick them after the first call starts. "The site's own choice" hands it back to the site's own settings from its next call. The choices are the per-site settings `content.media.camera`, `content.media.microphone` and `content.media.speaker`, which hold the device's name; set one globally for every site:
+
+```lua
+c.content.media.microphone = "USB Mic"
+```
+
+Your choice wins over the device the site's own settings pick. A site that copies the camera into a stream of its own may still show the old camera in its preview while sending the new one.
+
 `tabs.tabs_are_windows = true` opens every tab, and every popup, in its own window and hides the tab bar, which suits tiling window managers that arrange windows themselves.
 
 `window.hide_decoration = true` asks the window manager for windows without a title bar or borders, which suits tiling window managers. It applies to windows opened after the change.
