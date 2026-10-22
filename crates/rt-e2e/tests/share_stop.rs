@@ -1,5 +1,5 @@
-//! A tab sharing a screen, window or tab is marked, and `:share-stop` ends
-//! the share from any tab.
+//! A tab sharing a screen, window or tab is marked, `:share-stop` ends the
+//! share from any tab, and `:share-switch` shares something else instead.
 #![cfg(unix)]
 
 use rt_e2e::Browser;
@@ -72,6 +72,48 @@ fn a_call_window_share_is_marked_and_stopped() {
     b.wait_until("the tab is marked as sharing", |s| {
         s.tab().sharing.as_deref() == Some("monitor")
     });
+    b.run("share-stop");
+    b.wait_eval("String(window.__share)", "ended");
+    b.wait_until("the mark goes", |s| s.tab().sharing.is_none());
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn share_switch_sends_a_new_pick_in_the_same_call() {
+    // The picker picks the screen by itself, every time.
+    let b = Browser::launch()
+        .arg("--auto-select-desktop-capture-source=Entire screen")
+        .toml("messages.timeout = 0\n")
+        .start("page.html");
+    let call = b.url("share-call.html");
+    b.run(&format!("open --call {call}"));
+    b.wait_until("the call window shows the page", |s| {
+        s.windows.len() == 2 && s.window().call && s.tab().is_loaded(&call)
+    });
+    b.wait_painted();
+    b.follow_hint("hint", |h| h.text.contains("share screen"));
+    b.wait_eval("String(window.__share)", "monitor");
+    b.wait_until("the tab is marked as sharing", |s| {
+        s.tab().sharing.is_some()
+    });
+    b.wait_eval("sent()", "given live");
+
+    // From the other window: riptide goes to the call to show the picker.
+    b.run(&format!("open -w {}", b.url("page.html")));
+    b.wait_until("another window", |s| {
+        s.windows.len() == 3 && !s.window().call
+    });
+    b.run("share-switch");
+    b.wait_until("back in the call window", |s| s.window().call);
+    b.wait_eval("sent()", "new live");
+    assert_eq!(
+        b.eval("String(window.__share)"),
+        "monitor",
+        "the share carries on"
+    );
+    assert!(b.state().tab().sharing.is_some());
+
+    // Stopping the new share tells the site, on the track it was given.
     b.run("share-stop");
     b.wait_eval("String(window.__share)", "ended");
     b.wait_until("the mark goes", |s| s.tab().sharing.is_none());

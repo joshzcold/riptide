@@ -119,6 +119,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:pip` | `gp` | Float the page's main video in a picture-in-picture window, or bring it back (gp) |
 | `:call-mute` | `cm` | Mute or unmute your microphone in the call, from any tab or window, with the site's own mute key (content.call_mute_keys) |
 | `:share-stop` |  | Stop sharing your screen, a window or a tab, from any tab or window |
+| `:share-switch` |  | Pick another screen, window or tab to share in place of the current share, without stopping it (in a call window) |
 | `:media-devices` |  | Pick the camera, microphone and speaker for the current site; a call in progress switches at once |
 | `:messages` |  | Show this session's messages |
 | `:repeat-command` | `.` | Run the last command again (.) |

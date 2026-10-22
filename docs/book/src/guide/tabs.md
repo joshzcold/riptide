@@ -109,6 +109,8 @@ While a page shares your screen, a window or a tab, its tab shows `[Share] ` in 
 
 `:share-stop` stops every share, in any tab or window. The page is told as if you'd pressed Chrome's "Stop sharing", so the call site updates its own buttons. You can still stop from the site or from Chrome's bar in a call window.
 
+`:share-switch` shares something else instead, without stopping: riptide goes to the call, Chrome's picker opens again, and what you pick goes out in the same call, so the others never see the share end. It works in call windows, the only ones with a picker; `:tab-call` moves a call into one. Cancelling the picker keeps the current share.
+
 ### Picture-in-picture
 
 `gp` (`:pip`) floats the page's main video in a small window that stays on top while you work in other tabs, such as a call or a talk; `gp` again brings it back. Sites' own picture-in-picture buttons work too, including Meet's floating call window.

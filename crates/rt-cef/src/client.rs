@@ -151,16 +151,25 @@ wrap_client! {
             }
             if name == crate::renderer::SHARE_MESSAGE {
                 let surface = message.argument_list().map(|a| CefString::from(&a.string(0)).to_string()).unwrap_or_default();
-                let started = shell::with_tab(browser, |s, index, _| {
+                let change = shell::with_tab(browser, |s, index, _| {
                     let tab = s.tabs.get_mut(index)?;
-                    let started = tab.sharing.is_none() && !surface.is_empty();
-                    tab.sharing = (!surface.is_empty()).then(|| surface.clone());
-                    started.then(|| rt_core::url::host(&tab.url).to_string())
+                    let before = tab.sharing.replace(surface.clone()).filter(|b| !b.is_empty());
+                    if surface.is_empty() {
+                        tab.sharing = None;
+                    }
+                    Some((before, rt_core::url::host(&tab.url).to_string()))
                 })
                 .flatten();
-                if let Some(site) = started {
-                    let what = crate::view::share_name(&surface);
-                    shell::show_message(Level::Info, format!("Sharing {what} with {site}. :share-stop stops it"));
+                let what = crate::view::share_name(&surface);
+                match change {
+                    Some((None, site)) if !surface.is_empty() => {
+                        shell::show_message(Level::Info, format!("Sharing {what} with {site}. :share-stop stops it"));
+                    }
+                    // `:share-switch` picked another kind of surface.
+                    Some((Some(before), site)) if !surface.is_empty() && before != surface => {
+                        shell::show_message(Level::Info, format!("Now sharing {what} with {site}"));
+                    }
+                    _ => {}
                 }
                 shell::refresh_ui();
                 return 1;

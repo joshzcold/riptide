@@ -451,6 +451,8 @@ pub enum Command {
     CallMute,
     /// Stop every screen, window or tab share, in any tab or window.
     ShareStop,
+    /// `:share-switch`: pick something else to share, without stopping the share.
+    ShareSwitch,
     /// `:media-devices`: pick the camera, microphone and speaker for the current site.
     MediaDevices,
     /// Float the page's main video in picture-in-picture, or bring it back.
@@ -1129,6 +1131,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "share-stop",
         "Stop sharing your screen, a window or a tab, from any tab or window",
+    ),
+    spec(
+        "share-switch",
+        "Pick another screen, window or tab to share in place of the current share, without stopping it (in a call window)",
     ),
     spec(
         "media-devices",
@@ -1841,6 +1847,7 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         "tab-mute" => Command::TabMute,
         "call-mute" => Command::CallMute,
         "share-stop" => Command::ShareStop,
+        "share-switch" => Command::ShareSwitch,
         "media-devices" => Command::MediaDevices,
         "pip" => Command::Pip,
         "messages" => Command::Messages,
