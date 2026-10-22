@@ -191,7 +191,7 @@ local function add_spec(spec)
     end
   end
   rt._pack_spec(name, src or "", spec.dir, spec.version, spec.trusted == true,
-    list(spec.event), list(spec.cmd), keys, spec.subdir)
+    list(spec.event), list(spec.cmd), keys, spec.subdir, spec.riptide)
   pack_specs[name] = spec
 end
 function rt.pack.add(specs)
@@ -794,6 +794,9 @@ pub struct PluginSpec {
     /// The plugin's folder inside its git repository, for a repository of
     /// several plugins; empty for its root.
     pub subdir: String,
+    /// A riptide build, by its commit, that loads it even though its
+    /// manifest's `riptide` requirement leaves this riptide out.
+    pub riptide: Option<String>,
     /// From `plugins.toml` (the Plugins tab or `:pack-add`), not config.lua.
     pub added: bool,
 }
@@ -1976,6 +1979,7 @@ fn add_file_plugins(lua: &Lua, state: &Rc<RefCell<State>>, config_dir: &Path) ->
                 ("dir", &spec.dir),
                 ("name", &spec.name),
                 ("version", &spec.version),
+                ("riptide", &spec.riptide),
             ] {
                 if !value.is_empty() {
                     table.set(key, value.as_str())?;
@@ -2090,6 +2094,7 @@ type PackSpecArgs = (
     Vec<String>,
     Vec<String>,
     Vec<Vec<String>>,
+    Option<String>,
     Option<String>,
 );
 
@@ -2394,7 +2399,8 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     api.set(
         "_pack_spec",
         lua.create_function(
-            move |_, (name, src, dir, version, trusted, events, commands, keys, subdir): PackSpecArgs| {
+            move |_,
+                  (name, src, dir, version, trusted, events, commands, keys, subdir, riptide): PackSpecArgs| {
                 let bad =
                     |what: String| Err(mlua::Error::runtime(format!("plugin {name:?}: {what}")));
                 if !crate::plugins::valid_name(&name) {
@@ -2417,6 +2423,22 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     })
                 {
                     return bad(format!("subdir {subdir:?}: a folder in the repository, like \"plugins/name\""));
+                }
+                // A build of riptide, by its commit, that may load it whatever
+                // its manifest's riptide requirement says.
+                if let Some(commit) = &riptide
+                    && !(7..=40).contains(&commit.len())
+                {
+                    return bad(format!(
+                        "riptide = {commit:?}: a riptide build's commit, 7 to 40 hex digits, as riptide --version shows it"
+                    ));
+                }
+                if let Some(commit) = &riptide
+                    && !commit.chars().all(|c| c.is_ascii_hexdigit())
+                {
+                    return bad(format!(
+                        "riptide = {commit:?}: a riptide build's commit, 7 to 40 hex digits, as riptide --version shows it"
+                    ));
                 }
                 let mut parsed = Vec::new();
                 for pair in keys {
@@ -2445,6 +2467,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                     commands,
                     keys: parsed,
                     subdir,
+                    riptide: riptide.map(|c| c.to_ascii_lowercase()),
                     added: false,
                 });
                 Ok(())

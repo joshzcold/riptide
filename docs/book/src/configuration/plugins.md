@@ -193,6 +193,14 @@ riptide = ">=0.4"
 
 An older riptide doesn't load it. `:plugins` shows why ("needs riptide >=0.4, and this is 0.3.0; update riptide"), and Browse shows it but won't add it. Use `>=`, since a bare `"0.4"` means 0.4.x only. riptide 0.3 and older don't know this key and refuse the whole manifest, so the plugin doesn't load there either.
 
+A build from `main` keeps the last release's version until the next release, though it may already have what a plugin needs. To load the plugin on it anyway, name the build by its commit, as `riptide --version` shows it, in the plugin's spec, or the same key in `plugins.toml`:
+
+```lua
+rt.pack.add({ "https://github.com/joshzcold/riptide-plugins", subdir = "telescope", riptide = "517d039" })
+```
+
+It counts on that build only: `:plugins` notes that the plugin loaded anyway, and once you run another build, the plugin's own requirement applies again, with a message saying the commit names another build.
+
 ### Dependencies
 
 A plugin that builds on another lists it in `riptide-plugin.toml`:

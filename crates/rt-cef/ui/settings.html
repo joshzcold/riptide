@@ -56,6 +56,7 @@
   .notes { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .35rem; }
   .note { font-size: .74em; padding: .05rem .45rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .note.wins { border-color: var(--accent); color: var(--accent); }
+  .overridden { color: var(--muted); font-size: .85em; font-style: italic; }
   .site-values { display: flex; flex-direction: column; gap: .3rem; margin-top: .45rem; }
   .site-values .pattern { font: .82em var(--mono); color: var(--muted); min-width: 10rem; }
   .site-values .line input[type=text] { max-width: 16rem; }
@@ -1145,6 +1146,7 @@ function renderPlugins() {
     block.append(head);
     const wide = (node) => { node.style.gridTemplateColumns = "minmax(0, 1fr)"; return node; };
     if (plugin.error) block.append(wide(el("div", "keyrow", plugin.error)));
+    if (plugin.note) block.append(wide(el("div", "keyrow overridden", plugin.note)));
     const perms = wide(el("div", "keyrow"));
     perms.append(el("div", "desc", plugin.trusted ? "Trusted: runs without the sandbox" : plugin.approved.length ? `Approved: ${plugin.approved.join(", ")}` : "No permissions approved"));
     if (plugin.triggers.length) perms.append(el("div", "desc", `Loads on ${plugin.triggers.join(", ")}`));
