@@ -290,9 +290,16 @@ pub fn before_navigation(browser: &Browser, url: &str) {
     if host.is_empty() {
         return;
     }
-    let script = blocker_for(url)
+    let blocker = blocker_for(url);
+    let script = blocker
+        .as_ref()
         .map(|blocker| blocker.cosmetic(url).page_script())
         .unwrap_or_default();
+    if blocker.is_some()
+        && let Some(devtools) = browser.host()
+    {
+        watch(browser.identifier(), &devtools);
+    }
     let key = (browser.identifier(), host.clone());
     let sent = SCRIPTLETS.with(|s| s.borrow().get(&key).map(|sent| sent.script.clone()));
     if sent.as_deref().unwrap_or_default() == script {
@@ -317,12 +324,14 @@ pub fn before_navigation(browser: &Browser, url: &str) {
     if script.is_empty() {
         return;
     }
-    watch_replies(browser.identifier(), &devtools);
-    let id = NEXT_SCRIPTLET_ID.with(|n| {
-        let id = n.get();
-        n.set(id + 1);
-        id
-    });
+    // The registration only takes with the Page domain on.
+    send(&devtools, None, "Page.enable", serde_json::json!({}));
+    let id = send(
+        &devtools,
+        None,
+        "Page.addScriptToEvaluateOnNewDocument",
+        serde_json::json!({ "source": for_host(&host, &script) }),
+    );
     SCRIPTLET_REPLIES.with(|r| r.borrow_mut().insert(id, key.clone()));
     SCRIPTLETS.with(|s| {
         s.borrow_mut().insert(
@@ -333,39 +342,114 @@ pub fn before_navigation(browser: &Browser, url: &str) {
             },
         )
     });
-    let host_json = serde_json::to_string(&host).unwrap_or_default();
-    let source = format!("if (location.hostname === {host_json}) {{\n{script}}}");
-    let message = serde_json::json!({
-        "id": id,
-        "method": "Page.addScriptToEvaluateOnNewDocument",
-        "params": { "source": source },
-    })
-    .to_string();
-    // The registration only takes with the Page domain on.
-    let enable = serde_json::json!({ "id": 1, "method": "Page.enable" }).to_string();
-    devtools.send_dev_tools_message(Some(enable.as_bytes()));
-    devtools.send_dev_tools_message(Some(message.as_bytes()));
 }
 
 fn remove_script(devtools: &BrowserHost, identifier: &str) {
-    let message = serde_json::json!({
-        "id": 1,
-        "method": "Page.removeScriptToEvaluateOnNewDocument",
-        "params": { "identifier": identifier },
-    })
-    .to_string();
-    devtools.send_dev_tools_message(Some(message.as_bytes()));
+    send(
+        devtools,
+        None,
+        "Page.removeScriptToEvaluateOnNewDocument",
+        serde_json::json!({ "identifier": identifier }),
+    );
 }
 
-/// Listen for `browser`'s answers to scriptlet registrations, once.
-fn watch_replies(browser: i32, devtools: &BrowserHost) {
+/// Send a DevTools command to the tab, or to one of its frames' `session`,
+/// and return its id. Ids must differ while their commands are pending.
+fn send(
+    devtools: &BrowserHost,
+    session: Option<&str>,
+    method: &str,
+    params: serde_json::Value,
+) -> i32 {
+    let id = NEXT_SCRIPTLET_ID.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    });
+    let mut message = serde_json::json!({ "id": id, "method": method, "params": params });
+    if let Some(session) = session {
+        message["sessionId"] = session.into();
+    }
+    devtools.send_dev_tools_message(Some(message.to_string().as_bytes()));
+    id
+}
+
+/// A page script that runs only in documents from `host`.
+fn for_host(host: &str, script: &str) -> String {
+    let host_json = serde_json::to_string(host).unwrap_or_default();
+    format!("if (location.hostname === {host_json}) {{\n{script}}}")
+}
+
+/// Once per tab: listen for its answers to scriptlet registrations, and have
+/// frames from other sites, which start in processes of their own, wait for
+/// their page script (`frame_attached`).
+fn watch(browser: i32, devtools: &BrowserHost) {
     if SCRIPTLET_OBSERVERS.with(|o| o.borrow().contains_key(&browser)) {
         return;
     }
     let mut observer = ScriptletReplies::new();
-    if let Some(registration) = devtools.add_dev_tools_message_observer(Some(&mut observer)) {
-        SCRIPTLET_OBSERVERS.with(|o| o.borrow_mut().insert(browser, registration));
+    let Some(registration) = devtools.add_dev_tools_message_observer(Some(&mut observer)) else {
+        return;
+    };
+    SCRIPTLET_OBSERVERS.with(|o| o.borrow_mut().insert(browser, registration));
+    send(devtools, None, "Page.enable", serde_json::json!({}));
+    send(devtools, None, "Target.setAutoAttach", auto_attach());
+}
+
+/// Pause each new frame from another site until it's told to go on.
+fn auto_attach() -> serde_json::Value {
+    serde_json::json!({
+        "autoAttach": true,
+        "waitForDebuggerOnStart": true,
+        "flatten": true,
+        "filter": [{ "type": "iframe" }],
+    })
+}
+
+/// A frame from another site is starting, paused: give it its site's page
+/// script, have its own frames wait the same way, then let it go on. The
+/// tab's page decides whether anything is blocked, as for its requests.
+fn frame_attached(browser: &Browser, params: &serde_json::Value) {
+    let Some(session) = params["sessionId"].as_str() else {
+        return;
+    };
+    let Some(devtools) = browser.host() else {
+        return;
+    };
+    let send =
+        |method: &str, params: serde_json::Value| send(&devtools, Some(session), method, params);
+    // The frame's address isn't in the target yet, but its navigation was
+    // announced on its parent's session (a frame's id is its target's).
+    let target = params["targetInfo"]["targetId"]
+        .as_str()
+        .unwrap_or_default();
+    let url = FRAME_URLS
+        .with(|u| u.borrow_mut().remove(target))
+        .unwrap_or_default();
+    let url = url.as_str();
+    let host = rt_core::url::host(url);
+    let page = browser
+        .main_frame()
+        .map(|f| CefString::from(&f.url()).to_string())
+        .unwrap_or_default();
+    let script = match blocker_for(&page) {
+        Some(blocker) if !host.is_empty() => blocker.cosmetic(url).page_script(),
+        _ => String::new(),
+    };
+    // Page events also tell of the frames inside this one.
+    send("Page.enable", serde_json::json!({}));
+    if !script.is_empty() {
+        send(
+            "Page.addScriptToEvaluateOnNewDocument",
+            serde_json::json!({ "source": for_host(host, &script) }),
+        );
+        FRAME_SCRIPTS.with(|f| {
+            f.borrow_mut()
+                .insert((browser.identifier(), host.to_string()))
+        });
     }
+    send("Target.setAutoAttach", auto_attach());
+    send("Runtime.runIfWaitingForDebugger", serde_json::json!({}));
 }
 
 /// Tab `browser` closed: forget its scriptlets.
@@ -373,6 +457,35 @@ pub fn forget_tab(browser: i32) {
     SCRIPTLETS.with(|s| s.borrow_mut().retain(|(b, _), _| *b != browser));
     SCRIPTLET_REPLIES.with(|r| r.borrow_mut().retain(|_, (b, _)| *b != browser));
     SCRIPTLET_OBSERVERS.with(|o| o.borrow_mut().remove(&browser));
+    FRAME_SCRIPTS.with(|f| f.borrow_mut().retain(|(b, _)| *b != browser));
+}
+
+wrap_task! {
+    struct FrameAttached {
+        browser: Browser,
+        params: serde_json::Value,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            frame_attached(&self.browser, &self.params);
+        }
+    }
+}
+
+/// A frame started loading `url`: remember it until its process starts.
+fn frame_navigating(params: &serde_json::Value) {
+    let (Some(frame), Some(url)) = (params["frameId"].as_str(), params["url"].as_str()) else {
+        return;
+    };
+    FRAME_URLS.with(|u| {
+        let mut urls = u.borrow_mut();
+        // Same-site frames never start a process of their own; keep it small.
+        if urls.len() > 256 {
+            urls.clear();
+        }
+        urls.insert(frame.to_string(), url.to_string());
+    });
 }
 
 /// A site's page script given to a tab, and DevTools' name for it once known.
@@ -390,6 +503,13 @@ thread_local! {
     static SCRIPTLET_REPLIES: RefCell<std::collections::HashMap<i32, (i32, String)>> =
         RefCell::new(std::collections::HashMap::new());
     static SCRIPTLET_OBSERVERS: RefCell<std::collections::HashMap<i32, Registration>> =
+        RefCell::new(std::collections::HashMap::new());
+    /// The hosts of frames from other sites that got their page script as
+    /// they started, by tab.
+    static FRAME_SCRIPTS: RefCell<std::collections::HashSet<(i32, String)>> =
+        RefCell::new(std::collections::HashSet::new());
+    /// The address each frame is loading, by DevTools frame id.
+    static FRAME_URLS: RefCell<std::collections::HashMap<String, String>> =
         RefCell::new(std::collections::HashMap::new());
     /// Far from the ids other DevTools messages use.
     static NEXT_SCRIPTLET_ID: std::cell::Cell<i32> = const { std::cell::Cell::new(1 << 24) };
@@ -425,6 +545,30 @@ wrap_dev_tools_message_observer! {
                     sent.identifier = Some(identifier);
                 }
             });
+        }
+
+        fn on_dev_tools_event(
+            &self,
+            browser: Option<&mut Browser>,
+            method: Option<&CefString>,
+            params: Option<&[u8]>,
+        ) {
+            let method = method.map(|m| m.to_string()).unwrap_or_default();
+            if !matches!(method.as_str(), "Target.attachedToTarget" | "Page.frameStartedNavigating") {
+                return;
+            }
+            let Ok(params) = serde_json::from_slice(params.unwrap_or_default()) else {
+                return;
+            };
+            match browser {
+                // Answered once this returns: a frame told to go on while
+                // DevTools is still pausing it would never start.
+                Some(browser) if method == "Target.attachedToTarget" => {
+                    let mut task = FrameAttached::new(browser.clone(), params);
+                    post_task(ThreadId::UI, Some(&mut task));
+                }
+                _ => frame_navigating(&params),
+            }
         }
     }
 }
@@ -763,10 +907,14 @@ pub fn apply_cosmetic_frame(frame: &Frame, url: &str, page: &str) {
     };
     let cosmetic = Arc::new(blocker.cosmetic(url));
     inject_css_frame(frame, &cosmetic.css);
-    // The tab's own site gets these before its scripts, through DevTools;
-    // a frame from another site only now.
-    let same_site = rt_core::url::host(url) == rt_core::url::host(page);
-    if frame.is_main() == 0 && !same_site {
+    // The tab's own site, and frames from other sites as they start, get
+    // these before their scripts, through DevTools; any other frame only now.
+    let host = rt_core::url::host(url);
+    let early = host == rt_core::url::host(page)
+        || frame.browser().is_some_and(|b| {
+            FRAME_SCRIPTS.with(|f| f.borrow().contains(&(b.identifier(), host.to_string())))
+        });
+    if frame.is_main() == 0 && !early {
         let script = cosmetic.procedural_script();
         if !script.is_empty() {
             shell::exec_js(frame, &script);

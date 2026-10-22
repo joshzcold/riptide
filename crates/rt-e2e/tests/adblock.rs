@@ -99,6 +99,22 @@ fn scriptlets_run_first_and_redirects_stand_in() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn scriptlets_run_first_in_frames_from_other_sites() {
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    let blocked = "frame constant=false aopr=aborted";
+    b.open("scriptframe.html");
+    b.wait_eval("document.title", blocked);
+    // The tab's page decides: whitelisting it leaves the frame alone too.
+    b.run("config-list-add content.blocking.whitelist 127.0.0.1");
+    b.run("reload");
+    b.wait_eval("document.title", "frame constant=true aopr=read");
+    b.run("config-list-remove content.blocking.whitelist 127.0.0.1");
+    b.run("reload");
+    b.wait_eval("document.title", blocked);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn tracking_parameters_come_off_page_addresses() {
     let b = with_lists(&["filters-scriptlets.txt"]);
     let url = b.url("page.html");

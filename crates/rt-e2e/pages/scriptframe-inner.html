@@ -1,0 +1,12 @@
+<!doctype html><title>inner</title>
+<script>
+  // Scriptlets for localhost run before this, as in scriptlets.html.
+  window.rtFrameAdsEnabled = true;
+  let aopr = "read";
+  try {
+    void window.rtFrameDetectAdblock;
+  } catch {
+    aopr = "aborted";
+  }
+  parent.postMessage(`frame constant=${window.rtFrameAdsEnabled} aopr=${aopr}`, "*");
+</script>
