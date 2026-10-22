@@ -85,7 +85,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Plugins (M27)
 
 - **Events** (designed 2026-10-21; per-site keys, `command_before` and `key` are done). A hook cancels or swallows by returning `true`.
-  - Open: the `command` event shows every command's arguments (URLs, searches) to any plugin; whether it should need `commands` too, which would break plugins that use it now.
+  - The `command` event needs the `commands` permission too (2026-10-22), since its arguments include the URLs and searches you type.
 - **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
 - **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.
 

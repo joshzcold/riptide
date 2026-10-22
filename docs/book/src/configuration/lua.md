@@ -110,7 +110,7 @@ An empty string hides the widget. What a widget function asks for besides its te
 - `once = true`: run the first time only.
 - `group`: a name, so `rt.off(group)` removes them all.
 
-`command` fires after the command runs, for each command in a `;;` chain, and a key reports the command it's bound to (`:` is `cmd-set-text :`). A `command` hook that runs commands itself runs again for them.
+`command` fires after the command runs, for each command in a `;;` chain, and a key reports the command it's bound to (`:` is `cmd-set-text :`). A `command` hook that runs commands itself runs again for them. Since its arguments include the URLs and searches you type, a plugin needs the `commands` permission to use it.
 
 `command_before` fires just before each of those, after aliases and `{url}`-style variables are filled in. The first hook that returns `true` cancels the command, which then fires no `command`. What a hook asks for, such as `rt.run`, happens after the command, and inside the hook `rt.url()` and `rt.mode()` work but `rt.tabs()` is empty. So a broken hook can't lock you out, `config-source`, `config-edit`, `plugins`, `pack-*`, `mode-leave` and `quit` always run. A plugin needs the `commands` permission to use it.
 
