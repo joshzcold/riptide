@@ -319,6 +319,17 @@ function rt._sandbox(name, permissions, require_fn)
     end
     return on(event, opts, fn)
   end
+  -- Passthrough gives the page every key, riptide's included: a plugin that
+  -- kept going back to it would lock you out, so it takes the keys permission.
+  if not permissions.keys then
+    local enter_mode = api.enter_mode
+    api.enter_mode = function(mode)
+      if mode == "passthrough" then
+        error("rt.enter_mode(\"passthrough\") needs the keys permission", 2)
+      end
+      return enter_mode(mode)
+    end
+  end
   env.rt = api
   env._G = env
   return env

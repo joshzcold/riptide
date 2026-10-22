@@ -196,6 +196,8 @@ function rt.tabs() end
 
 ---Switch to normal, insert, caret or passthrough mode, as `:mode-enter`
 ---does. Caret mode starts at the page's selection when it's on screen.
+---Plugins need the `keys` permission for passthrough, which hands the page
+---every key.
 ---@param mode "normal"|"insert"|"caret"|"passthrough"
 function rt.enter_mode(mode) end
 

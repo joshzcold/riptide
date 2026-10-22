@@ -1267,6 +1267,10 @@ fn plugins_enter_caret_mode_but_not_riptides_own_modes() {
 rt.command("moder-prompt", function()
   local ok = pcall(rt.enter_mode, "prompt")
   rt.notify("prompt " .. tostring(ok))
+end)
+rt.command("moder-passthrough", function()
+  local ok = pcall(rt.enter_mode, "passthrough")
+  rt.notify("passthrough " .. tostring(ok))
 end)"#,
         )
         .lua(r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/moder" })"#)
@@ -1279,4 +1283,10 @@ end)"#,
     b.wait_until("prompt mode is refused", |s| {
         s.message() == Some("prompt false")
     });
+    // Passthrough takes the keys permission, which this plugin doesn't have.
+    b.run("moder-passthrough");
+    b.wait_until("passthrough is refused", |s| {
+        s.message() == Some("passthrough false")
+    });
+    assert_eq!(b.state().mode, "normal");
 }
