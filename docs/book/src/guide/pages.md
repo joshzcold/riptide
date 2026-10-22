@@ -36,4 +36,6 @@ Off by default. With `c.content.widevine = true` and a restart, Chromium downloa
 
 Every `content.widevine_update_interval` days (default 7; 0 never), one start turns component updates on again so Chromium can update the CDM; a newer one loads from the start after. Turning `content.widevine` off deletes the CDM at the next start.
 
-Limits: only VP9/AV1 streams work (prebuilt CEF has no H.264/AAC), Linux Widevine is the software-only level (L3) that services often cap at lower resolutions, and this hasn't been checked against Google's Widevine terms for third-party browsers.
+Google provides the Widevine CDM under its own terms. riptide doesn't distribute it or license it to you: turning `content.widevine` on means Chromium downloads it from Google for you, and the status bar says so when the download starts.
+
+Limits: only VP9/AV1 streams work (prebuilt CEF has no H.264/AAC), and Linux Widevine is the software-only level (L3) that services often cap at lower resolutions.
