@@ -787,3 +787,44 @@ fn qutebrowser_history() -> Option<std::path::PathBuf> {
     };
     Some(dir.join("history.sqlite"))
 }
+
+/// The most `rt.history` hands back.
+const LUA_HISTORY_LIMIT: usize = 500;
+
+/// `rt.history`, `rt.bookmarks`, `rt.quickmarks`: the list `kind` goes to
+/// plugin `source`'s callback `callback`, as `rt.page.eval` answers do.
+pub fn read_for_lua(source: &str, kind: &str, pattern: &str, callback: u32) {
+    let items: Result<serde_json::Value, String> = match kind {
+        "history" => with(|s| match s.history.as_ref().map(|h| h.search(pattern, LUA_HISTORY_LIMIT)) {
+            Some(Ok(entries)) => Ok(entries
+                .iter()
+                .map(|e| serde_json::json!({ "url": e.url, "title": e.title, "last_visit": e.last_visit }))
+                .collect()),
+            Some(Err(e)) => Err(format!("history search failed: {e}")),
+            None => Ok(serde_json::Value::Array(Vec::new())),
+        })
+        .unwrap_or_else(|| Err("history isn't open".into())),
+        "bookmarks" => Ok(with(|s| {
+            s.bookmarks
+                .iter()
+                .map(|(url, title)| serde_json::json!({ "url": url, "title": title }))
+                .collect()
+        })
+        .unwrap_or_default()),
+        "quickmarks" => Ok(with(|s| {
+            s.quickmarks
+                .iter()
+                .map(|(name, url)| serde_json::json!({ "name": name, "url": url }))
+                .collect()
+        })
+        .unwrap_or_default()),
+        other => Err(format!("unknown list {other:?}")),
+    };
+    let envelope = match items {
+        Ok(items) => serde_json::json!({ "ok": items }),
+        Err(why) => serde_json::json!({ "error": why }),
+    };
+    let context = crate::lua::current_context();
+    let result = rt_config::lua::answered(callback, Some(envelope.to_string()), &context);
+    crate::lua::carry_out_for(source, result);
+}

@@ -50,6 +50,8 @@ struct Popup {
     scrolled: (f64, f64),
     /// Reads in a row that found the page where it was.
     still: u32,
+    /// In the middle of the page area rather than at its top right.
+    center: bool,
     /// The frame `over` was measured in, by id, and where its viewport starts
     /// in the top page, in CSS pixels, once worked out: until then it's out
     /// of sight. The main frame starts at 0, 0.
@@ -73,6 +75,8 @@ pub struct Placement {
     pub offset: Option<(i32, i32)>,
     /// The frame `over` was measured in, by id.
     pub frame: Option<String>,
+    /// In the middle of the page area rather than at its top right.
+    pub center: bool,
     pub all_keys: bool,
     /// The plugin page it shows, told where it's dragged.
     pub plugin_page: Option<(String, u32)>,
@@ -107,6 +111,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
         over,
         offset,
         frame,
+        center,
         all_keys,
         plugin_page,
     } = placement;
@@ -147,6 +152,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
                 .unwrap_or(DEFAULT_SIZE),
             fixed: size.is_some() || over.is_some(),
             offset: match &over {
+                _ if center => (0, 0),
                 Some((_, tab)) => {
                     let zoom = zoom_of(tab);
                     let (x, y) = offset.unwrap_or_default();
@@ -159,6 +165,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
             scroll_from: None,
             scrolled: (0.0, 0.0),
             still: 0,
+            center,
             origin: frame.is_none().then_some((0.0, 0.0)),
             frame,
             plugin_page,
@@ -313,7 +320,13 @@ pub fn reposition() {
                     .1
                     .min(area.height - 2 * MARGIN - BAR_HEIGHT)
                     .max(1);
-                let (x, y) = place(&area, (width, height), popup.offset);
+                let (x, y) = if popup.center {
+                    let x = area.x + (area.width - width) / 2 + popup.offset.0;
+                    let y = area.y + (area.height - height - BAR_HEIGHT) / 4 + popup.offset.1;
+                    clamp_to(&area, (width, height), (x, y))
+                } else {
+                    place(&area, (width, height), popup.offset)
+                };
                 (x, y, width, height)
             }
         };

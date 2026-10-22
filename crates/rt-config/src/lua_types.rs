@@ -336,6 +336,25 @@ function rt.mode() end
 ---@return {{ index: integer, title: string, url: string, current: boolean, pinned: boolean }}[]
 function rt.tabs() end
 
+---Show tab `index` of the current window, as `rt.tabs()` numbers them.
+---@param index integer
+function rt.select_tab(index) end
+
+---History entries whose URL or title contain `pattern` (all of them for
+---`""`), the most recent first, at most 500: `fn(entries)`, or
+---`fn(nil, why)`. Plugins need the `history` permission.
+---@param pattern string
+---@param fn fun(entries: {{ url: string, title: string, last_visit: integer }}[]|nil, err: string|nil)
+function rt.history(pattern, fn) end
+
+---Your bookmarks: `fn(bookmarks)`. Plugins need the `history` permission.
+---@param fn fun(bookmarks: {{ url: string, title: string }}[]|nil, err: string|nil)
+function rt.bookmarks(fn) end
+
+---Your quickmarks: `fn(quickmarks)`. Plugins need the `history` permission.
+---@param fn fun(quickmarks: {{ name: string, url: string }}[]|nil, err: string|nil)
+function rt.quickmarks(fn) end
+
 ---The count typed before the key, if any (in callbacks).
 ---@return integer?
 function rt.count() end
@@ -459,6 +478,7 @@ function Panel:is_open() end
 ---@field over? {{ x: number, y: number, width: number, height: number, frame?: string }} In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them in `frame` (an id from `rt.page.eval`; the main frame without one), e.g. a text field's; its bar goes just above, and it follows the page as it scrolls.
 ---@field offset? {{ x: number, y: number }} In a float with `over`: where it goes from there, in CSS pixels, as `on_move` reported.
 ---@field on_move? fun(x: number, y: number, page: rt.Page) In a float: you dragged it; `x`, `y` is its offset in CSS pixels, from `over`'s place or its usual one.
+---@field position? "top-right"|"center" In a float without `over`: at the page area's top right (the default), or in its middle.
 ---@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included, as `keydown` events (not typed text) unless you click into it; Shift-Escape closes it.
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
