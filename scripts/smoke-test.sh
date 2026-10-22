@@ -213,9 +213,18 @@ xdotool type --delay 20 abc
 expect_title "s=0 k=3 v=abc c=no"
 
 step "Escape leaves insert mode, 5j scrolls 200px"
-xdotool key Escape
-wait_mode normal || true
-xdotool key 5 j
+# Under Xvfb on CI's runners, keys just after leaving insert mode are
+# sometimes lost (docs/PLAN.md, Test reliability): send them again, but 5j
+# only while nothing has scrolled, so a slow one isn't doubled.
+for _ in 1 2 3; do
+    xdotool key Escape
+    wait_mode normal 3 && break
+done
+for _ in 1 2 3; do
+    xdotool key 5 j
+    for _ in $(seq 20); do [[ $(page_title) != "s=0 "* ]] && break; nap 0.1; done
+    [[ $(page_title) != "s=0 "* ]] && break
+done
 expect_title "s=200 k=3 v=abc c=no"
 
 step "f + label clicks the button for real"
@@ -281,7 +290,14 @@ fi
 
 step "dragging the border between two splits resizes them"
 run "vsplit file://$work/split.html"
-for _ in $(seq $((TIMEOUT * 10))); do [[ $(page_title) == w=* && $(page_title) != w=0 ]] && break; sleep 0.1; done
+# The new pane's page can load at the full width before the split lays it
+# out at half; measure once it's narrower than most of the window.
+width=$(xdotool getwindowgeometry --shell "$window" | sed -n 's/^WIDTH=//p')
+for _ in $(seq $((TIMEOUT * 10))); do
+    w=$(page_title)
+    [[ $w == w=* ]] && (( ${w#w=} > 0 && ${w#w=} < width * 3 / 4 )) && break
+    sleep 0.1
+done
 before=$(page_title)
 # The border is in the middle of the page area, which starts below the tab bar.
 # Its handle is a page of its own, so the first drag may come before it's loaded.
