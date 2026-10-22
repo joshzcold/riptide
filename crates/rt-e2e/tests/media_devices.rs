@@ -85,7 +85,9 @@ fn media_devices_switches_a_call_in_progress() {
     });
     b.keys("4");
     wait_in_use(&b, "the new microphone", |v| {
-        has(v, "sent", "Fake Audio Input 2") && has(v, "stream", "Fake Audio Input 2") && v["live"] == true
+        has(v, "sent", "Fake Audio Input 2")
+            && has(v, "stream", "Fake Audio Input 2")
+            && v["live"] == true
     });
     assert!(
         b.wait_file(&b.config_dir().join("autoconfig.toml"))
