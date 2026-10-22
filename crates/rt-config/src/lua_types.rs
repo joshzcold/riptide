@@ -456,8 +456,10 @@ function Panel:is_open() end
 ---@field size? integer In a panel: its width, or height below the page, in pixels (default 400).
 ---@field width? integer In a float: its width in pixels; without width and height it's sized to the page's content.
 ---@field height? integer In a float: its height in pixels.
----@field over? {{ x: number, y: number, width: number, height: number }} In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them, e.g. a text field's; its bar goes just above.
----@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included; Shift-Escape closes it.
+---@field over? {{ x: number, y: number, width: number, height: number }} In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them, e.g. a text field's; its bar goes just above, and it follows the page as it scrolls.
+---@field offset? {{ x: number, y: number }} In a float with `over`: where it goes from there, in CSS pixels, as `on_move` reported.
+---@field on_move? fun(x: number, y: number, page: rt.Page) In a float: you dragged it; `x`, `y` is its offset in CSS pixels, from `over`'s place or its usual one.
+---@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included, as `keydown` events (not typed text) unless you click into it; Shift-Escape closes it.
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
 ---@class rt.Page
@@ -467,6 +469,10 @@ local Page = {{}}
 ---@param name string
 ---@param data any Anything `rt.json.encode` takes.
 function Page:send(name, data) end
+---Resize its float, in pixels; it keeps its place. Nothing for a tab or panel.
+---@param width integer
+---@param height integer
+function Page:resize(width, height) end
 ---Close its panel or float, or the tabs showing it.
 function Page:close() end
 

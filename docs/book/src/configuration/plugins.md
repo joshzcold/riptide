@@ -233,7 +233,7 @@ rt.send("ready", JSON.stringify({}));
 rt.ui.page({ path = "pick.html", where = "float", title = "Pick a login", width = 420, height = 320 })
 ```
 
-`over` places a float over part of the current page instead, such as a text field, in the CSS pixels `getBoundingClientRect` gives, with its bar just above. `keys = "all"` hands it every key, riptide's bindings and Escape included, as an editor needs; Shift-Escape closes it, and the bar says so.
+`over` places a float over part of the current page instead, such as a text field, in the CSS pixels `getBoundingClientRect` gives, with its bar just above. It follows the page as it scrolls, and waits out of sight while that part is scrolled away. Dragging its bar moves it; `on_move(x, y)` tells the plugin where to, as an `offset` from `over`'s place in CSS pixels, which the plugin can pass back next time. `page:resize(width, height)` resizes a float, e.g. from a grip the page draws. `keys = "all"` hands it every key, riptide's bindings and Escape included, as an editor needs; Shift-Escape closes it, and the bar says so. The keyboard stays with the tab, so the page gets each key as a `keydown` event, not typed text, until you click into it: handle `keydown` rather than relying on an `<input>`.
 
 ```lua
 rt.ui.page({ where = "float", over = { x = 8, y = 93, width = 583, height = 240 }, keys = "all" })

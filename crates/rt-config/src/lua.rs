@@ -573,6 +573,12 @@ function rt._page_for(source)
     function handle:send(name, data)
       rt._page_send(source, id, tostring(name), data == nil and "null" or rt.json.encode(data))
     end
+    function handle:resize(width, height)
+      if type(width) ~= "number" or type(height) ~= "number" then
+        error("page:resize(width, height): sizes in pixels", 2)
+      end
+      rt._page_resize(source, id, width, height)
+    end
     function handle:close()
       if plugin_pages[id] then
         plugin_pages[id] = nil
@@ -582,6 +588,11 @@ function rt._page_for(source)
     rt._page_open(source, id, path, opts)
     return handle
   end
+end
+function rt._page_moved(source, id, x, y)
+  local page = plugin_pages[id]
+  if not page or page.source ~= source or not page.opts.on_move then return end
+  page.opts.on_move(x, y, page.handle)
 end
 function rt._page_message(source, id, name, json)
   local page = plugin_pages[id]
@@ -767,6 +778,8 @@ pub enum PagePlace {
     Float {
         size: Option<(u32, u32)>,
         over: Option<PageRect>,
+        /// From where `over` puts it, in CSS pixels.
+        offset: Option<(i32, i32)>,
         all_keys: bool,
     },
 }
@@ -848,6 +861,13 @@ pub enum Action {
     },
     /// A page handle's `close`.
     PluginPageClose { source: String, id: u32 },
+    /// A float page handle's `resize`.
+    PluginPageResize {
+        source: String,
+        id: u32,
+        width: u32,
+        height: u32,
+    },
     /// The plugin test runner presses riptide keys.
     Keys(String),
     /// `rt.secret.get`: plugin `plugin`'s secret `option` goes to callback
@@ -1103,6 +1123,22 @@ pub fn page_message(
         let api: mlua::Table = lua.globals().get("rt")?;
         api.get::<mlua::Function>("_page_message")?
             .call::<()>((source, id, name, json))
+    })
+}
+
+/// Float page `id` of plugin `source` was dragged: its `on_move(x, y)`.
+pub fn page_moved(
+    source: &str,
+    id: u32,
+    x: i32,
+    y: i32,
+    context: &Context,
+) -> Result<Vec<Action>, String> {
+    let source = source.to_string();
+    run_guarded(context, move |lua, _| {
+        let api: mlua::Table = lua.globals().get("rt")?;
+        api.get::<mlua::Function>("_page_moved")?
+            .call::<()>((source, id, x, y))
     })
 }
 
@@ -2368,6 +2404,18 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                                 })
                             })
                             .transpose()?;
+                        let offset: Option<mlua::Table> = opts.get("offset")?;
+                        let offset = offset
+                            .map(|t| -> mlua::Result<(i32, i32)> {
+                                let (x, y): (f64, f64) = (t.get("x")?, t.get("y")?);
+                                if !(x.is_finite() && y.is_finite() && x.abs() < 1e5 && y.abs() < 1e5) {
+                                    return Err(mlua::Error::runtime(
+                                        "rt.ui.page: offset is { x, y }, in CSS pixels",
+                                    ));
+                                }
+                                Ok((x.round() as i32, y.round() as i32))
+                            })
+                            .transpose()?;
                         let keys: Option<String> = opts.get("keys")?;
                         let all_keys = match keys.as_deref() {
                             None => false,
@@ -2387,6 +2435,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                                 )),
                             },
                             over,
+                            offset,
                             all_keys,
                         }
                     }
@@ -2433,6 +2482,22 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 .push(Action::PluginPageClose { source, id });
             Ok(())
         })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_page_resize",
+        lua.create_function(
+            move |_, (source, id, width, height): (String, u32, f64, f64)| {
+                let size = |v: f64| v.clamp(40.0, 4000.0).round() as u32;
+                s.borrow_mut().actions.push(Action::PluginPageResize {
+                    source,
+                    id,
+                    width: size(width),
+                    height: size(height),
+                });
+                Ok(())
+            },
+        )?,
     )?;
     let s = state.clone();
     api.set(

@@ -245,6 +245,20 @@ pub fn message(plugin: &str, url: &str, name: &str, payload: &str) {
     crate::lua::carry_out_for(plugin, result);
 }
 
+/// `page:resize`: the float showing page `id` of plugin `source`, if one does.
+pub fn resize(source: &str, id: u32, width: u32, height: u32) {
+    if crate::popup::page_frame().is_some_and(|(url, _)| is_page(&url, source, id)) {
+        crate::popup::resize(width as i32, height as i32);
+    }
+}
+
+/// Float page `id` of plugin `source` was dragged to `x`, `y`: its `on_move`.
+pub fn moved(source: &str, id: u32, x: i32, y: i32) {
+    let context = crate::lua::current_context();
+    let result = rt_config::lua::page_moved(source, id, x, y, &context);
+    crate::lua::carry_out_for(source, result);
+}
+
 /// Whether `url` is page `id` of plugin `source`.
 fn is_page(url: &str, source: &str, id: u32) -> bool {
     rt_core::ui_message::plugin_page(url) == Some(source)
@@ -334,6 +348,7 @@ pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) 
         PagePlace::Float {
             size,
             over,
+            offset,
             all_keys,
         } => {
             let bar = if title.is_empty() {
@@ -348,7 +363,9 @@ pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) 
                 crate::popup::Placement {
                     size,
                     over,
+                    offset,
                     all_keys,
+                    plugin_page: Some((source.to_string(), id)),
                 },
             );
         }
