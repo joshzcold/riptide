@@ -93,7 +93,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Packaging (M10)
 
-- macOS: an app bundle, signing and notarization. Windows: an installer, and named pipes for the remote command (each start is a new instance there).
+- macOS: an app bundle, signing and notarization. Windows: an installer. The remote command's named pipe is tested on CI's Windows runner, but not yet with the browser itself, which doesn't start there.
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
 ### Bugs
