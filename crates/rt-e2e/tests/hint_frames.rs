@@ -101,6 +101,13 @@ rt.command("framed-again", function()
     rt.notify("again " .. tostring(err or v))
   end, { frame = frame })
 end)
+rt.command("framed-all", function()
+  rt.page.eval("location.hostname", function(list)
+    local hosts = {}
+    for _, f in ipairs(list) do table.insert(hosts, tostring(f.value)) end
+    rt.notify("all " .. table.concat(hosts, " "))
+  end, { frame = "all" })
+end)
 rt.command("framed-gone", function()
   rt.page.eval("1", function(v, err) rt.notify("gone " .. tostring(err or v)) end, { frame = "nope" })
 end)"#,
@@ -139,6 +146,10 @@ end)"#,
     b.run("framed-again");
     b.wait_until("the frame's id reached it again", |s| {
         s.message() == Some("again in the frame")
+    });
+    b.run("framed-all");
+    b.wait_until("every frame answered, the main one first", |s| {
+        s.message() == Some("all 127.0.0.1 localhost")
     });
     b.run("framed-gone");
     b.wait_until("an unknown frame is refused", |s| {

@@ -484,9 +484,11 @@ function rt.move_tab(from, to)
 end
 -- The modes a plugin may switch to; the others belong to riptide's own prompts.
 local ENTERABLE = { normal = true, insert = true, caret = true, passthrough = true }
-function rt.enter_mode(mode)
+function rt.enter_mode(mode, opts)
   if not ENTERABLE[mode] then error("rt.enter_mode takes normal, insert, caret or passthrough", 2) end
-  rt._enter_mode(mode)
+  local frame = opts and opts.frame
+  if frame ~= nil and type(frame) ~= "string" then error("rt.enter_mode: frame is a frame's id", 2) end
+  rt._enter_mode(mode, frame)
 end
 function rt.select_tab(index)
   if math.type(index) ~= "integer" or index < 1 then error("rt.select_tab takes a tab's index, from 1", 2) end
@@ -973,8 +975,9 @@ pub enum Action {
     },
     /// `rt.select_tab`: show tab `index` (from 0) of the current window.
     SelectTab(usize),
-    /// `rt.enter_mode`: switch to `mode`, as `:mode-enter` does.
-    EnterMode(Mode),
+    /// `rt.enter_mode`: switch to `mode`, as `:mode-enter` does; caret mode
+    /// in frame `.1` when given.
+    EnterMode(Mode, Option<String>),
     /// `rt.close_tab`: close tab `index` (from 0) of the current window.
     CloseTab(usize),
     /// `rt.move_tab`: move tab `from` to `to` (from 0) in the current window.
@@ -3010,11 +3013,11 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
     let s = state.clone();
     api.set(
         "_enter_mode",
-        lua.create_function(move |_, mode: String| {
+        lua.create_function(move |_, (mode, frame): (String, Option<String>)| {
             let mode = mode
                 .parse::<Mode>()
                 .map_err(|e| mlua::Error::runtime(format!("rt.enter_mode: {e}")))?;
-            s.borrow_mut().actions.push(Action::EnterMode(mode));
+            s.borrow_mut().actions.push(Action::EnterMode(mode, frame));
             Ok(())
         })?,
     )?;

@@ -91,6 +91,74 @@ fn answer_from(
     crate::lua::carry_out_for(plugin.unwrap_or("config.lua"), result);
 }
 
+/// How long `rt.page.eval` with `frame = "all"` waits for every frame, as
+/// hints do; a frame that hasn't answered by then is left out.
+const ALL_FRAMES_MS: i64 = 1500;
+
+/// `rt.page.eval(code, fn, { frame = "all" })`: `code` in each frame of a
+/// site `pages` allows, the main frame first, answering with a list of
+/// `{ frame, value }` (or `{ frame, error }`) once every frame has.
+fn eval_in_every_frame(
+    browser: &Browser,
+    pages: Option<&[String]>,
+    code: &str,
+    plugin: Option<String>,
+    callback: u32,
+) {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    let frames: Vec<Frame> = crate::hints::all_frames(browser)
+        .into_iter()
+        .filter(|f| {
+            let url = CefString::from(&f.url()).to_string();
+            !url.is_empty() && allowed(&url, pages)
+        })
+        .collect();
+    let replies: Rc<RefCell<Vec<Option<serde_json::Value>>>> =
+        Rc::new(RefCell::new(vec![None; frames.len()]));
+    let done = Rc::new(std::cell::Cell::new(false));
+    let finish = {
+        let (replies, done, plugin) = (replies.clone(), done.clone(), plugin.clone());
+        Rc::new(move || {
+            if done.replace(true) {
+                return;
+            }
+            let list: Vec<serde_json::Value> = replies.borrow_mut().drain(..).flatten().collect();
+            let json = serde_json::Value::Array(list).to_string();
+            answer(plugin.as_deref(), callback, Ok(json));
+        })
+    };
+    if frames.is_empty() {
+        return finish();
+    }
+    for (i, frame) in frames.iter().enumerate() {
+        let id = CefString::from(&frame.identifier()).to_string();
+        let (replies, finish) = (replies.clone(), finish.clone());
+        crate::eval::eval_frame(frame, code, move |result| {
+            let reply = match result {
+                Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+                    Ok(value) => serde_json::json!({ "frame": id, "value": value }),
+                    Err(_) => {
+                        serde_json::json!({ "frame": id, "error": "the page's answer wasn't JSON" })
+                    }
+                },
+                Err(why) => serde_json::json!({ "frame": id, "error": why }),
+            };
+            let all = {
+                let mut replies = replies.borrow_mut();
+                if let Some(slot) = replies.get_mut(i) {
+                    *slot = Some(reply);
+                }
+                replies.iter().all(Option::is_some)
+            };
+            if all {
+                finish();
+            }
+        });
+    }
+    crate::client::later(ALL_FRAMES_MS, move || finish());
+}
+
 /// The element an `rt.page.hint` picked: its URL and text go to Lua.
 pub fn hint_chosen(hint: rt_core::hints::LuaHint, url: Option<String>, text: String) {
     let element = serde_json::json!({ "url": url, "text": text });
@@ -184,6 +252,9 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
             // An expression, its value as JSON; it runs in the page's own world.
             let code = format!("JSON.stringify(({code}\n) ?? null)");
             let plugin = plugin.map(str::to_string);
+            if frame.as_deref() == Some("all") {
+                return eval_in_every_frame(&browser, pages, &code, plugin, callback);
+            }
             let target = match frame.as_deref() {
                 None => browser.main_frame(),
                 Some("focused") => browser.focused_frame().or_else(|| browser.main_frame()),

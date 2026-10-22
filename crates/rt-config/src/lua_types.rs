@@ -338,11 +338,13 @@ function rt.mode() end
 function rt.tabs() end
 
 ---Switch to normal, insert, caret or passthrough mode, as `:mode-enter`
----does. Caret mode starts at the page's selection when it's on screen.
+---does. Caret mode starts at the page's selection when it's on screen, in
+---`opts.frame` (a frame's id) or the focused frame, and stays in that frame.
 ---Plugins need the `keys` permission for passthrough, which hands the page
 ---every key.
 ---@param mode "normal"|"insert"|"caret"|"passthrough"
-function rt.enter_mode(mode) end
+---@param opts? {{ frame?: string }}
+function rt.enter_mode(mode, opts) end
 
 ---Show tab `index` of the current window, as `rt.tabs()` numbers them.
 ---@param index integer
@@ -578,6 +580,9 @@ function rt.page.fill_login(login) end
 ---`opts.frame` runs it in another frame: `"focused"` for the one with the
 ---keyboard focus (a field in an iframe, say), or a `frame` id an earlier
 ---call gave; the `pages` permission must cover that frame's site too.
+---`"all"` runs it in every frame whose site it covers, the main frame first,
+---and `fn` gets a list of `{{ frame, value }}` (or `{{ frame, error }}`); a frame
+---that hasn't answered within 1.5 seconds is left out.
 ---@param code string An expression; wrap statements in `(() => {{ … }})()`.
 ---@param fn fun(value: any, err: string|nil, frame: string|nil)
 ---@param opts? {{ frame?: string }}
