@@ -1,0 +1,14 @@
+<!doctype html><title>spellnav</title>
+<textarea id="t" rows="3" cols="40" spellcheck="true">This is a sentance with two mispeled words in it.</textarea>
+<div id="e" contenteditable="true" spellcheck="true">Another paragrap, edited in place.</div>
+<script>
+  // The words :spell-next should stop at, by where they start.
+  window.cursor = () => {
+    const el = document.activeElement;
+    if (el.isContentEditable) {
+      const sel = getSelection();
+      return sel.rangeCount ? String(sel.getRangeAt(0).startOffset) : "none";
+    }
+    return String(el.selectionStart);
+  };
+</script>

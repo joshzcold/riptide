@@ -88,7 +88,9 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `ZQ` | `quit` |
 | `ZZ` | `quit --save` |
 | `[[` | `navigate prev` |
+| `[s` | `spell-prev` |
 | `]]` | `navigate next` |
+| `]s` | `spell-next` |
 | `` ` `` | `mode-enter set_mark` |
 | `b` | `cmd-set-text -s :quickmark-load` |
 | `cm` | `call-mute` |
