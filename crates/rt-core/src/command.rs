@@ -692,6 +692,10 @@ pub enum Command {
     },
     /// Add the word from the last `:spell-suggest` to the dictionary.
     SpellAdd,
+    /// Move the text cursor to the next misspelled word, or the previous one.
+    SpellNext {
+        back: bool,
+    },
     /// Download dictionaries from Chromium's repository, checked against
     /// pinned checksums, and turn their languages on. Without languages, a
     /// list to pick from.
@@ -939,6 +943,14 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "spell-replace",
         "Replace the misspelled word: :spell-replace <word>",
+    ),
+    spec(
+        "spell-next",
+        "Move the text cursor to the next misspelled word in the field",
+    ),
+    spec(
+        "spell-prev",
+        "Move the text cursor to the previous misspelled word in the field",
     ),
     spec(
         "spell-add",
@@ -2106,6 +2118,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "spell-suggest" => Command::SpellSuggest,
+        "spell-next" => Command::SpellNext { back: false },
+        "spell-prev" => Command::SpellNext { back: true },
         "spell-replace" => Command::SpellReplace {
             word: args.required("word")?.to_string(),
         },

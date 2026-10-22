@@ -65,6 +65,8 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:adblock-toggle` | `tb` | Turn content blocking off on this site, or back on, and reload; remembered in content.blocking.whitelist |
 | `:spell-suggest` |  | Suggest fixes for the misspelled word at the cursor (insert mode) |
 | `:spell-replace` |  | Replace the misspelled word: :spell-replace &lt;word&gt; |
+| `:spell-next` | `]s` | Move the text cursor to the next misspelled word in the field |
+| `:spell-prev` | `[s` | Move the text cursor to the previous misspelled word in the field |
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
 | `:spell-install` |  | Download spell-check dictionaries (checked against pinned checksums) and turn them on: :spell-install en-US de-DE, or pick from a list without a language |
 | `:spawn` |  | Run a program: :spawn [-u] [-v] [-m] [-o] [-d] &lt;cmd&gt; [args]; -u runs a userscript |

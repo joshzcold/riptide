@@ -97,6 +97,8 @@ impl Keymap {
             ("gU", "navigate up -t"),
             ("[[", "navigate prev"),
             ("]]", "navigate next"),
+            ("[s", "spell-prev"),
+            ("]s", "spell-next"),
             ("{{", "navigate prev -t"),
             ("}}", "navigate next -t"),
             ("<Ctrl-a>", "navigate increment"),

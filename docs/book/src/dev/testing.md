@@ -46,6 +46,7 @@ fn d_closes_the_tab() {
 - **Every test is `#[ignore]`d,** so a plain `cargo test` never starts browsers. `./task e2e` runs them with `--ignored`, two at a time (`E2E_THREADS` changes that).
 - **Clicks that should count as the user's go through hints** (`follow_hint`). Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
 - **The smoke test stays** for what needs real X11 input (xdotool) and for checking the release packages. New behaviour gets an e2e test.
+- **Spell checking needs a dictionary,** which tests don't download. `tests/spell.rs` copies an installed one (`RT_E2E_DICTIONARY=<file>.bdic`, or `en-US-*.bdic` from `~/.local/share/riptide/Dictionaries`) and passes without checking anything when there is none, as on CI.
 
 ## Unit tests in the CEF layer
 

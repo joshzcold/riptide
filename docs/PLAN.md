@@ -108,10 +108,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 - Widevine: protected playback against a real stream isn't verified (needs a real desktop and a service that serves VP9/AV1).
 
-### Small features
-
-- Spell checking: hints for misspelled words.
-
 ### Test reliability
 
 - Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop.
