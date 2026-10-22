@@ -119,6 +119,34 @@ fn ui_css_and_user_stylesheets_apply_and_reload() {
     wait_for(&b, "the page after the edit", page, "rgb(10, 11, 12)");
 }
 
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_style_the_bars_with_rt_ui_css_under_ui_css() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/painter/plugin/painter.lua",
+            "rt.ui.css('#bar { background: rgb(1, 2, 3) !important; color: rgb(4, 5, 6) !important; }')\n\
+             rt.command('painter-off', function() rt.ui.css(nil) end)",
+        )
+        .file("config/ui.css", "#bar { color: rgb(7, 8, 9) !important; }")
+        .lua("rt.pack.add({ dir = rt.config_dir .. '/../scratch-plugins/painter' })")
+        .start("page.html");
+    let bar = |b: &Browser| {
+        b.eval_bar(
+            "statusbar",
+            "(s => s.backgroundColor + ' ' + s.color)(getComputedStyle(document.getElementById('bar')))",
+        )
+    };
+    // The plugin's background shows; ui.css comes after it, so its color wins.
+    wait_for(&b, "the plugin's CSS", bar, "rgb(1, 2, 3) rgb(7, 8, 9)");
+    b.run("painter-off");
+    let start = std::time::Instant::now();
+    while bar(&b).starts_with("rgb(1, 2, 3)") {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the plugin's CSS stayed");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 /// Wait until `bar`'s page is taller (or shorter) than `than` pixels.
 fn wait_height(b: &Browser, bar: &str, what: &str, grow: bool, than: i64) -> i64 {
     let start = std::time::Instant::now();

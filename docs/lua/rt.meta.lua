@@ -340,6 +340,12 @@ function Float:is_open() end
 ---@return rt.Float
 function rt.ui.float(opts) end
 
+---CSS for riptide's tab bar, status bar, overlay, floats and panels, like
+---`ui.css` but kept by riptide: each call replaces this plugin's last one, and
+---nil or "" removes it. `ui.css` comes after, so it wins.
+---@param css string?
+function rt.ui.css(css) end
+
 ---@class rt.PanelOpts
 ---@field title? string
 ---@field lines? (string|(string|{ [1]: string, [2]: rt.Highlight })[])[] Text, or chunks of text with highlights; never HTML.

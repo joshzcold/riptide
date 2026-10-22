@@ -149,6 +149,7 @@ pub fn start() {
     // The config was just applied: the old placeholders and keys went with it.
     WAITING.with(|w| w.borrow_mut().clear());
     crate::lua::forget_plugin_keys();
+    crate::userstyle::forget_plugin_css();
     crate::pages::unregister_all();
     BLOCKED.with(|b| b.borrow_mut().clear());
     for spec in rt_config::lua::plugin_specs() {
