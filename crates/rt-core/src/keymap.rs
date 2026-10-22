@@ -424,6 +424,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("<Ctrl-l>", "split-focus right"),
     ("cm", "call-mute"),
     ("gp", "pip"),
+    ("tb", "adblock-toggle"),
     ("<Ctrl-p>", "tab-pin"),
     ("f", "hint"),
     ("F", "hint all tab"),
@@ -612,6 +613,10 @@ mod tests {
         assert_eq!(
             map.lookup(Mode::Insert, &seq("<Alt-s>")),
             Lookup::Exact("spell-suggest")
+        );
+        assert_eq!(
+            map.lookup(Mode::Normal, &seq("tb")),
+            Lookup::Exact("adblock-toggle")
         );
     }
 

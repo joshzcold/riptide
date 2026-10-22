@@ -62,6 +62,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:history-clear` |  | Delete all browsing history (needs --force) |
 | `:history-import` |  | Import qutebrowser's history: :history-import [path to history.sqlite] |
 | `:adblock-update` |  | Download the filter lists in content.blocking.adblock.lists |
+| `:adblock-toggle` | `tb` | Turn content blocking off on this site, or back on, and reload; remembered in content.blocking.whitelist |
 | `:spell-suggest` |  | Suggest fixes for the misspelled word at the cursor (insert mode) |
 | `:spell-replace` |  | Replace the misspelled word: :spell-replace &lt;word&gt; |
 | `:spell-add` |  | Add the word from the last :spell-suggest to your dictionary |
