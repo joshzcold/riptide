@@ -164,7 +164,13 @@ description = "The database password, so it doesn't ask"
 
 A riptide older than the plugin ignores keys it doesn't know, such as `[[option]]` before 0.4, with a warning in its log; it still refuses a permission it doesn't know.
 
-A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring. On Linux without a keyring service, saving a secret says so and the plugin can ask instead.
+A `secret` option is never written to a file: the form saves it in your OS keyring (the macOS Keychain, Windows' Credential Manager, or the Secret Service, such as GNOME Keyring or KWallet, on Linux), and the plugin reads it when it needs it, with `rt.secret.get("password", function(value, err) … end)`. A plugin can read only its own secret options, and only the ones its manifest declares. The Plugins tab shows whether a secret is set, never its value; **Clear** takes it out of the keyring.
+
+On Linux without a keyring service, a saved secret goes to the kernel keyring instead, which keeps it until the computer restarts (or until it can't keep it there, then until riptide quits); the message says which. After a restart the plugin asks again, as it does for a secret that was never set. To keep secrets across restarts, run a Secret Service:
+
+- **KeePassXC** can be one: in its settings, under Secret Service Integration, turn it on.
+- **GNOME Keyring** works outside GNOME too, for example in a window manager's startup script: `eval $(gnome-keyring-daemon --start --components=secrets)`.
+- **KWallet** on KDE.
 
 ### Health
 

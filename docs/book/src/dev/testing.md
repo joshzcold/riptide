@@ -23,7 +23,7 @@ Debug builds (and release builds with `--features test-control`) answer test req
 | `evalbar` | Runs JavaScript in the window's `tabbar`, `statusbar` or `completion` overlay page (`Browser::eval_bar`). |
 | `setwindowbounds` | Moves and sizes the current window, as a window manager would (`Browser::set_window_bounds`). `state` reports each window's `bounds`. |
 
-`crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. Its browsers run without the desktop's session bus and keep plugins' secrets in memory (`RIPTIDE_SECRET_STORE=memory`), so a test never touches your keyring. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
+`crates/rt-e2e` wraps them in a `Browser` that starts riptide with a scratch `--basedir`, its own Xvfb display, runtime directory and command socket, and a local HTTP server for the fixture pages in `crates/rt-e2e/pages/`. It stops only its own processes when the test ends. Its browsers run without the desktop's session bus and keep plugins' secrets in memory (`RIPTIDE_SECRET_STORE=memory`), so a test never touches your keyring. A test that sets `RIPTIDE_SECRET_STORE` to empty uses the kernel keyring, as Linux does without a Secret Service. Its secrets are kept under its own service name (`RIPTIDE_SECRET_SERVICE`), and it takes them out again even if it fails. When a test fails, the end of the browser log is printed and the profile is kept in `/tmp/rt-e2e-*` for a look.
 
 ```rust
 #[test]

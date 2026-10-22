@@ -86,7 +86,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Plugins (M27)
 
 - **Health checks in the riptide-plugins repository:** the password plugins can say when their tool (`bw`, `pass`, `keepassxc-cli`, …) isn't installed.
-- **Secrets on Linux without a keyring service:** today saving says it can't; consider an encrypted file as a fallback.
 
 ### Extensions (M28)
 
@@ -117,6 +116,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Not planned
 
+- Plugins' secrets in a passphrase-encrypted file, to last across restarts on Linux without a keyring service: you'd type riptide's passphrase in place of the vault's, for new crypto code and a passphrase that can't be recovered. They go to the kernel keyring until a restart instead, and a Secret Service (KeePassXC, GNOME Keyring) keeps them for good. Revisit if users ask for it.
 - Highlighting the tab a call shares: the picker's Tab list only offers call tabs (CEF lists only Chrome-style tabs), so it's rare, and telling which tab is captured would mean giving sites an id for your tabs (Capture Handle). Revisit if riptide's ordinary tabs become shareable.
 - Extensions seeing riptide's tabs in `chrome.tabs`: CEF lists only Chrome-style tabs, so it needs a CEF change (see Risks).
 - Reading `RIPTIDE_FIFO` live (it's read when the userscript exits), Greasemonkey scripts in an isolated world, and binary `GM_xmlhttpRequest` responses, until someone needs them.

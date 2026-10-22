@@ -924,10 +924,10 @@ fn plugins_are_added_from_the_catalog_and_kept_in_plugins_toml() {
     std::fs::remove_dir_all(&repo).unwrap();
 }
 
-#[test]
-#[ignore = "starts a browser; run with ./task e2e"]
-fn plugin_options_are_edited_on_the_tab_and_secrets_kept_out_of_files() {
-    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-options-{}", std::process::id()));
+/// A git repository with a "vault" plugin, which has an option of each kind
+/// and the commands vault-show, vault-token and vault-other. Returns it and its URL.
+fn vault_plugin(name: &str) -> (std::path::PathBuf, String) {
+    let repo = std::env::temp_dir().join(format!("rt-e2e-plugin-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&repo);
     std::fs::create_dir_all(repo.join("vault/lua/vault")).unwrap();
     std::fs::write(
@@ -990,6 +990,107 @@ return M"#,
     git(&["add", "."]);
     git(&["commit", "--quiet", "-m", "vault"]);
     let url = format!("file://{}", repo.display());
+    (repo, url)
+}
+
+/// Run `command` until the message it shows is `wanted`.
+fn say(b: &Browser, command: &str, wanted: &str) {
+    let start = std::time::Instant::now();
+    loop {
+        b.run(command);
+        if b.wait_until("an answer", |s| s.message().is_some())
+            .message()
+            == Some(wanted)
+        {
+            break;
+        }
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "{command} never said {wanted:?}: {:?}",
+            b.state().message()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Run `js` on the Plugins tab's control `key` (its element is `e`).
+fn on_control(b: &Browser, key: &str, js: &str) {
+    b.eval(&format!(
+        "(() => {{ const e = document.querySelector('[data-key=\"{key}\"]'); {js}; return ''; }})()"
+    ));
+}
+
+/// Takes a test's key out of the user's kernel keyring, even if the test fails.
+#[cfg(target_os = "linux")]
+struct KernelKey(String);
+
+#[cfg(target_os = "linux")]
+impl Drop for KernelKey {
+    fn drop(&mut self) {
+        use linux_keyutils::{KeyRing, KeyRingIdentifier};
+        if let Ok(key) = KeyRing::from_special_id(KeyRingIdentifier::Session, false)
+            .and_then(|ring| ring.search(&self.0))
+        {
+            let _ = key.invalidate();
+        }
+    }
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+#[cfg(target_os = "linux")]
+fn without_a_keyring_service_secrets_go_to_the_kernel_keyring() {
+    let (repo, url) = vault_plugin("kernel");
+    // The tests have no session bus, so no Secret Service: the real fallback.
+    let b = Browser::launch()
+        .env("RIPTIDE_SECRET_STORE", "")
+        .start("page.html");
+    let _cleanup = KernelKey(format!("keyring:plugin/vault/token@{}", b.secret_service()));
+    b.run(&format!("pack-add {url} vault"));
+    b.run("plugins");
+    b.wait_eval(
+        "page.plugins.map((p) => `${p.name}:${p.state}`).join(' ')",
+        "vault:loaded",
+    );
+    // The plugin only starts once its required option is set.
+    on_control(
+        &b,
+        "option:vault:server#input",
+        "e.value = 'vault.example.com'",
+    );
+    on_control(&b, "options:vault#save", "e.click()");
+    say(&b, "vault-show", "server vault.example.com:nil nil");
+    on_control(&b, "option:vault:token#input", "e.value = 'kernel-token'");
+    on_control(&b, "option:vault:token#button", "e.click()");
+    b.wait_until("it says where it went", |s| {
+        s.message().is_some_and(|m| {
+            m.contains("Saved vault's token in the kernel keyring until the computer restarts")
+        })
+    });
+    let marks = b.data_dir().join("plugin-secrets");
+    assert_eq!(
+        std::fs::read_to_string(&marks).unwrap(),
+        "vault/token kernel\n"
+    );
+    say(&b, "vault-token", "token kernel-token");
+
+    // Cleared from the kernel keyring; a mark left behind, as after a
+    // restart, is dropped the next time the plugin asks.
+    on_control(&b, "option:vault:token#clear", "e.click()");
+    b.wait_eval(
+        "String(page.plugins[0].options.find((o) => o.name === 'token').set)",
+        "false",
+    );
+    std::fs::write(&marks, "vault/token kernel\n").unwrap();
+    say(&b, "vault-token", "token nil");
+    assert_eq!(std::fs::read_to_string(&marks).unwrap(), "");
+    std::fs::remove_dir_all(&repo).unwrap();
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugin_options_are_edited_on_the_tab_and_secrets_kept_out_of_files() {
+    let (repo, url) = vault_plugin("options");
     let b = Browser::start("page.html");
     b.run(&format!("pack-add {url} vault"));
     b.run("plugins");
@@ -999,11 +1100,7 @@ return M"#,
     );
 
     // Options: typed in the form, saved to plugins.toml, given to setup().
-    let set = |key: &str, js: &str| {
-        b.eval(&format!(
-            "(() => {{ const e = document.querySelector('[data-key=\"{key}\"]'); {js}; return ''; }})()"
-        ));
-    };
+    let set = |key: &str, js: &str| on_control(&b, key, js);
     set("option:vault:server#input", "e.value = 'vault.example.com'");
     set("option:vault:mode#input", "e.value = 'safe'");
     set("options:vault#save", "e.click()");
@@ -1017,23 +1114,7 @@ return M"#,
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
-    let say = |command: &str, wanted: &str| {
-        let start = std::time::Instant::now();
-        loop {
-            b.run(command);
-            if b.wait_until("an answer", |s| s.message().is_some())
-                .message()
-                == Some(wanted)
-            {
-                break;
-            }
-            assert!(
-                start.elapsed() < rt_e2e::TIMEOUT,
-                "{command} never said {wanted:?}"
-            );
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    };
+    let say = |command: &str, wanted: &str| say(&b, command, wanted);
     say("vault-show", "server vault.example.com:nil safe");
 
     // A secret goes to the keyring (here the test's memory store), and only

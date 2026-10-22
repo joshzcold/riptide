@@ -1199,7 +1199,8 @@ pub fn read_secret(plugin: String, option: String, callback: u32) {
             .iter()
             .any(|o| o.name == option && o.kind == rt_config::plugins::OptionKind::Secret)
     });
-    crate::secrets::get(plugin, option, declared, callback);
+    let data_dir = paths().map(|(_, data_dir)| data_dir).unwrap_or_default();
+    crate::secrets::get(data_dir, plugin, option, declared, callback);
 }
 
 /// The Plugins tab's Save: `values` for plugin `name`'s options, each checked
