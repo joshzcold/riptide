@@ -389,10 +389,13 @@ fn call_mute() {
     // A page only takes keys while it has the focus, so the call's window
     // gets it for the moment the key takes, then the one you were in.
     let elsewhere = window != active;
-    if elsewhere {
-        for browser in browsers {
+    let lend = move || {
+        for &browser in &browsers {
             crate::panes::lend_focus(browser);
         }
+    };
+    if elsewhere {
+        lend();
         focus_window(window);
     }
     let place = if elsewhere { " (another window)" } else { "" };
@@ -406,6 +409,8 @@ fn call_mute() {
     crate::client::send_when_ready(keys, move || {
         crate::tabs::select(current);
         if elsewhere {
+            // Their focus events can still be on the way, on a busy machine.
+            lend();
             focus_window(active);
         }
     });

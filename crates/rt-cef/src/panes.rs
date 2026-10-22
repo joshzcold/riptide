@@ -619,7 +619,8 @@ pub fn lend_focus(browser: i32) {
     LENT.with(|l| l.borrow_mut().push((browser, std::time::Instant::now())));
 }
 
-fn focus_lent(browser: i32) -> bool {
+/// Whether `browser` has the focus only to take riptide's keys (see [`lend_focus`]).
+pub fn focus_lent(browser: i32) -> bool {
     LENT.with(|l| {
         let mut l = l.borrow_mut();
         l.retain(|(_, at)| at.elapsed() < std::time::Duration::from_secs(2));
