@@ -250,6 +250,26 @@ pub fn whitelisted(host: &str, whitelist: &[String]) -> bool {
     })
 }
 
+/// Whether hosts `a` and `b` are the same site (`www.example.com` and
+/// `ads.example.com`), as Chromium groups frames into processes.
+pub fn same_site(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let ip = |h: &str| {
+        h.trim_matches(['[', ']'])
+            .parse::<std::net::IpAddr>()
+            .is_ok()
+    };
+    if ip(a) || ip(b) {
+        return false;
+    }
+    match (psl::domain_str(a), psl::domain_str(b)) {
+        (Some(a), Some(b)) => a.eq_ignore_ascii_case(b),
+        _ => false,
+    }
+}
+
 /// Where lists and the compiled engine live.
 pub struct Store {
     dir: PathBuf,
@@ -537,6 +557,18 @@ mod tests {
         assert!(!whitelisted("badexample.com", &list));
         assert!(whitelisted("a.test.org", &list));
         assert!(!whitelisted("other.org", &list));
+    }
+
+    #[test]
+    fn same_site_follows_the_public_suffix_list() {
+        assert!(same_site("www.example.com", "ads.example.com"));
+        assert!(same_site("example.com", "a.b.example.com"));
+        assert!(!same_site("example.com", "badexample.com"));
+        assert!(same_site("a.example.co.uk", "b.example.co.uk"));
+        assert!(!same_site("one.co.uk", "two.co.uk"));
+        assert!(!same_site("127.0.0.1", "localhost"));
+        assert!(same_site("127.0.0.1", "127.0.0.1"));
+        assert!(!same_site("10.0.0.1", "10.0.0.2"));
     }
 
     #[test]

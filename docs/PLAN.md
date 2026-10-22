@@ -82,8 +82,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 1. **The Widevine licensing review** (see Risks): a decision, not code.
 2. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
-3. **Scriptlets in same-site frames from another host** (Ad blocking, below).
-4. **macOS and Windows packages** (M10), the largest milestone left.
+3. **macOS and Windows packages** (M10), the largest milestone left.
 
 ### Plugins (M27)
 
@@ -93,10 +92,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Extensions (M28)
 
 - Not checked yet: real autofill with a vault, passkeys, `chrome.commands` shortcuts.
-
-### Ad blocking (M8)
-
-- Scriptlets in a frame from another host of the page's own site (`ads.example.com` in `www.example.com`): it shares the page's process, so it isn't attached, and the page's script only runs for the page's host.
 
 ### Calls (M22)
 
