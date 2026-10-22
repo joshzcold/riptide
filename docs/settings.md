@@ -119,7 +119,8 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.user_stylesheets` | string[] | `[]` | CSS files applied to pages (relative paths are in the config directory); reloaded when they change; can be set per site |
 | `content.webgl` | boolean | `true` | Allow WebGL, which 3D graphics need and fingerprinting scripts use (after a restart) |
 | `content.webrtc_ip_handling_policy` | all-interfaces \| default-public-and-private-interfaces \| default-public-interface-only \| disable-non-proxied-udp | `all-interfaces` | Which IP addresses WebRTC (video calls) may reveal; disable-non-proxied-udp keeps it behind content.proxy |
-| `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart) |
+| `content.widevine` | boolean | `false` | Allow Widevine DRM: Chromium downloads Google's CDM (takes effect after a restart; turning it off deletes the CDM) |
+| `content.widevine_update_interval` | integer | `7` | Every this many days, a start with content.widevine on lets Chromium update the CDM, with its other components (0: never) |
 | `crash_report.email` | string | `` | Where :crash-report's Email button sends a report; empty hides the button |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |

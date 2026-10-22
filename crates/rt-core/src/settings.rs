@@ -1321,7 +1321,13 @@ pub static SETTINGS: &[SettingDef] = &[
         "content.widevine",
         Kind::Bool,
         Value::Bool(false),
-        "Allow Widevine DRM: Chromium downloads Google's CDM once (takes effect after a restart)"
+        "Allow Widevine DRM: Chromium downloads Google's CDM (takes effect after a restart; turning it off deletes the CDM)"
+    ),
+    def!(
+        "content.widevine_update_interval",
+        Kind::Int { min: 0, max: 365 },
+        Value::Int(7),
+        "Every this many days, a start with content.widevine on lets Chromium update the CDM, with its other components (0: never)"
     ),
     def!(
         "crash_report.email",
@@ -2215,6 +2221,7 @@ pub const RESTART_REQUIRED: &[&str] = &[
     "content.prefers_reduced_motion",
     "content.webgl",
     "content.widevine",
+    "content.widevine_update_interval",
     "extensions.load",
     "input.media_keys",
     "input.spatial_navigation",

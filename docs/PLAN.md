@@ -106,7 +106,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Bugs
 
-- Widevine is never updated after the first download, isn't removed when turned off, and protected playback against a real stream isn't verified.
+- Widevine: protected playback against a real stream isn't verified (needs a real desktop and a service that serves VP9/AV1).
 
 ### Small features
 
