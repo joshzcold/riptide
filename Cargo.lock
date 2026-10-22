@@ -1394,6 +1394,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "linux-keyutils"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83270a18e9f90d0707c41e9f35efada77b64c0e6f3f1810e71c8368a864d5590"
+dependencies = [
+ "bitflags",
+ "libc",
+]
+
+[[package]]
+name = "linux-keyutils-keyring-store"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39fbed79f71dc21eb21d3d07c0e908a3c58ff9a1fdbf5cf44230fb3deb6d994b"
+dependencies = [
+ "keyring-core",
+ "linux-keyutils",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2021,7 +2041,9 @@ dependencies = [
  "arboard",
  "cef",
  "keyring",
+ "keyring-core",
  "libc",
+ "linux-keyutils-keyring-store",
  "rt-adblock",
  "rt-config",
  "rt-core",
@@ -2059,6 +2081,7 @@ dependencies = [
 name = "rt-e2e"
 version = "0.7.0"
 dependencies = [
+ "linux-keyutils",
  "rt-config",
  "serde",
  "serde_json",

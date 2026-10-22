@@ -292,6 +292,11 @@ impl Browser {
         self.dir.join("base/data")
     }
 
+    /// The keyring service its plugins' secrets are kept under, its own.
+    pub fn secret_service(&self) -> String {
+        secret_service(&self.dir)
+    }
+
     /// The test's own directory, `{scratch}` in config and files.
     pub fn scratch(&self) -> PathBuf {
         self.dir.join("scratch")
@@ -657,6 +662,13 @@ impl Drop for Browser {
     }
 }
 
+fn secret_service(dir: &Path) -> String {
+    format!(
+        "riptide-e2e-{}",
+        dir.file_name().unwrap_or_default().to_string_lossy()
+    )
+}
+
 fn spawn_browser(dir: &Path, display: &str, env: &[(String, String)], args: &[&str]) -> Child {
     let log = std::fs::OpenOptions::new()
         .create(true)
@@ -673,8 +685,10 @@ fn spawn_browser(dir: &Path, display: &str, env: &[(String, String)], args: &[&s
         // Not the desktop's session bus: tests must not pop up notifications
         // or talk to services on the user's screen.
         .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
-        // Plugins' secrets in memory, never the desktop's keyring.
+        // Plugins' secrets in memory, never the desktop's keyring; a test
+        // that uses the kernel keyring keeps them under its own name.
         .env("RIPTIDE_SECRET_STORE", "memory")
+        .env("RIPTIDE_SECRET_SERVICE", secret_service(dir))
         // No filter list downloads from the internet; tests that want one turn it back on.
         .env("RIPTIDE_ADBLOCK_AUTO_UPDATE", "0")
         // Stand-ins from `Launch::command` come first.
