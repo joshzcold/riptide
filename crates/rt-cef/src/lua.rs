@@ -193,6 +193,22 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 callback,
             } => crate::storage::read_for_lua(source, &kind, &pattern, callback),
             Action::SelectTab(index) => crate::tabs::select(index),
+            Action::CloseTab(index) => {
+                if shell::with(|s| index < s.tabs.len()).unwrap_or(false) {
+                    crate::tabs::close(index);
+                }
+            }
+            Action::MoveTab { from, to } => {
+                let len = shell::with(|s| s.tabs.len()).unwrap_or(0);
+                if from < len && to < len {
+                    crate::tabs::move_tab(from, to);
+                }
+            }
+            Action::Write {
+                kind,
+                marks,
+                callback,
+            } => crate::storage::write_for_lua(source, &kind, marks, callback),
             Action::Keys(keys) => {
                 let keys = rt_core::key::Key::parse_sequence(&keys).unwrap_or_default();
                 if let Some(effects) = shell::with(|s| s.engine.replay_keys(&keys)) {

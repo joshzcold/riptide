@@ -28,6 +28,8 @@ const MIN_WIDTH: i32 = 220;
 
 struct Popup {
     window: u32,
+    /// The browser of the tab it was opened over.
+    tab: Option<i32>,
     title: String,
     page: BrowserView,
     bar: BrowserView,
@@ -120,6 +122,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
         Some((rect, tab))
     });
     close();
+    let tab = shell::with(|s| s.tabs.current()?.browser().map(|b| b.identifier())).flatten();
     let opened = OPENED.with(|o| {
         o.set(o.get().wrapping_add(1));
         o.get()
@@ -162,6 +165,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
             },
             all_keys,
             opened,
+            tab,
             scroll_from: None,
             scrolled: (0.0, 0.0),
             still: 0,
@@ -188,6 +192,19 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
 fn focus_tab() {
     if let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten() {
         View::from(&tab).request_focus();
+    }
+}
+
+/// Window `window`'s tab with browser `tab` is shown: close a popup that was
+/// opened over another of its tabs. Moving tabs around leaves it open.
+pub fn tab_shown(window: u32, tab: Option<i32>) {
+    let other = POPUP.with(|p| {
+        p.borrow()
+            .as_ref()
+            .is_some_and(|p| p.window == window && (p.tab.is_none() || p.tab != tab))
+    });
+    if other {
+        close();
     }
 }
 

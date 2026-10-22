@@ -828,3 +828,22 @@ pub fn read_for_lua(source: &str, kind: &str, pattern: &str, callback: u32) {
     let result = rt_config::lua::answered(callback, Some(envelope.to_string()), &context);
     crate::lua::carry_out_for(source, result);
 }
+
+/// `rt.set_bookmarks`, `rt.set_quickmarks`: replace list `kind` with `marks`,
+/// then answer plugin `source`'s callback `callback`.
+pub fn write_for_lua(source: &str, kind: &str, marks: Vec<(String, String)>, callback: u32) {
+    let written = match kind {
+        "bookmarks" => with(|s| s.bookmarks.replace(marks)),
+        "quickmarks" => with(|s| s.quickmarks.replace(marks)),
+        _ => None,
+    };
+    let envelope = match written {
+        Some(Ok(())) => serde_json::json!({ "ok": true }),
+        Some(Err(e)) => serde_json::json!({ "error": e.to_string() }),
+        None => serde_json::json!({ "error": format!("can't change {kind}") }),
+    };
+    publish_bookmarks();
+    let context = crate::lua::current_context();
+    let result = rt_config::lua::answered(callback, Some(envelope.to_string()), &context);
+    crate::lua::carry_out_for(source, result);
+}

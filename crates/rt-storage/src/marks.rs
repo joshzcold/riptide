@@ -114,6 +114,12 @@ impl Quickmarks {
         Ok(removed)
     }
 
+    /// Replace every quickmark with `marks`, as (name, URL), in order.
+    pub fn replace(&mut self, marks: Vec<(String, String)>) -> std::io::Result<()> {
+        self.marks = marks;
+        self.save()
+    }
+
     pub fn save(&self) -> std::io::Result<()> {
         save_to(
             &self.path,
@@ -177,6 +183,15 @@ impl Bookmarks {
             self.save()?;
         }
         Ok(removed)
+    }
+
+    /// Replace every bookmark with `marks`, as (URL, title), in order.
+    pub fn replace(&mut self, marks: Vec<(String, String)>) -> std::io::Result<()> {
+        self.marks = marks
+            .into_iter()
+            .map(|(url, title)| (url, title.trim().to_string()))
+            .collect();
+        self.save()
     }
 
     pub fn save(&self) -> std::io::Result<()> {
