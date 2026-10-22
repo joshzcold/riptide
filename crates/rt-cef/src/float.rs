@@ -284,7 +284,17 @@ pub fn reposition() {
             shown = true;
         }
     }
-    if shown && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
+    // During a prompt the status bar keeps the keyboard, on purpose.
+    let prompting = shell::with(|s| {
+        matches!(
+            s.engine.mode(),
+            rt_core::Mode::Prompt | rt_core::Mode::YesNo
+        )
+    })
+    .unwrap_or(false);
+    if shown
+        && !prompting
+        && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
     {
         View::from(&tab).request_focus();
     }
