@@ -24,10 +24,10 @@ Off by default. Turn it on with a list of languages, e.g. `c.spellcheck.language
 To keep that request away from Google, install dictionaries yourself first: `:spell-install en-US de-DE`, or `:spell-install` alone to pick from the 47 languages (type a code or a name such as `german`) downloads them from Chromium's own dictionary repository at a fixed version, checks each file against a checksum built into riptide, saves it where Chromium looks, and turns the language on. Chromium then uses that file and fetches nothing.
 
 From the keyboard, in a text field:
-- `:spell-suggest` lists fixes for the word at the text cursor as completions. `Tab` picks one, `Return` replaces the word, and you're back in insert mode.
+- `Alt-s` (`:spell-suggest`) lists fixes for the word at the text cursor as completions. `Tab` picks one, `Return` replaces the word, and you're back in insert mode.
 - `:spell-add` adds that word to your dictionary.
 
-Nothing is bound by default. For example, `rt.bind("<Ctrl-s>", "spell-suggest", "insert")`. Right-click suggestions work too.
+Right-click suggestions work too.
 
 ## Widevine (DRM)
 

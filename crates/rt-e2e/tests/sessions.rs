@@ -168,6 +168,40 @@ fn lazy_restore_loads_a_background_tab_only_when_its_shown() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn restored_tabs_show_their_sites_icon_before_they_load() {
+    let b = Browser::launch()
+        .toml("session.lazy_restore = true\n")
+        .start("nav1.html");
+    b.run(&format!("open -t {}", b.url("icon.html")));
+    let db = b.data_dir().join("history.sqlite");
+    let start = std::time::Instant::now();
+    while rt_e2e::sqlite(&db, "SELECT count(*) FROM favicons") != "1" {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "the icon wasn't saved");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.run("tab-focus 1");
+    b.run("session-save icons");
+    b.run("session-load icons");
+    b.wait_until("the session is back with nav1 in front", |s| {
+        s.tabs().len() == 2 && s.tab().title == "nav1"
+    });
+    // The background tab hasn't loaded, but its tab shows the saved icon.
+    let start = std::time::Instant::now();
+    while b.eval_bar(
+        "tabbar",
+        "String(!!document.querySelectorAll('.tab')[1]?.querySelector('img.icon'))",
+    ) != "true"
+    {
+        assert!(
+            start.elapsed() < rt_e2e::TIMEOUT,
+            "the restored tab has no icon"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn confirm_quit_asks_with_several_tabs() {
     let b = Browser::launch()
         .toml("confirm_quit = [\"multiple-tabs\"]\n")

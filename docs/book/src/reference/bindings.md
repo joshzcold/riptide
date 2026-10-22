@@ -151,6 +151,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 
 | Keys | Command |
 |---|---|
+| `<Alt-s>` | `spell-suggest` |
 | `<Ctrl-e>` | `open-editor` |
 | `<Escape>` | `mode-leave` |
 

@@ -69,6 +69,10 @@ fn set(browser: i32, favicon: Option<String>) {
             .tabs
             .iter_mut()
             .find(|t| t.browser().is_some_and(|b| b.identifier() == browser))?;
+        // A lazily restored tab shows about:blank but keeps its site's icon.
+        if tab.pending.is_some() {
+            return None;
+        }
         tab.favicon = favicon.clone();
         (!private).then(|| tab.url.clone()).zip(favicon)
     })

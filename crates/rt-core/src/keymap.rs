@@ -81,6 +81,9 @@ impl Keymap {
             .expect("valid default binding");
         map.bind(Mode::Insert, "<Ctrl-e>", "open-editor")
             .expect("valid default binding");
+        // Alt, since pages use Ctrl-s (save) in their own editors.
+        map.bind(Mode::Insert, "<Alt-s>", "spell-suggest")
+            .expect("valid default binding");
         map.bind(Mode::Normal, "`", "mode-enter set_mark")
             .expect("valid default binding");
         map.bind(Mode::Normal, "'", "mode-enter jump_mark")
@@ -606,6 +609,10 @@ mod tests {
         );
         assert_eq!(map.lookup(Mode::Normal, &seq("gx")), Lookup::None);
         assert_eq!(map.lookup(Mode::Insert, &seq("j")), Lookup::None);
+        assert_eq!(
+            map.lookup(Mode::Insert, &seq("<Alt-s>")),
+            Lookup::Exact("spell-suggest")
+        );
     }
 
     #[test]

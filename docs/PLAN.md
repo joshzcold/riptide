@@ -82,9 +82,8 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 1. **The Widevine licensing review** (see Risks): a decision, not code.
 2. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
-3. **Small features:** a default key binding for spell checking, favicons kept in sessions, the version on the documentation site.
-4. **Scriptlets in same-site frames from another host** (Ad blocking, below).
-5. **macOS and Windows packages** (M10), the largest milestone left.
+3. **Scriptlets in same-site frames from another host** (Ad blocking, below).
+4. **macOS and Windows packages** (M10), the largest milestone left.
 
 ### Plugins (M27)
 
@@ -118,9 +117,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Small features
 
-- Spell checking: a default key binding, and hints for misspelled words.
-- Favicons kept in sessions (today they're fetched again on load).
-- The documentation site showing the version it was built from.
+- Spell checking: hints for misspelled words.
 
 ### Test reliability
 
