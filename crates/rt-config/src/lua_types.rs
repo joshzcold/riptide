@@ -459,7 +459,7 @@ function Panel:is_open() end
 ---@field over? {{ x: number, y: number, width: number, height: number }} In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them, e.g. a text field's; its bar goes just above, and it follows the page as it scrolls.
 ---@field offset? {{ x: number, y: number }} In a float with `over`: where it goes from there, in CSS pixels, as `on_move` reported.
 ---@field on_move? fun(x: number, y: number, page: rt.Page) In a float: you dragged it; `x`, `y` is its offset in CSS pixels, from `over`'s place or its usual one.
----@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included; Shift-Escape closes it.
+---@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included, as `keydown` events (not typed text) unless you click into it; Shift-Escape closes it.
 ---@field on_message? fun(name: string, data: any, page: rt.Page) A message the page sent with `rt.send(name, json)`.
 
 ---@class rt.Page

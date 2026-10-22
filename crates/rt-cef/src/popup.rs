@@ -48,6 +48,8 @@ struct Popup {
     /// scrolled since, in CSS pixels: the popup follows the part it covers.
     scroll_from: Option<(f64, f64)>,
     scrolled: (f64, f64),
+    /// Reads in a row that found the page where it was.
+    still: u32,
     /// The plugin page it shows (plugin, page id), told where it's dragged.
     plugin_page: Option<(String, u32)>,
     /// Drags so far, so only the last one of a run is told.
@@ -69,8 +71,11 @@ pub struct Placement {
     pub plugin_page: Option<(String, u32)>,
 }
 
-/// How often a popup over part of a page reads where the page has scrolled.
+/// How often a popup over part of a page reads where the page has scrolled:
+/// often while it scrolls, less once it has been still for `STILL_READS`.
 const FOLLOW_MS: i64 = 40;
+const FOLLOW_STILL_MS: i64 = 250;
+const STILL_READS: u32 = 25;
 /// A drag is told once the bar has been still this long.
 const MOVED_MS: i64 = 400;
 /// Where a popup over part of the page waits while that part is scrolled away.
@@ -145,6 +150,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
             opened,
             scroll_from: None,
             scrolled: (0.0, 0.0),
+            still: 0,
             plugin_page,
             moves: 0,
             resized: false,
@@ -391,7 +397,8 @@ fn zoom_of(tab: &BrowserView) -> f64 {
 
 /// While popup `opened` covers part of its tab's page, follow the page's
 /// scrolling. Pages can't tell us they scrolled, so it's read every few
-/// milliseconds, as the status bar's `scroll` widget does more slowly.
+/// milliseconds while it scrolls, as the status bar's `scroll` widget does
+/// more slowly, and less often once the page is still.
 fn follow_scroll(opened: u32) {
     let tab = POPUP.with(|p| {
         let p = p.borrow();
@@ -408,19 +415,28 @@ fn follow_scroll(opened: u32) {
             let at = result
                 .ok()
                 .and_then(|json| serde_json::from_str::<[f64; 2]>(&json).ok());
-            let moved = at.and_then(|[x, y]| {
+            let read = at.and_then(|[x, y]| {
                 POPUP.with(|p| {
                     let mut p = p.borrow_mut();
                     let popup = p.as_mut().filter(|p| p.opened == opened)?;
                     let from = *popup.scroll_from.get_or_insert((x, y));
                     let scrolled = (x - from.0, y - from.1);
-                    (scrolled != popup.scrolled).then(|| popup.scrolled = scrolled)
+                    let moved = scrolled != popup.scrolled;
+                    popup.scrolled = scrolled;
+                    popup.still = if moved {
+                        0
+                    } else {
+                        popup.still.saturating_add(1)
+                    };
+                    Some((moved, popup.still))
                 })
             });
-            if moved.is_some() {
+            if read.is_some_and(|(moved, _)| moved) {
                 reposition();
             }
-            crate::client::later(FOLLOW_MS, move || follow_scroll(opened));
+            let still = read.is_some_and(|(_, still)| still >= STILL_READS);
+            let wait = if still { FOLLOW_STILL_MS } else { FOLLOW_MS };
+            crate::client::later(wait, move || follow_scroll(opened));
         },
     );
 }
