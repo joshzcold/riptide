@@ -107,7 +107,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Bugs
 
-- Downloads from private windows go to the usual folder and list.
 - Widevine is never updated after the first download, isn't removed when turned off, and protected playback against a real stream isn't verified.
 
 ### Small features

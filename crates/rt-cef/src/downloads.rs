@@ -35,6 +35,9 @@ struct Download {
     /// `prompt-open-download`: open it when done, with this command or
     /// (`None`) the desktop's default.
     open_when_done: Option<Option<String>>,
+    /// From a private window: listed only in private windows, and forgotten
+    /// when the last one closes.
+    private: bool,
 }
 
 thread_local! {
@@ -62,7 +65,11 @@ pub(crate) fn download_dir() -> PathBuf {
     current_system_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Status bar summary, e.g. `↓2 41%`.
+/// Whether the active window is private, so commands see its kind of downloads.
+fn current_private() -> bool {
+    shell::with(|s| s.private).unwrap_or(false)
+}
+
 /// How many downloads are still running, for `confirm_quit`.
 pub fn running_count() -> usize {
     DOWNLOADS.with(|d| {
@@ -73,16 +80,70 @@ pub fn running_count() -> usize {
     })
 }
 
-pub fn summary() -> String {
+/// Status bar summary for a private or normal window, e.g. `↓2 41%`.
+pub fn summary(private: bool) -> String {
     DOWNLOADS.with(|d| {
         let running: Vec<Option<i32>> = d
             .borrow()
             .iter()
-            .filter(|d| d.state == State::Running)
+            .filter(|d| d.state == State::Running && d.private == private)
             .map(|d| d.percent)
             .collect();
         summary_of(&running)
     })
+}
+
+/// Before the last private window closes, which cancels its running
+/// downloads: ask first. Returns whether to close now; `close` runs on yes.
+pub fn confirm_close_private(close: impl FnOnce() + 'static) -> bool {
+    let running = DOWNLOADS.with(|d| {
+        d.borrow()
+            .iter()
+            .filter(|d| d.state == State::Running && d.private)
+            .count()
+    });
+    if running == 0 {
+        return true;
+    }
+    let s = if running == 1 { "" } else { "s" };
+    prompts::ask(
+        None,
+        Scope::Other,
+        rt_core::prompt::Topic::Confirm,
+        "Close the private window?",
+        format!("{running} private download{s} will be cancelled"),
+        PromptKind::YesNo {
+            default: false,
+            remember: Remember::Never,
+        },
+        move |answer| {
+            if matches!(answer, PromptAnswer::Yes { .. }) {
+                forget_private();
+                close();
+            }
+        },
+    );
+    false
+}
+
+/// The last private window closed: cancel its running downloads and forget them all.
+pub fn forget_private() {
+    let private: Vec<Download> = DOWNLOADS.with(|d| {
+        let mut d = d.borrow_mut();
+        let (private, normal) = std::mem::take(&mut *d).into_iter().partition(|d| d.private);
+        *d = normal;
+        private
+    });
+    if private.is_empty() {
+        return;
+    }
+    for download in private {
+        if let Some(callback) = download.callback {
+            callback.cancel();
+        }
+    }
+    publish();
+    shell::refresh_ui();
 }
 
 /// `↓count` and the average of the known percentages, from the running
@@ -110,6 +171,7 @@ fn save_to(
     callback: BeforeDownloadCallback,
     browser: Option<i32>,
     open_when_done: Option<Option<String>>,
+    private: bool,
 ) {
     let begin = move |path: PathBuf| {
         if let Some(dir) = path.parent() {
@@ -126,6 +188,7 @@ fn save_to(
                 state: State::Running,
                 callback: None,
                 open_when_done,
+                private,
             })
         });
         publish();
@@ -181,6 +244,7 @@ wrap_download_handler! {
             let (Some(item), Some(callback)) = (download_item, callback.map(|c| c.clone())) else { return 0 };
             let id = item.id();
             let url = CefString::from(&item.url()).to_string();
+            let private = browser.as_deref().map_or_else(current_private, crate::window::is_private);
             let browser = browser.map(|b| b.identifier());
             let name = sanitize_name(&suggested_name.map(CefString::to_string).unwrap_or_default());
             // An extension installs instead of saving. Not continuing the
@@ -203,7 +267,7 @@ wrap_download_handler! {
                 .unwrap_or_else(download_dir);
             let suggestion = unique_path(&dir, &name, &|p: &Path| p.exists());
             if !ask {
-                save_to(suggestion, id, url, callback, browser, None);
+                save_to(suggestion, id, url, callback, browser, None, private);
                 return 1;
             }
             let default = match suggest.as_str() {
@@ -231,7 +295,7 @@ wrap_download_handler! {
                             if path.is_dir() {
                                 path = path.join(&name);
                             }
-                            if let Some(parent) = path.parent() {
+                            if let Some(parent) = path.parent().filter(|_| !private) {
                                 LAST_DIR.with(|d| *d.borrow_mut() = Some(parent.to_path_buf()));
                             }
                             (path, None)
@@ -243,7 +307,7 @@ wrap_download_handler! {
                         }
                         _ => return,
                     };
-                    save_to(path, id, url, callback, browser, open);
+                    save_to(path, id, url, callback, browser, open, private);
                 },
             );
             1
@@ -327,10 +391,20 @@ fn pick(count: Option<u32>, state: State) -> Result<usize, String> {
     pick_any(count, &[state], what)
 }
 
-/// The download numbered `count`, or the newest one, in one of `states`.
+/// The download numbered `count`, or the newest one, in one of `states`,
+/// among the active window's kind (private or not).
 fn pick_any(count: Option<u32>, states: &[State], what: &str) -> Result<usize, String> {
-    let all: Vec<State> = DOWNLOADS.with(|d| d.borrow().iter().map(|d| d.state).collect());
-    pick_from(&all, count, states, what)
+    let private = current_private();
+    let listed: Vec<(usize, State)> = DOWNLOADS.with(|d| {
+        d.borrow()
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.private == private)
+            .map(|(i, d)| (i, d.state))
+            .collect()
+    });
+    let all: Vec<State> = listed.iter().map(|&(_, state)| state).collect();
+    pick_from(&all, count, states, what).map(|i| listed[i].0)
 }
 
 /// The index of download number `count` (from 1) in `all`, or of the newest
@@ -471,7 +545,11 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             Err(e) => shell::show_message(Level::Error, e),
         },
         Command::DownloadRemove { all: true } => {
-            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| d.state == State::Running));
+            let private = current_private();
+            DOWNLOADS.with(|d| {
+                d.borrow_mut()
+                    .retain(|d| d.state == State::Running || d.private != private)
+            });
             publish();
         }
         Command::DownloadRemove { all: false } => {
@@ -505,7 +583,11 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
             Err(e) => shell::show_message(Level::Error, e),
         },
         Command::DownloadClear => {
-            DOWNLOADS.with(|d| d.borrow_mut().retain(|d| d.state == State::Running));
+            let private = current_private();
+            DOWNLOADS.with(|d| {
+                d.borrow_mut()
+                    .retain(|d| d.state == State::Running || d.private != private)
+            });
             publish();
         }
         Command::Downloads => {
@@ -529,14 +611,16 @@ pub fn start(url: &str) {
     }
 }
 
-/// `riptide://downloads/`, rebuilt on the UI thread whenever a download changes
-/// and served from the IO thread.
+/// `riptide://downloads/` for normal and for private windows, rebuilt on the
+/// UI thread whenever a download changes and served from the IO thread.
 static PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
+static PRIVATE_PAGE: RwLock<Option<Arc<[u8]>>> = RwLock::new(None);
 
-pub fn page() -> Arc<[u8]> {
-    PAGE.read().ok().and_then(|p| p.clone()).unwrap_or_else(|| {
+pub fn page(private: bool) -> Arc<[u8]> {
+    let page = if private { &PRIVATE_PAGE } else { &PAGE };
+    page.read().ok().and_then(|p| p.clone()).unwrap_or_else(|| {
         publish();
-        PAGE.read()
+        page.read()
             .ok()
             .and_then(|p| p.clone())
             .unwrap_or_else(|| Arc::from(&b""[..]))
@@ -544,8 +628,17 @@ pub fn page() -> Arc<[u8]> {
 }
 
 fn publish() {
+    for (page, private) in [(&PAGE, false), (&PRIVATE_PAGE, true)] {
+        if let Ok(mut page) = page.write() {
+            *page = Some(Arc::from(render(private).into_bytes()));
+        }
+    }
+}
+
+fn render(private: bool) -> String {
     let (rows, running) = DOWNLOADS.with(|d| {
         let d = d.borrow();
+        let d: Vec<&Download> = d.iter().filter(|dl| dl.private == private).collect();
         let rows: String = d
             .iter()
             .enumerate()
@@ -581,14 +674,19 @@ fn publish() {
     } else {
         ""
     };
-    let html = format!(
-        "<!doctype html><html><head><meta charset=utf-8><title>Downloads</title>{refresh}<style>{STYLE}</style></head>\
-         <body><main><h1>Downloads</h1>{body}<p class=help>:download-cancel and :download-open take the number as a count, e.g. 2:download-open. \
+    let (title, note) = if private {
+        (
+            "Private downloads",
+            "<p class=help>The files stay where they were saved; this list is forgotten when the last private window closes.</p>",
+        )
+    } else {
+        ("Downloads", "")
+    };
+    format!(
+        "<!doctype html><html><head><meta charset=utf-8><title>{title}</title>{refresh}<style>{STYLE}</style></head>\
+         <body><main><h1>{title}</h1>{body}{note}<p class=help>:download-cancel and :download-open take the number as a count, e.g. 2:download-open. \
          :download-clear forgets finished ones.</p></main></body></html>"
-    );
-    if let Ok(mut page) = PAGE.write() {
-        *page = Some(Arc::from(html.into_bytes()));
-    }
+    )
 }
 
 const STYLE: &str = "
