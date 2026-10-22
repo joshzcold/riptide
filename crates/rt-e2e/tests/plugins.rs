@@ -1141,3 +1141,57 @@ fn plugins_for_a_newer_riptide_are_refused_with_a_reason() {
     );
     std::fs::remove_dir_all(&repo).unwrap();
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn plugins_with_the_history_permission_read_history_bookmarks_and_quickmarks() {
+    let b = Browser::launch()
+        .file(
+            "scratch-plugins/finder/plugin/finder.lua",
+            r#"rt.command("finder", function()
+  rt.history("nav1", function(entries, err)
+    local found = entries and entries[1] and entries[1].url:match("nav1%.html") and "nav1" or tostring(err)
+    rt.bookmarks(function(marks)
+      rt.quickmarks(function(quick)
+        rt.notify("finder " .. found .. " " .. #marks .. " " .. type(quick))
+      end)
+    end)
+  end)
+end)
+rt.command("finder-first", function() rt.select_tab(1) end)"#,
+        )
+        .file(
+            "scratch-plugins/finder/riptide-plugin.toml",
+            "[permissions]\nhistory = true\n",
+        )
+        .file(
+            "scratch-plugins/nosy/plugin/nosy.lua",
+            r#"rt.command("nosy", function() rt.notify("nosy " .. type(rt.history)) end)"#,
+        )
+        .lua(
+            r#"rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/finder" })
+rt.pack.add({ dir = rt.config_dir .. "/../scratch-plugins/nosy" })"#,
+        )
+        .start("nav1.html");
+    b.wait_until("finder asks", |s| s.mode == "yesno");
+    b.keys("y");
+    b.wait_mode("normal");
+    b.run("bookmark-add");
+    b.run("open -t links.html");
+    b.wait_until("the second tab", |s| s.tab().url.ends_with("links.html"));
+
+    b.run("finder");
+    b.wait_until("the lists arrived", |s| {
+        s.message() == Some("finder nav1 1 table")
+    });
+    b.run("finder-first");
+    b.wait_until("the first tab is shown", |s| {
+        s.tab().url.ends_with("nav1.html")
+    });
+
+    // Without the permission, it has no rt.history.
+    b.run("nosy");
+    b.wait_until("nosy can't read history", |s| {
+        s.message() == Some("nosy nil")
+    });
+}

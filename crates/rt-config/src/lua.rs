@@ -241,7 +241,10 @@ local SAFE = {
   "assert", "error", "ipairs", "next", "pairs", "pcall", "rawequal", "rawget", "rawlen",
   "rawset", "select", "setmetatable", "getmetatable", "tonumber", "tostring", "type", "xpcall",
 }
-local GATED = { spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings" }
+local GATED = {
+  spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings",
+  history = "history", bookmarks = "history", quickmarks = "history",
+}
 -- Defined further down, with rt.ui and rt.page.
 local ui_for, page_for, secret_for
 local function copy(t)
@@ -414,6 +417,26 @@ end
 rt.ui = ui_for(nil)
 rt.page = page_for(nil)
 rt.secret = secret_for(nil)
+
+-- rt.history, rt.bookmarks, rt.quickmarks: lists, answered later; see rt.meta.lua.
+function rt.history(pattern, fn)
+  if type(pattern) ~= "string" or type(fn) ~= "function" then
+    error("rt.history takes text to look for and a function", 2)
+  end
+  rt._read("history", pattern, page_result(fn))
+end
+function rt.bookmarks(fn)
+  if type(fn) ~= "function" then error("rt.bookmarks takes a function", 2) end
+  rt._read("bookmarks", "", page_result(fn))
+end
+function rt.quickmarks(fn)
+  if type(fn) ~= "function" then error("rt.quickmarks takes a function", 2) end
+  rt._read("quickmarks", "", page_result(fn))
+end
+function rt.select_tab(index)
+  if math.type(index) ~= "integer" or index < 1 then error("rt.select_tab takes a tab's index, from 1", 2) end
+  rt._select_tab(index)
+end
 
 -- rt.store(name): data kept between runs, saved on every change.
 local stores = {}
@@ -784,6 +807,8 @@ pub enum PagePlace {
         offset: Option<(i32, i32)>,
         /// The frame `over` is measured in, by id; the main frame without one.
         frame: Option<String>,
+        /// In the middle of the page area rather than at its top right.
+        center: bool,
         all_keys: bool,
     },
 }
@@ -881,6 +906,15 @@ pub enum Action {
         option: String,
         callback: u32,
     },
+    /// `rt.history`, `rt.bookmarks`, `rt.quickmarks`: the list `kind` (with
+    /// `pattern` for history) goes to callback `callback`.
+    Read {
+        kind: String,
+        pattern: String,
+        callback: u32,
+    },
+    /// `rt.select_tab`: show tab `index` (from 0) of the current window.
+    SelectTab(usize),
     /// The plugin test runner is done: quit with this exit code.
     Exit(i32),
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
@@ -2429,6 +2463,16 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                                 Ok((x.round() as i32, y.round() as i32))
                             })
                             .transpose()?;
+                        let position: Option<String> = opts.get("position")?;
+                        let center = match position.as_deref() {
+                            None | Some("top-right") => false,
+                            Some("center") => true,
+                            Some(other) => {
+                                return Err(mlua::Error::runtime(format!(
+                                    "rt.ui.page: position is \"center\" or \"top-right\", not {other:?}"
+                                )));
+                            }
+                        };
                         let keys: Option<String> = opts.get("keys")?;
                         let all_keys = match keys.as_deref() {
                             None => false,
@@ -2450,6 +2494,7 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                             over,
                             offset,
                             frame,
+                            center,
                             all_keys,
                         }
                     }
@@ -2803,6 +2848,37 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 Ok(())
             },
         )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_read",
+        lua.create_function(
+            move |lua, (kind, pattern, callback): (String, String, mlua::Function)| {
+                let id = {
+                    let mut state = s.borrow_mut();
+                    state.next_callback += 1;
+                    state.next_callback - 1
+                };
+                let api: mlua::Table = lua.globals().get("rt")?;
+                api.get::<mlua::Table>("_answers")?.set(id, callback)?;
+                s.borrow_mut().actions.push(Action::Read {
+                    kind,
+                    pattern,
+                    callback: id,
+                });
+                Ok(())
+            },
+        )?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_select_tab",
+        lua.create_function(move |_, index: usize| {
+            s.borrow_mut()
+                .actions
+                .push(Action::SelectTab(index.saturating_sub(1)));
+            Ok(())
+        })?,
     )?;
     let s = state.clone();
     api.set(

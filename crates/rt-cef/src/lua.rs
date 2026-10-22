@@ -187,6 +187,12 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 option,
                 callback,
             } => crate::plugins::read_secret(plugin, option, callback),
+            Action::Read {
+                kind,
+                pattern,
+                callback,
+            } => crate::storage::read_for_lua(source, &kind, &pattern, callback),
+            Action::SelectTab(index) => crate::tabs::select(index),
             Action::Keys(keys) => {
                 let keys = rt_core::key::Key::parse_sequence(&keys).unwrap_or_default();
                 if let Some(effects) = shell::with(|s| s.engine.replay_keys(&keys)) {

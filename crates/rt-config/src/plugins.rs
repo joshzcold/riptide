@@ -35,6 +35,9 @@ pub struct Permissions {
     pub clipboard: bool,
     /// See every key pressed.
     pub keys: bool,
+    /// Read history, bookmarks and quickmarks (`rt.history`, `rt.bookmarks`,
+    /// `rt.quickmarks`).
+    pub history: bool,
     /// Hosts it may fetch from.
     pub network: Vec<String>,
     /// Sites whose pages it may script or style.
@@ -61,6 +64,7 @@ impl Permissions {
         flag(self.settings, "read and change your settings");
         flag(self.clipboard, "read and write the clipboard");
         flag(self.keys, "see every key you press");
+        flag(self.history, "read your history, bookmarks and quickmarks");
         let mut list = |hosts: &[String], text: &str| {
             if hosts.iter().any(|h| h == "*") {
                 out.push(format!("{text} every site"));
@@ -90,6 +94,7 @@ impl Permissions {
             settings: self.settings && !approved.settings,
             clipboard: self.clipboard && !approved.clipboard,
             keys: self.keys && !approved.keys,
+            history: self.history && !approved.history,
             network: more(&self.network, &approved.network),
             pages: more(&self.pages, &approved.pages),
             frames: more(&self.frames, &approved.frames),
