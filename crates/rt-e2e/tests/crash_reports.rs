@@ -99,16 +99,8 @@ fn crash_report_says_when_there_are_none() {
     b.wait_eval("String(document.getElementById('dumps').hidden)", "true");
 }
 
-#[test]
-#[ignore = "starts a browser; run with ./task e2e"]
-fn a_chromium_crash_leaves_a_dump_that_the_next_start_mentions() {
-    let b = Browser::launch()
-        .toml("url.start_pages = [\"about:blank\"]\nmessages.timeout = 0\n")
-        .start("page.html");
-    // Crashpad, turned on by the crash_reporter.cfg riptide writes, keeps a
-    // dump of the tab's renderer.
-    b.crash_tab();
-    b.wait_until("the tab crashed", |s| s.tab().crashed);
+/// Wait until Chromium's crash reporter has left a dump in `pending/`.
+fn wait_for_dump(b: &Browser) {
     let start = std::time::Instant::now();
     while !std::fs::read_dir(b.data_dir().join("pending")).is_ok_and(|d| {
         d.flatten()
@@ -121,6 +113,74 @@ fn a_chromium_crash_leaves_a_dump_that_the_next_start_mentions() {
         );
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+}
+
+/// End the browser process with `signal`, as a crash in native code would,
+/// and check that its tabs and a crash dump survive it.
+fn native_crash_keeps_the_tabs_and_leaves_a_dump(signal: &str) {
+    let b = Browser::launch()
+        .toml(
+            "url.start_pages = [\"about:blank\"]\nauto_save.interval = 500\nmessages.timeout = 0\n",
+        )
+        .start("page.html");
+    let second = b.url("second.html");
+    b.run(&format!("open -t {second}"));
+    b.wait_until("two tabs", |s| {
+        s.tabs().len() == 2 && s.tab().is_loaded(&second)
+    });
+    let autosave = b.data_dir().join("sessions/_autosave.toml");
+    let start = std::time::Instant::now();
+    while !std::fs::read_to_string(&autosave).is_ok_and(|t| t.contains("second.html")) {
+        assert!(start.elapsed() < rt_e2e::TIMEOUT, "no autosave");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    b.signal(signal);
+    assert!(!b.wait_exit().success(), "SIG{signal} doesn't exit cleanly");
+    wait_for_dump(&b);
+    assert!(
+        autosave.exists(),
+        "SIG{signal} removed the crash-recovery save"
+    );
+
+    b.restart();
+    b.wait_until("the tabs are restored", |s| {
+        s.tabs().len() == 2 && s.tabs()[1].url == second
+    });
+    b.run("crash-report");
+    b.wait_until("the report page opens", |s| {
+        s.tab().url == "riptide://crash/" && !s.tab().loading
+    });
+    b.wait_eval(
+        "String(document.querySelectorAll('#dump-list li').length)",
+        "1",
+    );
+}
+
+// Native code (CEF, Chromium, a C library) aborts or faults without running
+// riptide's panic hook; Chromium's crash reporter catches both.
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_native_abort_in_the_browser_keeps_the_tabs_and_leaves_a_dump() {
+    native_crash_keeps_the_tabs_and_leaves_a_dump("ABRT");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_segfault_in_the_browser_keeps_the_tabs_and_leaves_a_dump() {
+    native_crash_keeps_the_tabs_and_leaves_a_dump("SEGV");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_chromium_crash_leaves_a_dump_that_the_next_start_mentions() {
+    let b = Browser::launch()
+        .toml("url.start_pages = [\"about:blank\"]\nmessages.timeout = 0\n")
+        .start("page.html");
+    // Crashpad, turned on by the crash_reporter.cfg riptide writes, keeps a
+    // dump of the tab's renderer.
+    b.crash_tab();
+    b.wait_until("the tab crashed", |s| s.tab().crashed);
+    wait_for_dump(&b);
     b.run("quit");
     b.wait_exit();
     b.restart();
