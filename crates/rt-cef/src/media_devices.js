@@ -48,8 +48,9 @@
         }
         stream.removeTrack(old);
         stream.addTrack(track);
-        replaced.set(old, track);
+        // Stopped first: from then on, stopping `old` stops `track`.
         old.stop();
+        replaced.set(old, track);
       }
     }
   };

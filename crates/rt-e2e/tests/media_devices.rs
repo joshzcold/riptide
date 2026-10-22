@@ -58,6 +58,7 @@ fn a_site_gets_the_devices_set_for_it() {
             .iter()
             .all(|k| has(v, k, "fake_device_1") && has(v, k, "Fake Audio Input 2"))
             && v["speaker"] == "Fake Audio Output 1"
+            && v["live"] == true
     });
 }
 
@@ -84,7 +85,7 @@ fn media_devices_switches_a_call_in_progress() {
     });
     b.keys("4");
     wait_in_use(&b, "the new microphone", |v| {
-        has(v, "sent", "Fake Audio Input 2") && has(v, "stream", "Fake Audio Input 2")
+        has(v, "sent", "Fake Audio Input 2") && has(v, "stream", "Fake Audio Input 2") && v["live"] == true
     });
     assert!(
         b.wait_file(&b.config_dir().join("autoconfig.toml"))

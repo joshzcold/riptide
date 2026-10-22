@@ -31,6 +31,7 @@
       speaker: devices.find((d) => d.kind === "audiooutput" && d.deviceId === sink)?.label ?? "",
       // The site mutes the track it was given.
       enabled: __near.getSenders().map((s) => s.track?.enabled),
+      live: __near.getSenders().every((s) => s.track?.readyState === "live"),
     });
   };
   window.listDevices = async () => {
