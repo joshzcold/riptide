@@ -54,6 +54,55 @@ pub fn watch_widevine_download(data_dir: std::path::PathBuf) {
     });
 }
 
+/// When Chromium last had component updates on to update Widevine.
+const WIDEVINE_LAST_UPDATE: &str = "widevine-last-update";
+
+/// What startup does about the Widevine CDM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Widevine {
+    Off,
+    /// `content.widevine` was turned off, so the CDM was deleted.
+    Removed,
+    /// On but not downloaded yet.
+    Fetch,
+    /// Installed, and `content.widevine_update_interval` days have passed.
+    Update,
+    Installed,
+}
+
+impl Widevine {
+    /// Chromium has no switch for a single component, so updates are on for
+    /// the whole run that fetches or updates the CDM.
+    pub fn component_updates(self) -> bool {
+        matches!(self, Self::Fetch | Self::Update)
+    }
+}
+
+/// Before CEF starts, which is when Chromium loads the CDM: delete it when
+/// `on` is false, and fetch it, or check for a newer one every `days` days (0: never).
+pub fn prepare_widevine(data_dir: &Path, on: bool, days: i64) -> Widevine {
+    let stamp = data_dir.join(WIDEVINE_LAST_UPDATE);
+    match (on, widevine_installed(data_dir)) {
+        (false, true) => match std::fs::remove_dir_all(data_dir.join("WidevineCdm")) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&stamp);
+                Widevine::Removed
+            }
+            Err(e) => {
+                tracing::warn!("can't remove the Widevine CDM: {e}");
+                Widevine::Off
+            }
+        },
+        (false, false) => Widevine::Off,
+        (true, false) => {
+            crate::background::record(&stamp);
+            Widevine::Fetch
+        }
+        (true, true) if crate::background::due(&stamp, days) => Widevine::Update,
+        (true, true) => Widevine::Installed,
+    }
+}
+
 /// Whether Chromium has downloaded the Widevine CDM into this profile.
 pub fn widevine_installed(data_dir: &Path) -> bool {
     std::fs::read_dir(data_dir.join("WidevineCdm"))
@@ -89,8 +138,7 @@ pub fn append_switches(command_line: &mut CommandLine) {
 }
 
 /// Write the preferences into the profile before CEF reads it.
-/// `component_updates` is on only to fetch Widevine (`content.widevine`):
-/// Chromium has no switch for a single component.
+/// `component_updates` is on only to fetch or update Widevine (see [`Widevine`]).
 pub fn seed_prefs(data_dir: &Path, profile_dir: &Path, component_updates: bool) {
     seed(
         &data_dir.join("Local State"),
@@ -165,5 +213,41 @@ mod tests {
             })
         );
         assert!(!set_all(&mut root, &prefs));
+    }
+
+    #[test]
+    fn widevine_is_fetched_updated_every_few_days_and_deleted_when_off() {
+        let dir =
+            std::env::temp_dir().join(format!("riptide-widevine-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let stamp = dir.join(WIDEVINE_LAST_UPDATE);
+        assert_eq!(prepare_widevine(&dir, false, 7), Widevine::Off);
+        assert_eq!(prepare_widevine(&dir, true, 7), Widevine::Fetch);
+        assert!(stamp.exists(), "the fetch starts the clock");
+
+        let cdm = dir.join("WidevineCdm/4.10.2830.0");
+        std::fs::create_dir_all(&cdm).unwrap();
+        std::fs::write(cdm.join("manifest.json"), "{}").unwrap();
+        assert_eq!(prepare_widevine(&dir, true, 7), Widevine::Installed);
+        std::fs::write(&stamp, "0").unwrap();
+        assert_eq!(
+            prepare_widevine(&dir, true, 0),
+            Widevine::Installed,
+            "0: never"
+        );
+        assert_eq!(prepare_widevine(&dir, true, 7), Widevine::Update);
+        assert_eq!(
+            prepare_widevine(&dir, true, 7),
+            Widevine::Installed,
+            "not again so soon"
+        );
+
+        assert_eq!(prepare_widevine(&dir, false, 7), Widevine::Removed);
+        assert!(!dir.join("WidevineCdm").exists());
+        assert!(!stamp.exists());
+        assert!(Widevine::Fetch.component_updates() && Widevine::Update.component_updates());
+        assert!(!Widevine::Installed.component_updates() && !Widevine::Removed.component_updates());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

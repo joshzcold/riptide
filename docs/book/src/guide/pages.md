@@ -31,6 +31,8 @@ Right-click suggestions work too.
 
 ## Widevine (DRM)
 
-Off by default. With `c.content.widevine = true` and a restart, Chromium downloads Google's Widevine CDM (about 21 MB) into the data directory, and it loads from the next start. Chromium has no switch for a single component, so component updates are on during that one run. Once the CDM is installed they go back off, and the CDM itself isn't updated. To update or remove it, delete `<data>/WidevineCdm`.
+Off by default. With `c.content.widevine = true` and a restart, Chromium downloads Google's Widevine CDM (about 21 MB) into the data directory, and it loads from the next start. Chromium has no switch for a single component, so component updates are on during that one run, and they go back off once the CDM is installed.
+
+Every `content.widevine_update_interval` days (default 7; 0 never), one start turns component updates on again so Chromium can update the CDM; a newer one loads from the start after. Turning `content.widevine` off deletes the CDM at the next start.
 
 Limits: only VP9/AV1 streams work (prebuilt CEF has no H.264/AAC), Linux Widevine is the software-only level (L3) that services often cap at lower resolutions, and this hasn't been checked against Google's Widevine terms for third-party browsers.

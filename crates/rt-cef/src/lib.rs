@@ -85,8 +85,8 @@ struct Startup {
     /// Switches from startup-only settings such as `content.cache.size`,
     /// `content.canvas_reading` and `content.webgl`.
     switches: Vec<(&'static str, Option<String>)>,
-    /// `content.widevine` is on but the CDM isn't downloaded yet.
-    fetch_widevine: bool,
+    /// What startup did about the Widevine CDM, to say once a window is up.
+    widevine: privacy::Widevine,
 }
 
 wrap_app! {
@@ -181,10 +181,18 @@ wrap_browser_process_handler! {
             }
             window::create(startup.urls, commands, false);
             report_config_errors(&errors);
-            if let Some(data_dir) = data_dir
-                && startup.fetch_widevine
-            {
-                privacy::watch_widevine_download(data_dir);
+            match startup.widevine {
+                privacy::Widevine::Fetch => {
+                    if let Some(data_dir) = data_dir {
+                        privacy::watch_widevine_download(data_dir);
+                    }
+                }
+                privacy::Widevine::Removed => shell::show_message(
+                    Level::Info,
+                    "Removed the Widevine CDM, since content.widevine is off",
+                ),
+                privacy::Widevine::Update => tracing::info!("checking for a newer Widevine CDM"),
+                privacy::Widevine::Off | privacy::Widevine::Installed => {}
             }
             remote::listen();
             statusbar::start();
@@ -377,9 +385,12 @@ pub fn run() -> i32 {
     let _ = help::SANDBOX.set(sandbox.describe());
     let data_dir = paths.data_dir.clone();
     let loaded = rt_config::load(&paths);
-    let widevine = startup_bool(&loaded, "content.widevine");
-    let fetch_widevine = widevine && !privacy::widevine_installed(&paths.data_dir);
-    privacy::seed_prefs(&paths.data_dir, &profile, fetch_widevine);
+    let widevine = privacy::prepare_widevine(
+        &paths.data_dir,
+        startup_bool(&loaded, "content.widevine"),
+        startup_settings(&loaded).int("content.widevine_update_interval"),
+    );
+    privacy::seed_prefs(&paths.data_dir, &profile, widevine.component_updates());
     let settings = Settings {
         no_sandbox: (!sandbox.is_on()).into(),
         persist_session_cookies: 1,
@@ -442,7 +453,7 @@ pub fn run() -> i32 {
         commands,
         config: std::sync::Arc::new(std::sync::Mutex::new(Some(loaded))),
         switches,
-        fetch_widevine,
+        widevine,
     }));
     if initialize(
         Some(args.as_main_args()),
