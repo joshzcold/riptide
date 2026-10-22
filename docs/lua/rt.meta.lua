@@ -314,7 +314,7 @@ function Panel:is_open() end
 ---@field size? integer In a panel: its width, or height below the page, in pixels (default 400).
 ---@field width? integer In a float: its width in pixels; without width and height it's sized to the page's content.
 ---@field height? integer In a float: its height in pixels.
----@field over? { x: number, y: number, width: number, height: number } In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them, e.g. a text field's; its bar goes just above, and it follows the page as it scrolls.
+---@field over? { x: number, y: number, width: number, height: number, frame?: string } In a float: the part of the current page it covers, in CSS pixels as `getBoundingClientRect` gives them in `frame` (an id from `rt.page.eval`; the main frame without one), e.g. a text field's; its bar goes just above, and it follows the page as it scrolls.
 ---@field offset? { x: number, y: number } In a float with `over`: where it goes from there, in CSS pixels, as `on_move` reported.
 ---@field on_move? fun(x: number, y: number, page: rt.Page) In a float: you dragged it; `x`, `y` is its offset in CSS pixels, from `over`'s place or its usual one.
 ---@field keys? "all" In a float: every key goes to the page, riptide's bindings and Escape included, as `keydown` events (not typed text) unless you click into it; Shift-Escape closes it.
@@ -379,11 +379,15 @@ function rt.page.key(keys) end
 function rt.page.fill_login(login) end
 
 ---Evaluate a JavaScript expression in the page and get its value, as JSON
----turns it into Lua: `fn(value)`, or `fn(nil, why)`. It runs in the page's
----own world, so the page can see it and change what it returns.
+---turns it into Lua: `fn(value, nil, frame)`, or `fn(nil, why)`. It runs in
+---the page's own world, so the page can see it and change what it returns.
+---`opts.frame` runs it in another frame: `"focused"` for the one with the
+---keyboard focus (a field in an iframe, say), or a `frame` id an earlier
+---call gave; the `pages` permission must cover that frame's site too.
 ---@param code string An expression; wrap statements in `(() => { … })()`.
----@param fn fun(value: any, err: string|nil)
-function rt.page.eval(code, fn) end
+---@param fn fun(value: any, err: string|nil, frame: string|nil)
+---@param opts? { frame?: string }
+function rt.page.eval(code, fn, opts) end
 
 ---Add a stylesheet to the page, until it next loads.
 ---@param css string

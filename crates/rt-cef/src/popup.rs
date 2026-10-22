@@ -50,6 +50,11 @@ struct Popup {
     scrolled: (f64, f64),
     /// Reads in a row that found the page where it was.
     still: u32,
+    /// The frame `over` was measured in, by id, and where its viewport starts
+    /// in the top page, in CSS pixels, once worked out: until then it's out
+    /// of sight. The main frame starts at 0, 0.
+    frame: Option<String>,
+    origin: Option<(f64, f64)>,
     /// The plugin page it shows (plugin, page id), told where it's dragged.
     plugin_page: Option<(String, u32)>,
     /// Drags so far, so only the last one of a run is told.
@@ -66,6 +71,8 @@ pub struct Placement {
     pub over: Option<PageRect>,
     /// From where `over` puts it, in CSS pixels, as `on_move` reported.
     pub offset: Option<(i32, i32)>,
+    /// The frame `over` was measured in, by id.
+    pub frame: Option<String>,
     pub all_keys: bool,
     /// The plugin page it shows, told where it's dragged.
     pub plugin_page: Option<(String, u32)>,
@@ -99,6 +106,7 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
         size,
         over,
         offset,
+        frame,
         all_keys,
         plugin_page,
     } = placement;
@@ -151,6 +159,8 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
             scroll_from: None,
             scrolled: (0.0, 0.0),
             still: 0,
+            origin: frame.is_none().then_some((0.0, 0.0)),
+            frame,
             plugin_page,
             moves: 0,
             resized: false,
@@ -272,7 +282,9 @@ pub fn reposition() {
                     ))
                 })
                 .flatten()?;
-                let (x, y, width, height) = cover(&area, &content, rect, popup.scrolled, tab)?;
+                let origin = popup.origin.unwrap_or_default();
+                let scrolled = (popup.scrolled.0 - origin.0, popup.scrolled.1 - origin.1);
+                let (x, y, width, height) = cover(&area, &content, rect, scrolled, tab)?;
                 let (width, height) = if popup.resized {
                     (
                         popup
@@ -285,7 +297,8 @@ pub fn reposition() {
                     (width, height)
                 };
                 let (x, y) = (x + popup.offset.0, y + popup.offset.1);
-                shown = y + BAR_HEIGHT + height > area.y
+                shown = popup.origin.is_some()
+                    && y + BAR_HEIGHT + height > area.y
                     && y < area.y + area.height
                     && x + width > area.x
                     && x < area.x + area.width;
@@ -400,46 +413,124 @@ fn zoom_of(tab: &BrowserView) -> f64 {
 /// milliseconds while it scrolls, as the status bar's `scroll` widget does
 /// more slowly, and less often once the page is still.
 fn follow_scroll(opened: u32) {
-    let tab = POPUP.with(|p| {
+    let target = POPUP.with(|p| {
         let p = p.borrow();
         let popup = p.as_ref().filter(|p| p.opened == opened)?;
-        popup.over.as_ref().map(|(_, tab)| tab.clone())
+        let browser = popup.over.as_ref()?.1.browser()?;
+        let frame = match &popup.frame {
+            Some(id) => browser.frame_by_identifier(Some(&CefString::from(id.as_str()))),
+            None => browser.main_frame(),
+        };
+        Some(frame)
     });
-    let Some(browser) = tab.and_then(|t| t.browser()) else {
+    let Some(target) = target else {
         return;
     };
-    crate::eval::eval(
-        &browser,
-        "JSON.stringify([scrollX, scrollY])",
-        move |result| {
-            let at = result
-                .ok()
-                .and_then(|json| serde_json::from_str::<[f64; 2]>(&json).ok());
-            let read = at.and_then(|[x, y]| {
-                POPUP.with(|p| {
-                    let mut p = p.borrow_mut();
-                    let popup = p.as_mut().filter(|p| p.opened == opened)?;
-                    let from = *popup.scroll_from.get_or_insert((x, y));
-                    let scrolled = (x - from.0, y - from.1);
-                    let moved = scrolled != popup.scrolled;
-                    popup.scrolled = scrolled;
-                    popup.still = if moved {
-                        0
-                    } else {
-                        popup.still.saturating_add(1)
-                    };
-                    Some((moved, popup.still))
-                })
-            });
-            if read.is_some_and(|(moved, _)| moved) {
-                reposition();
-            }
-            let still = read.is_some_and(|(_, still)| still >= STILL_READS);
-            let wait = if still { FOLLOW_STILL_MS } else { FOLLOW_MS };
-            crate::client::later(wait, move || follow_scroll(opened));
-        },
+    // The frame is gone, e.g. it navigated: the popup stays where it is.
+    let Some(frame) = target else {
+        return crate::client::later(FOLLOW_STILL_MS, move || follow_scroll(opened));
+    };
+    frame_origin(
+        frame.clone(),
+        0,
+        Box::new(move |origin| {
+            crate::eval::eval_frame(
+                &frame,
+                "JSON.stringify([scrollX, scrollY])",
+                move |result| {
+                    let at = result
+                        .ok()
+                        .and_then(|json| serde_json::from_str::<[f64; 2]>(&json).ok());
+                    let read = at.and_then(|[x, y]| {
+                        POPUP.with(|p| {
+                            let mut p = p.borrow_mut();
+                            let popup = p.as_mut().filter(|p| p.opened == opened)?;
+                            let from = *popup.scroll_from.get_or_insert((x, y));
+                            let scrolled = (x - from.0, y - from.1);
+                            let moved = scrolled != popup.scrolled || origin != popup.origin;
+                            popup.scrolled = scrolled;
+                            popup.origin = origin;
+                            popup.still = if moved {
+                                0
+                            } else {
+                                popup.still.saturating_add(1)
+                            };
+                            Some((moved, popup.still))
+                        })
+                    });
+                    if read.is_some_and(|(moved, _)| moved) {
+                        reposition();
+                    }
+                    let still = read.is_some_and(|(_, still)| still >= STILL_READS);
+                    let wait = if still { FOLLOW_STILL_MS } else { FOLLOW_MS };
+                    crate::client::later(wait, move || follow_scroll(opened));
+                },
+            );
+        }),
     );
 }
+
+/// What [`frame_origin`] hands its answer to.
+type Origin = Box<dyn FnOnce(Option<(f64, f64)>)>;
+
+/// Where `frame`'s viewport starts in the top page, in CSS pixels: each
+/// parent finds the `<iframe>` showing it, as hints do, by name, then URL,
+/// then origin, then as its only frame. `None` if one can't be told apart.
+fn frame_origin(frame: Frame, depth: u32, done: Origin) {
+    let Some(parent) = frame.parent().filter(|_| depth < 16) else {
+        return done((depth < 16).then_some((0.0, 0.0)));
+    };
+    let wanted = serde_json::json!({
+        "name": CefString::from(&frame.name()).to_string(),
+        "url": CefString::from(&frame.url()).to_string(),
+    });
+    let code = format!("JSON.stringify(({FIND_FRAME_JS})({wanted}))");
+    let next = parent.clone();
+    crate::eval::eval_frame(&parent, &code, move |result| {
+        let at = result
+            .ok()
+            .and_then(|json| serde_json::from_str::<Option<[f64; 2]>>(&json).ok())
+            .flatten();
+        let Some([x, y]) = at else {
+            return done(None);
+        };
+        frame_origin(
+            next,
+            depth + 1,
+            Box::new(move |above| done(above.map(|(ax, ay)| (ax + x, ay + y)))),
+        );
+    });
+}
+
+/// In a parent frame: where the `<iframe>` showing `wanted` starts its
+/// content, in this frame's viewport, or null.
+const FIND_FRAME_JS: &str = r#"(wanted) => {
+  const all = [];
+  const walk = (root) => {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.tagName === "IFRAME" || el.tagName === "FRAME") all.push(el);
+      if (el.shadowRoot) walk(el.shadowRoot);
+    }
+  };
+  walk(document);
+  const href = (f) => { try { return f.src ? new URL(f.src, f.ownerDocument.baseURI).href : ""; } catch { return ""; } };
+  const origin = (u) => { try { return new URL(u).origin; } catch { return ""; } };
+  const tries = [
+    (f) => wanted.name !== "" && f.name === wanted.name,
+    (f) => href(f) === wanted.url,
+    (f) => origin(href(f)) === origin(wanted.url),
+    () => true,
+  ];
+  for (const test of tries) {
+    const found = all.filter(test);
+    if (found.length === 1) {
+      const f = found[0], r = f.getBoundingClientRect();
+      return [r.left + f.clientLeft, r.top + f.clientTop];
+    }
+    if (found.length > 1) return null;
+  }
+  return null;
+}"#;
 
 /// Tell the plugin page where its popup was dragged to, once the drag is over.
 fn report_move(opened: u32, moves: u32) {

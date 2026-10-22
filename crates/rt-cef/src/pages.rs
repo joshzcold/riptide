@@ -349,6 +349,7 @@ pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) 
             size,
             over,
             offset,
+            frame,
             all_keys,
         } => {
             let bar = if title.is_empty() {
@@ -364,6 +365,7 @@ pub fn open(source: &str, id: u32, path: &str, title: String, place: PagePlace) 
                     size,
                     over,
                     offset,
+                    frame,
                     all_keys,
                     plugin_page: Some((source.to_string(), id)),
                 },

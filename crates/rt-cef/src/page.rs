@@ -62,7 +62,17 @@ const MAX_ANSWER: usize = 1 << 20;
 /// Hand an `eval` or `selection` answer to Lua callback `callback`, as JSON
 /// `{"ok": value}` or `{"error": why}`.
 fn answer(plugin: Option<&str>, callback: u32, result: Result<String, String>) {
-    let envelope = match result {
+    answer_from(plugin, callback, result, None);
+}
+
+/// [`answer`], saying which frame answered.
+fn answer_from(
+    plugin: Option<&str>,
+    callback: u32,
+    result: Result<String, String>,
+    frame: Option<String>,
+) {
+    let mut envelope = match result {
         Ok(text) if text.len() > MAX_ANSWER => {
             serde_json::json!({ "error": "the answer is too big" })
         }
@@ -73,6 +83,9 @@ fn answer(plugin: Option<&str>, callback: u32, result: Result<String, String>) {
         },
         Err(why) => serde_json::json!({ "error": why }),
     };
+    if let Some(frame) = frame {
+        envelope["frame"] = frame.into();
+    }
     let context = crate::lua::current_context();
     let result = rt_config::lua::answered(callback, Some(envelope.to_string()), &context);
     crate::lua::carry_out_for(plugin.unwrap_or("config.lua"), result);
@@ -163,12 +176,33 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
                 count: None,
             }]);
         }
-        PageRequest::Eval { code, callback } => {
+        PageRequest::Eval {
+            code,
+            callback,
+            frame,
+        } => {
             // An expression, its value as JSON; it runs in the page's own world.
             let code = format!("JSON.stringify(({code}\n) ?? null)");
             let plugin = plugin.map(str::to_string);
-            crate::eval::eval(&browser, &code, move |result| {
-                answer(plugin.as_deref(), callback, result)
+            let target = match frame.as_deref() {
+                None => browser.main_frame(),
+                Some("focused") => browser.focused_frame().or_else(|| browser.main_frame()),
+                Some(id) => browser.frame_by_identifier(Some(&CefString::from(id))),
+            };
+            let Some(target) = target else {
+                return refuse("that frame is gone".into());
+            };
+            // A frame may be another site's.
+            let frame_url = CefString::from(&target.url()).to_string();
+            if !frame_url.is_empty() && !allowed(&frame_url, pages) {
+                return refuse(format!(
+                    "may not act on {}, a frame in this page",
+                    rt_core::url::host(&frame_url)
+                ));
+            }
+            let id = CefString::from(&target.identifier()).to_string();
+            crate::eval::eval_frame(&target, &code, move |result| {
+                answer_from(plugin.as_deref(), callback, result, Some(id))
             });
         }
         PageRequest::Selection { callback } => {
