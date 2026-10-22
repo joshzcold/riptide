@@ -61,3 +61,5 @@ commit_parsers = [
 [bump]
 # The first release; later ones bump from the last tag (0.x: features bump the minor version).
 initial_tag = "v0.1.0"
+# In 0.x a breaking change bumps the minor version too; 1.0 is a deliberate choice.
+breaking_always_bump_major = false

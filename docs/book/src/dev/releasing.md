@@ -7,7 +7,7 @@ Releases are cut from GitHub Actions; nothing needs to run locally.
 `main` only takes changes through pull requests, so a release is two of them.
 
 1. **The release pull request is always open** while there's something to release. Every push to `main` that adds a `feat`, `fix` or `perf` commit since the last tag (yours or a contributor's) rebuilds `chore(release): vX.Y.Z` on the `release/next` branch from the new `main`: the version in `Cargo.toml` and `Cargo.lock`, and `CHANGELOG.md`. Its description shows the release notes.
-   - git-cliff works out the version from the [Conventional Commits](contributing.md#commit-messages) since the last tag. In 0.x, a `feat` bumps the minor version and a `fix` the patch version. `docs`, `test`, `ci` and `chore` commits don't open one.
+   - git-cliff works out the version from the [Conventional Commits](contributing.md#commit-messages) since the last tag. In 0.x, a `feat` or a breaking change (`fix!:`, `feat!:`) bumps the minor version and a `fix` the patch version; 1.0 is set by hand. `docs`, `test`, `ci` and `chore` commits don't open one.
    - Each update replaces the branch, so fix the notes through `cliff.toml` on `main` (for example a `{ sha = "…", skip = true }` parser for a commit to leave out), not by editing the pull request.
 2. **Merge the pull request** when you want to release. That's the release: the push to `main` builds, smoke-tests, tags and publishes it.
 3. Merge the second pull request, `chore(release): update the AUR and Nix packages for vX.Y.Z`, which points the packages at the new tarball.
