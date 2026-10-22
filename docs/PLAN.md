@@ -110,10 +110,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
 - Since 2026-10-21 on CI's runners, the smoke test's first hint click after startup is often lost, and so are keys just after `Escape` leaves insert mode; the smoke test sends them again.
 
-### Upkeep
-
-- `deny.toml` ignores RUSTSEC-2026-0370/0371/0372 (zvariant and zbus_names merged into zbus 6). Drop the ignores once `keyring`'s `secret-service` moves to zbus 6.
-
 ### Not planned
 
 - Plugins' secrets in a passphrase-encrypted file, to last across restarts on Linux without a keyring service: you'd type riptide's passphrase in place of the vault's, for new crypto code and a passphrase that can't be recovered. They go to the kernel keyring until a restart instead, and a Secret Service (KeePassXC, GNOME Keyring) keeps them for good. Revisit if users ask for it.

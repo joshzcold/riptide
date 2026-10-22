@@ -30,9 +30,14 @@ adblock = { version = "0.13", default-features = false, features = ["embedded-do
 # The public suffix list adblock already uses, for telling sites apart.
 psl = "2"
 arboard = { version = "3.6", default-features = false }
-# The OS keyring for plugins' secret options; v1: Keychain, Credential
-# Manager, and Secret Service through zbus (no C library to build against).
-keyring = "4.2"
+# The OS keyring for plugins' secret options, through keyring-core: the
+# stores keyring's v1 uses on macOS and Windows, and on Linux the Secret
+# Service through libdbus, built in (vendored) with Rust crypto. keyring's own
+# Linux store needs zbus 5, whose advisories zbus 6 fixed; libdbus is a C
+# library to compile, not a package to depend on.
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+windows-native-keyring-store = "1"
+dbus-secret-service-keyring-store = { version = "1", features = ["vendored", "crypto-rust"] }
 # Without a Secret Service on Linux, secrets fall back to the kernel keyring.
 keyring-core = "1"
 linux-keyutils-keyring-store = "1"

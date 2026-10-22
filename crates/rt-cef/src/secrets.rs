@@ -84,7 +84,37 @@ fn entry(store: Store, account: &str) -> keyring_core::Result<keyring_core::Entr
             use keyring_core::api::CredentialStoreApi;
             linux_keyutils_keyring_store::Store::new()?.build(&service(), account, None)
         }
-        _ => keyring::Entry::new(&service(), account).map(|e| e.inner),
+        _ => os_store()?.build(&service(), account, None),
+    }
+}
+
+/// The OS keyring (the Secret Service on Linux, the Keychain on macOS, the
+/// Credential Manager on Windows), opened once and kept. A failure isn't
+/// kept, so a keyring that starts later is still found.
+fn os_store() -> keyring_core::Result<std::sync::Arc<keyring_core::api::CredentialStore>> {
+    static STORE: Mutex<Option<std::sync::Arc<keyring_core::api::CredentialStore>>> =
+        Mutex::new(None);
+    let mut store = STORE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(store) = store.as_ref() {
+        return Ok(store.clone());
+    }
+    #[cfg(target_os = "linux")]
+    let opened: std::sync::Arc<keyring_core::api::CredentialStore> =
+        dbus_secret_service_keyring_store::Store::new()?;
+    #[cfg(target_os = "macos")]
+    let opened: std::sync::Arc<keyring_core::api::CredentialStore> =
+        apple_native_keyring_store::keychain::Store::new()?;
+    #[cfg(target_os = "windows")]
+    let opened: std::sync::Arc<keyring_core::api::CredentialStore> =
+        windows_native_keyring_store::Store::new()?;
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    return Err(keyring_core::Error::NoDefaultStore);
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        *store = Some(opened.clone());
+        Ok(opened)
     }
 }
 
