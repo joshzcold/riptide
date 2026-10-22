@@ -319,6 +319,17 @@ function rt._sandbox(name, permissions, require_fn)
     end
     return on(event, opts, fn)
   end
+  -- Passthrough gives the page every key, riptide's included: a plugin that
+  -- kept going back to it would lock you out, so it takes the keys permission.
+  if not permissions.keys then
+    local enter_mode = api.enter_mode
+    api.enter_mode = function(mode)
+      if mode == "passthrough" then
+        error("rt.enter_mode(\"passthrough\") needs the keys permission", 2)
+      end
+      return enter_mode(mode)
+    end
+  end
   env.rt = api
   env._G = env
   return env
@@ -470,6 +481,12 @@ function rt.move_tab(from, to)
     error("rt.move_tab takes two tabs' indexes, from 1", 2)
   end
   rt._tab_action("move", from, to)
+end
+-- The modes a plugin may switch to; the others belong to riptide's own prompts.
+local ENTERABLE = { normal = true, insert = true, caret = true, passthrough = true }
+function rt.enter_mode(mode)
+  if not ENTERABLE[mode] then error("rt.enter_mode takes normal, insert, caret or passthrough", 2) end
+  rt._enter_mode(mode)
 end
 function rt.select_tab(index)
   if math.type(index) ~= "integer" or index < 1 then error("rt.select_tab takes a tab's index, from 1", 2) end
@@ -953,6 +970,8 @@ pub enum Action {
     },
     /// `rt.select_tab`: show tab `index` (from 0) of the current window.
     SelectTab(usize),
+    /// `rt.enter_mode`: switch to `mode`, as `:mode-enter` does.
+    EnterMode(Mode),
     /// `rt.close_tab`: close tab `index` (from 0) of the current window.
     CloseTab(usize),
     /// `rt.move_tab`: move tab `from` to `to` (from 0) in the current window.
@@ -2962,6 +2981,17 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                 },
             };
             s.borrow_mut().actions.push(action);
+            Ok(())
+        })?,
+    )?;
+    let s = state.clone();
+    api.set(
+        "_enter_mode",
+        lua.create_function(move |_, mode: String| {
+            let mode = mode
+                .parse::<Mode>()
+                .map_err(|e| mlua::Error::runtime(format!("rt.enter_mode: {e}")))?;
+            s.borrow_mut().actions.push(Action::EnterMode(mode));
             Ok(())
         })?,
     )?;

@@ -193,6 +193,13 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 callback,
             } => crate::storage::read_for_lua(source, &kind, &pattern, callback),
             Action::SelectTab(index) => crate::tabs::select(index),
+            Action::EnterMode(mode) => {
+                // Through the engine, which owns the mode, as :mode-enter is.
+                let line = format!("mode-enter {}", mode.name());
+                if let Some(effects) = shell::with(|s| s.engine.execute_str(&line, None)) {
+                    shell::apply(effects);
+                }
+            }
             Action::CloseTab(index) => {
                 if shell::with(|s| index < s.tabs.len()).unwrap_or(false) {
                     crate::tabs::close(index);
