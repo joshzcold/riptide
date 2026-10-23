@@ -69,7 +69,7 @@ pub fn run_command(command: &Command) -> bool {
 }
 
 pub(crate) fn expand_home(path: &str) -> PathBuf {
-    expand_home_in(path, std::env::var_os("HOME"))
+    expand_home_in(path, std::env::home_dir().map(Into::into))
 }
 
 fn expand_home_in(path: &str, home: Option<std::ffi::OsString>) -> PathBuf {

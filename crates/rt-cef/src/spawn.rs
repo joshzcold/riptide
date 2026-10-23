@@ -242,7 +242,7 @@ fn userscript_start(argv: Vec<String>, flags: Flags, count: Option<u32>, hint_ur
     }) else {
         return;
     };
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = std::env::home_dir();
     let mut argv = argv;
     argv[0] = rt_config::userscripts::resolve(&argv[0], &paths, home.as_deref())
         .to_string_lossy()

@@ -220,7 +220,7 @@ wrap_resource_request_handler! {
     impl ResourceRequestHandler {
         /// A link to a scheme Chromium can't show (mailto:, magnet:). Runs on
         /// the IO thread; `content.unknown_url_scheme_policy` is applied on
-        /// the UI thread, where xdg-open is run instead of Chromium's handler.
+        /// the UI thread, where the desktop's handler is run instead of Chromium's handler.
         fn on_protocol_execution(
             &self,
             browser: Option<&mut Browser>,
@@ -304,19 +304,14 @@ wrap_task! {
     }
 }
 
-/// The desktop's handler for `url` (xdg-open on Linux), as one argument with no shell.
+/// The desktop's handler for `url`, as one argument with no shell.
 fn system_open(url: &str) {
-    let program = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    if let Err(e) = std::process::Command::new(program).arg(url).spawn() {
-        shell::show_message(Level::Error, format!("Can't run {program}: {e}"));
+    if let Err(e) = crate::downloads::system_open(url.as_ref()) {
+        shell::show_message(Level::Error, format!("Can't open {url}: {e}"));
     }
 }
 
-/// Hand `url` to xdg-open as `content.unknown_url_scheme_policy` says.
+/// Hand `url` to the desktop as `content.unknown_url_scheme_policy` says.
 fn open_external(browser: Option<i32>, url: String) {
     let policy = shell::with(|s| {
         s.engine

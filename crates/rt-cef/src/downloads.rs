@@ -47,8 +47,7 @@ thread_local! {
 }
 
 fn home() -> Option<PathBuf> {
-    let key = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(key).map(PathBuf::from)
+    std::env::home_dir()
 }
 
 pub(crate) fn download_dir() -> PathBuf {
@@ -468,16 +467,49 @@ fn open_with(path: &Path, command: Option<&str>) -> std::io::Result<()> {
             .spawn()
             .map(|_| ());
     }
-    let mut command = if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
-    } else if cfg!(windows) {
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/C", "start", ""]);
-        c
+    system_open(path.as_os_str())
+}
+
+/// Open a file or URL with the desktop's default handler, without a shell.
+#[cfg(not(windows))]
+pub(crate) fn system_open(target: &std::ffi::OsStr) -> std::io::Result<()> {
+    let program = if cfg!(target_os = "macos") {
+        "open"
     } else {
-        std::process::Command::new("xdg-open")
+        "xdg-open"
     };
-    command.arg(path).spawn().map(|_| ())
+    std::process::Command::new(program)
+        .arg(target)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| std::io::Error::new(e.kind(), format!("can't run {program}: {e}")))
+}
+
+/// Open a file or URL with the desktop's default handler, without a shell.
+#[cfg(windows)]
+pub(crate) fn system_open(target: &std::ffi::OsStr) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let wide = |s: &std::ffi::OsStr| s.encode_wide().chain([0]).collect::<Vec<u16>>();
+    let (verb, file) = (wide("open".as_ref()), wide(target));
+    // SAFETY: both strings are NUL-terminated and outlive the call; null means none.
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Values up to 32 are errors.
+    if result as usize > 32 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
 }
 
 wrap_task! {

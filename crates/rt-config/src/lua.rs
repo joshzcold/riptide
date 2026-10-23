@@ -2071,8 +2071,8 @@ fn searcher(
 
 /// `~/x` as a path in the home folder.
 fn expand_home(path: &str, _data_dir: &Path) -> std::path::PathBuf {
-    match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
-        (Some(rest), Some(home)) => std::path::PathBuf::from(home).join(rest),
+    match (path.strip_prefix("~/"), std::env::home_dir()) {
+        (Some(rest), Some(home)) => home.join(rest),
         _ => std::path::PathBuf::from(path),
     }
 }

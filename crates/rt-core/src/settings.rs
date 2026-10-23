@@ -1258,7 +1258,7 @@ pub static SETTINGS: &[SettingDef] = &[
         "content.notifications.presenter",
         Kind::Enum(&["auto", "libnotify", "messages"]),
         s("auto"),
-        "Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings) or messages (riptide's status bar)"
+        "Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings; Linux only, auto elsewhere) or messages (riptide's status bar)"
     ),
     def!(
         "content.notifications.show_origin",

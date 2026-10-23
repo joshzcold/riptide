@@ -401,7 +401,7 @@ fn files(pattern: &str) -> Vec<Completion> {
     if !(path.starts_with('/') || path.starts_with("~/")) {
         return Vec::new();
     }
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let home = std::env::home_dir();
     let expanded = match (path.strip_prefix("~/"), &home) {
         (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
         _ => path.to_string(),
@@ -828,10 +828,10 @@ fn qutebrowser_history() -> Option<std::path::PathBuf> {
     let dir = if cfg!(windows) {
         env("APPDATA")?.join("qutebrowser").join("data")
     } else if cfg!(target_os = "macos") {
-        env("HOME")?.join("Library/Application Support/qutebrowser")
+        std::env::home_dir()?.join("Library/Application Support/qutebrowser")
     } else {
         env("XDG_DATA_HOME")
-            .or_else(|| env("HOME").map(|h| h.join(".local/share")))?
+            .or_else(|| std::env::home_dir().map(|h| h.join(".local/share")))?
             .join("qutebrowser")
     };
     Some(dir.join("history.sqlite"))

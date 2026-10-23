@@ -12,6 +12,14 @@ use rt_core::engine::Level;
 
 use crate::shell;
 
+/// `content.notifications.presenter`, with `libnotify` as `auto` where there's no notify-send.
+pub fn presenter(settings: &rt_core::settings::Settings) -> &str {
+    match settings.str("content.notifications.presenter") {
+        "libnotify" if !cfg!(target_os = "linux") => "auto",
+        presenter => presenter,
+    }
+}
+
 /// One notification, read from the settings on the UI thread.
 struct Desktop {
     app_name: String,
@@ -194,6 +202,23 @@ mod tests {
             body: "https://example.com\nHi".into(),
             browser: Some(3),
         }
+    }
+
+    #[test]
+    fn libnotify_is_chromiums_presenter_without_notify_send() {
+        let mut settings = rt_core::settings::Settings::default();
+        settings
+            .set(
+                "content.notifications.presenter",
+                rt_core::settings::Value::Str("libnotify".into()),
+            )
+            .unwrap();
+        let expected = if cfg!(target_os = "linux") {
+            "libnotify"
+        } else {
+            "auto"
+        };
+        assert_eq!(presenter(&settings), expected);
     }
 
     #[test]

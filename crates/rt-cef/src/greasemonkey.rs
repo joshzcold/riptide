@@ -53,7 +53,7 @@ pub fn load() -> (usize, Vec<String>) {
 pub fn sync_settings(settings: &rt_core::settings::Settings) {
     let rocker = settings.bool("input.mouse.rocker_gestures");
     // Both take notifications from riptide's stand-in instead of Chromium.
-    let messages = settings.str("content.notifications.presenter") != "auto";
+    let messages = crate::notifications::presenter(settings) != "auto";
     let media = MediaChoices::from_settings(settings);
     let changed = ROCKER.with(|r| r.replace(rocker))
         != rocker

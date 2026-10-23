@@ -1501,7 +1501,7 @@ impl Engine {
                     self.active_prompt().map(|p| &p.kind),
                     Some(PromptKind::Text { path: true, .. })
                 );
-                let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+                let home = std::env::home_dir();
                 if path
                     && let Some(text) =
                         crate::path_complete::complete(self.prompt_editor.text(), home.as_deref())

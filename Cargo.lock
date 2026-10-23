@@ -1750,6 +1750,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "windows-native-keyring-store",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

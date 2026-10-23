@@ -784,7 +784,7 @@ function rt.json.encode(value) end
 ---@class rt.c.content.notifications
 ---@field app_name string The app name on desktop notifications (presenter = libnotify), which notification services such as dunst and mako can match to style them
 ---@field enabled "ask"|"true"|"false" Let sites show notifications: ask, true or false
----@field presenter "auto"|"libnotify"|"messages" Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings) or messages (riptide's status bar)
+---@field presenter "auto"|"libnotify"|"messages" Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings; Linux only, auto elsewhere) or messages (riptide's status bar)
 ---@field show_origin boolean Show the site a notification came from (presenter = libnotify or messages)
 ---@field site_icon boolean Show the site's icon on desktop notifications (presenter = libnotify)
 ---@field timeout integer Milliseconds a desktop notification stays (presenter = libnotify): -1 lets the desktop decide, 0 keeps it until dismissed
