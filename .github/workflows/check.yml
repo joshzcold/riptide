@@ -90,21 +90,28 @@ jobs:
         run: cargo build --workspace --locked
       - name: Unit tests
         run: cargo test --locked --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock
+      # cef-dll-sys copies CEF's runtime next to the binary only when its build
+      # script runs, which a restored cache skips; its downloaded CEF in the
+      # build directory is still there.
+      - name: Put CEF next to riptide.exe
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          dll=$(find target/debug/build -name libcef.dll -print -quit)
+          [[ -n $dll ]] || { echo "no libcef.dll under target/debug/build"; exit 1; }
+          cef=$(dirname "$dll")
+          find "$cef" -maxdepth 1 -type f -exec cp {} target/debug/ \;
+          cp -r "$cef/locales" target/debug/
       - name: Run without CEF (--version, --paths)
         shell: bash
         run: |
           bin=target/debug/riptide
           [[ -f $bin.exe ]] && bin=$bin.exe
-          # Windows loads libcef.dll at startup. cef-dll-sys copies it next to
-          # the binary only when its build script runs, which a restored cache
-          # skips; its downloaded CEF in the build directory is still there.
-          if [[ $RUNNER_OS == Windows && ! -f target/debug/libcef.dll ]]; then
-            dll=$(find target/debug/build -name libcef.dll -print -quit)
-            [[ -n $dll ]] || { echo "no libcef.dll under target/debug/build"; exit 1; }
-            PATH="$(dirname "$dll"):$PATH"
-          fi
           "$bin" --version
           "$bin" --paths
+      - name: Start the browser
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p riptide --test windows_start -- --ignored --nocapture
 
   docs:
     name: docs (build, internal links)
