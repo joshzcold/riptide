@@ -50,8 +50,6 @@
   .tab.shrunk { flex: 0 0 auto; }
   /* A dragged tab follows the pointer; the others slide aside to show where it lands. */
   .tab.dragging { position: relative; z-index: 1; opacity: 0.9; box-shadow: 0 0 6px rgba(0, 0, 0, 0.6); }
-  /* A dragged tab shrinks to about a pinned tab's size, so wide tabs are easy to place. */
-  body:not(.vertical) .tab.dragging { flex: 0 0 auto; width: 10ch; min-width: 0; max-width: none; }
   .tab.shifting { transition: transform 120ms ease; }
   .tab.selected {
     font: var(--rt-font-tabs-selected, var(--font));
@@ -97,7 +95,11 @@
     press.dragging = true;
     press.target = press.index;
     // Shrink first, then measure, so the other tabs' new sizes are what we compare with.
-    bar.children[press.index].classList.add("dragging");
+    const dragged = bar.children[press.index];
+    dragged.classList.add("dragging");
+    // Every dragged tab gets the same small size, on the element so ui.css
+    // and plugins' tab widths don't keep a wide one wide.
+    if (!vertical()) Object.assign(dragged.style, { flex: "0 0 auto", width: "10ch", minWidth: "0", maxWidth: "none" });
     press.spans = [...bar.children].map((el) => span(el.getBoundingClientRect()));
     for (const [i, el] of [...bar.children].entries()) if (i !== press.index) el.classList.add("shifting");
   }
@@ -128,7 +130,7 @@
   function endDrag() {
     for (const el of bar.children) {
       el.classList.remove("dragging", "shifting");
-      el.style.transform = "";
+      Object.assign(el.style, { transform: "", flex: "", width: "", minWidth: "", maxWidth: "" });
     }
     if (deferred) {
       const payload = deferred;

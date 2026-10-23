@@ -158,6 +158,60 @@ fn tab_bar_a_dragged_tab_lands_where_its_left_edge_is() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_dragged_tabs_shrink_to_one_size_whatever_ui_css_says() {
+    // A plugin's tab width rule that outweighs the tab bar's own.
+    let b = Browser::launch()
+        .file(
+            "config/ui.css",
+            "body:not(.vertical) .tab, body:not(.vertical) .tab:nth-child(odd), \
+             body:not(.vertical) .tab:nth-child(even) { flex: 0 1 260px; }",
+        )
+        .start("nav1.html");
+    let url = b.url("second.html");
+    b.run(&format!("open -t {url}"));
+    b.wait_until("the tab loads", |s| s.tab().is_loaded(&url));
+    b.run("tab-focus 1");
+    b.run("tab-pin");
+    b.wait_until("a pinned tab", |s| s.tabs().iter().any(|t| t.pinned));
+    wait_bar(
+        &b,
+        "String(document.querySelectorAll('.tab.shrunk').length)",
+        "1",
+    );
+    // Drag each tab a little and read its width while dragged, then after.
+    let widths = b.eval_bar(
+        "tabbar",
+        r#"(() => {
+          const bar = document.getElementById('tabs');
+          const fire = (type, x, y) => bar.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: y }));
+          return [...bar.children].map((tab) => {
+            const r = tab.getBoundingClientRect();
+            const [x, y] = [r.left + 4, r.top + r.height / 2];
+            fire('pointerdown', x, y);
+            fire('pointermove', x + 6, y);
+            const dragged = tab.getBoundingClientRect().width;
+            fire('pointercancel', x + 6, y);
+            return `${Math.round(dragged)}:${Math.round(tab.getBoundingClientRect().width)}`;
+          }).join(' ');
+        })()"#,
+    );
+    let pairs: Vec<(f64, f64)> = widths
+        .split(' ')
+        .map(|p| {
+            let (d, a) = p.split_once(':').unwrap();
+            (d.parse().unwrap(), a.parse().unwrap())
+        })
+        .collect();
+    assert_eq!(
+        pairs[0].0, pairs[1].0,
+        "pinned and unpinned drag at one size: {widths}"
+    );
+    assert!(pairs[1].0 < 120.0, "the wide tab shrinks: {widths}");
+    assert!(pairs[1].1 > 200.0, "and is wide again after: {widths}");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn tab_bar_unpinned_tabs_can_sit_between_pinned_ones() {
     let b = Browser::start("nav1.html");
     for page in ["second.html", "nav2.html"] {

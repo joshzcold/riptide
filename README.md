@@ -19,12 +19,29 @@ A keyboard-driven browser with vim-like bindings, built on Chromium and Rust.
 **[Releases](https://github.com/joshzcold/riptide/releases)** ·
 **[Roadmap](docs/PLAN.md)**
 
+<br><br>
+
+<img src="https://github.com/user-attachments/assets/aaee1bc0-06ed-410d-9a03-a468f2312066" alt="Riptide in hint mode on a Wikipedia article, with a two-letter label on every link and the tab bar above" width="900">
+
 </div>
 
 Riptide is built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate, with everything else in Rust.
 
 > [!NOTE]
-> **Status:** early (v0.4). Linux on X11 only; Wayland is untested, the Windows build starts but is untested by hand and has no installer, and the macOS build can't run the browser yet. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+> **Status:** early. Linux on X11 only; Wayland is untested, the Windows build starts but is untested by hand and has no installer, and the macOS build can't run the browser yet. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+
+<table>
+  <tr>
+    <td width="33%"><img src="https://github.com/user-attachments/assets/8566f10b-9db4-42c4-b19e-70c803fa63e1" alt="The command line with completion listing the :tab commands and what each does"></td>
+    <td width="33%"><img src="https://github.com/user-attachments/assets/ff7ea072-6191-4e1b-8bfa-dc9f6b57db6f" alt="Two tabs side by side in a vertical split"></td>
+    <td width="33%"><img src="https://github.com/user-attachments/assets/f4c79f97-8e4a-4ea7-a826-9151238201b6" alt="The settings page with its categories, search box and editable settings"></td>
+  </tr>
+  <tr>
+    <td align="center">Command line with completion</td>
+    <td align="center">Splits (<code>sv</code>, <code>ss</code>)</td>
+    <td align="center">The <code>:settings</code> page</td>
+  </tr>
+</table>
 
 ## Features
 
