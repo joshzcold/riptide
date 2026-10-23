@@ -35,7 +35,7 @@ fn mute_from_another_window(b: &Browser, tab: usize) {
         });
     }
     let s = b.state();
-    assert_eq!(s.current_window, 1, "the call's window didn't take over");
+    assert_eq!(s.current_window, 1, "the call's window took over");
     assert!(
         s.message().unwrap_or_default().contains("(another window)"),
         "{s:?}"
