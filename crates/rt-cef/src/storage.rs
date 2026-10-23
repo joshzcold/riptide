@@ -64,8 +64,16 @@ pub fn icon_for(url: &str) -> Option<String> {
     FAVICONS.with(|f| f.borrow().get(rt_core::url::host(url)).cloned())
 }
 
+/// [`icon_for`], unless `completion.favicons` is off.
+pub fn completion_icon(url: &str) -> Option<String> {
+    COMPLETION
+        .with(|c| c.borrow().favicons)
+        .then(|| icon_for(url))
+        .flatten()
+}
+
 fn with_icon(mut item: Completion, url: &str) -> Completion {
-    item.icon = icon_for(url);
+    item.icon = completion_icon(url);
     item
 }
 
@@ -167,6 +175,7 @@ pub fn delete_completion(item: &rt_core::completion::Completion) {
 
 #[derive(Default)]
 struct CompletionSettings {
+    favicons: bool,
     history_limit: usize,
     categories: Vec<String>,
     exclude: Vec<String>,
@@ -177,6 +186,7 @@ struct CompletionSettings {
 pub fn sync_settings(settings: &rt_core::settings::Settings) {
     COMPLETION.with(|c| {
         *c.borrow_mut() = CompletionSettings {
+            favicons: settings.bool("completion.favicons"),
             history_limit: settings.int("completion.web_history.max_items").max(0) as usize,
             categories: settings.list("completion.open_categories").to_vec(),
             exclude: settings.list("completion.web_history.exclude").to_vec(),
@@ -259,7 +269,7 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
                 .iter()
                 .filter(|(n, u)| matches(pattern, &[n, u]))
             {
-                items.push(item("Quickmarks", name, url));
+                items.push(with_icon(item("Quickmarks", name, url), url));
             }
         }
         if kind == CompletionKind::Bookmark {
@@ -268,7 +278,7 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
                 .iter()
                 .filter(|(u, t)| matches(pattern, &[u, t]))
             {
-                items.push(item("Bookmarks", url, title));
+                items.push(with_icon(item("Bookmarks", url, title), url));
             }
         }
         if kind == CompletionKind::Session {
@@ -327,7 +337,7 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                         .iter()
                         .filter(|e| !exclude.iter().any(|glob| rt_core::url::glob(glob, &e.url)))
                         .map(|e| Completion {
-                            icon: icon_for(&e.url),
+                            icon: completion_icon(&e.url),
                             time: Some(e.last_visit),
                             ..item("History", &e.url, &e.title)
                         })

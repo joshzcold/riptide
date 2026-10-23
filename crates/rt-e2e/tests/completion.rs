@@ -250,12 +250,24 @@ fn open_completion_shows_each_sites_icon_and_history_keeps_it() {
         assert!(start.elapsed() < rt_e2e::TIMEOUT, "the icon wasn't saved");
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    let icons = "String(document.querySelectorAll('img.site-icon').length)";
     b.keys(":open icon");
-    wait_overlay(
-        &b,
-        "String(document.querySelectorAll('img.site-icon').length > 0)",
-        |v| v == "true",
-    );
+    wait_overlay(&b, icons, |v| v != "0");
+    b.keys("<Escape>");
+    // :quickmark-load and :bookmark-load show it too.
+    let url = b.url("icon.html");
+    b.run(&format!("quickmark-add {url} iconpage"));
+    b.run("bookmark-add");
+    for command in ["quickmark-load", "bookmark-load"] {
+        b.keys(&format!(":{command} "));
+        wait_overlay(&b, icons, |v| v == "1");
+        b.keys("<Escape>");
+    }
+    // completion.favicons = false leaves them out.
+    b.run("set completion.favicons false");
+    b.keys(":open icon");
+    wait_overlay(&b, LIST, |t| t.contains("iconpage"));
+    assert_eq!(b.eval_bar("completion", icons), "0");
     b.keys("<Escape>");
 }
 

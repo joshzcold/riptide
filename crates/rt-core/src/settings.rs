@@ -938,6 +938,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Milliseconds to wait after a key press before updating completions"
     ),
     def!(
+        "completion.favicons",
+        Kind::Bool,
+        Value::Bool(true),
+        "Show each site's icon next to quickmarks, bookmarks, history and tabs in completions"
+    ),
+    def!(
         "completion.height",
         Kind::Str,
         s("12"),
