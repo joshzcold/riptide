@@ -82,7 +82,8 @@ step() { printf '  %-56s' "$1"; }
 pass() { echo "ok"; }
 fail() { echo "FAIL ($1)"; failures=$((failures + 1)); }
 
-name() { xdotool getwindowname "$window" 2>/dev/null || true; }
+# The window keys go to: $window, or $focused while another one has them.
+name() { xdotool getwindowname "${focused:-$window}" 2>/dev/null || true; }
 
 # Waits for a window whose name matches, other than $2. Polls instead of
 # `xdotool search --sync`, which aborts with BadWindow when one of
@@ -127,8 +128,8 @@ wait_mode() {
     return 1
 }
 
-# Runs a command through the command line. ':' is retried, since a key sent
-# while a new tab settles can be lost (docs/PLAN.md, M14 gaps).
+# Runs a command through the command line. ':' is retried, since the first
+# key a new tab or window gets can be lost under Xvfb.
 run() {
     for _ in 1 2 3; do
         xdotool key shift+semicolon
@@ -240,9 +241,6 @@ done
 step "a key bound in config.lua opens a tab"
 xdotool key shift+x
 expect_title "second"
-# Under Xvfb, a key sent just as a tab finishes loading is sometimes dropped
-# before CEF sees it (docs/PLAN.md, M14 gaps).
-nap 0.3
 
 step "K switches back to the first tab"
 xdotool key shift+k
@@ -274,7 +272,9 @@ else
     for _ in $(seq $((TIMEOUT * 10))); do [[ $(xdotool getwindowname "$second") == *::nav2 ]] && break; sleep 0.1; done
     keys_went=$(xdotool getwindowname "$second")
     first_page=$(page_title)
+    focused=$second
     run "close"
+    focused=""
     for _ in $(seq $((TIMEOUT * 10))); do xdotool getwindowname "$second" >/dev/null 2>&1 || break; sleep 0.1; done
     if [[ $keys_went != *::nav2 ]]; then
         fail "keys didn't reach the second window ('$keys_went')"

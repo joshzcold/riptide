@@ -18,7 +18,7 @@ Things CEF, Chromium and the `cef` crate do that cost time to find out. Add to t
 - **Chromium ignores input to a page while it shows a JavaScript dialog**, so prompt keys go through the status bar's browser, which gets focus for the duration.
 - **A new tab can miss focus requested before its browser existed**; `on_after_created` focuses it again.
 - **`send_key_event` to a hidden tab is dropped** (keys go to the window's focused view), and DevTools' `Input.dispatchKeyEvent` reports success without reaching the page in windowed browsers. The first key a page ever gets starts something that drops keys for about 400 ms (`client::send_when_ready`).
-- **Under Xvfb, a key sent just as a page finishes loading can be lost** below Views. The e2e harness waits two animation frames after each load.
+- **Under Xvfb, a key sent just as a page finishes loading could be lost** below Views (about 1 in 5 in October 2026, for tabs opened from a typed `:open -t`). It didn't reproduce in 100 tries on 2026-10-23, so the smoke test no longer pauses for it; the e2e harness still waits two animation frames after each load.
 - **Middle-clicks and Ctrl+clicks come through `OnOpenURLFromTab`**, not popups, and Alloy loads them in the same tab if it isn't handled.
 - **Ctrl+wheel over a bar zooms every `riptide://ui` page** (Chromium saves zoom per host). The bar pages refuse it, and `on_load_end` resets a saved zoom for non-tab roles.
 

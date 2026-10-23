@@ -102,7 +102,6 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Test reliability
 
-- Lost keys under Xvfb just after `:open -t` finishes loading (about 1 in 5); not seen on a real desktop.
 - Under load, CEF can time out setting up a cross-origin iframe's renderer ("Timeout of new browser info response"). The frame then gets no hints until the page is reloaded; the e2e test reloads once.
 - Since 2026-10-21 on CI's runners, the smoke test's first hint click after startup is often lost, and so are keys just after `Escape` leaves insert mode; the smoke test sends them again.
 
