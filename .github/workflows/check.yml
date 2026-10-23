@@ -116,6 +116,8 @@ jobs:
           [[ -n $framework ]] || { echo "no CEF framework under target/debug/build"; exit 1; }
           scripts/bundle-macos.sh target/debug/riptide "$(dirname "$framework")" target/debug
           codesign --verify --deep --strict target/debug/riptide.app
+          ln -s "$PWD/target/debug/riptide.app/Contents/Resources/bin/riptide" "$RUNNER_TEMP/riptide"
+          "$RUNNER_TEMP/riptide" --version
           echo "RIPTIDE_EXE=$PWD/target/debug/riptide.app/Contents/MacOS/riptide" >> "$GITHUB_ENV"
       - name: Start the browser
         run: cargo test --locked -p riptide --test desktop_start -- --ignored --nocapture

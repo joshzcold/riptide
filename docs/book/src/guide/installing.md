@@ -27,7 +27,17 @@ Uninstalling keeps your config and profile (see [Where things live](#where-thing
 
 ## macOS (experimental)
 
-The macOS app starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg`, for Apple silicon Macs. Open it and drag riptide onto Applications.
+The macOS app starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg`, for Apple silicon Macs. Open it and drag riptide onto Applications. For a `riptide` command too, link to the launcher inside the app (not to the binary, which finds CEF relative to itself):
+
+```sh
+ln -s /Applications/riptide.app/Contents/Resources/bin/riptide /usr/local/bin/riptide
+```
+
+Or install it with [Homebrew](https://brew.sh) from riptide's tap, which also adds the `riptide` command and clears the quarantine flag described below:
+
+```sh
+brew install --cask joshzcold/riptide/riptide
+```
 
 riptide is signed ad hoc but not notarized by Apple, so macOS blocks its first start. Open it once, then choose **Open Anyway** in **System Settings → Privacy & Security**. Or clear the quarantine flag yourself:
 

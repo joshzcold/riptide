@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs riptide.app's binary from a link to this script (Homebrew's `riptide`),
+# since the binary finds CEF relative to its own path.
+self=$0
+while [ -L "$self" ]; do
+    link=$(readlink "$self")
+    case $link in
+        /*) self=$link ;;
+        *) self=$(dirname "$self")/$link ;;
+    esac
+done
+exec "$(dirname "$self")/../../MacOS/riptide" "$@"

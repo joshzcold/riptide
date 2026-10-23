@@ -24,6 +24,9 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Frameworks" "$app/Contents/Resourc
 cp "$bin" "$app/Contents/MacOS/riptide"
 cp -R "$cef/$framework" "$app/Contents/Frameworks/"
 cp "$root/packaging/macos/riptide.icns" "$app/Contents/Resources/"
+# For a `riptide` command: link to this, not to the binary.
+mkdir -p "$app/Contents/Resources/bin"
+cp "$root/packaging/macos/riptide-cli" "$app/Contents/Resources/bin/riptide"
 
 # <name> <executable> <identifier> <extra plist keys>
 plist() {
