@@ -306,3 +306,34 @@ fn spell_install_without_a_language_lists_them_to_pick_from() {
     });
     b.keys("<Escape>");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn quickmarks_visited_lately_come_first() {
+    let b = Browser::start("page.html");
+    let (nav1, nav2) = (b.url("nav1.html"), b.url("nav2.html"));
+    std::fs::write(
+        b.config_dir().join("quickmarks"),
+        format!("first {nav1}\nsecond {nav2}\n"),
+    )
+    .unwrap();
+    b.run("quickmarks-reload");
+    b.run(&format!("open {nav2}"));
+    b.wait_until("nav2 loads", |s| s.tab().is_loaded(&nav2));
+    let names = |s: &State| -> Vec<String> {
+        items(s)
+            .into_iter()
+            .filter(|(c, _)| c == "Quickmarks")
+            .map(|(_, n)| n)
+            .collect()
+    };
+    b.keys(":quickmark-load ");
+    b.wait_until("the visited quickmark is first", |s| {
+        names(s) == ["second", "first"]
+    });
+    b.keys("<Escape>");
+    b.run("set completion.marks_order file");
+    b.keys(":quickmark-load ");
+    b.wait_until("file order", |s| names(s) == ["first", "second"]);
+    b.keys("<Escape>");
+}
