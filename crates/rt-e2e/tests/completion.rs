@@ -223,6 +223,11 @@ fn floating_overlay_shows_the_command_in_a_box() {
     let bar = b.eval_bar("statusbar", "document.body.innerText");
     assert!(!bar.contains(":set"), "the status bar shows {bar:?}");
     b.keys("<Escape>");
+    // center is the same box, in the middle of the page.
+    b.run("set ui.overlay.position center");
+    b.keys(":set ui.over");
+    wait_overlay(&b, first, |t| t.starts_with(":set ui.over"));
+    b.keys("<Escape>");
     b.run("set ui.overlay.position docked");
     b.keys(":set ui.over");
     wait_overlay(&b, first, |t| t.is_empty());

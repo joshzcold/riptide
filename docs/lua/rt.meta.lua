@@ -993,8 +993,8 @@ function rt.json.encode(value) end
 ---@field light string The theme ui.theme = auto uses when light is preferred
 
 ---@class rt.c.ui.overlay
----@field position "docked"|"floating" Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command
----@field width integer Width in pixels of the floating overlay (ui.overlay.position = floating), at most the page's
+---@field position "docked"|"floating"|"center" Where the command line's completions and the key hints appear: docked above the status bar; floating, a box near the top of the page that also shows the command; or center, that box in the middle
+---@field width integer Width in pixels of the floating overlay (ui.overlay.position = floating or center), at most the page's
 
 ---@class rt.c.url
 ---@field auto_search "naive"|"schemeless"|"never" When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never
