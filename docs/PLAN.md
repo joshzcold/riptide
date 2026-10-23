@@ -93,7 +93,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Packaging (M10)
 
-- macOS: an app bundle, signing and notarization. Windows: an installer, and trying the browser by hand. It starts on CI's Windows runner (`windows_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
+- macOS: an app bundle, signing and notarization. Windows: trying the browser by hand, the sandbox, and an icon embedded in `riptide.exe`. The installer (`packaging/windows/riptide.iss`, Inno Setup) is done. It starts on CI's Windows runner (`windows_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
 ### Bugs
