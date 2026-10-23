@@ -171,7 +171,7 @@ In `:open`, history, bookmarks, quickmarks and tabs show each site's icon (remem
 | `completion.timestamp_format` | When each history entry was last visited, e.g. `%d %b %H:%M`; empty hides it |
 | `completion.delay` | Milliseconds to wait after a key before updating the list, for slow history searches |
 | `completion.quick` | With one command or setting name left, `Tab` takes it and goes on to its arguments |
-| `ui.overlay.position` | `floating` shows the command and its list in a box near the top of the page ([Themes](../configuration/themes.md#floating-command-line)) |
+| `ui.overlay.position` | `floating` shows the command and its list in a box near the top of the page, `center` in its middle ([Themes](../configuration/themes.md#floating-command-line)) |
 | `completion.use_best_match` | `Return` on an unknown command runs the first one it starts, so `:rel` runs `:reload` |
  `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 

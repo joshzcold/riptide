@@ -2114,9 +2114,9 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     def!(
         "ui.overlay.position",
-        Kind::Enum(&["docked", "floating"]),
+        Kind::Enum(&["docked", "floating", "center"]),
         s("docked"),
-        "Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command"
+        "Where the command line's completions and the key hints appear: docked above the status bar; floating, a box near the top of the page that also shows the command; or center, that box in the middle"
     ),
     def!(
         "ui.overlay.width",

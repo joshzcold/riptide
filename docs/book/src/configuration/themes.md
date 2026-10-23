@@ -122,7 +122,7 @@ Pages have their own fonts: `fonts.web.family.standard`, `.fixed`, `.serif` and 
 
 ## Floating command line
 
-`ui.overlay.position = "floating"` turns the command line into a box near the top of the page, like a command palette: what you type shows in the box, with its completions under it, and the key hints appear there too. `ui.overlay.width` sets the box's width in pixels.
+`ui.overlay.position = "floating"` turns the command line into a box near the top of the page, like a command palette: what you type shows in the box, with its completions under it, and the key hints appear there too. `"center"` puts the same box in the middle of the page; the command line stays in place as the list under it grows and shrinks. `ui.overlay.width` sets the box's width in pixels.
 
 ```toml
 "ui.overlay.position" = "floating"

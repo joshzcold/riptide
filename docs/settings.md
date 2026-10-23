@@ -234,7 +234,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `tabs.wrap` | boolean | `true` | Wrap around from the last tab to the first (and back) when switching tabs |
 | `ui.auto_theme.dark` | string | `riptide` | The theme ui.theme = auto uses when the desktop (or colors.webpage.preferred_color_scheme) prefers dark |
 | `ui.auto_theme.light` | string | `riptide-light` | The theme ui.theme = auto uses when light is preferred |
-| `ui.overlay.position` | docked \| floating | `docked` | Where the command line's completions and the key hints appear: docked above the status bar, or floating, a box near the top of the page that also shows the command |
+| `ui.overlay.position` | docked \| floating \| center | `docked` | Where the command line's completions and the key hints appear: docked above the status bar; floating, a box near the top of the page that also shows the command; or center, that box in the middle |
 | `ui.overlay.width` | integer | `800` | Width in pixels of the floating overlay (ui.overlay.position = floating), at most the page's |
 | `ui.theme` | string | `riptide` | Colors of riptide's bars, prompts and hints: riptide, riptide-light, gruvbox, catppuccin, nord, dracula, solarized, tokyo-night or a theme from themes/ in the config directory (:theme); auto follows the light or dark preference |
 | `url.auto_search` | naive \| schemeless \| never | `naive` | When :open searches: text that doesn't look like an address (naive), anything without a scheme:// (schemeless), or never |

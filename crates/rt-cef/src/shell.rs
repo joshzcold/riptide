@@ -1836,15 +1836,27 @@ fn overlay_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     }
 }
 
+/// `ui.overlay.position` is `floating` or `center`: the command line in a box.
 fn floating_overlay(s: &Shell) -> bool {
-    s.engine.settings().str("ui.overlay.position") == "floating"
+    s.engine.settings().str("ui.overlay.position") != "docked"
+}
+
+/// How far down the page area the floating overlay's top goes. `center` puts
+/// it where a box of `max_height` would be centred, so the command line stays
+/// put while its list grows and shrinks.
+fn overlay_top(area_height: i32, max_height: i32, center: bool) -> i32 {
+    if center {
+        ((area_height - max_height) / 2).max(0)
+    } else {
+        area_height / 6
+    }
 }
 
 /// Border and padding around the floating overlay's rows, on each side.
 const OVERLAY_FRAME: i32 = 5;
 
-/// Completions, key hints and messages: docked, or in a box centred near the
-/// top of the page area, `ui.overlay.width` wide at most.
+/// Completions, key hints and messages: docked, or in a box centred across
+/// the page area (near its top, or in its middle), `ui.overlay.width` wide at most.
 fn rows_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     if !floating_overlay(s) {
         return completion_bounds(s, rows);
@@ -1852,8 +1864,11 @@ fn rows_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     let area = View::from(s.row.as_ref()?).bounds();
     let max = s.engine.settings().int("ui.overlay.width") as i32;
     let width = max.min(area.width - 2 * PROMPT_MARGIN).max(200);
-    let top = area.height / 6;
-    let rows = rows.min(OVERLAY_MAX_ROWS.max(completion_max_rows(s)) + 1) as i32;
+    let max_rows = OVERLAY_MAX_ROWS.max(completion_max_rows(s)) + 1;
+    let center = s.engine.settings().str("ui.overlay.position") == "center";
+    let tallest = (OVERLAY_MAX_ROWS as i32 + 1) * row_height() + 2 * OVERLAY_FRAME;
+    let top = overlay_top(area.height, tallest, center);
+    let rows = rows.min(max_rows) as i32;
     let height = (rows * row_height() + 2 * OVERLAY_FRAME).min(area.height - top);
     Some(Rect {
         x: area.x + (area.width - width) / 2,
@@ -1913,5 +1928,18 @@ wrap_task! {
             show_message(self.level, self.text.clone());
             refresh_ui();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overlay_top;
+
+    #[test]
+    fn the_centred_overlay_keeps_its_top_where_the_tallest_box_is_centred() {
+        assert_eq!(overlay_top(800, 300, false), 133);
+        assert_eq!(overlay_top(800, 300, true), 250);
+        // A page area shorter than the tallest box: the top of the page area.
+        assert_eq!(overlay_top(200, 300, true), 0);
     }
 }
