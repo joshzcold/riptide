@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Packs an experimental macOS or Windows release build with its CEF runtime:
 #   scripts/package-experimental.sh [version]
-#     -> dist/riptide-<version>-macos-<arch>.tar.gz or -windows-<arch>.zip
-# Neither platform can run the browser yet (no app bundle or installer, M10);
-# these exist so the builds can be tried and the packaging grows from here.
+#     -> dist/riptide-<version>-macos-<arch>.tar.gz, or on Windows
+#        -windows-<arch>.zip and the installer, -windows-<arch>-setup.exe
+# macOS can't run the browser yet (no app bundle, M10); Windows is untested by hand.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -47,7 +47,7 @@ else
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
 if [[ $os == windows ]]; then
-    status="starts, but is untested by hand and has no installer yet"
+    status="starts, but is untested by hand"
 else
     status="does not run yet: it still needs an app bundle"
 fi
@@ -62,5 +62,10 @@ if [[ $os == macos ]]; then
 else
     (cd dist && 7z a -tzip -bso0 "$name.zip" "$name")
     echo "dist/$name.zip"
+    iscc=$(command -v iscc || echo "/c/Program Files (x86)/Inno Setup 6/ISCC.exe")
+    [[ -x $iscc ]] || { echo "package-experimental.sh: Inno Setup's iscc isn't installed" >&2; exit 1; }
+    "$iscc" -Q "-DVersion=$version" "-DArch=$arch" "-DSource=$(cygpath -w "$root/$stage")" \
+        "-DOutput=$(cygpath -w "$root/dist")" "$(cygpath -w "$root/packaging/windows/riptide.iss")"
+    echo "dist/$name-setup.exe"
 fi
 rm -rf "$stage"

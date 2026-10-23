@@ -14,7 +14,18 @@ To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify w
 
 The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly) is rebuilt from `main` every night it changes. It has the newest features, and may be broken.
 
-The Windows build starts: CI checks that it opens a window and quits. It hasn't been used by hand yet, and there's no installer, so it's experimental. The macOS build can't run the browser yet; it needs the app bundle that's still planned.
+The macOS build can't run the browser yet; it needs the app bundle that's still planned.
+
+## Windows (experimental)
+
+The Windows build starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has two x86_64 downloads:
+
+| Download | Install |
+|---|---|
+| `riptide-X.Y.Z-windows-x86_64-setup.exe` | Run it. It installs for you alone without admin rights (to `%LOCALAPPDATA%\Programs\riptide`), or for everyone if you choose. It adds a Start menu entry and an uninstaller. Unless you untick it, it also lists riptide in **Settings → Apps → Default apps**, where you can make it your browser. |
+| `riptide-X.Y.Z-windows-x86_64.zip` | Unpack it anywhere and run `riptide.exe`. |
+
+Uninstalling keeps your config and profile (see [Where things live](#where-things-live)).
 
 ## Nix and Arch Linux
 
@@ -65,7 +76,7 @@ Ubuntu 23.10 and later block user namespaces through AppArmor unless a program h
 
 Inside an AppImage, `chrome-sandbox` can't be setuid, so the sandbox needs user namespaces.
 
-macOS and Windows builds run without the sandbox for now; it needs the app bundle and installer work that's still planned.
+macOS and Windows builds run without the sandbox for now.
 
 ## Window managers
 

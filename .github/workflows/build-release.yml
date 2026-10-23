@@ -104,13 +104,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --locked
+      - name: Install Inno Setup
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
       - name: Package
         shell: bash
         run: scripts/package-experimental.sh "${{ inputs.version }}"
+      # Install for this user, start the installed copy, then uninstall.
+      - name: Try the installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\riptide-installed"
+          Start-Process $setup.FullName -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', "/DIR=$dir", '/LOG=install.log'
+          & "$dir\riptide.exe" --version
+          if ($LASTEXITCODE -ne 0) { Get-Content install.log -Tail 30; exit 1 }
+          # The uninstaller hands over to a copy of itself, so -Wait returns early.
+          Start-Process "$dir\unins000.exe" -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES'
+          for ($i = 0; ($i -lt 60) -and (Test-Path "$dir\riptide.exe"); $i++) { Start-Sleep 1 }
+          if (Test-Path "$dir\riptide.exe") { Write-Error "the uninstaller left riptide.exe"; exit 1 }
       - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.platform }}
           path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*-setup.exe
           retention-days: 3
