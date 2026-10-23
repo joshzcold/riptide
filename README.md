@@ -28,7 +28,7 @@ A keyboard-driven browser with vim-like bindings, built on Chromium and Rust.
 Riptide is built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate, with everything else in Rust.
 
 > [!NOTE]
-> **Status:** early. Linux on X11 only; Wayland is untested, the Windows build (with an installer) starts but is untested by hand, and the macOS build can't run the browser yet. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+> **Status:** early. Linux on X11 only; Wayland is untested, the Windows (installer) and macOS (`.dmg`) builds start but are untested by hand. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
 
 <table>
   <tr>

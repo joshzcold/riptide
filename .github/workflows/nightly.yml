@@ -86,6 +86,7 @@ jobs:
             dist/*.tar.gz
             dist/*.AppImage
             dist/*.deb
+            dist/*.dmg
             dist/*.zip
             dist/*-setup.exe
       - name: Replace the nightly pre-release

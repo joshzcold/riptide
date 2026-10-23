@@ -34,6 +34,8 @@ linux-keyutils-keyring-store.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store.workspace = true
+objc2.workspace = true
+objc2-app-kit.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-native-keyring-store.workspace = true
