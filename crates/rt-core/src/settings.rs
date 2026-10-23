@@ -2125,7 +2125,7 @@ pub static SETTINGS: &[SettingDef] = &[
             max: 4000
         },
         Value::Int(800),
-        "Width in pixels of the floating overlay (ui.overlay.position = floating), at most the page's"
+        "Width in pixels of the floating overlay (ui.overlay.position = floating or center), at most the page's"
     ),
     def!(
         "ui.theme",

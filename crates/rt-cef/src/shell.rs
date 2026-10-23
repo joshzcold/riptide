@@ -1866,7 +1866,7 @@ fn rows_bounds(s: &Shell, rows: usize) -> Option<Rect> {
     let width = max.min(area.width - 2 * PROMPT_MARGIN).max(200);
     let max_rows = OVERLAY_MAX_ROWS.max(completion_max_rows(s)) + 1;
     let center = s.engine.settings().str("ui.overlay.position") == "center";
-    let tallest = (OVERLAY_MAX_ROWS as i32 + 1) * row_height() + 2 * OVERLAY_FRAME;
+    let tallest = max_rows as i32 * row_height() + 2 * OVERLAY_FRAME;
     let top = overlay_top(area.height, tallest, center);
     let rows = rows.min(max_rows) as i32;
     let height = (rows * row_height() + 2 * OVERLAY_FRAME).min(area.height - top);
