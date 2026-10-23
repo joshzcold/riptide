@@ -64,6 +64,26 @@ fn a_site_gets_the_devices_set_for_it() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn a_site_keeping_get_user_media_early_still_gets_its_camera() {
+    let b = Browser::launch()
+        .arg("--use-fake-device-for-media-stream=device-count=2")
+        .toml(
+            "[content.media]\nvideo_capture = \"true\"\n\
+             [per_domain.\"{server}\"]\n\"content.media.camera\" = \"fake_device_1\"\n",
+        )
+        .start("media-early.html");
+    b.wait_eval(
+        "String(window.__on = window.__on || (call(), true))",
+        "true",
+    );
+    let label = "String(window.__error || window.__stream?.getVideoTracks()[0]?.label)";
+    b.wait_until("the page's camera is the one set for it", |_| {
+        b.eval(label) == "fake_device_1"
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn media_devices_switches_a_call_in_progress() {
     let b = start_call("");
     wait_in_use(&b, "the defaults", |v| {
