@@ -80,7 +80,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |
 | `:cmd-edit` |  | Edit the command line in editor.command, then put it back: [--run] runs it instead |
 | `:greasemonkey-reload` |  | Read the scripts in the greasemonkey directories again |
-| `:close` |  | Close the current window (:quit closes all of them) |
+| `:close` |  | Close the focused split pane, or the current window when it has one pane (:quit closes all of them) |
 | `:tab-select` | `T` `gt` | Go to a tab in any window: :tab-select &lt;window/tab \| text&gt; (T) |
 | `:history` |  | Show the browsing history: :history [-t] |
 | `:settings` |  | Open the settings page, to browse and change every setting |

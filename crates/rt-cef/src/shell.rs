@@ -853,7 +853,10 @@ fn run_command(command: Command, count: Option<u32>) {
             scroll(&browser, "perc", &x, &y);
         }
         Command::Close => {
-            if let Some(window) = with(|s| s.window.clone()).flatten() {
+            // As in Vim, :q in a split closes only the focused pane.
+            if with(|s| s.layout.is_split()).unwrap_or(false) {
+                crate::panes::run_command(&Command::SplitClose);
+            } else if let Some(window) = with(|s| s.window.clone()).flatten() {
                 window.close();
             }
         }

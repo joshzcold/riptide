@@ -1010,7 +1010,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "close",
-        "Close the current window (:quit closes all of them)",
+        "Close the focused split pane, or the current window when it has one pane (:quit closes all of them)",
     ),
     spec(
         "tab-select",

@@ -61,7 +61,7 @@ Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts
 | `s=` | `:split-equal` | Give every pane the same room |
 | `s>` `s<` | `:split-resize width +10` / `-10` | Make the focused pane wider or narrower |
 | `s+` `s-` | `:split-resize height +10` / `-10` | Make the focused pane taller or shorter |
-| `sc` | `:split-close` | Close the focused pane |
+| `sc` | `:split-close`, or `:q` | Close the focused pane |
 | `so` | `:only` | Keep only the focused pane |
 
 The focused pane has a border in the theme's accent color and shows the current tab, so keys, hints, the status bar and every command act on it. Clicking a pane focuses it, and dragging the border between two panes resizes them. `J`, `K` and `:tab-select` change the focused pane's tab; picking a tab that another pane already shows moves the focus there instead, since a tab can only be in one pane. New tabs, such as `:open -t`, open in the focused pane, since a new tab becomes the current one; `:open -b` keeps it in the background. Closing a pane or using `:only` keeps its tab open; closing a pane's tab shows another tab that isn't on screen, or closes the pane when there's none.
@@ -70,7 +70,7 @@ Sessions save each window's panes, their sizes and their tabs, so a restored win
 
 ## Windows and private windows
 
-`:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` closes the current window and `:quit` closes all of them. Sessions save and restore every normal window.
+`:open -w url` opens a new window and `:open -p url` a private one. Private windows use an in-memory profile shared by all private windows: no cookies or cache on disk, no history, and they're left out of sessions. Their status bar is gray. `:close` (`:q`) closes the current window, or only the focused pane when it's split, and `:quit` closes all of them. Sessions save and restore every normal window.
 
 Windows remember their size. At startup the first window opens where the last one closed, at the same size and maximized if it was, even without `auto_save.session`. A new window from `:open -w` takes the size of the window you're in, and the window manager places it. If the window was last on a monitor that's no longer connected, it keeps its size and the window manager places it instead. Tiling window managers set the size themselves.
 
