@@ -150,9 +150,10 @@ fn native_crash_keeps_the_tabs_and_leaves_a_dump(signal: &str) {
     b.wait_until("the report page opens", |s| {
         s.tab().url == "riptide://crash/" && !s.tab().loading
     });
+    // A child process that loses the browser can leave a second dump.
     b.wait_eval(
-        "String(document.querySelectorAll('#dump-list li').length)",
-        "1",
+        "String(document.querySelectorAll('#dump-list li').length >= 1)",
+        "true",
     );
 }
 
