@@ -15,5 +15,11 @@ fn main() {
             "cargo::rustc-link-arg-bins=/MANIFESTINPUT:{}",
             manifest.display()
         );
+        println!("cargo::rerun-if-changed=riptide.rc");
+        println!("cargo::rerun-if-changed=../../packaging/windows/riptide.ico");
+        #[cfg(windows)]
+        embed_resource::compile("riptide.rc", embed_resource::NONE)
+            .manifest_optional()
+            .unwrap();
     }
 }

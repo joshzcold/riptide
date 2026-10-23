@@ -398,6 +398,9 @@ impl Shell {
 
     /// Turn `:open` text into a URL using the configured search engines.
     pub fn fuzzy_url(&self, input: &str) -> String {
+        if let Some(url) = rt_core::url::local_file_url(input, std::env::home_dir().as_deref()) {
+            return url;
+        }
         let settings = self.engine.settings();
         let engines = settings
             .map("url.searchengines")

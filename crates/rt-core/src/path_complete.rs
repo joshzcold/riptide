@@ -7,11 +7,8 @@ use std::path::{Path, PathBuf};
 /// matches or nothing would change. `home` expands a leading `~/` for the
 /// lookup only; the text keeps the `~`.
 pub fn complete(text: &str, home: Option<&Path>) -> Option<String> {
-    let (dir, prefix) = match text.rfind('/') {
-        Some(i) => (&text[..=i], &text[i + 1..]),
-        None => ("", text),
-    };
-    let lookup: PathBuf = match (dir.strip_prefix("~/"), home) {
+    let (dir, prefix) = split(text);
+    let lookup: PathBuf = match (strip_home(dir), home) {
         (Some(rest), Some(home)) => home.join(rest),
         _ if dir.is_empty() => PathBuf::from("."),
         _ => PathBuf::from(dir),
@@ -37,9 +34,37 @@ pub fn complete(text: &str, home: Option<&Path>) -> Option<String> {
     });
     let mut completed = format!("{dir}{common}");
     if let [(_, true)] = matches.as_slice() {
-        completed.push('/');
+        completed.push(separator(dir));
     }
     (completed != text).then_some(completed)
+}
+
+/// Whether `c` separates folders: `/`, and on Windows `\` too.
+pub fn is_separator(c: char) -> bool {
+    c == '/' || (cfg!(windows) && c == '\\')
+}
+
+/// `text` split after its last separator: the folder and the start of a name.
+pub fn split(text: &str) -> (&str, &str) {
+    match text.rfind(is_separator) {
+        Some(i) => (&text[..=i], &text[i + 1..]),
+        None => ("", text),
+    }
+}
+
+/// What's after a leading `~/` (or `~\` on Windows).
+pub fn strip_home(path: &str) -> Option<&str> {
+    path.strip_prefix('~')
+        .filter(|rest| rest.starts_with(is_separator))
+        .map(|rest| &rest[1..])
+}
+
+/// The separator to put after a folder in `dir`: the one it already uses.
+pub fn separator(dir: &str) -> char {
+    dir.chars()
+        .last()
+        .filter(|c| is_separator(*c))
+        .unwrap_or('/')
 }
 
 #[cfg(test)]
@@ -80,6 +105,23 @@ mod tests {
         assert_eq!(
             complete("~/Dow", Some(&dir)),
             Some("~/Downloads/".to_string())
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn completes_windows_paths() {
+        let dir = std::env::temp_dir().join(format!("rt-path-complete-win-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("Downloads")).unwrap();
+        let base = format!("{}\\", dir.display());
+        assert_eq!(
+            complete(&format!("{base}Dow"), None),
+            Some(format!("{base}Downloads\\"))
+        );
+        assert_eq!(
+            complete("~\\Dow", Some(&dir)),
+            Some("~\\Downloads\\".to_string())
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

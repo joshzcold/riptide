@@ -46,3 +46,17 @@ fn url_incdec_segments_choose_what_ctrl_a_changes() {
     let next = format!("{}?n=1#s2", b.url("nav1.html"));
     b.wait_until("only the anchor changes", |s| s.tab().url == next);
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn open_a_local_path_opens_the_file_not_a_search() {
+    let dir = std::env::temp_dir().join(format!("rt-e2e-local-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("a page.html");
+    std::fs::write(&file, "<title>local file</title>").unwrap();
+    let b = Browser::launch().toml(ENGINES).start("page.html");
+    b.run(&format!("open {}", file.display()));
+    let s = b.wait_until("the file loads", |s| s.tab().title == "local file");
+    assert!(s.tab().url.starts_with("file:///"), "{}", s.tab().url);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

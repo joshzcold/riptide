@@ -395,21 +395,31 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
     }
 }
 
-/// Files and folders for a pattern that looks like a path (`/…`, `~/…`, `file://…`).
+/// Files and folders for a pattern that looks like a path (`/…`, `~/…`,
+/// `file://…`, and on Windows `C:\…`).
 fn files(pattern: &str) -> Vec<Completion> {
+    use rt_core::path_complete::{separator, split, strip_home};
     let path = pattern.strip_prefix("file://").unwrap_or(pattern);
-    if !(path.starts_with('/') || path.starts_with("~/")) {
+    let drive = cfg!(windows)
+        && path.len() >= 3
+        && path.as_bytes()[0].is_ascii_alphabetic()
+        && path[1..].starts_with(':')
+        && path[2..].starts_with(rt_core::path_complete::is_separator);
+    if !(path.starts_with('/') || strip_home(path).is_some() || drive) {
         return Vec::new();
     }
-    let home = std::env::home_dir();
-    let expanded = match (path.strip_prefix("~/"), &home) {
-        (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
+    let expanded = match (strip_home(path), std::env::home_dir()) {
+        (Some(rest), Some(home)) => {
+            let home = home.to_string_lossy().into_owned();
+            format!("{home}{}{rest}", separator(path.get(..2).unwrap_or("/")))
+        }
         _ => path.to_string(),
     };
-    let (dir, prefix) = match expanded.rfind('/') {
-        Some(i) => (&expanded[..=i], &expanded[i + 1..]),
-        None => return Vec::new(),
-    };
+    let (dir, prefix) = split(&expanded);
+    if dir.is_empty() {
+        return Vec::new();
+    }
+    let slash = separator(dir);
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -426,7 +436,11 @@ fn files(pattern: &str) -> Vec<Completion> {
         .into_iter()
         .take(50)
         .map(|(name, is_dir)| {
-            let full = format!("{dir}{name}{}", if is_dir { "/" } else { "" });
+            let full = if is_dir {
+                format!("{dir}{name}{slash}")
+            } else {
+                format!("{dir}{name}")
+            };
             item("Filesystem", &full, if is_dir { "folder" } else { "" })
         })
         .collect()
