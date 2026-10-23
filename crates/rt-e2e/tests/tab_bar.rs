@@ -109,6 +109,55 @@ fn tab_bar_dragging_shows_the_tab_moving_and_drops_it_there() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn tab_bar_a_dragged_tab_lands_where_its_left_edge_is() {
+    let b = Browser::start("nav1.html");
+    for page in ["second.html", "nav2.html"] {
+        let url = b.url(page);
+        b.run(&format!("open -t {url}"));
+        b.wait_until("the tab loads", |s| s.tab().is_loaded(&url));
+    }
+    wait_bar(&b, "String(document.querySelectorAll('.tab').length)", "3");
+    // The dragged tab is centred on the pointer: put its left edge just
+    // before, then just past, the second tab's left edge, short of its middle.
+    let targets = b.eval_bar(
+        "tabbar",
+        r#"(() => {
+          const bar = document.getElementById('tabs');
+          const tabs = [...bar.children];
+          const first = tabs[0].getBoundingClientRect();
+          const y = first.top + first.height / 2;
+          const fire = (type, x) => bar.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: y }));
+          const moved = () => tabs[1].style.transform || 'none';
+          fire('pointerdown', first.left + 20);
+          fire('pointermove', first.left + 30);
+          // Measured once the dragged tab has shrunk.
+          const half = tabs[0].getBoundingClientRect().width / 2;
+          const second = tabs[1].getBoundingClientRect();
+          fire('pointermove', second.left - 4 + half);
+          const before = moved();
+          fire('pointermove', second.left + 4 + half);
+          const after = moved();
+          const short = second.left + 4 + half < second.left + second.width / 2;
+          fire('pointerup', second.left + 4 + half);
+          return `${before}|${after}|${short}`;
+        })()"#,
+    );
+    let parts: Vec<&str> = targets.split('|').collect();
+    assert_eq!(parts[0], "none", "not past the left edge yet: {targets}");
+    assert!(
+        parts[1].starts_with("translateX(-"),
+        "past it, the second tab makes room: {targets}"
+    );
+    assert_eq!(
+        parts[2], "true",
+        "the pointer is short of the middle: {targets}"
+    );
+    let first = b.url("nav1.html");
+    b.wait_until("nav1 is now second", |s| s.tabs()[1].url == first);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn tab_bar_unpinned_tabs_can_sit_between_pinned_ones() {
     let b = Browser::start("nav1.html");
     for page in ["second.html", "nav2.html"] {

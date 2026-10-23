@@ -103,16 +103,16 @@
   }
 
   // Keep the dragged tab centred on the pointer and slide the others out of
-  // its way. Where it lands follows the pointer, so a tab can pass narrow
-  // ones near the edge of the bar.
+  // its way. It lands where its left (or top) edge is: past another tab's
+  // left edge, it takes that tab's place.
   function dragTo(pointer) {
     const { index, spans } = press;
-    const delta = pointer - spans[index].size / 2 - spans[index].start;
+    const edge = pointer - spans[index].size / 2;
+    const delta = edge - spans[index].start;
     let target = index;
     spans.forEach((other, i) => {
-      const middle = other.start + other.size / 2;
-      if (i > index && pointer > middle) target = Math.max(target, i);
-      if (i < index && pointer < middle) target = Math.min(target, i);
+      if (i > index && edge > other.start) target = Math.max(target, i);
+      if (i < index && edge < other.start) target = Math.min(target, i);
     });
     press.target = target;
     const axis = vertical() ? "Y" : "X";
