@@ -142,6 +142,37 @@ fn call_sites_open_in_a_call_window_from_open_and_from_links() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn a_call_window_from_a_new_tab_link_fills_its_bars() {
+    let b = Browser::launch()
+        .toml("\"content.call_sites\" = [\"127.0.0.1/nav2.html\"]\n")
+        .start("call-link.html");
+    let nav2 = b.url("nav2.html");
+    // The link's new tab moves to a call window, and focus goes back to the
+    // link's window (as a window manager does) while the call window's bars load.
+    b.follow_hint("hint", |h| h.text.contains("join"));
+    let s = b.wait_until("nav2 opens in a call window", |s| {
+        let opened = s.windows.len() == 2;
+        if opened {
+            b.run("tab-select 1/1");
+        }
+        opened && s.windows.iter().any(|w| w.call && w.tabs[0].url == nav2)
+    });
+    let call = s
+        .windows
+        .iter()
+        .position(|w| w.call)
+        .expect("the call window");
+    b.run(&format!("tab-select {}/1", call + 1));
+    b.wait_until("the call window's bars show its tab", |_| {
+        b.eval_bar("statusbar", "document.body.innerText")
+            .contains("nav2.html")
+            && b.eval_bar("tabbar", "document.body.innerText")
+                .contains("nav2")
+    });
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn a_saved_call_window_comes_back_as_a_call_window() {
     let b = Browser::launch()
         .toml("url.start_pages = [\"about:blank\"]\nauto_save.session = true\n")
