@@ -74,7 +74,7 @@ This is a tour, not the whole list. The [default key bindings](../reference/bind
 
 ## Opening pages
 
-`o` (`:open`) takes an address or words to search for. Text that looks like an address (`example.org`, `localhost:8080`) opens; anything else goes to the `DEFAULT` search engine in `url.searchengines`. Start with an engine's name to use it instead:
+`o` (`:open`) takes an address or words to search for. Text that looks like an address (`example.org`, `localhost:8080`) opens, and so does a file or folder you name by its full path (`/tmp/page.html`, `~/notes.html`, or on Windows `C:\Users\me\page.html`); anything else goes to the `DEFAULT` search engine in `url.searchengines`. Start with an engine's name to use it instead:
 
 ```toml
 [url.searchengines]
@@ -155,7 +155,7 @@ keyhint.blacklist = ["<Ctrl-x>*", "g$"]
 
 ## The command line
 
-In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from search engines, quickmarks, bookmarks, history and, for paths starting with `/` or `~/`, files. Every typed word must match, in any order.
+In the command line, `Tab` / `Shift-Tab` cycle through completions. `:open` completes from search engines, quickmarks, bookmarks, history and, for paths starting with `/` or `~/` (or a drive such as `C:\` on Windows), files. Every typed word must match, in any order.
 
 Quickmarks, bookmarks, history and tabs show each site's icon in completions, such as `:open`, `:quickmark-load` and `:bookmark-load`. Icons are remembered from your visits, but not from private windows; `completion.favicons = false` hides them. Command names, settings, setting values and themes match anywhere in the name: `:set hints` offers `hints.chars` and also `colors.hints.bg`. Names that start with what you typed come first, then names with a part that starts with it (after a `.`, `-` or `_`), then the rest. When no name contains what you typed, its letters in order still match, so `:set clrhnt` offers `colors.hints.*`; names with fewer gaps come first. The matched text is highlighted in the list (`colors.completion.match.fg`).
 

@@ -19,6 +19,10 @@ test-control = ["rt-cef/test-control"]
 rt-cef.workspace = true
 tracing-subscriber.workspace = true
 
+# Builds run on the platform they're for, so the host is Windows here.
+[target.'cfg(windows)'.build-dependencies]
+embed-resource.workspace = true
+
 [dev-dependencies]
 rt-config.workspace = true
 serde_json.workspace = true

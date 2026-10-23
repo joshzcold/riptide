@@ -373,9 +373,110 @@ pub fn encode_query(query: &str) -> String {
     out
 }
 
+/// A `file://` URL for `:open` text naming a file or folder that exists: an
+/// absolute path, `~/…`, or on Windows `C:\…` or `\\server\share\…`.
+pub fn local_file_url(input: &str, home: Option<&std::path::Path>) -> Option<String> {
+    let path = local_path(input.trim(), home, cfg!(windows))?;
+    std::path::Path::new(&path)
+        .exists()
+        .then(|| path_to_file_url(&path, cfg!(windows)))
+}
+
+/// The path `input` names, with `~` expanded, if it's absolute.
+fn local_path(input: &str, home: Option<&std::path::Path>, windows: bool) -> Option<String> {
+    let tilde = input
+        .strip_prefix("~/")
+        .or_else(|| input.strip_prefix("~\\").filter(|_| windows));
+    if let Some(rest) = tilde {
+        return Some(home?.join(rest).to_string_lossy().into_owned());
+    }
+    let bytes = input.as_bytes();
+    let drive = bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/');
+    let absolute = if windows {
+        drive || input.starts_with("\\\\")
+    } else {
+        input.starts_with('/')
+    };
+    absolute.then(|| input.to_string())
+}
+
+/// `C:\a b\x.html` as `file:///C:/a%20b/x.html`; `/tmp/x` as `file:///tmp/x`.
+fn path_to_file_url(path: &str, windows: bool) -> String {
+    let path = if windows {
+        path.replace('\\', "/")
+    } else {
+        path.to_string()
+    };
+    // A UNC path's server is the URL's host.
+    if windows && let Some(unc) = path.strip_prefix("//") {
+        return format!("file://{}", encode_path(unc));
+    }
+    let slash = if path.starts_with('/') { "" } else { "/" };
+    format!("file://{slash}{}", encode_path(&path))
+}
+
+fn encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for c in path.chars() {
+        match c {
+            ' ' | '%' | '#' | '?' | '"' | '<' | '>' | '`' | '{' | '}' => {
+                let mut buf = [0; 4];
+                for byte in c.encode_utf8(&mut buf).bytes() {
+                    out.push_str(&format!("%{byte:02X}"));
+                }
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_paths_become_file_urls() {
+        let home = std::path::Path::new("/home/u");
+        let url = |input: &str, windows| {
+            local_path(input, Some(home), windows).map(|p| path_to_file_url(&p, windows))
+        };
+        assert_eq!(
+            url("/tmp/a b#1.html", false).as_deref(),
+            Some("file:///tmp/a%20b%231.html")
+        );
+        let in_home = path_to_file_url(&home.join("x.html").to_string_lossy(), false);
+        assert_eq!(url("~/x.html", false), Some(in_home));
+        assert_eq!(url("example.com/x", false), None);
+        assert_eq!(url("C:\\x.html", false), None, "not a path on Linux");
+        assert_eq!(
+            url("C:\\Users\\u\\a b.html", true).as_deref(),
+            Some("file:///C:/Users/u/a%20b.html")
+        );
+        assert_eq!(url("d:/x", true).as_deref(), Some("file:///d:/x"));
+        assert_eq!(
+            url("\\\\server\\share\\x.html", true).as_deref(),
+            Some("file://server/share/x.html")
+        );
+        assert_eq!(url("/tmp/x", true), None, "no drive on Windows");
+    }
+
+    #[test]
+    fn existing_files_open_as_files() {
+        let file = std::env::temp_dir().join(format!("rt-local-url-{}.html", std::process::id()));
+        std::fs::write(&file, "").unwrap();
+        let path = file.to_string_lossy().into_owned();
+        let url = local_file_url(&path, None).unwrap();
+        assert!(
+            url.starts_with("file:///") && url.ends_with(".html"),
+            "{url}"
+        );
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(local_file_url(&path, None), None, "gone");
+    }
 
     #[test]
     fn external_schemes() {
