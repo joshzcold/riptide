@@ -7,6 +7,9 @@ use rusqlite::{Connection, OpenFlags, params, params_from_iter};
 
 const SCHEMA_VERSION: i32 = 2;
 
+/// [`History::frecency`]: a visit counts half as much after 30 days.
+const HALF_LIFE: f64 = 30.0 * 24.0 * 3600.0;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryEntry {
     pub url: String,
@@ -212,6 +215,28 @@ impl History {
         Ok(visits + entries > 0)
     }
 
+    /// How much each of `urls` is used: its visits and those to pages under
+    /// it, each worth half as much every [`HALF_LIFE`] seconds of its age.
+    pub fn frecency(&self, urls: &[&str], now: i64) -> rusqlite::Result<Vec<f64>> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT atime FROM visits WHERE url = ?1 OR (url >= ?2 AND url < ?3)",
+        )?;
+        urls.iter()
+            .map(|url| {
+                let base = url.trim_end_matches('/');
+                // Pages under `base/`: '0' is the character after '/'.
+                let mut times = stmt.query_map(
+                    params![base, format!("{base}/"), format!("{base}0")],
+                    |row| row.get::<_, i64>(0),
+                )?;
+                times.try_fold(0.0, |score, atime| {
+                    let age = (now - atime?).max(0) as f64;
+                    Ok(score + 0.5_f64.powf(age / HALF_LIFE))
+                })
+            })
+            .collect()
+    }
+
     pub fn visit_count(&self) -> rusqlite::Result<i64> {
         self.conn
             .query_row("SELECT COUNT(*) FROM visits", [], |row| row.get(0))
@@ -227,6 +252,44 @@ fn escape_like(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frecency_counts_pages_under_a_url_and_favours_recent_visits() {
+        let h = History::open_in_memory().unwrap();
+        let day = 24 * 3600;
+        let now = 100 * day;
+        h.add_visit("https://often.example/", "", now - day)
+            .unwrap();
+        h.add_visit("https://often.example/a/b", "", now - 2 * day)
+            .unwrap();
+        h.add_visit("https://often.example/c", "", now - 3 * day)
+            .unwrap();
+        h.add_visit("https://once.example/", "", now - day).unwrap();
+        h.add_visit("https://old.example/", "", now - 90 * day)
+            .unwrap();
+        h.add_visit("https://old.example/", "", now - 90 * day)
+            .unwrap();
+        // A longer host that shares the prefix isn't under it.
+        h.add_visit("https://often.example.net/", "", now).unwrap();
+        let scores = h
+            .frecency(
+                &[
+                    "https://often.example",
+                    "https://once.example/",
+                    "https://old.example",
+                    "https://never.example",
+                ],
+                now,
+            )
+            .unwrap();
+        assert!(scores[0] > scores[1], "{scores:?}");
+        assert!(
+            scores[1] > scores[2],
+            "two 90-day-old visits count less than one yesterday: {scores:?}"
+        );
+        assert!(scores[2] > 0.0 && scores[0] < 3.0, "{scores:?}");
+        assert_eq!(scores[3], 0.0);
+    }
 
     #[test]
     fn favicons_are_kept_per_host_and_cleared_with_history() {

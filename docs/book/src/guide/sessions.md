@@ -77,6 +77,8 @@ Pages run in processes separate from the browser. If a page's process crashes, r
 
 `:quickmark-add`, `:quickmark-del`, `:bookmark-add` and `:bookmark-del` do the same from the command line.
 
+In completions (`b`, `gb`, `:open`), the quickmarks and bookmarks you've used most lately come first. Each visit to the mark's page, or to a page under it, counts, and counts half as much every 30 days. Marks you haven't visited follow in their file's order. `completion.marks_order = "file"` keeps the file's order for all of them.
+
 `:bookmark-list` shows your quickmarks and bookmarks on a page (`-t` in a new tab). If you edit the `quickmarks` or `bookmarks/urls` files by hand, `:quickmarks-reload` (or `:bookmarks-reload`) reads them again. `:quickmark-save` writes the quickmarks file, although every change is saved anyway.
 
 ## Restarting

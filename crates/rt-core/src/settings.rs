@@ -951,6 +951,12 @@ pub static SETTINGS: &[SettingDef] = &[
         completion_height
     ),
     def!(
+        "completion.marks_order",
+        Kind::Enum(&["visits", "file"]),
+        s("visits"),
+        "Order of quickmarks and bookmarks in completions: the most visited lately first (visits), or as in their files (file)"
+    ),
+    def!(
         "completion.min_chars",
         Kind::Int { min: 0, max: 100 },
         Value::Int(0),
