@@ -131,6 +131,24 @@ fn sc_and_so_close_panes_but_keep_their_tabs() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn q_closes_the_focused_pane_and_then_the_window() {
+    let b = three_panes();
+    b.run("q");
+    let s = b.wait_until("two panes", |s| s.window().panes.len() == 2);
+    assert_eq!(s.windows.len(), 1, "the window stays open");
+    assert_eq!(s.tabs().len(), 3, "the pane's tab stays open");
+    assert_eq!(panes(&s), ["ready", "*second"]);
+    b.run("q");
+    b.wait_until("one pane", |s| s.window().panes.len() == 1);
+    b.run("q");
+    assert!(
+        b.wait_exit().success(),
+        "the last pane's :q closes the window"
+    );
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn closing_a_panes_tab_shows_another_or_closes_the_pane() {
     let b = three_panes();
     // Three tabs on screen, so the pane has nothing left to show.
