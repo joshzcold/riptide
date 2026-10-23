@@ -420,6 +420,19 @@ pub fn completions(pattern: &str) -> Vec<Completion> {
     })
 }
 
+/// Put a pencil before each spelling suggestion in the context menu, since
+/// CEF's menus can't show icons.
+fn mark_suggestions(model: &MenuModel) {
+    let first = MenuId::SPELLCHECK_SUGGESTION_0.get_raw() as i32;
+    let last = MenuId::SPELLCHECK_SUGGESTION_4.get_raw() as i32;
+    for i in 0..model.count() {
+        if (first..=last).contains(&model.command_id_at(i)) {
+            let label = CefString::from(&model.label_at(i)).to_string();
+            model.set_label_at(i, Some(&CefString::from(format!("✎ {label}").as_str())));
+        }
+    }
+}
+
 /// The context menu's "Copy link address", among CEF's ids for embedders.
 fn copy_link() -> i32 {
     MenuId::USER_FIRST.get_raw() as i32
@@ -442,12 +455,13 @@ wrap_context_menu_handler! {
             if context_menu(browser, params, model) {
                 return;
             }
+            mark_suggestions(model);
             // A link: copy its address, as other browsers offer.
             if !CefString::from(&params.link_url()).to_string().is_empty() {
                 if model.count() > 0 {
                     model.add_separator();
                 }
-                model.add_item(copy_link(), Some(&CefString::from("Copy link address")));
+                model.add_item(copy_link(), Some(&CefString::from("⧉ Copy link address")));
             }
         }
 

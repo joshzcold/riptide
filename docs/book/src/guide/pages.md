@@ -28,7 +28,7 @@ From the keyboard, in a text field:
 - `:spell-add` adds that word to your dictionary.
 - `]s` and `[s` in normal mode (`Escape` from the field keeps the cursor in it) move the text cursor to the next or previous misspelled word, so `i` and `Alt-s` fix it. With none that way, the cursor stays where it was.
 
-Right-click suggestions work too.
+Right-clicking a misspelled word works too: its fixes are the menu items marked with a pencil (`✎`).
 
 ## Widevine (DRM)
 
