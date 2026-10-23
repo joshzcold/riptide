@@ -31,7 +31,7 @@ The `content.geolocation`, `content.notifications.enabled`, `content.media.audio
 | Presenter | Where |
 |---|---|
 | `auto` (the default) | Your desktop, sent by Chromium |
-| `libnotify` | Your desktop, sent by riptide with `notify-send` (from libnotify), following the settings below. Clicking one shows its tab. |
+| `libnotify` | Your desktop, sent by riptide with `notify-send` (from libnotify), following the settings below. Clicking one shows its tab. Linux only; elsewhere it acts as `auto`. |
 | `messages` | riptide's status bar, for `messages.timeout` milliseconds |
 
 With `libnotify`:

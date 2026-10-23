@@ -110,7 +110,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.mute` | boolean | `false` | Mute pages; can be set per site |
 | `content.notifications.app_name` | string | `riptide` | The app name on desktop notifications (presenter = libnotify), which notification services such as dunst and mako can match to style them |
 | `content.notifications.enabled` | ask \| true \| false | `ask` | Let sites show notifications: ask, true or false |
-| `content.notifications.presenter` | auto \| libnotify \| messages | `auto` | Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings) or messages (riptide's status bar) |
+| `content.notifications.presenter` | auto \| libnotify \| messages | `auto` | Where page notifications show: auto (Chromium's desktop notifications), libnotify (desktop notifications riptide sends with notify-send, following the other content.notifications settings; Linux only, auto elsewhere) or messages (riptide's status bar) |
 | `content.notifications.show_origin` | boolean | `true` | Show the site a notification came from (presenter = libnotify or messages) |
 | `content.notifications.site_icon` | boolean | `true` | Show the site's icon on desktop notifications (presenter = libnotify) |
 | `content.notifications.timeout` | integer | `-1` | Milliseconds a desktop notification stays (presenter = libnotify): -1 lets the desktop decide, 0 keeps it until dismissed |

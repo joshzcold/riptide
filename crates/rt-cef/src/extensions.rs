@@ -88,7 +88,7 @@ fn installed_dir(data_dir: &Path) -> PathBuf {
 }
 
 fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    std::env::home_dir()
 }
 
 /// An extension riptide loads: installed by `:extension-install`, or a

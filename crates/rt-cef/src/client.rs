@@ -129,7 +129,7 @@ wrap_client! {
                 let page = frame.as_ref().map(|f| CefString::from(&f.url()).to_string()).unwrap_or_default();
                 let (show_origin, desktop) = shell::with(|s| {
                     let settings = s.engine.settings();
-                    (settings.bool("content.notifications.show_origin"), settings.str("content.notifications.presenter") == "libnotify")
+                    (settings.bool("content.notifications.show_origin"), crate::notifications::presenter(settings) == "libnotify")
                 })
                 .unwrap_or((true, false));
                 if desktop {
