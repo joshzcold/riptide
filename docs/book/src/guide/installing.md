@@ -14,8 +14,6 @@ To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify w
 
 The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly) is rebuilt from `main` every night it changes. It has the newest features, and may be broken.
 
-The macOS build can't run the browser yet; it needs the app bundle that's still planned.
-
 ## Windows (experimental)
 
 The Windows build starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has two x86_64 downloads:
@@ -26,6 +24,18 @@ The Windows build starts, and CI checks that it opens a window and quits, but it
 | `riptide-X.Y.Z-windows-x86_64.zip` | Unpack it anywhere and run `riptide.exe`. |
 
 Uninstalling keeps your config and profile (see [Where things live](#where-things-live)).
+
+## macOS (experimental)
+
+The macOS app starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg`, for Apple silicon Macs. Open it and drag riptide onto Applications.
+
+riptide is signed ad hoc but not notarized by Apple, so macOS blocks its first start. Open it once, then choose **Open Anyway** in **System Settings → Privacy & Security**. Or clear the quarantine flag yourself:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/riptide.app
+```
+
+Each update has a new signature, so macOS may ask again for the camera, microphone and keychain.
 
 ## Nix and Arch Linux
 

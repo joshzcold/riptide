@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Packs an experimental macOS or Windows release build with its CEF runtime:
 #   scripts/package-experimental.sh [version]
-#     -> dist/riptide-<version>-macos-<arch>.tar.gz, or on Windows
+#     -> dist/riptide-<version>-macos-<arch>.dmg (riptide.app), or on Windows
 #        -windows-<arch>.zip and the installer, -windows-<arch>-setup.exe
-# macOS can't run the browser yet (no app bundle, M10); Windows is untested by hand.
+# Both start on CI but are untested by hand; the macOS app is ad-hoc signed.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -34,11 +34,12 @@ fi
 stage=dist/$name
 rm -rf "$stage"
 mkdir -p "$stage"
-cp "$build/$exe" "$stage/"
 if [[ $os == macos ]]; then
-    # The framework belongs inside an app bundle; until M10 it ships alongside.
-    cp -R "$cef/Chromium Embedded Framework.framework" "$stage/"
+    scripts/bundle-macos.sh "$build/$exe" "$cef" "$stage" "$version" >/dev/null
+    # Drag riptide.app onto Applications to install it.
+    ln -s /Applications "$stage/Applications"
 else
+    cp "$build/$exe" "$stage/"
     # The runtime files cef-dll-sys copies next to the binary: CEF's top-level
     # files and locales, minus the build-only ones and CEF's sample launchers.
     find "$cef" -maxdepth 1 -type f ! -name archive.json ! -name 'CMakeLists.txt' ! -name '*.lib' \
@@ -46,19 +47,15 @@ else
     cp -R "$cef/locales" "$stage/"
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
-if [[ $os == windows ]]; then
-    status="starts, but is untested by hand"
-else
-    status="does not run yet: it still needs an app bundle"
-fi
+status="starts, but is untested by hand"
 cat >"$stage/EXPERIMENTAL.txt" <<EOF
 This $os build of riptide $version is experimental and $status.
 Linux is the only supported platform for now. See https://joshzcold.github.io/riptide/
 EOF
 
 if [[ $os == macos ]]; then
-    tar -C dist -czf "dist/$name.tar.gz" "$name"
-    echo "dist/$name.tar.gz"
+    hdiutil create -quiet -volname "riptide $version" -srcfolder "$stage" -ov -format UDZO "dist/$name.dmg"
+    echo "dist/$name.dmg"
 else
     (cd dist && 7z a -tzip -bso0 "$name.zip" "$name")
     echo "dist/$name.zip"

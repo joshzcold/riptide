@@ -109,9 +109,16 @@ jobs:
           [[ -f $bin.exe ]] && bin=$bin.exe
           "$bin" --version
           "$bin" --paths
+      - name: Build riptide.app
+        if: runner.os == 'macOS'
+        run: |
+          framework=$(find target/debug/build -maxdepth 4 -name 'Chromium Embedded Framework.framework' -print -quit)
+          [[ -n $framework ]] || { echo "no CEF framework under target/debug/build"; exit 1; }
+          scripts/bundle-macos.sh target/debug/riptide "$(dirname "$framework")" target/debug
+          codesign --verify --deep --strict target/debug/riptide.app
+          echo "RIPTIDE_EXE=$PWD/target/debug/riptide.app/Contents/MacOS/riptide" >> "$GITHUB_ENV"
       - name: Start the browser
-        if: runner.os == 'Windows'
-        run: cargo test --locked -p riptide --test windows_start -- --ignored --nocapture
+        run: cargo test --locked -p riptide --test desktop_start -- --ignored --nocapture
 
   docs:
     name: docs (build, internal links)

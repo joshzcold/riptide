@@ -1757,6 +1757,8 @@ dependencies = [
  "keyring-core",
  "libc",
  "linux-keyutils-keyring-store",
+ "objc2",
+ "objc2-app-kit",
  "rt-adblock",
  "rt-config",
  "rt-core",

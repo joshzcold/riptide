@@ -1,6 +1,7 @@
-//! The browser starts on Windows and opens a window. CI's Windows job runs
-//! it with CEF's runtime files copied next to `riptide.exe`.
-#![cfg(windows)]
+//! The browser starts on Windows and macOS and opens a window. CI runs it
+//! with CEF's runtime next to `riptide.exe`, or on macOS in `riptide.app`
+//! (`RIPTIDE_EXE` names the binary inside it).
+#![cfg(any(windows, target_os = "macos"))]
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -36,11 +37,19 @@ fn logs(base: &Path) -> String {
 }
 
 #[test]
-#[ignore = "starts the browser; needs CEF's runtime files next to riptide.exe"]
+#[ignore = "starts the browser; needs CEF's runtime next to riptide.exe or an app bundle"]
 fn the_browser_starts_opens_a_window_and_quits() {
-    let base = std::env::temp_dir().join(format!("rt-start-{}", std::process::id()));
+    // macOS's temporary folder is too long for the socket's path.
+    let tmp = if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        "/tmp".into()
+    };
+    let base = tmp.join(format!("rt-start-{}", std::process::id()));
     std::fs::create_dir_all(&base).unwrap();
-    let mut browser = Command::new(env!("CARGO_BIN_EXE_riptide"))
+    let exe =
+        std::env::var_os("RIPTIDE_EXE").unwrap_or_else(|| env!("CARGO_BIN_EXE_riptide").into());
+    let mut browser = Command::new(exe)
         .arg("--basedir")
         .arg(&base)
         .arg("about:blank")
@@ -54,7 +63,7 @@ fn the_browser_starts_opens_a_window_and_quits() {
         if let Some(status) = browser.try_wait().unwrap() {
             panic!("riptide exited early ({status}):\n{}", logs(&base));
         }
-        // The pipe answers once the first window exists.
+        // The socket answers once the first window exists.
         if let Ok(Some(state)) = request(&socket, TestRequest::State)
             && state["windows"].as_array().is_some_and(|w| !w.is_empty())
         {

@@ -24,6 +24,8 @@ mod help;
 mod hints;
 mod history;
 mod lua;
+#[cfg(target_os = "macos")]
+mod mac_app;
 mod marks;
 mod media;
 mod navigate;
@@ -448,6 +450,8 @@ pub fn run() -> i32 {
         }
         switches
     };
+    #[cfg(target_os = "macos")]
+    mac_app::install();
     let mut app = RtApp::new(Some(Startup {
         paths,
         urls,
