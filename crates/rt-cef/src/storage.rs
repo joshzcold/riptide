@@ -64,8 +64,43 @@ pub fn icon_for(url: &str) -> Option<String> {
     FAVICONS.with(|f| f.borrow().get(rt_core::url::host(url)).cloned())
 }
 
+/// [`icon_for`], unless `completion.favicons` is off.
+pub fn completion_icon(url: &str) -> Option<String> {
+    COMPLETION
+        .with(|c| c.borrow().favicons)
+        .then(|| icon_for(url))
+        .flatten()
+}
+
+/// `completion.marks_order = visits`: the marks used most lately first, the
+/// others in their order.
+fn most_used<'a>(
+    s: &Storage,
+    marks: Vec<(&'a str, &'a str)>,
+    url: fn(&(&'a str, &'a str)) -> &'a str,
+) -> Vec<(&'a str, &'a str)> {
+    let Some(history) = s
+        .history
+        .as_ref()
+        .filter(|_| COMPLETION.with(|c| c.borrow().marks_by_visits))
+    else {
+        return marks;
+    };
+    let urls: Vec<&str> = marks.iter().map(url).collect();
+    let scores = match history.frecency(&urls, now()) {
+        Ok(scores) => scores,
+        Err(e) => {
+            tracing::warn!(%e, "could not rank marks by visits");
+            return marks;
+        }
+    };
+    let mut ranked: Vec<(f64, (&str, &str))> = scores.into_iter().zip(marks).collect();
+    ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+    ranked.into_iter().map(|(_, mark)| mark).collect()
+}
+
 fn with_icon(mut item: Completion, url: &str) -> Completion {
-    item.icon = icon_for(url);
+    item.icon = completion_icon(url);
     item
 }
 
@@ -167,6 +202,8 @@ pub fn delete_completion(item: &rt_core::completion::Completion) {
 
 #[derive(Default)]
 struct CompletionSettings {
+    marks_by_visits: bool,
+    favicons: bool,
     history_limit: usize,
     categories: Vec<String>,
     exclude: Vec<String>,
@@ -177,6 +214,8 @@ struct CompletionSettings {
 pub fn sync_settings(settings: &rt_core::settings::Settings) {
     COMPLETION.with(|c| {
         *c.borrow_mut() = CompletionSettings {
+            marks_by_visits: settings.str("completion.marks_order") == "visits",
+            favicons: settings.bool("completion.favicons"),
             history_limit: settings.int("completion.web_history.max_items").max(0) as usize,
             categories: settings.list("completion.open_categories").to_vec(),
             exclude: settings.list("completion.web_history.exclude").to_vec(),
@@ -254,21 +293,23 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     with(|s| {
         let mut items = Vec::new();
         if kind == CompletionKind::Quickmark {
-            for (name, url) in s
+            let marks = s
                 .quickmarks
                 .iter()
                 .filter(|(n, u)| matches(pattern, &[n, u]))
-            {
-                items.push(item("Quickmarks", name, url));
+                .collect();
+            for (name, url) in most_used(s, marks, |m| m.1) {
+                items.push(with_icon(item("Quickmarks", name, url), url));
             }
         }
         if kind == CompletionKind::Bookmark {
-            for (url, title) in s
+            let marks = s
                 .bookmarks
                 .iter()
                 .filter(|(u, t)| matches(pattern, &[u, t]))
-            {
-                items.push(item("Bookmarks", url, title));
+                .collect();
+            for (url, title) in most_used(s, marks, |m| m.0) {
+                items.push(with_icon(item("Bookmarks", url, title), url));
             }
         }
         if kind == CompletionKind::Session {
@@ -298,17 +339,25 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                 .collect()
         }
         "quickmarks" => with(|s| {
-            s.quickmarks
+            let marks = s
+                .quickmarks
                 .iter()
                 .filter(|(n, u)| matches(pattern, &[n, u]))
+                .collect();
+            most_used(s, marks, |m| m.1)
+                .into_iter()
                 .map(|(name, url)| with_icon(item("Quickmarks", url, name), url))
                 .collect()
         })
         .unwrap_or_default(),
         "bookmarks" => with(|s| {
-            s.bookmarks
+            let marks = s
+                .bookmarks
                 .iter()
                 .filter(|(u, t)| matches(pattern, &[u, t]))
+                .collect();
+            most_used(s, marks, |m| m.0)
+                .into_iter()
                 .map(|(url, title)| with_icon(item("Bookmarks", url, title), url))
                 .collect()
         })
@@ -327,7 +376,7 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                         .iter()
                         .filter(|e| !exclude.iter().any(|glob| rt_core::url::glob(glob, &e.url)))
                         .map(|e| Completion {
-                            icon: icon_for(&e.url),
+                            icon: completion_icon(&e.url),
                             time: Some(e.last_visit),
                             ..item("History", &e.url, &e.title)
                         })

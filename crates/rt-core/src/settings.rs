@@ -938,11 +938,23 @@ pub static SETTINGS: &[SettingDef] = &[
         "Milliseconds to wait after a key press before updating completions"
     ),
     def!(
+        "completion.favicons",
+        Kind::Bool,
+        Value::Bool(true),
+        "Show each site's icon next to quickmarks, bookmarks, history and tabs in completions"
+    ),
+    def!(
         "completion.height",
         Kind::Str,
         s("12"),
         "Height of the completion list: rows (12) or a percentage of the window (50%)",
         completion_height
+    ),
+    def!(
+        "completion.marks_order",
+        Kind::Enum(&["visits", "file"]),
+        s("visits"),
+        "Order of quickmarks and bookmarks in completions: the most visited lately first (visits), or as in their files (file)"
     ),
     def!(
         "completion.min_chars",

@@ -901,9 +901,20 @@ wrap_load_handler! {
                     shell::show_messages_waiting_for_load();
                     return;
                 }
-                Role::Tabbar => shell::with(|s| s.tabbar_ready = true),
-                Role::Statusbar => shell::with(|s| s.statusbar_ready = true),
-                Role::Completion => shell::with(|s| s.completion_ready = true),
+                Role::Tabbar | Role::Statusbar | Role::Completion => {
+                    // Its own window's: a call window opened from a link loads
+                    // its bars after focus went back to the link's window.
+                    let id = browser.as_deref().map(|b| b.identifier());
+                    shell::with(|s| {
+                        let window = id.and_then(|id| s.window_of_browser(id)).unwrap_or(s.active);
+                        let w = &mut s.windows[window];
+                        match self.role {
+                            Role::Tabbar => w.tabbar_ready = true,
+                            Role::Statusbar => w.statusbar_ready = true,
+                            _ => w.completion_ready = true,
+                        }
+                    });
+                }
                 Role::Crashed => return,
                 Role::Float => {
                     if let Some(browser) = &browser {

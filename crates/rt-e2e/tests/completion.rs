@@ -255,12 +255,24 @@ fn open_completion_shows_each_sites_icon_and_history_keeps_it() {
         assert!(start.elapsed() < rt_e2e::TIMEOUT, "the icon wasn't saved");
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
+    let icons = "String(document.querySelectorAll('img.site-icon').length)";
     b.keys(":open icon");
-    wait_overlay(
-        &b,
-        "String(document.querySelectorAll('img.site-icon').length > 0)",
-        |v| v == "true",
-    );
+    wait_overlay(&b, icons, |v| v != "0");
+    b.keys("<Escape>");
+    // :quickmark-load and :bookmark-load show it too.
+    let url = b.url("icon.html");
+    b.run(&format!("quickmark-add {url} iconpage"));
+    b.run("bookmark-add");
+    for command in ["quickmark-load", "bookmark-load"] {
+        b.keys(&format!(":{command} "));
+        wait_overlay(&b, icons, |v| v == "1");
+        b.keys("<Escape>");
+    }
+    // completion.favicons = false leaves them out.
+    b.run("set completion.favicons false");
+    b.keys(":open icon");
+    wait_overlay(&b, LIST, |t| t.contains("iconpage"));
+    assert_eq!(b.eval_bar("completion", icons), "0");
     b.keys("<Escape>");
 }
 
@@ -297,5 +309,36 @@ fn spell_install_without_a_language_lists_them_to_pick_from() {
         let items = items(s);
         items.len() == 1 && items[0].1 == "de-DE"
     });
+    b.keys("<Escape>");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn quickmarks_visited_lately_come_first() {
+    let b = Browser::start("page.html");
+    let (nav1, nav2) = (b.url("nav1.html"), b.url("nav2.html"));
+    std::fs::write(
+        b.config_dir().join("quickmarks"),
+        format!("first {nav1}\nsecond {nav2}\n"),
+    )
+    .unwrap();
+    b.run("quickmarks-reload");
+    b.run(&format!("open {nav2}"));
+    b.wait_until("nav2 loads", |s| s.tab().is_loaded(&nav2));
+    let names = |s: &State| -> Vec<String> {
+        items(s)
+            .into_iter()
+            .filter(|(c, _)| c == "Quickmarks")
+            .map(|(_, n)| n)
+            .collect()
+    };
+    b.keys(":quickmark-load ");
+    b.wait_until("the visited quickmark is first", |s| {
+        names(s) == ["second", "first"]
+    });
+    b.keys("<Escape>");
+    b.run("set completion.marks_order file");
+    b.keys(":quickmark-load ");
+    b.wait_until("file order", |s| names(s) == ["first", "second"]);
     b.keys("<Escape>");
 }

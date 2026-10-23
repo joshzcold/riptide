@@ -60,7 +60,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `colors.webpage.preferred_color_scheme` | auto \| light \| dark | `auto` | The color scheme pages see in prefers-color-scheme: auto follows the system |
 | `completion.cmd_history_max_items` | integer | `100` | How many command lines Up and Down remember |
 | `completion.delay` | integer | `0` | Milliseconds to wait after a key press before updating completions |
+| `completion.favicons` | boolean | `true` | Show each site's icon next to quickmarks, bookmarks, history and tabs in completions |
 | `completion.height` | string | `12` | Height of the completion list: rows (12) or a percentage of the window (50%) |
+| `completion.marks_order` | visits \| file | `visits` | Order of quickmarks and bookmarks in completions: the most visited lately first (visits), or as in their files (file) |
 | `completion.min_chars` | integer | `0` | Characters to type after a command before its arguments complete |
 | `completion.open_categories` | string[] | `["searchengines","quickmarks","bookmarks","history","filesystem"]` | What :open completes from, in order: searchengines, quickmarks, bookmarks, history, filesystem |
 | `completion.quick` | boolean | `true` | When only one command or setting name is left, Tab takes it and moves on to completing the next part |
