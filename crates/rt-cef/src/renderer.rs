@@ -592,10 +592,10 @@ const SHARE_JS: &str = r#"(function (report) {
     if (now !== last) { last = now; report(now); }
     if (!streams.size && timer) { clearInterval(timer); timer = 0; }
   };
-  // Chromium adds MediaDevices after this runs: wrap it once it's there.
+  // Chromium exposes navigator.mediaDevices before the MediaDevices name.
   let wrapped = false;
   const install = () => {
-    const proto = globalThis.MediaDevices?.prototype;
+    const proto = globalThis.MediaDevices?.prototype ?? (navigator.mediaDevices && Object.getPrototypeOf(navigator.mediaDevices));
     if (wrapped || !proto?.getDisplayMedia) return;
     wrapped = true;
     const native = proto.getDisplayMedia;

@@ -132,7 +132,8 @@
 
   let wrapped = false;
   const install = () => {
-    const proto = globalThis.MediaDevices?.prototype;
+    // Chromium exposes navigator.mediaDevices before the MediaDevices name.
+    const proto = globalThis.MediaDevices?.prototype ?? (navigator.mediaDevices && Object.getPrototypeOf(navigator.mediaDevices));
     if (wrapped || !proto?.getUserMedia) return;
     wrapped = true;
     getUserMedia = proto.getUserMedia;

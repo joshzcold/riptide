@@ -1,0 +1,8 @@
+<!doctype html><title>media-early</title>
+<script>
+  // Kept before any page load event, as some call sites do.
+  const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  function call() {
+    getUserMedia({ video: true }).then((s) => (window.__stream = s), (e) => (window.__error = e.name));
+  }
+</script>
