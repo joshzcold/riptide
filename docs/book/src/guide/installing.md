@@ -14,7 +14,7 @@ To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify w
 
 The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly) is rebuilt from `main` every night it changes. It has the newest features, and may be broken.
 
-macOS and Windows builds compile and pass their unit tests, but can't run the browser yet; they need the app bundle and installer work that's still planned.
+The Windows build starts: CI checks that it opens a window and quits. It hasn't been used by hand yet, and there's no installer, so it's experimental. The macOS build can't run the browser yet; it needs the app bundle that's still planned.
 
 ## Nix and Arch Linux
 

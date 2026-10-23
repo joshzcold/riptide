@@ -93,7 +93,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Packaging (M10)
 
-- macOS: an app bundle, signing and notarization. Windows: an installer. The remote command's named pipe is tested on CI's Windows runner, but not yet with the browser itself, which doesn't start there.
+- macOS: an app bundle, signing and notarization. Windows: an installer, and trying the browser by hand. It starts on CI's Windows runner (`windows_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
 ### Bugs

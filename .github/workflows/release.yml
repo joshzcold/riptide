@@ -180,7 +180,8 @@ jobs:
           ### Downloads
 
           - **Linux (x86_64):** the `.deb` for Ubuntu 24.04+ and Debian 13+ (`sudo apt install ./riptide_*.deb`), the `.AppImage`, or the `.tar.gz` (unpack and run `riptide`). See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for the sandbox setup.
-          - **macOS and Windows:** experimental packages that don't run the browser yet.
+          - **Windows:** an experimental `.zip` that starts the browser, with no installer yet.
+          - **macOS:** an experimental package that doesn't run the browser yet.
           - Check a download with `sha256sum -c SHA256SUMS --ignore-missing`, or its build provenance with `gh attestation verify <file> --repo joshzcold/riptide`.
           EOF
       - name: Build provenance

@@ -46,10 +46,14 @@ else
     cp -R "$cef/locales" "$stage/"
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
+if [[ $os == windows ]]; then
+    status="starts, but is untested by hand and has no installer yet"
+else
+    status="does not run yet: it still needs an app bundle"
+fi
 cat >"$stage/EXPERIMENTAL.txt" <<EOF
-This $os build of riptide $version is experimental and does not run yet: it
-still needs an app bundle (macOS) or installer (Windows). Linux is the only
-supported platform for now. See https://joshzcold.github.io/riptide/
+This $os build of riptide $version is experimental and $status.
+Linux is the only supported platform for now. See https://joshzcold.github.io/riptide/
 EOF
 
 if [[ $os == macos ]]; then

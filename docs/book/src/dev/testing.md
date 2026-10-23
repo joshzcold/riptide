@@ -94,10 +94,10 @@ The [local-testing skill](https://github.com/joshzcold/riptide/blob/main/.claude
 |---|---|
 | commit messages | `scripts/check-commits.sh` on the new commits |
 | linux | `./task lint`, `./task test`, `./task smoke` (Xvfb, cached CEF download) |
-| macos, windows | `cargo build`, the unit tests, and `--version`/`--paths` |
+| macos, windows | `cargo build`, the unit tests, and `--version`/`--paths`; on Windows, `crates/riptide/tests/windows_start.rs` starts the browser, waits for its window over the named pipe and quits it |
 | docs | builds this book and checks its internal links and anchors with [lychee](https://github.com/lycheeverse/lychee) |
 
-macOS and Windows are built and unit-tested but can't run the browser yet; packaging (M10) adds the app bundle and installer they need.
+The Windows job copies CEF's runtime next to `riptide.exe` first, since a restored cache skips cef-dll-sys's own copy. macOS is built and unit-tested but can't run the browser yet; packaging (M10) adds the app bundle it needs.
 
 [`.github/workflows/docs.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/docs.yml) publishes the book to GitHub Pages on every push to `main`, and checks its external links weekly.
 
