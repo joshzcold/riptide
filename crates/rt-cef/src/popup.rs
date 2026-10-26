@@ -704,6 +704,7 @@ pub fn forward_key(key: &rt_core::key::Key) -> bool {
 }
 
 /// What the e2e tests see: the popup's title and URL, or null.
+#[cfg(any(debug_assertions, feature = "test-control"))]
 pub fn test_state() -> serde_json::Value {
     POPUP.with(|p| {
         p.borrow()

@@ -437,6 +437,7 @@ pub fn forward_key(key: &Key) -> bool {
 }
 
 /// The panels open, for the e2e tests.
+#[cfg(any(debug_assertions, feature = "test-control"))]
 pub fn test_state() -> serde_json::Value {
     PANELS.with(|p| {
         p.borrow()
