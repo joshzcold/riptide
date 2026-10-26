@@ -2,7 +2,7 @@
 # riptide-browser-bin: the Linux release tarball (the binary and the CEF runtime).
 # The version and checksum are updated at each release.
 pkgname=riptide-browser-bin
-pkgver=0.11.1
+pkgver=0.11.2
 pkgrel=1
 pkgdesc="Keyboard-driven web browser with vim-like bindings, built on CEF"
 arch=('x86_64')
@@ -15,7 +15,7 @@ provides=('riptide-browser')
 conflicts=('riptide-browser' 'riptide' 'riptide-bin')
 options=('!strip' '!debug')
 source=("https://github.com/joshzcold/riptide/releases/download/v${pkgver}/riptide-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('8a320fd1dccf0a0cf5966def41d8d0c8e9c95182a7f4c89711eea8fcff120a10')
+sha256sums=('6cb5e694d382c2cb4106d4c8171f42782b1b8f0ab839ff63568f56ae101b4ac2')
 
 package() {
     cd "riptide-${pkgver}-linux-x86_64" || return 1
