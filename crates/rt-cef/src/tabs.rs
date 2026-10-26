@@ -445,31 +445,43 @@ pub fn show_current_in(window_id: u32, focus: bool) {
         }
         (None, view) => view,
     };
+    let visible = |current: bool, other_pane: bool| (current && crashed.is_none()) || other_pane;
     for (view, current, other_pane) in &views {
-        View::from(view).set_visible(((*current && crashed.is_none()) || *other_pane).into());
+        if visible(*current, *other_pane) {
+            View::from(view).set_visible(1);
+        }
         if *other_pane {
             // A lazily restored tab loads once it's on screen.
             load_pending(view);
         }
     }
-    if let Some(notice) = &notice {
-        View::from(notice).set_visible(crashed.is_some().into());
+    if let Some(notice) = notice.as_ref().filter(|_| crashed.is_some()) {
+        View::from(notice).set_visible(1);
+    }
+    // Focus moves before the old tab hides: hiding the focused view makes
+    // Chromium move the focus itself, which would read as a click in that pane.
+    if focus {
+        let shown = match (&crashed, &notice) {
+            (Some(_), Some(notice)) => Some(notice),
+            _ => views
+                .iter()
+                .find(|(_, current, _)| *current)
+                .map(|(v, _, _)| v),
+        };
+        if let Some(view) = shown {
+            crate::panes::focus_view(view);
+        }
+    }
+    for (view, current, other_pane) in &views {
+        if !visible(*current, *other_pane) {
+            View::from(view).set_visible(0);
+        }
+    }
+    if let Some(notice) = notice.as_ref().filter(|_| crashed.is_none()) {
+        View::from(notice).set_visible(0);
     }
     crate::panes::show_crashes(window_id, &content);
     crate::panes::arrange(window_id);
-    if !focus {
-        return;
-    }
-    let shown = match (&crashed, notice) {
-        (Some(_), Some(notice)) => Some(notice),
-        _ => views
-            .into_iter()
-            .find(|(_, current, _)| *current)
-            .map(|(v, _, _)| v),
-    };
-    if let Some(view) = shown {
-        View::from(&view).request_focus();
-    }
 }
 
 /// CEF says `browser`'s renderer process ended. If it's a tab, mark it

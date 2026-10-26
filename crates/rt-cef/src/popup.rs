@@ -185,13 +185,13 @@ pub fn open_with(title: &str, url: &str, placement: Placement) {
     if all_keys {
         focus_tab();
     } else {
-        View::from(&page).request_focus();
+        crate::panes::focus_view(&page);
     }
 }
 
 fn focus_tab() {
     if let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten() {
-        View::from(&tab).request_focus();
+        crate::panes::focus_view(&tab);
     }
 }
 

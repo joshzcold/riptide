@@ -512,7 +512,7 @@ fn route_key_event(role: Role, event: &KeyEvent) -> bool {
     if let Some(host) = tab.browser().and_then(|b| b.host()) {
         host.send_key_event(Some(event));
     }
-    View::from(&tab).request_focus();
+    crate::panes::focus_view(&tab);
     true
 }
 
@@ -1052,7 +1052,7 @@ wrap_life_span_handler! {
             if let Some(Some(Some(view))) = view
                 && !shell::with(|s| matches!(s.engine.mode(), rt_core::Mode::Prompt | rt_core::Mode::YesNo)).unwrap_or(false)
             {
-                View::from(&view).request_focus();
+                crate::panes::focus_view(&view);
             }
         }
 
