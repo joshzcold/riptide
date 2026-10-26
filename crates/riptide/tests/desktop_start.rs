@@ -75,6 +75,30 @@ fn the_browser_starts_opens_a_window_and_quits() {
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+    // riptide's own renderer code gives its UI pages `rt.send`; on macOS it runs in riptide-helper.
+    let start = Instant::now();
+    loop {
+        let reply = request(
+            &socket,
+            TestRequest::EvalBar {
+                code: "typeof rt === 'object' ? typeof rt.send : 'none'".into(),
+                bar: "statusbar".into(),
+            },
+        );
+        if let Ok(Some(serde_json::Value::String(kind))) = &reply
+            && kind == "function"
+        {
+            break;
+        }
+        if start.elapsed() > TIMEOUT {
+            let _ = browser.kill();
+            panic!(
+                "the status bar has no rt.send ({reply:?}):\n{}",
+                logs(&base)
+            );
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
     request(
         &socket,
         TestRequest::Run {

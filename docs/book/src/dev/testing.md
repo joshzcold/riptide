@@ -94,7 +94,7 @@ The [local-testing skill](https://github.com/joshzcold/riptide/blob/main/.claude
 |---|---|
 | commit messages | `scripts/check-commits.sh` on the new commits |
 | linux | `./task lint`, `./task test`, `./task smoke` (Xvfb, cached CEF download) |
-| macos, windows | `cargo build`, the unit tests, and `--version`/`--paths`; then `crates/riptide/tests/desktop_start.rs` starts the browser, waits for its window over the named pipe or socket and quits it |
+| macos, windows | `cargo build`, the unit tests, and `--version`/`--paths`; then `crates/riptide/tests/desktop_start.rs` starts the browser, waits for its window over the named pipe or socket, checks that riptide's renderer code runs (in `riptide-helper` on macOS) and quits it |
 | docs | builds this book and checks its internal links and anchors with [lychee](https://github.com/lycheeverse/lychee) |
 
 The Windows job copies CEF's runtime next to `riptide.exe` first, since a restored cache skips cef-dll-sys's own copy. The macOS job builds `target/debug/riptide.app` with `scripts/bundle-macos.sh` and points the test at the binary inside it with `RIPTIDE_EXE`.

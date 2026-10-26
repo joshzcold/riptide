@@ -6,7 +6,7 @@ Riptide is one Rust workspace around CEF's prebuilt Chromium. The [project plan]
 
 | Crate | Purpose |
 |---|---|
-| `crates/riptide` | The `riptide` binary: `main()`, which hands subprocesses to CEF and starts the browser. |
+| `crates/riptide` | The `riptide` binary: `main()`, which hands subprocesses to CEF and starts the browser. Also `riptide-helper`, which runs only CEF's subprocesses, for the macOS helper apps. |
 | `crates/rt-core` | Modes, key parsing, bindings, commands, the command line, settings, URL guessing and the help data. **No CEF dependency**; unit tested. |
 | `crates/rt-config` | Config paths per platform, the command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, and the generated Lua types, settings docs and reference pages. |
 | `crates/rt-storage` | History (SQLite), quickmarks and bookmarks (plain text files), sessions (TOML). |
