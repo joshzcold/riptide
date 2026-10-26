@@ -173,7 +173,7 @@ fn broadcast(name: &str, payload: &str) {
     let browsers: Vec<Browser> = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter().filter_map(|t| t.browser()))
+            .flat_map(|w| w.all_tabs().filter_map(|t| t.browser()))
             .collect()
     })
     .unwrap_or_default();

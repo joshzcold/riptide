@@ -361,7 +361,7 @@ pub struct Border {
 }
 
 /// A border's id: the child indices down to its split, then the pane it follows.
-fn border_id(path: &[usize], after: usize) -> String {
+pub fn border_id(path: &[usize], after: usize) -> String {
     let path: Vec<String> = path.iter().map(usize::to_string).collect();
     format!("{}:{after}", path.join("."))
 }

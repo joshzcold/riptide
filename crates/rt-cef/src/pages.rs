@@ -273,7 +273,7 @@ pub fn send(source: &str, id: u32, name: &str, json: &str) {
     let mut frames = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter(|t| is_page(&t.url, source, id))
             .filter_map(|t| t.browser()?.main_frame())
             .collect::<Vec<_>>()

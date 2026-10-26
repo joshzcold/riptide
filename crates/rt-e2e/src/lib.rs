@@ -78,10 +78,20 @@ pub struct WindowState {
     pub pane_crash_notices: usize,
 }
 
-/// A split pane: the tab it shows and where it is in the page area.
+/// A split pane: its tabs, the one it shows, and where it is in the page area.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Pane {
+    /// The shown tab's index among the pane's tabs.
     pub tab: usize,
+    /// The shown tab's title.
+    #[serde(default)]
+    pub title: Option<String>,
+    /// Every tab's title, in order.
+    #[serde(default)]
+    pub tabs: Vec<String>,
+    /// The URL the shown tab's page has loaded (`about:blank` before a lazy tab loads).
+    #[serde(default)]
+    pub page_url: Option<String>,
     pub focused: bool,
     pub bounds: Bounds,
 }

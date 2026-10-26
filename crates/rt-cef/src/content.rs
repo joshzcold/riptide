@@ -364,7 +364,7 @@ pub fn apply_dark_mode() {
         let settings = s.engine.settings();
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter_map(|t| {
                 let dark = settings.bool_for("colors.webpage.darkmode.enabled", &t.url);
                 t.browser().map(|b| (b, dark))

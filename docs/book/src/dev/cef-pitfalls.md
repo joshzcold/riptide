@@ -10,6 +10,8 @@ Things CEF, Chromium and the `cef` crate do that cost time to find out. Add to t
 - **A Chrome-style `BrowserView` doesn't exist until it's added to a window**, so calling `set_focusable` on it first crashes. A Chrome-style window takes one Chrome-style view, which must be added before any Alloy view (the first view sets the window's profile). Popups must match their opener's style. See `window::create_call` and `tabs::add_call_view`.
 - **Overlay views are opaque and only as big as their bounds.** Rounded corners show square ones behind them, and there's no dimming the page behind a box.
 - **A hidden view pauses `requestAnimationFrame`.** A page that measures itself before it's shown must do it synchronously (`ui/float.html`).
+- **A panel lays its children out with a fill layout unless told otherwise**, which gives every visible child the panel's whole bounds on each layout pass. Placing children by hand fights it: splits once had every pane's page resized to the full page area and back several times per tab switch, and pages went blank on a GPU. Each pane is a panel of its own, and each split a panel whose box layout sizes its panes and the handles between them (`panes::arrange`).
+- **A `BrowserView` can move to another parent in the same window** and keeps its page (remove it, then add it), which is how a tab moves between panes.
 - **A window doesn't finish closing while any browser in it is open**, overlay views included. Floats and panels are closed in the window's `can_close` (`float::close_window`, `panel::close_window`), or `:quit` hangs.
 
 ## Keys and input

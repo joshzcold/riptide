@@ -1026,21 +1026,23 @@ wrap_life_span_handler! {
             // A page calling `window.close()` should close its tab, not the window.
             // Closing from inside this callback is unsafe, so post it.
             let asked = browser.as_ref().is_some_and(|b| tabs::take_close_request(b.identifier()));
-            let tab = shell::with_tab(browser, |s, index, _| {
-                (!s.window_closing && s.tabs.len() > 1)
-                    .then(|| (index, asked || s.engine.settings().bool("content.javascript.can_close_tabs")))
+            let id = browser.as_ref().map(|b| b.identifier());
+            let tab = shell::with_tab(browser, |s, _, _| {
+                let others = s.layout.is_split() || s.tabs.len() > 1;
+                (!s.window_closing && others)
+                    .then(|| asked || s.engine.settings().bool("content.javascript.can_close_tabs"))
             });
-            match tab.flatten() {
-                Some((_, false)) => {
+            match (tab.flatten(), id) {
+                (Some(false), _) => {
                     shell::show_message(Level::Info, "The page tried to close its tab (content.javascript.can_close_tabs)");
                     1
                 }
-                Some((index, true)) => {
-                    let mut task = tabs::CloseTab::new(index);
+                (Some(true), Some(id)) => {
+                    let mut task = tabs::CloseTab::new(id);
                     post_task(ThreadId::UI, Some(&mut task));
                     1
                 }
-                None => 0,
+                _ => 0,
             }
         }
 

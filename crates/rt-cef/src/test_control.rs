@@ -126,7 +126,7 @@ mod enabled {
             "tabbar" => s.tabbar.clone(),
             "statusbar" => s.statusbar.clone(),
             "completion" => s.completion.clone(),
-            "crash_notice" => s.crash_notice.clone(),
+            "crash_notice" => s.crash_notice(),
             _ => None,
         })
         .flatten();
@@ -165,27 +165,39 @@ mod enabled {
                             })
                         })
                         .collect();
-                    let crash_notice = w
-                        .crash_notice
+                    let shows = |v: &Option<cef::BrowserView>| {
+                        v.as_ref().is_some_and(|v| cef::View::from(v).is_visible() != 0)
+                    };
+                    let crash_notice = shows(&w.crash_notice());
+                    let origin = w
+                        .content
                         .as_ref()
-                        .is_some_and(|v| cef::View::from(v).is_visible() != 0);
+                        .map(|c| cef::View::from(c).bounds_in_screen())
+                        .unwrap_or_default();
                     let bounds = w.window.as_ref().map(|window| {
                         let b = cef::View::from(window).bounds_in_screen();
                         json!({ "x": b.x, "y": b.y, "width": b.width, "height": b.height })
                     });
-                    // The tabs on screen, one per pane, with where they are in the page area.
-                    let panes: Vec<Value> = w
-                        .tabs
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, t)| cef::View::from(&t.view).is_visible() != 0)
-                        .map(|(i, t)| {
-                            let b = cef::View::from(&t.view).bounds();
-                            json!({
-                                "tab": i,
-                                "focused": i == w.tabs.current_index(),
+                    // Each pane, with its tabs and where it is in the page area.
+                    let panes: Vec<Value> = crate::panes::pane_bounds(w)
+                        .into_iter()
+                        .filter_map(|(pane, focused, b)| {
+                            let tabs = if focused {
+                                &w.tabs
+                            } else {
+                                &w.panes.iter().find(|p| p.id == pane)?.tabs
+                            };
+                            Some(json!({
+                                "tab": tabs.current_index(),
+                                "title": tabs.current().map(|t| t.title.clone()),
+                                "page_url": tabs
+                                    .current()
+                                    .and_then(|t| t.browser()?.main_frame())
+                                    .map(|f| cef::CefString::from(&f.url()).to_string()),
+                                "tabs": tabs.iter().map(|t| t.title.clone()).collect::<Vec<_>>(),
+                                "focused": focused,
                                 "bounds": { "x": b.x, "y": b.y, "width": b.width, "height": b.height },
-                            })
+                            }))
                         })
                         .collect();
                     json!({
@@ -198,13 +210,17 @@ mod enabled {
                         "split_handles": w
                             .pane_handles
                             .iter()
-                            .map(|(_, v)| {
-                                let b = cef::View::from(v).bounds();
-                                json!({ "x": b.x, "y": b.y, "width": b.width, "height": b.height })
+                            .map(|(_, v, _)| {
+                                let b = cef::View::from(v).bounds_in_screen();
+                                json!({ "x": b.x - origin.x, "y": b.y - origin.y, "width": b.width, "height": b.height })
                             })
                             .collect::<Vec<Value>>(),
                         "crash_notice": crash_notice,
-                        "pane_crash_notices": w.pane_notices.len(),
+                        "pane_crash_notices": w
+                            .pane_views
+                            .iter()
+                            .filter(|v| v.pane != w.layout.focused() && shows(&v.notice))
+                            .count(),
                     })
                 })
                 .collect();

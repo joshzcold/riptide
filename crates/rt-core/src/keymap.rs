@@ -415,6 +415,7 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("so", "only"),
     ("sc", "split-close"),
     ("sw", "split-focus next"),
+    ("sm", "tab-move-pane next"),
     ("s=", "split-equal"),
     ("s>", "split-resize width +10"),
     ("s<Less>", "split-resize width -10"),

@@ -66,7 +66,7 @@ fn site_icon(id: i32) -> Option<PathBuf> {
         let favicon = s
             .windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .find(|t| t.browser().is_some_and(|b| b.identifier() == id))
             .and_then(|t| t.favicon.clone());
         (favicon, s.paths.data_dir.join("notification-icons"))

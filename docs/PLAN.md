@@ -72,7 +72,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M26 | The e2e harness (`rt-e2e`), unit tests in the CEF layer, linters (clippy lints, cargo-deny, ShellCheck, actionlint, typos, Biome) | dev/testing.md |
 | M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events (`command_before` and `key` can cancel; both, and `command`, need a permission), keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
-| M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, the focused pane's border, layouts in sessions, crash notices and extension popups per pane | guide/tabs.md |
+| M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, the focused pane's border, layouts in sessions, crash notices and extension popups per pane; each pane has its own tabs (`:tab-move-pane`), and its own panel, so pages are only resized with their pane | guide/tabs.md |
 
 ---
 
