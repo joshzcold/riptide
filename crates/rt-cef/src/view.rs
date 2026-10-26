@@ -315,7 +315,7 @@ fn share_stop() {
     let tabs: Vec<Browser> = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter(|t| t.sharing.is_some())
             .filter_map(|t| t.browser())
             .collect()

@@ -138,7 +138,7 @@ pub fn read_scroll_positions() {
     let browsers: Vec<Browser> = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter(|t| t.pending.is_none() && t.restore_scroll.is_none())
             .filter_map(Tab::browser)
             .collect()

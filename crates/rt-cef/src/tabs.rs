@@ -1,5 +1,5 @@
 //! Tab operations. Index bookkeeping lives in `rt_core::tabs::TabList`; this
-//! module keeps the CEF views in the content panel in step with it.
+//! module keeps the CEF views in their pane's panel in step with it.
 
 use cef::*;
 use rt_core::Command;
@@ -284,21 +284,26 @@ fn adopt(
     focus_tab: bool,
     chrome_style: bool,
 ) -> Option<usize> {
-    let content = shell::with(|s| s.content.clone()).flatten()?;
+    // A new tab joins the focused pane.
+    let body = crate::panes::focused_body()?;
     let mut child = View::from(&view);
     if chrome_style {
-        content.add_child_view(Some(&mut child));
+        body.add_child_view(Some(&mut child));
         child.set_visible(0);
     } else {
         child.set_visible(0);
-        content.add_child_view(Some(&mut child));
+        body.add_child_view(Some(&mut child));
     }
-    let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
     // Sized at once, even in the background, so its page lays out at the
     // size it'll be shown at and isn't still resizing when it's first used.
-    if let Some(window) = shell::with(|s| s.id) {
-        crate::panes::arrange(window);
-    }
+    let size = View::from(&body).bounds();
+    child.set_bounds(Some(&Rect {
+        x: 0,
+        y: 0,
+        width: size.width,
+        height: size.height,
+    }));
+    let index = shell::with(|s| s.tabs.insert(Tab::new(view), position, false))?;
     let first = shell::with(|s| s.tabs.len() == 1).unwrap_or(false);
     if focus_tab || first {
         switch_to(index, true);
@@ -364,7 +369,6 @@ fn switch_to(index: usize, force: bool) {
         if let Some(tab) = s.tabs.get_mut(leaving) {
             tab.mode = mode;
         }
-        crate::panes::before_switch(s, index);
         if !s.tabs.focus(index) && !force {
             return None;
         }
@@ -387,9 +391,8 @@ fn switch_to(index: usize, force: bool) {
     );
 }
 
-/// Show window `window_id`'s current tab and hide the others. A tab whose
-/// renderer died is replaced by the crash notice, since there's nothing left
-/// to draw the page.
+/// Show window `window_id`'s panes' current tabs and hide the others (see
+/// `panes::show`). With `focus`, the focused pane's page takes the keys.
 pub fn show_current_in(window_id: u32, focus: bool) {
     // An extension's popup belongs to the tab it was opened over.
     let shown = shell::with(|s| {
@@ -398,105 +401,32 @@ pub fn show_current_in(window_id: u32, focus: bool) {
     })
     .flatten();
     crate::popup::tab_shown(window_id, shown);
-    let Some(Some((views, crashed, content, notice))) = shell::with(|s| {
-        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
-        crate::panes::reconcile(w);
-        let current = w.tabs.current_index();
-        // (view, current, shown in another pane)
-        let views: Vec<(BrowserView, bool, bool)> = w
-            .tabs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                (
-                    t.view.clone(),
-                    i == current,
-                    crate::panes::in_other_pane(w, &t.view),
-                )
-            })
-            .collect();
-        let crashed = w
-            .tabs
-            .current()
-            .and_then(|t| Some(crate::ui::crashed_url(&t.url, t.crashed.as_deref()?)));
-        Some((views, crashed, w.content.clone()?, w.crash_notice.clone()))
-    }) else {
-        return;
-    };
-    let notice = match (&crashed, notice) {
-        (Some(url), None) => {
-            let view = window::create_browser_view(Role::Crashed, url);
-            if let Some(view) = &view {
-                content.add_child_view(Some(&mut View::from(view)));
-                shell::with(|s| {
-                    if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
-                        w.crash_notice = Some(view.clone());
-                    }
-                });
-            }
-            view
-        }
-        (Some(url), Some(view)) => {
-            // Only the fragment changes, so the notice redraws without reloading.
-            if let Some(frame) = view.browser().and_then(|b| b.main_frame()) {
-                frame.load_url(Some(&CefString::from(url.as_str())));
-            }
-            Some(view)
-        }
-        (None, view) => view,
-    };
-    let visible = |current: bool, other_pane: bool| (current && crashed.is_none()) || other_pane;
-    for (view, current, other_pane) in &views {
-        if visible(*current, *other_pane) {
-            View::from(view).set_visible(1);
-        }
-        if *other_pane {
-            // A lazily restored tab loads once it's on screen.
-            load_pending(view);
-        }
+    crate::panes::show(window_id, focus);
+}
+
+/// Show the active window's focused pane's current tab again, after the
+/// focused pane or its tabs changed.
+pub fn show_current_tab() {
+    if let Some(index) =
+        shell::with(|s| (!s.tabs.is_empty()).then(|| s.tabs.current_index())).flatten()
+    {
+        switch_to(index, true);
     }
-    if let Some(notice) = notice.as_ref().filter(|_| crashed.is_some()) {
-        View::from(notice).set_visible(1);
-    }
-    // Focus moves before the old tab hides: hiding the focused view makes
-    // Chromium move the focus itself, which would read as a click in that pane.
-    if focus {
-        let shown = match (&crashed, &notice) {
-            (Some(_), Some(notice)) => Some(notice),
-            _ => views
-                .iter()
-                .find(|(_, current, _)| *current)
-                .map(|(v, _, _)| v),
-        };
-        if let Some(view) = shown {
-            crate::panes::focus_view(view);
-        }
-    }
-    for (view, current, other_pane) in &views {
-        if !visible(*current, *other_pane) {
-            View::from(view).set_visible(0);
-        }
-    }
-    if let Some(notice) = notice.as_ref().filter(|_| crashed.is_none()) {
-        View::from(notice).set_visible(0);
-    }
-    crate::panes::show_crashes(window_id, &content);
-    crate::panes::arrange(window_id);
 }
 
 /// CEF says `browser`'s renderer process ended. If it's a tab, mark it
 /// crashed and, if it's showing, put the crash notice in its place.
 pub fn renderer_gone(browser: &mut Browser, status: TerminationStatus, error_code: i32) {
     let reason = crate::ui::crash_reason(status.into());
+    // `shown`: its pane shows it; `current`: that's the focused pane.
     let Some(Some((window, url, current, in_pane))) =
-        shell::with_tab(Some(browser), |s, index, _| {
-            let current = index == s.tabs.current_index();
+        shell::with_tab(Some(browser), |s, index, current| {
+            let shown = index == s.tabs.current_index();
             let window = s.id;
-            let in_pane = crate::panes::in_other_pane(s, &s.tabs.get(index)?.view);
             let tab = s.tabs.get_mut(index)?;
             tab.crashed = Some(reason.to_string());
             tab.progress = None;
-            Some((window, tab.url.clone(), current, in_pane))
+            Some((window, tab.url.clone(), current, shown && !current))
         })
     else {
         return;
@@ -519,20 +449,28 @@ pub fn renderer_gone(browser: &mut Browser, status: TerminationStatus, error_cod
 /// The window of a tab that's marked crashed, for showing it again once it reloads.
 pub fn window_of_crashed(browser: &Browser) -> Option<u32> {
     shell::with(|s| {
-        let (window, index) = s.find_browser(browser)?;
-        let w = &s.windows[window];
-        w.tabs.get(index)?.crashed.as_ref()?;
-        Some(w.id)
+        let at = s.find_browser(browser)?;
+        s.tab_at(&at)?.crashed.as_ref()?;
+        Some(s.windows[at.window].id)
     })
     .flatten()
 }
 
 /// A lazily restored tab is shown for the first time: load its page.
-fn load_pending(view: &BrowserView) {
+pub(crate) fn load_pending(view: &BrowserView) {
     let Some(frame) = view.browser().and_then(|b| b.main_frame()) else {
         return;
     };
-    let url = shell::with(|s| s.tabs.current_mut()?.pending.take()).flatten();
+    let same = |t: &Tab| View::from(&t.view).is_same(Some(&mut View::from(view))) != 0;
+    let url = shell::with(|s| {
+        s.windows
+            .iter_mut()
+            .flat_map(|w| w.all_tabs_mut())
+            .find(|t| same(t))?
+            .pending
+            .take()
+    })
+    .flatten();
     if let Some(url) = url {
         frame.load_url(Some(&CefString::from(url.as_str())));
     }
@@ -580,9 +518,11 @@ fn current_window_number(s: &shell::Shell) -> Option<usize> {
         .map(|n| n + 1)
 }
 
-/// Close a tab. Closing the last one follows `tabs.last_close`.
+/// Close a tab. Closing a pane's last tab closes the pane; closing the
+/// window's last one follows `tabs.last_close`.
 pub fn close(index: usize) {
-    if shell::with(|s| s.tabs.len() <= 1).unwrap_or(true) {
+    let split = shell::with(|s| s.layout.is_split()).unwrap_or(false);
+    if !split && shell::with(|s| s.tabs.len() <= 1).unwrap_or(true) {
         return last_close();
     }
     let Some(Some((tab, was_current))) = shell::with(|s| {
@@ -601,8 +541,9 @@ pub fn close(index: usize) {
     }) else {
         return;
     };
-    if let Some(content) = shell::with(|s| s.content.clone()).flatten() {
-        content.remove_child_view(Some(&mut View::from(&tab.view)));
+    let mut view = View::from(&tab.view);
+    if let Some(parent) = view.parent_view().and_then(|p| p.as_panel()) {
+        parent.remove_child_view(Some(&mut view));
     }
     if let Some(browser) = tab.browser() {
         crate::prompts::withdraw_for_browser(browser.identifier(), None);
@@ -611,6 +552,10 @@ pub fn close(index: usize) {
     let url = tab.url.clone();
     drop(tab);
     crate::lua::emit("tab_closed", &[("url", &url)]);
+    if shell::with(|s| s.tabs.is_empty()) == Some(true) {
+        crate::panes::close_emptied_pane();
+        return;
+    }
     if was_current && let Some(index) = shell::with(|s| s.tabs.current_index()) {
         switch_to(index, true);
     }
@@ -717,27 +662,40 @@ fn restore_tabs(window: &rt_storage::WindowState, after_call: bool) {
         }
     });
     let active = order.iter().position(|&i| i == active).unwrap_or(0);
-    if let Some(splits) = &window.splits {
-        shell::with(|s| {
+    match (&window.splits, shell::with(|s| s.id)) {
+        (Some(splits), Some(window_id)) => {
             crate::panes::restore(
-                s,
+                window_id,
                 splits,
                 |saved| order.iter().position(|&i| i == saved),
                 active,
             );
-        });
+            show_current_tab();
+        }
+        _ => switch_to(active, true),
     }
-    switch_to(active, true);
 }
 
+// Close browser `browser`'s tab, in whichever pane it is.
 wrap_task! {
     pub struct CloseTab {
-        index: usize,
+        browser: i32,
     }
 
     impl Task {
         fn execute(&self) {
-            close(self.index);
+            let is = |t: &Tab| t.browser().is_some_and(|b| b.identifier() == self.browser);
+            let index = shell::with(|s| {
+                if let Some(pane) = s.panes.iter().find(|p| p.tabs.position(|t| is(t)).is_some()) {
+                    let pane = pane.id;
+                    s.focus_pane(pane);
+                }
+                s.tabs.position(|t| is(t))
+            })
+            .flatten();
+            if let Some(index) = index {
+                close(index);
+            }
             shell::refresh_ui();
         }
     }

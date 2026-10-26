@@ -30,6 +30,11 @@ pub struct SplitState {
     /// The tab a pane shows, as an index into the window's tabs; none for a split.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab: Option<usize>,
+    /// All of a pane's tabs, `tab` among them, in order. Sessions from before
+    /// panes had tabs of their own leave it empty; the focused pane then takes
+    /// the tabs no pane shows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tabs: Vec<usize>,
     /// A split's panes are side by side rather than one above the other.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub vertical: bool,

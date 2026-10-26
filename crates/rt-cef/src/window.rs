@@ -459,7 +459,7 @@ wrap_window_delegate! {
             let (Some(tabbar), Some(row), Some(content), Some(statusbar), Some(completion)) = (
                 create_browser_view(Role::Tabbar, ui::TABBAR_URL),
                 panel_create(None),
-                panel_create(Some(&mut crate::panes::ContentDelegate::new(self.id))),
+                panel_create(None),
                 create_browser_view(Role::Statusbar, ui::STATUSBAR_URL),
                 create_browser_view(Role::Completion, ui::COMPLETION_URL),
             ) else {
@@ -490,8 +490,7 @@ wrap_window_delegate! {
                 layout.set_flex_for_view(Some(&mut row_view), 1);
             }
 
-            // All tab views share the content panel, which places them itself
-            // (`panes::arrange`): the current one fills it, or each pane has one.
+            // The page area holds a pane's panel, or the panels of its splits (`panes::arrange`).
             let mut content_view = View::from(&content);
             row.add_child_view(Some(&mut content_view));
             if let Some(layout) = row_layout {
@@ -511,6 +510,7 @@ wrap_window_delegate! {
                 s.windows.len() == 1
             })
             .unwrap_or(false);
+            crate::panes::arrange(id);
 
             // The first view added decides the window's profile, and CEF then
             // refuses a Chrome-style tab, so a call window's tab goes first.
@@ -685,7 +685,7 @@ wrap_window_delegate! {
             crate::panel::close_window(id);
             let hosts: Vec<BrowserHost> = shell::with(|s| {
                 let index = s.window_index(id)?;
-                Some(s.windows[index].tabs.iter().filter_map(|t| t.browser()?.host()).collect())
+                Some(s.windows[index].all_tabs().filter_map(|t| t.browser()?.host()).collect())
             })
             .flatten()
             .unwrap_or_default();
@@ -926,6 +926,11 @@ fn bar_size(role: Role) -> Size {
         Role::Statusbar => Size {
             width: 1,
             height: statusbar_height,
+        },
+        // A gap between panes, as wide as the split's box layout makes it across.
+        Role::SplitHandle => Size {
+            width: crate::panes::GAP,
+            height: crate::panes::GAP,
         },
         Role::Tabbar => {
             let (width, height) = TABBAR_SIZE.with(Cell::get);

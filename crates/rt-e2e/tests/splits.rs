@@ -11,14 +11,19 @@ fn panes(s: &State) -> Vec<String> {
     panes
         .iter()
         .map(|p| {
-            let title = &w.tabs[p.tab].title;
+            let title = p.title.clone().unwrap_or_default();
             if p.focused {
                 format!("*{title}")
             } else {
-                title.clone()
+                title
             }
         })
         .collect()
+}
+
+/// How many tabs every pane has in all.
+fn total(s: &State) -> usize {
+    s.window().panes.iter().map(|p| p.tabs.len()).sum()
 }
 
 /// `ready` on the left, `second` top right and `dialogs` bottom right (focused).
@@ -57,7 +62,10 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
         "a gap between them: {halves:?}"
     );
     assert!((left.width - right.width).abs() <= 1, "{halves:?}");
-    assert_eq!(s.tabs().len(), 2);
+    assert!(
+        s.window().panes.iter().all(|p| p.tabs.len() == 1),
+        "each pane has a tab of its own"
+    );
     // A handle to drag sits over the gap.
     let s = b.wait_until("a handle", |s| s.window().split_handles.len() == 1);
     let handle = s.window().split_handles[0];
@@ -103,14 +111,51 @@ fn ctrl_hjkl_and_sw_move_between_panes() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
-fn picking_a_tab_another_pane_shows_focuses_that_pane() {
+fn each_pane_has_tabs_of_its_own() {
     let b = Browser::start("page.html");
     b.run(&format!("vsplit {}", b.url("second.html")));
     b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
+    b.run(&format!("open -t {}", b.url("dialogs.html")));
+    let s = b.wait_until("a second tab on the right", |s| {
+        panes(s) == ["ready", "*dialogs"]
+    });
+    assert_eq!(
+        s.tabs().len(),
+        2,
+        "tab commands see the focused pane's tabs"
+    );
+    // J and K go through the focused pane's tabs only.
     b.keys("K");
-    b.wait_until("the left pane", |s| panes(s) == ["*ready", "second"]);
-    b.keys("J");
-    b.wait_until("the right pane", |s| panes(s) == ["ready", "*second"]);
+    b.wait_until("back to second", |s| panes(s) == ["ready", "*second"]);
+    b.keys("K");
+    b.wait_until("round to dialogs", |s| panes(s) == ["ready", "*dialogs"]);
+    b.keys("<Ctrl-h>");
+    let s = b.wait_until("the left pane", |s| panes(s) == ["*ready", "dialogs"]);
+    assert_eq!(s.tabs().len(), 1);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn tab_move_pane_moves_the_tab_and_the_focus() {
+    let b = Browser::start("page.html");
+    b.run(&format!("vsplit {}", b.url("second.html")));
+    b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
+    b.run(&format!("open -t {}", b.url("dialogs.html")));
+    b.wait_until("dialogs on the right", |s| {
+        panes(s) == ["ready", "*dialogs"]
+    });
+    b.keys("sm");
+    let s = b.wait_until("dialogs went left", |s| panes(s) == ["*dialogs", "second"]);
+    assert_eq!(s.tabs().len(), 2);
+    // Moving a pane's only tab closes the pane.
+    b.run("tab-move-pane right");
+    b.wait_until("dialogs went right", |s| panes(s) == ["ready", "*dialogs"]);
+    b.keys("<Ctrl-h>");
+    b.wait_until("the left pane", |s| panes(s) == ["*ready", "dialogs"]);
+    b.run("tab-move-pane right");
+    let s = b.wait_until("one pane with every tab", |s| s.window().panes.len() == 1);
+    assert_eq!(s.tabs().len(), 3);
+    assert_eq!(s.tab().title, "ready");
 }
 
 #[test]
@@ -119,8 +164,12 @@ fn sc_and_so_close_panes_but_keep_their_tabs() {
     let b = three_panes();
     b.keys("sc");
     let s = b.wait_until("two panes", |s| s.window().panes.len() == 2);
-    assert_eq!(s.tabs().len(), 3, "the pane's tab stays open");
     assert_eq!(panes(&s), ["ready", "*second"]);
+    assert_eq!(
+        s.tabs().len(),
+        2,
+        "the closed pane's tab joins the pane that takes its room"
+    );
     assert_eq!(s.window().split_handles.len(), 1);
     b.keys("so");
     let s = b.wait_until("one pane", |s| s.window().panes.len() == 1);
@@ -136,7 +185,7 @@ fn q_closes_the_focused_pane_and_then_the_window() {
     b.run("q");
     let s = b.wait_until("two panes", |s| s.window().panes.len() == 2);
     assert_eq!(s.windows.len(), 1, "the window stays open");
-    assert_eq!(s.tabs().len(), 3, "the pane's tab stays open");
+    assert_eq!(total(&s), 3, "the pane's tab stays open");
     assert_eq!(panes(&s), ["ready", "*second"]);
     b.run("q");
     b.wait_until("one pane", |s| s.window().panes.len() == 1);
@@ -151,21 +200,17 @@ fn q_closes_the_focused_pane_and_then_the_window() {
 #[ignore = "starts a browser; run with ./task e2e"]
 fn closing_a_panes_tab_shows_another_or_closes_the_pane() {
     let b = three_panes();
-    // Three tabs on screen, so the pane has nothing left to show.
+    // The pane's only tab, so the pane closes too.
     b.keys("d");
     let s = b.wait_until("two panes", |s| {
-        s.tabs().len() == 2 && s.window().panes.len() == 2
+        total(s) == 2 && s.window().panes.len() == 2
     });
-    assert!(
-        panes(&s).iter().any(|p| p.starts_with('*')),
-        "{:?}",
-        panes(&s)
-    );
-    b.run(&format!("open -b {}", b.url("page.html?more")));
-    b.wait_until("three tabs", |s| s.tabs().len() == 3);
+    assert_eq!(panes(&s), ["ready", "*second"]);
+    b.run(&format!("open -b {}", b.url("dialogs.html")));
+    b.wait_until("a second tab in the pane", |s| s.tabs().len() == 2);
     b.keys("d");
-    b.wait_until("the pane shows the tab that wasn't on screen", |s| {
-        s.tabs().len() == 2 && s.window().panes.len() == 2
+    b.wait_until("the pane shows its other tab", |s| {
+        panes(s) == ["ready", "*dialogs"] && total(s) == 2
     });
 }
 
@@ -213,7 +258,7 @@ fn splits_come_back_with_the_session() {
     b.keys("<Ctrl-h>");
     let s = b.wait_until("the left pane, narrower", |s| {
         let w = widths(s);
-        panes(s) == ["*ready", "second", "dialogs"] && w[0] < w[1]
+        panes(s) == ["*ready", "second", "dialogs"] && w[0] + 50 < w[1]
     });
     let saved = widths(&s);
     b.run("wq");
@@ -222,18 +267,16 @@ fn splits_come_back_with_the_session() {
     assert!(session.contains("[windows.splits]"), "{session}");
 
     b.restart();
-    let s = b.wait_until("the panes are back", |s| {
+    b.wait_until("the panes are back", |s| {
         panes(s) == ["*ready", "second", "dialogs"]
     });
     // With lazy restore, tabs load once they're on screen, in any pane.
-    for pane in &s.window().panes {
-        let url = s.window().tabs[pane.tab].url.clone();
-        let start = std::time::Instant::now();
-        while b.eval_tab(pane.tab, "location.href") != url {
-            assert!(start.elapsed() < rt_e2e::TIMEOUT, "{url} didn't load");
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    }
+    let s = b.wait_until("every pane's page loads", |s| {
+        s.window()
+            .panes
+            .iter()
+            .all(|p| p.page_url.as_deref().is_some_and(|u| u.starts_with("http")))
+    });
     let restored = widths(&s);
     for (a, b) in saved.iter().zip(&restored) {
         assert!((a - b).abs() <= 2, "{saved:?} then {restored:?}");
@@ -248,7 +291,7 @@ fn panes_stop_trading_focus_after_tab_switches() {
     b.run(&format!("vsplit {}", b.url("second.html")));
     b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
     b.run(&format!("open -b {}", b.url("dialogs.html")));
-    b.wait_until("three tabs", |s| s.window().tabs.len() == 3);
+    b.wait_until("two tabs on the right", |s| s.window().tabs.len() == 2);
     for command in [
         "split-focus left",
         "split-focus right",
@@ -277,11 +320,11 @@ fn vsplit_m_moves_the_current_tab_into_the_new_pane() {
     b.wait_until("second is current", |s| s.tab().title == "second");
     // The old pane shows the tab used before.
     b.run("vsplit -m");
-    b.wait_until("second moved right", |s| panes(s) == ["ready", "*second"]);
-    assert_eq!(b.state().window().tabs.len(), 2);
-    // With every other tab on screen, the old pane gets a new tab.
+    let s = b.wait_until("second moved right", |s| panes(s) == ["ready", "*second"]);
+    assert_eq!(total(&s), 2);
+    // With no other tab, the old pane gets a new one.
     b.run("split -m");
     let s = b.wait_until("second moved down", |s| s.window().panes.len() == 3);
-    assert_eq!(s.window().tabs.len(), 3);
+    assert_eq!(total(&s), 3);
     assert_eq!(s.tab().title, "second");
 }

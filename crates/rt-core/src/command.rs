@@ -243,6 +243,8 @@ pub enum Command {
     /// Keep only the focused pane.
     SplitOnly,
     SplitFocus(PaneTarget),
+    /// Move the current tab to another pane, which takes the focus.
+    TabMovePane(PaneTarget),
     SplitEqual,
     /// Grow the focused pane by `percent` of its split (negative shrinks
     /// it); `width` side to side, else up and down.
@@ -832,6 +834,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "split-focus",
         "Focus the pane to the left, below, above or to the right, or the next one: :split-focus left|down|up|right|next",
+    ),
+    spec(
+        "tab-move-pane",
+        "Move the current tab to the pane to the left, below, above or to the right, or the next one: :tab-move-pane left|down|up|right|next",
     ),
     spec("split-equal", "Give every pane the same room"),
     spec(
@@ -1506,13 +1512,20 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }
         "split-close" => Command::SplitClose,
         "only" => Command::SplitOnly,
-        "split-focus" => Command::SplitFocus(match args.required("direction")? {
-            "next" => PaneTarget::Next,
-            other => PaneTarget::Direction(
-                crate::split::Direction::parse(other)
-                    .ok_or_else(|| args.error(format!("invalid direction: {other}")))?,
-            ),
-        }),
+        "split-focus" | "tab-move-pane" => {
+            let target = match args.required("direction")? {
+                "next" => PaneTarget::Next,
+                other => PaneTarget::Direction(
+                    crate::split::Direction::parse(other)
+                        .ok_or_else(|| args.error(format!("invalid direction: {other}")))?,
+                ),
+            };
+            if name == "split-focus" {
+                Command::SplitFocus(target)
+            } else {
+                Command::TabMovePane(target)
+            }
+        }
         "split-equal" => Command::SplitEqual,
         "split-resize" => {
             let width = match args.required("width or height")? {
@@ -2412,6 +2425,10 @@ mod tests {
             parse("split-focus next").unwrap(),
             Command::SplitFocus(PaneTarget::Next)
         );
+        assert_eq!(
+            parse("tab-move-pane left").unwrap(),
+            Command::TabMovePane(PaneTarget::Direction(crate::split::Direction::Left))
+        );
         assert!(parse("split-focus sideways").is_err());
         assert_eq!(parse("only").unwrap(), Command::SplitOnly);
         assert_eq!(
@@ -2873,6 +2890,7 @@ mod tests {
     fn every_spec_parses() {
         let needs_args = [
             "split-focus",
+            "tab-move-pane",
             "split-resize",
             "pack-add",
             "pack-load",

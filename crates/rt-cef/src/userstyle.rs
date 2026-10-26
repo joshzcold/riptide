@@ -213,7 +213,7 @@ pub fn restyle_tabs() {
     let frames: Vec<Frame> = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter().filter_map(|t| t.browser()))
+            .flat_map(|w| w.all_tabs().filter_map(|t| t.browser()))
             .filter_map(|b| b.main_frame())
             .collect()
     })

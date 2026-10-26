@@ -357,7 +357,7 @@ fn reload_stuck() {
     let stuck: Vec<Browser> = shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter(|t| t.pending.is_none() && t.crashed.is_none() && t.progress.is_none())
             .filter(|t| t.url.starts_with("http") || t.url.starts_with("file:"))
             .filter_map(|t| t.browser())

@@ -131,6 +131,30 @@ pub fn geometry_bounds(geometry: &rt_storage::Geometry) -> Rect {
     }
 }
 
+/// Where a tab is: its window, its pane (`None` for the focused one, or an
+/// index into the window's `panes`) and its index among that pane's tabs.
+#[derive(Clone, Copy, Debug)]
+pub struct TabAt {
+    pub window: usize,
+    pub pane: Option<usize>,
+    pub index: usize,
+}
+
+/// A pane other than the focused one, with its own tabs. The focused pane's
+/// tabs are the window's `tabs`, so tab commands act on the focused pane.
+pub struct Pane {
+    pub id: rt_core::split::PaneId,
+    pub tabs: TabList<Tab>,
+}
+
+/// A pane's views: the panel its tabs fill, and the notice shown in place of
+/// its current tab when that tab's renderer died (made on first use).
+pub struct PaneViews {
+    pub pane: rt_core::split::PaneId,
+    pub body: Panel,
+    pub notice: Option<BrowserView>,
+}
+
 /// One browser window: its views, tabs and what was last drawn in it.
 pub struct WindowState {
     /// Stable across other windows opening and closing.
@@ -145,17 +169,22 @@ pub struct WindowState {
     normal_bounds: Option<rt_storage::Geometry>,
     earlier_bounds: Option<rt_storage::Geometry>,
     pub content: Option<Panel>,
+    /// The focused pane's tabs.
     pub tabs: TabList<Tab>,
-    /// Split panes; the focused one shows the current tab.
+    /// Split panes; the focused one's tabs are `tabs`.
     pub layout: rt_core::split::Layout,
-    /// The tab each other pane shows (see `panes`).
-    pub pane_tabs: Vec<(rt_core::split::PaneId, BrowserView)>,
-    /// Behind the focused pane, showing through the gaps around it.
-    pub pane_border: Option<Panel>,
-    /// Over each border between panes, to drag it: its id and view.
-    pub pane_handles: Vec<(String, BrowserView)>,
-    /// The crash notices over other panes' crashed tabs: (tab, notice).
-    pub pane_notices: Vec<(BrowserView, BrowserView)>,
+    /// The other panes and their tabs (see `panes`).
+    pub panes: Vec<Pane>,
+    /// Every pane's views, the focused one's too.
+    pub pane_views: Vec<PaneViews>,
+    /// The panels for the splits, by their path in the layout, and the
+    /// layout's shape they were made for.
+    pub split_panels: Vec<(String, Panel)>,
+    pub split_shape: String,
+    /// The gap between each two neighbouring panes, to drag: its border's id, view and color.
+    pub pane_handles: Vec<(String, BrowserView, u32)>,
+    /// Whether the current tab took the keyboard focus once the page area had a size.
+    pub focused_with_size: bool,
     /// Closed tabs as (index, url), newest last, for `undo`.
     /// Closed tabs for `u`: index, URL and whether it was pinned.
     pub closed: Vec<(usize, String, bool)>,
@@ -172,8 +201,6 @@ pub struct WindowState {
     pub statusbar: Option<BrowserView>,
     pub completion: Option<BrowserView>,
     pub overlay: Option<OverlayController>,
-    /// Shown in place of the current tab when its renderer died; created on first use.
-    pub crash_notice: Option<BrowserView>,
     pub tabbar_ready: bool,
     pub statusbar_ready: bool,
     pub completion_ready: bool,
@@ -197,6 +224,49 @@ pub struct WindowState {
 }
 
 impl WindowState {
+    /// Every tab in the window, the focused pane's first.
+    pub fn all_tabs(&self) -> impl Iterator<Item = &Tab> {
+        self.tabs
+            .iter()
+            .chain(self.panes.iter().flat_map(|p| p.tabs.iter()))
+    }
+
+    pub fn all_tabs_mut(&mut self) -> impl Iterator<Item = &mut Tab> {
+        self.tabs
+            .iter_mut()
+            .chain(self.panes.iter_mut().flat_map(|p| p.tabs.iter_mut()))
+    }
+
+    /// Make `pane` the focused one, swapping its tabs in as `tabs`.
+    pub fn focus_pane(&mut self, pane: rt_core::split::PaneId) -> bool {
+        let old = self.layout.focused();
+        if pane == old {
+            return true;
+        }
+        let Some(i) = self.panes.iter().position(|p| p.id == pane) else {
+            return false;
+        };
+        if !self.layout.focus(pane) {
+            return false;
+        }
+        let incoming = std::mem::take(&mut self.panes[i].tabs);
+        let outgoing = std::mem::replace(&mut self.tabs, incoming);
+        self.panes[i] = Pane {
+            id: old,
+            tabs: outgoing,
+        };
+        true
+    }
+
+    pub fn views_of(&self, pane: rt_core::split::PaneId) -> Option<&PaneViews> {
+        self.pane_views.iter().find(|v| v.pane == pane)
+    }
+
+    /// The focused pane's crash notice.
+    pub fn crash_notice(&self) -> Option<BrowserView> {
+        self.views_of(self.layout.focused())?.notice.clone()
+    }
+
     /// Where the window is, for sessions and the next start. A maximized
     /// window keeps the bounds it had before.
     pub fn geometry(&self) -> Option<rt_storage::Geometry> {
@@ -236,10 +306,12 @@ impl WindowState {
             content: None,
             tabs: TabList::default(),
             layout: rt_core::split::Layout::new(),
-            pane_tabs: Vec::new(),
-            pane_border: None,
+            panes: Vec::new(),
+            pane_views: Vec::new(),
+            split_panels: Vec::new(),
+            split_shape: String::new(),
             pane_handles: Vec::new(),
-            pane_notices: Vec::new(),
+            focused_with_size: false,
             closed: Vec::new(),
             tabbar: None,
             row: None,
@@ -251,7 +323,6 @@ impl WindowState {
             statusbar: None,
             completion: None,
             overlay: None,
-            crash_notice: None,
             tabbar_ready: false,
             statusbar_ready: false,
             completion_ready: false,
@@ -368,14 +439,33 @@ impl Shell {
     }
 
     /// The window and tab index showing `browser`.
-    pub fn find_browser(&self, browser: &Browser) -> Option<(usize, usize)> {
+    pub fn find_browser(&self, browser: &Browser) -> Option<TabAt> {
         let id = browser.identifier();
-        self.windows.iter().enumerate().find_map(|(w, state)| {
-            state
-                .tabs
-                .position(|t| t.browser().is_some_and(|b| b.identifier() == id))
-                .map(|t| (w, t))
+        let is = |t: &Tab| t.browser().is_some_and(|b| b.identifier() == id);
+        self.windows.iter().enumerate().find_map(|(window, w)| {
+            if let Some(index) = w.tabs.position(|t| is(t)) {
+                return Some(TabAt {
+                    window,
+                    pane: None,
+                    index,
+                });
+            }
+            w.panes.iter().enumerate().find_map(|(pane, p)| {
+                p.tabs.position(|t| is(t)).map(|index| TabAt {
+                    window,
+                    pane: Some(pane),
+                    index,
+                })
+            })
         })
+    }
+
+    pub fn tab_at(&self, at: &TabAt) -> Option<&Tab> {
+        let w = self.windows.get(at.window)?;
+        match at.pane {
+            None => w.tabs.get(at.index),
+            Some(p) => w.panes.get(p)?.tabs.get(at.index),
+        }
     }
 
     /// The window a UI or tab browser belongs to, by browser id.
@@ -389,9 +479,8 @@ impl Shell {
             is(&w.tabbar)
                 || is(&w.statusbar)
                 || is(&w.completion)
-                || is(&w.crash_notice)
-                || w.tabs
-                    .iter()
+                || w.pane_views.iter().any(|v| is(&v.notice))
+                || w.all_tabs()
                     .any(|t| t.browser().is_some_and(|b| b.identifier() == id))
         })
     }
@@ -467,11 +556,22 @@ pub fn with_tab<R>(
 ) -> Option<R> {
     let browser = browser?;
     with(|s| {
-        let (window, index) = s.find_browser(browser)?;
+        let at = s.find_browser(browser)?;
         let active = s.active;
-        let current = window == active && index == s.windows[window].tabs.current_index();
-        s.active = window;
-        let result = f(s, index, current);
+        let current = at.window == active
+            && at.pane.is_none()
+            && at.index == s.windows[at.window].tabs.current_index();
+        s.active = at.window;
+        // A tab in another pane: that pane's tabs stand in as `tabs` meanwhile.
+        let swap = |s: &mut Shell| {
+            if let Some(p) = at.pane {
+                let w = &mut s.windows[at.window];
+                std::mem::swap(&mut w.tabs, &mut w.panes[p].tabs);
+            }
+        };
+        swap(s);
+        let result = f(s, at.index, current);
+        swap(s);
         s.active = active.min(s.windows.len() - 1);
         Some(result)
     })
@@ -937,8 +1037,18 @@ pub fn current_session() -> rt_storage::Session {
                 .map(|i| &s.windows[i])
                 .filter(|w| !w.private && w.window.is_some())
                 .filter_map(|w| {
-                    let tabs = w.tabs.iter().enumerate().map(|(i, t)| {
-                        let mut state = crate::history::tab_state(t, w.tabs.is_pinned(i));
+                    // Every pane's tabs, the focused pane's first: (pane, index in it, tab, pinned).
+                    let panes = std::iter::once((w.layout.focused(), &w.tabs))
+                        .chain(w.panes.iter().map(|p| (p.id, &p.tabs)));
+                    let all: Vec<_> = panes
+                        .flat_map(|(pane, tabs)| {
+                            tabs.iter()
+                                .enumerate()
+                                .map(move |(i, t)| (pane, i, t, tabs.is_pinned(i)))
+                        })
+                        .collect();
+                    let tabs = all.iter().map(|&(_, _, t, pinned)| {
+                        let mut state = crate::history::tab_state(t, pinned);
                         state.call = w.call
                             && t.browser()
                                 .and_then(|b| b.host())
@@ -949,17 +1059,19 @@ pub fn current_session() -> rt_storage::Session {
                         rt_storage::WindowState::from_tabs(tabs, w.tabs.current_index())?;
                     state.geometry = w.geometry();
                     // `from_tabs` leaves out tabs without a URL; the panes follow.
-                    let saved: Vec<Option<usize>> = w
-                        .tabs
+                    let saved: Vec<Option<usize>> = all
                         .iter()
-                        .scan(0, |kept, t| {
+                        .scan(0, |kept, (_, _, t, _)| {
                             Some((!t.url.is_empty()).then(|| {
                                 *kept += 1;
                                 *kept - 1
                             }))
                         })
                         .collect();
-                    state.splits = crate::panes::saved(w, |i| saved.get(i).copied().flatten());
+                    state.splits = crate::panes::saved(w, |pane, i| {
+                        let at = all.iter().position(|&(p, j, _, _)| p == pane && j == i)?;
+                        saved.get(at).copied().flatten()
+                    });
                     Some(state)
                 })
                 .collect(),
@@ -1003,7 +1115,7 @@ pub fn confirm_quit(quit: impl FnOnce() + 'static) -> bool {
         if s.quit_confirmed {
             return None;
         }
-        let tabs = s.windows.iter().map(|w| w.tabs.len()).sum();
+        let tabs = s.windows.iter().map(|w| w.all_tabs().count()).sum();
         let values = s.engine.settings().list("confirm_quit").to_vec();
         rt_core::settings::confirm_quit_reason(&values, tabs, crate::downloads::running_count())
     })
@@ -1276,7 +1388,7 @@ fn collect_ui_update(
         "sharing": s
             .windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .find_map(|t| t.sharing.as_deref())
             .map(crate::view::share_name),
         "blocked": current

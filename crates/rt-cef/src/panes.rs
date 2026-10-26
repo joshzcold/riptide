@@ -1,20 +1,22 @@
-//! Split panes (`:split`, `:vsplit`): several tabs on screen in one window.
-//! The focused pane always shows the current tab, so everything that acts on
-//! the current tab acts on the focused pane; each other pane remembers its
-//! tab's view. `rt_core::split` keeps the layout.
+//! Split panes (`:split`, `:vsplit`): several panes in one window, each with
+//! its own tabs. The focused pane's tabs are the window's `tabs`, so tab
+//! commands act on it; the other panes keep theirs in `panes`. Each pane's
+//! tab views fill a panel of its own, and each split is a panel whose box
+//! layout sizes its panes and the handles between them, so a page is only
+//! resized when its pane is. `rt_core::split` keeps the layout.
 
 use cef::*;
+use rt_core::Command;
 use rt_core::command::{OpenTarget, PaneTarget};
 use rt_core::engine::Level;
-use rt_core::split::{Axis, Layout, Tree};
-use rt_core::{Command, Effect};
+use rt_core::split::{Axis, Layout, PaneId, Tree};
+use rt_core::tabs::{Position, SelectOnRemove, TabList};
 use rt_storage::SplitState;
 
-use crate::shell::{self, WindowState};
+use crate::shell::{self, Pane, PaneViews, Shell, Tab, WindowState};
 
-/// Pixels between panes, where the page area's background shows and the
-/// borders can be dragged.
-const GAP: i32 = 4;
+/// Pixels between panes: the handle that drags the border between them.
+pub const GAP: i32 = 4;
 
 const HANDLE_URL: &str = "riptide://ui/split.html";
 
@@ -36,6 +38,7 @@ pub fn run_command(command: &Command) -> bool {
         Command::SplitClose => close_focused(),
         Command::SplitOnly => only(),
         Command::SplitFocus(target) => focus(*target),
+        Command::TabMovePane(target) => move_to_pane(*target),
         Command::SplitEqual => {
             shell::with(|s| s.layout.equalize());
             arrange_active();
@@ -70,391 +73,682 @@ fn same(a: &BrowserView, b: &BrowserView) -> bool {
     View::from(a).is_same(Some(&mut View::from(b))) != 0
 }
 
-fn index_of(w: &WindowState, view: &BrowserView) -> Option<usize> {
-    w.tabs.iter().position(|t| same(&t.view, view))
+fn window(s: &Shell, id: u32) -> Option<&WindowState> {
+    s.windows.iter().find(|w| w.id == id)
+}
+
+fn window_mut(s: &mut Shell, id: u32) -> Option<&mut WindowState> {
+    s.windows.iter_mut().find(|w| w.id == id)
+}
+
+fn select_on_remove(s: &Shell) -> SelectOnRemove {
+    SelectOnRemove::from_setting(s.engine.settings().str("tabs.select_on_remove"))
+}
+
+/// The pane `target` names, from the focused one.
+fn target_pane(w: &WindowState, target: PaneTarget) -> Option<PaneId> {
+    match target {
+        PaneTarget::Next => Some(w.layout.next()).filter(|&p| p != w.layout.focused()),
+        PaneTarget::Direction(direction) => w.layout.neighbour(direction),
+    }
+}
+
+/// Add `tab` to `tabs` as their current one, pinned among the pinned tabs.
+fn insert_current(tabs: &mut TabList<Tab>, tab: Tab, pinned: bool) {
+    if pinned {
+        let index = tabs.insert(tab, Position::At(tabs.pinned_count()), true);
+        tabs.set_pinned(index, true);
+    } else {
+        tabs.insert(tab, Position::Last, true);
+    }
 }
 
 /// Split the focused pane; the new pane gets `url` (or the default page) in
-/// a new tab, and the old one keeps its tab. With `move_tab` the current tab
-/// goes to the new pane instead, and the old one shows the tab used before
-/// it, or `url` in a new tab when given or when every other tab is on screen.
+/// a new tab, and is focused. With `move_tab` the current tab moves to the
+/// new pane instead, and the old pane shows another of its tabs, or `url`
+/// in a new one when given or when it has no other.
 fn split(axis: Axis, url: Option<String>, move_tab: bool) {
-    let split = shell::with(|s| {
-        let view = s.tabs.current()?.view.clone();
-        let earlier = (move_tab && url.is_none())
-            .then(|| {
-                s.tabs
-                    .recent()
-                    .filter_map(|i| s.tabs.get(i))
-                    .find(|t| !in_other_pane(s, &t.view))
-                    .map(|t| t.view.clone())
-            })
-            .flatten();
+    let Some(window_id) = shell::with(|s| s.id) else {
+        return;
+    };
+    let opened = if move_tab && (url.is_some() || shell::with(|s| s.tabs.len() < 2) == Some(true)) {
+        open_in_background(url.clone())
+    } else {
+        None
+    };
+    let Some(Some((new, moved))) = shell::with(|s| {
+        if s.tabs.is_empty() {
+            return None;
+        }
+        let select = select_on_remove(s);
         let old = s.layout.focused();
-        s.layout.split(axis);
-        s.pane_tabs
-            .push((old, earlier.clone().unwrap_or_else(|| view.clone())));
-        Some((s.id, old, view, earlier.is_some()))
-    })
-    .flatten();
-    let Some((window, old, moved, placed)) = split else {
-        return;
-    };
-    if placed {
-        crate::tabs::show_current_in(window, true);
-        return;
-    }
-    shell::apply(vec![Effect::Run {
-        command: Command::Open {
-            target: OpenTarget::Tab,
-            related: false,
-            url,
-        },
-        count: None,
-    }]);
-    if move_tab {
-        // The new tab takes the old pane, and the moved one is current in the new pane.
-        let index = shell::with(|s| {
-            let opened = s.tabs.current()?.view.clone();
-            let pane = s.pane_tabs.iter_mut().find(|(p, _)| *p == old)?;
-            pane.1 = opened;
-            index_of(s, &moved)
-        })
-        .flatten();
-        if let Some(index) = index {
-            crate::tabs::select(index);
-        }
-    }
-}
-
-/// Close the focused pane and focus its neighbour. Its tab stays open.
-fn close_focused() {
-    let next = shell::with(|s| {
-        if !s.layout.is_split() {
-            return Err("There's only one pane");
-        }
-        let focused = s.layout.focused();
-        s.layout.close(focused);
-        let next = s.layout.focused();
-        let view = s
-            .pane_tabs
-            .iter()
-            .position(|(p, _)| *p == next)
-            .map(|i| s.pane_tabs.remove(i).1);
-        Ok((s.id, view.and_then(|v| index_of(s, &v))))
-    });
-    match next {
-        Some(Err(message)) => shell::show_message(Level::Error, message),
-        Some(Ok((_, Some(index)))) => crate::tabs::select(index),
-        Some(Ok((window, None))) => crate::tabs::show_current_in(window, true),
-        None => {}
-    }
-}
-
-/// Keep only the focused pane; the other panes' tabs stay open.
-fn only() {
-    if let Some(window) = shell::with(|s| {
-        s.layout.only();
-        s.pane_tabs.clear();
-        s.id
-    }) {
-        crate::tabs::show_current_in(window, true);
-    }
-}
-
-fn focus(target: PaneTarget) {
-    let index = shell::with(|s| {
-        let pane = match target {
-            PaneTarget::Next => s.layout.next(),
-            PaneTarget::Direction(direction) => s.layout.neighbour(direction)?,
-        };
-        let view = s.pane_tabs.iter().find(|(p, _)| *p == pane)?.1.clone();
-        index_of(s, &view)
-    })
-    .flatten();
-    if let Some(index) = index {
-        crate::tabs::select(index);
-    }
-}
-
-/// The tab at `index` is about to become current. If another pane shows
-/// it, that pane takes the focus, and the focused pane keeps its tab.
-pub fn before_switch(w: &mut WindowState, index: usize) {
-    if !w.layout.is_split() || index == w.tabs.current_index() {
-        return;
-    }
-    let Some(target) = w.tabs.get(index).map(|t| t.view.clone()) else {
-        return;
-    };
-    let Some(i) = w.pane_tabs.iter().position(|(_, v)| same(v, &target)) else {
-        return;
-    };
-    let (pane, _) = w.pane_tabs.remove(i);
-    if let Some(current) = w.tabs.current().map(|t| t.view.clone()) {
-        w.pane_tabs.push((w.layout.focused(), current));
-    }
-    w.layout.focus(pane);
-}
-
-/// After tabs closed or the current tab changed: every pane but the focused
-/// one shows a tab of its own that isn't current. A pane whose tab went gets
-/// one that isn't on screen; with none left, the pane closes.
-pub fn reconcile(w: &mut WindowState) {
-    if !w.layout.is_split() {
-        w.pane_tabs.clear();
-        return;
-    }
-    let focused = w.layout.focused();
-    let views: Vec<BrowserView> = w.tabs.iter().map(|t| t.view.clone()).collect();
-    let current = w.tabs.current().map(|t| t.view.clone());
-    let mut kept: Vec<(u32, BrowserView)> = Vec::new();
-    for pane in w.layout.panes().into_iter().filter(|&p| p != focused) {
-        let on_screen = |v: &BrowserView, kept: &[(u32, BrowserView)]| {
-            current.as_ref().is_some_and(|c| same(c, v)) || kept.iter().any(|(_, k)| same(k, v))
-        };
-        let own = w
-            .pane_tabs
-            .iter()
-            .find(|(p, _)| *p == pane)
-            .map(|(_, v)| v.clone())
-            .filter(|v| views.iter().any(|t| same(t, v)) && !on_screen(v, &kept));
-        match own.or_else(|| views.iter().find(|v| !on_screen(v, &kept)).cloned()) {
-            Some(view) => kept.push((pane, view)),
-            None => {
-                w.layout.close(pane);
+        let new = s.layout.split(axis);
+        let mut tabs = std::mem::take(&mut s.tabs);
+        let moved = if move_tab {
+            let current = tabs.current_index();
+            let pinned = tabs.is_pinned(current);
+            let tab = tabs.remove_selecting(current, select)?;
+            if let Some(i) = opened
+                .as_ref()
+                .and_then(|o| tabs.position(|t| same(&t.view, o)))
+            {
+                tabs.focus(i);
             }
-        }
-    }
-    w.pane_tabs = kept;
-}
-
-/// Whether `view` is on screen in a pane other than the focused one.
-pub fn in_other_pane(w: &WindowState, view: &BrowserView) -> bool {
-    w.pane_tabs.iter().any(|(_, v)| same(v, view))
-}
-
-/// Place window `window_id`'s tab views: the current one (and the crash
-/// notice) in the focused pane, the other panes' tabs in theirs, and every
-/// hidden tab over the whole page area, ready to be shown.
-pub fn arrange(window_id: u32) {
-    arrange_in(window_id, None);
-}
-
-thread_local! {
-    /// Placements put off because the page area had no size yet.
-    static WAITING: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
-}
-
-/// [`arrange`] in a page area of `size`, or the size it has now. One that
-/// has no size yet is tried again shortly, so the first tab isn't left 0×0.
-fn arrange_in(window_id: u32, size: Option<Rect>) {
-    let size = size.or_else(|| {
-        shell::with(|s| {
-            let w = s.windows.iter().find(|w| w.id == window_id)?;
-            w.content.as_ref().map(|c| View::from(c).bounds())
-        })
-        .flatten()
-    });
-    let Some(size) = size else { return };
-    if size.width <= 0 || size.height <= 0 {
-        if WAITING.get() < 200 {
-            WAITING.set(WAITING.get() + 1);
-            crate::client::later(50, move || arrange(window_id));
-        }
-        return;
-    }
-    WAITING.set(0);
-    let Some(Some((content, tabs, notice, panes, focused, pane_notices, current_index))) =
-        shell::with(|s| {
-            let w = s.windows.iter().find(|w| w.id == window_id)?;
-            let bounds = w.layout.bounds(size.width, size.height, GAP);
-            let rect = |pane| {
-                bounds.iter().find(|(p, _)| *p == pane).map(|(_, b)| Rect {
-                    x: b.x,
-                    y: b.y,
-                    width: b.width,
-                    height: b.height,
-                })
-            };
-            let full = Rect {
-                x: 0,
-                y: 0,
-                width: size.width,
-                height: size.height,
-            };
-            let focused = rect(w.layout.focused()).unwrap_or(full.clone());
-            let current = w.tabs.current_index();
-            let tabs: Vec<(BrowserView, Rect)> = w
-                .tabs
-                .iter()
-                .enumerate()
-                .map(|(i, t)| {
-                    let place = if i == current {
-                        focused.clone()
-                    } else {
-                        w.pane_tabs
-                            .iter()
-                            .find(|(_, v)| same(v, &t.view))
-                            .and_then(|(p, _)| rect(*p))
-                            .unwrap_or_else(|| full.clone())
-                    };
-                    (t.view.clone(), place)
-                })
-                .collect();
-            let pane_notices: Vec<(BrowserView, Rect)> = w
-                .pane_notices
-                .iter()
-                .filter_map(|(tab, notice)| {
-                    let pane = w.pane_tabs.iter().find(|(_, v)| same(v, tab))?.0;
-                    Some((notice.clone(), rect(pane)?))
-                })
-                .collect();
-            Some((
-                w.content.clone()?,
-                tabs,
-                w.crash_notice.clone(),
-                w.layout.is_split(),
-                focused,
-                pane_notices,
-                current,
-            ))
-        })
-    else {
-        return;
-    };
-    // The gaps between panes show the page area's background, and the
-    // focused pane's edges a border behind it.
-    let (gap, accent) = split_colors();
-    View::from(&content).set_background_color(if panes { gap } else { 0 });
-    if let Some(border) = panes.then(|| border(window_id, &content)).flatten() {
-        let size = View::from(&content).bounds();
-        let around = Rect {
-            x: (focused.x - GAP).max(0),
-            y: (focused.y - GAP).max(0),
-            width: 0,
-            height: 0,
-        };
-        let around = Rect {
-            width: (focused.x + focused.width + GAP).min(size.width) - around.x,
-            height: (focused.y + focused.height + GAP).min(size.height) - around.y,
-            ..around
-        };
-        let border = View::from(&border);
-        border.set_background_color(accent);
-        border.set_bounds(Some(&around));
-        border.set_visible(1);
-    } else if let Some(Some(border)) = shell::with(|s| {
-        s.windows
-            .iter()
-            .find(|w| w.id == window_id)
-            .and_then(|w| w.pane_border.clone())
-    }) {
-        View::from(&border).set_visible(0);
-    }
-    tracing::debug!(
-        window = window_id,
-        width = size.width,
-        height = size.height,
-        split = panes,
-        "placing tabs"
-    );
-    for (i, (tab, rect)) in tabs.iter().enumerate() {
-        let view = View::from(tab);
-        let was_empty = view.bounds().width <= 0 || view.bounds().height <= 0;
-        view.set_bounds(Some(rect));
-        // A view can't take keyboard focus while it has no size, so the
-        // current tab asks again once it has one.
-        if was_empty && i == current_index && rect.width > 0 && rect.height > 0 {
-            focus_current(window_id, tab);
-        }
-    }
-    if let Some(notice) = notice {
-        View::from(&notice).set_bounds(Some(&focused));
-    }
-    for (notice, rect) in &pane_notices {
-        View::from(notice).set_bounds(Some(rect));
-    }
-    place_handles(window_id, &content, &size, &focused, gap, accent);
-}
-
-/// Put a handle over each border between panes, made or removed as the
-/// borders come and go, and above the tab views so it gets the mouse.
-fn place_handles(
-    window_id: u32,
-    content: &Panel,
-    size: &Rect,
-    focused: &Rect,
-    gap: u32,
-    accent: u32,
-) {
-    let Some(Some((borders, mut handles))) = shell::with(|s| {
-        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
-        let borders = if w.layout.is_split() {
-            w.layout.borders(size.width, size.height, GAP)
+            let view = tab.view.clone();
+            insert_current(&mut s.tabs, tab, pinned);
+            Some(view)
         } else {
-            Vec::new()
+            None
         };
-        Some((borders, std::mem::take(&mut w.pane_handles)))
+        s.panes.push(Pane { id: old, tabs });
+        Some((new, moved))
     }) else {
         return;
     };
-    let hex = |argb: u32| format!("{:06x}", argb & 0x00ff_ffff);
-    let mut kept = Vec::new();
-    for border in &borders {
-        let b = border.bounds;
-        let rect = Rect {
-            x: b.x,
-            y: b.y,
-            width: b.width,
-            height: b.height,
-        };
-        // A border along the focused pane's edge shows the focus color.
-        let touches = rect.x < focused.x + focused.width + GAP
-            && focused.x < rect.x + rect.width + GAP
-            && rect.y < focused.y + focused.height + GAP
-            && focused.y < rect.y + rect.height + GAP;
-        let color = if touches { accent } else { gap };
-        let axis = if border.axis == Axis::Vertical {
-            "v"
-        } else {
-            "h"
-        };
-        let view = match handles.iter().position(|(id, _)| *id == border.id) {
-            Some(i) => {
-                let (_, view) = handles.remove(i);
-                if let Some(frame) = view.browser().and_then(|b| b.main_frame()) {
-                    shell::exec_js(
-                        &frame,
-                        &format!("window.rtColor && rtColor('#{}')", hex(color)),
-                    );
-                }
-                view
+    arrange(window_id);
+    match moved {
+        Some(view) => {
+            if let Some(body) = body(window_id, new) {
+                reparent(&view, &body);
             }
-            None => {
-                let url = format!("{HANDLE_URL}#{axis}/{}/{}", border.id, hex(color));
-                let Some(view) =
-                    crate::window::create_browser_view(crate::client::Role::SplitHandle, &url)
-                else {
-                    continue;
-                };
-                View::from(&view).set_focusable(0);
-                content.add_child_view(Some(&mut View::from(&view)));
-                view
-            }
-        };
-        View::from(&view).set_bounds(Some(&rect));
-        View::from(&view).set_visible(1);
-        content.reorder_child_view(Some(&mut View::from(&view)), -1);
-        kept.push((border.id.clone(), view));
+            crate::tabs::show_current_tab();
+        }
+        // Not through the command: with no tab yet, the new pane has no page to run it on.
+        None => shell::open(OpenTarget::Tab, false, url),
     }
-    for (_, gone) in handles {
-        content.remove_child_view(Some(&mut View::from(&gone)));
+}
+
+/// Open `url` (or the default page) in a background tab of the focused pane; its view.
+fn open_in_background(url: Option<String>) -> Option<BrowserView> {
+    let before: Vec<BrowserView> =
+        shell::with(|s| s.tabs.iter().map(|t| t.view.clone()).collect()).unwrap_or_default();
+    shell::open(OpenTarget::Background, false, url);
+    shell::with(|s| {
+        s.tabs
+            .iter()
+            .find(|t| !before.iter().any(|b| same(b, &t.view)))
+            .map(|t| t.view.clone())
+    })
+    .flatten()
+}
+
+/// Close the focused pane. Its tabs join the pane that takes its room, which
+/// keeps its current tab and takes the focus.
+fn close_focused() {
+    let closed = shell::with(|s| {
+        if !s.layout.is_split() {
+            return Err("There's only one pane");
+        }
+        Ok(close_pane(s))
+    });
+    match closed {
+        Some(Err(message)) => shell::show_message(Level::Error, message),
+        Some(Ok(Some((window_id, pane, views)))) => moved_to(window_id, pane, &views),
+        _ => {}
+    }
+}
+
+/// Panes' tabs as one list, in the panes' order on screen (`order`), with
+/// `current`'s current tab current.
+fn gather(
+    mut lists: Vec<(PaneId, TabList<Tab>)>,
+    order: &[PaneId],
+    current: PaneId,
+) -> TabList<Tab> {
+    lists.sort_by_key(|(pane, _)| order.iter().position(|p| p == pane));
+    let shown = lists
+        .iter()
+        .find(|(pane, _)| *pane == current)
+        .and_then(|(_, tabs)| Some(tabs.current()?.view.clone()));
+    let mut out = TabList::default();
+    for (_, mut tabs) in lists {
+        out.append(tabs.take_all());
+    }
+    if let Some(i) = shown.and_then(|v| out.position(|t| same(&t.view, &v))) {
+        out.focus(i);
+    }
+    out
+}
+
+/// [`close_focused`] on the window's state: the window, the pane now focused
+/// and the views that moved to it.
+pub fn close_pane(w: &mut WindowState) -> Option<(u32, PaneId, Vec<BrowserView>)> {
+    let closing = w.layout.focused();
+    let order = w.layout.panes();
+    if !w.layout.close(closing) {
+        return None;
+    }
+    let next = w.layout.focused();
+    let i = w.panes.iter().position(|p| p.id == next)?;
+    let theirs = w.panes.remove(i).tabs;
+    let mine = std::mem::take(&mut w.tabs);
+    let views = mine.iter().map(|t| t.view.clone()).collect();
+    w.tabs = gather(vec![(closing, mine), (next, theirs)], &order, next);
+    Some((w.id, next, views))
+}
+
+/// Tabs moved to `pane`: put their views in its body and show the panes again.
+pub fn moved_to(window_id: u32, pane: PaneId, views: &[BrowserView]) {
+    arrange(window_id);
+    if let Some(body) = body(window_id, pane) {
+        for view in views {
+            reparent(view, &body);
+        }
+    }
+    arrange(window_id);
+    crate::tabs::show_current_tab();
+}
+
+/// Keep only the focused pane, which takes the other panes' tabs.
+fn only() {
+    let Some((window_id, pane, views)) = shell::with(|s| {
+        let order = s.layout.panes();
+        let focused = s.layout.focused();
+        s.layout.only();
+        let others = std::mem::take(&mut s.panes);
+        let views: Vec<BrowserView> = others
+            .iter()
+            .flat_map(|p| p.tabs.iter().map(|t| t.view.clone()))
+            .collect();
+        let lists = std::iter::once((focused, std::mem::take(&mut s.tabs)))
+            .chain(others.into_iter().map(|p| (p.id, p.tabs)))
+            .collect();
+        s.tabs = gather(lists, &order, focused);
+        (s.id, focused, views)
+    }) else {
+        return;
+    };
+    moved_to(window_id, pane, &views);
+}
+
+fn focus(target: PaneTarget) {
+    let switched = shell::with(|s| {
+        let pane = target_pane(s, target)?;
+        s.focus_pane(pane).then_some(())
+    })
+    .flatten();
+    if switched.is_some() {
+        crate::tabs::show_current_tab();
+    }
+}
+
+/// `:tab-move-pane`: the current tab moves to the pane `target` names and
+/// is focused there. A pane left without tabs closes.
+fn move_to_pane(target: PaneTarget) {
+    let moved = shell::with(|s| {
+        let pane = target_pane(s, target)?;
+        if s.tabs.is_empty() {
+            return None;
+        }
+        let select = select_on_remove(s);
+        let current = s.tabs.current_index();
+        let pinned = s.tabs.is_pinned(current);
+        let tab = s.tabs.remove_selecting(current, select)?;
+        let view = tab.view.clone();
+        let source = s.layout.focused();
+        let emptied = s.tabs.is_empty();
+        s.focus_pane(pane);
+        insert_current(&mut s.tabs, tab, pinned);
+        if emptied {
+            s.layout.close(source);
+            s.panes.retain(|p| p.id != source);
+        }
+        Some((s.id, pane, view))
+    })
+    .flatten();
+    match moved {
+        Some((window_id, pane, view)) => moved_to(window_id, pane, &[view]),
+        None => shell::show_message(Level::Error, "There's no pane there"),
+    }
+}
+
+/// The focused pane's last tab closed: the pane closes too, and its
+/// neighbour takes the focus. False when it's the only pane.
+pub fn close_emptied_pane() -> bool {
+    match shell::with(|s| s.layout.is_split().then(|| close_pane(s)).flatten()).flatten() {
+        Some((window_id, pane, views)) => {
+            moved_to(window_id, pane, &views);
+            true
+        }
+        None => false,
+    }
+}
+
+/// A click on a tab in another pane: that pane takes the focus. True if it did.
+pub fn focus_clicked(browser: i32) -> bool {
+    let switched = shell::with(|s| {
+        let is = |t: &Tab| t.browser().is_some_and(|b| b.identifier() == browser);
+        let (pane, index) = s
+            .panes
+            .iter()
+            .find_map(|p| Some((p.id, p.tabs.position(|t| is(t))?)))?;
+        s.focus_pane(pane);
+        s.tabs.focus(index);
+        Some(())
+    })
+    .flatten();
+    if switched.is_some() {
+        crate::tabs::show_current_tab();
+    }
+    switched.is_some()
+}
+
+/// Put `view` in `body`, out of whichever panel had it.
+fn reparent(view: &BrowserView, body: &Panel) {
+    let mut child = View::from(view);
+    if let Some(parent) = child.parent_view() {
+        if parent.is_same(Some(&mut View::from(body))) != 0 {
+            return;
+        }
+        if let Some(parent) = parent.as_panel() {
+            parent.remove_child_view(Some(&mut child));
+        }
+    }
+    body.add_child_view(Some(&mut child));
+}
+
+/// Take `view` out of its parent, if it has one.
+fn detach(view: &View) {
+    if let Some(parent) = view.parent_view().and_then(|p| p.as_panel()) {
+        parent.remove_child_view(Some(&mut view.clone()));
+    }
+}
+
+/// Pane `pane`'s body in window `window_id`, made if it's new.
+pub fn body(window_id: u32, pane: PaneId) -> Option<Panel> {
+    let existing =
+        shell::with(|s| Some(window(s, window_id)?.views_of(pane)?.body.clone())).flatten();
+    if existing.is_some() {
+        return existing;
+    }
+    let body = panel_create(Some(&mut BodyDelegate::new(window_id, pane)))?;
+    shell::with(|s| {
+        if let Some(w) = window_mut(s, window_id) {
+            w.pane_views.push(PaneViews {
+                pane,
+                body: body.clone(),
+                notice: None,
+            });
+        }
+    });
+    Some(body)
+}
+
+/// The focused pane's body in the active window, where a new tab goes.
+pub fn focused_body() -> Option<Panel> {
+    let (window_id, pane) = shell::with(|s| (s.id, s.layout.focused()))?;
+    body(window_id, pane)
+}
+
+/// The layout's shape, without the sizes: the panels are made again when it changes.
+fn shape(tree: &Tree<PaneId>) -> String {
+    match tree {
+        Tree::Pane(pane) => pane.to_string(),
+        Tree::Split { axis, children } => {
+            let children: Vec<String> = children.iter().map(|(c, _)| shape(c)).collect();
+            format!("{:?}({})", axis, children.join(","))
+        }
+    }
+}
+
+/// A share of a split as a box layout's flex.
+fn flex(share: f64) -> i32 {
+    ((share * 10_000.0).round() as i32).max(1)
+}
+
+/// Make window `window_id`'s panels match its layout: a body for each pane
+/// in the page area, or while it's split, a panel for each split holding its
+/// panes and the handles between them.
+pub fn arrange(window_id: u32) {
+    let Some(Some((content, panes, focused, tree, built))) = shell::with(|s| {
+        let w = window(s, window_id)?;
+        Some((
+            w.content.clone()?,
+            w.layout.panes(),
+            w.layout.focused(),
+            w.layout
+                .tree(Some)
+                .unwrap_or(Tree::Pane(w.layout.focused())),
+            w.split_shape.clone(),
+        ))
+    }) else {
+        return;
+    };
+    for &pane in &panes {
+        body(window_id, pane);
+    }
+    // A closed pane's body goes. Its tabs moved already; anything left joins the focused pane.
+    let gone = shell::with(|s| {
+        let w = window_mut(s, window_id)?;
+        let (kept, gone): (Vec<PaneViews>, Vec<PaneViews>) = std::mem::take(&mut w.pane_views)
+            .into_iter()
+            .partition(|v| panes.contains(&v.pane));
+        w.pane_views = kept;
+        Some(gone)
+    })
+    .flatten()
+    .unwrap_or_default();
+    if !gone.is_empty()
+        && let Some(target) = body(window_id, focused)
+    {
+        for views in gone {
+            let notice = views.notice.as_ref().map(View::from);
+            while let Some(mut child) = views.body.child_view_at(0) {
+                views.body.remove_child_view(Some(&mut child));
+                if notice
+                    .as_ref()
+                    .is_none_or(|n| n.is_same(Some(&mut child.clone())) == 0)
+                {
+                    target.add_child_view(Some(&mut child));
+                }
+            }
+            detach(&View::from(&views.body));
+        }
+    }
+    let shape = shape(&tree);
+    if shape != built {
+        rebuild(window_id, &content, &tree);
+        shell::with(|s| {
+            if let Some(w) = window_mut(s, window_id) {
+                w.split_shape = shape;
+            }
+        });
+    } else {
+        resize_splits(window_id, &tree);
+    }
+    color_handles(window_id);
+}
+
+/// Make the split panels again for `tree`, keeping the bodies and the handles
+/// whose borders are still there.
+fn rebuild(window_id: u32, content: &Panel, tree: &Tree<PaneId>) {
+    let Some((bodies, splits, mut handles)) = shell::with(|s| {
+        let w = window_mut(s, window_id)?;
+        let bodies: Vec<Panel> = w.pane_views.iter().map(|v| v.body.clone()).collect();
+        Some((
+            bodies,
+            std::mem::take(&mut w.split_panels),
+            std::mem::take(&mut w.pane_handles),
+        ))
+    })
+    .flatten() else {
+        return;
+    };
+    for body in &bodies {
+        detach(&View::from(body));
+    }
+    for (_, handle, _) in &handles {
+        detach(&View::from(handle));
+    }
+    for (_, panel) in &splits {
+        detach(&View::from(panel));
+    }
+    let mut panels = Vec::new();
+    let mut kept = Vec::new();
+    let root = build(
+        window_id,
+        tree,
+        &mut Vec::new(),
+        &mut panels,
+        &mut handles,
+        &mut kept,
+    );
+    if let Some(mut root) = root {
+        content.add_child_view(Some(&mut root));
     }
     shell::with(|s| {
-        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
+        if let Some(w) = window_mut(s, window_id) {
+            w.split_panels = panels;
             w.pane_handles = kept;
         }
     });
+    // Handles whose borders went close here, outside the shell.
+    drop(handles);
+}
+
+/// The view for `tree`: a pane's body, or a panel for a split.
+fn build(
+    window_id: u32,
+    tree: &Tree<PaneId>,
+    path: &mut Vec<usize>,
+    panels: &mut Vec<(String, Panel)>,
+    old_handles: &mut Vec<(String, BrowserView, u32)>,
+    handles: &mut Vec<(String, BrowserView, u32)>,
+) -> Option<View> {
+    let (axis, children) = match tree {
+        Tree::Pane(pane) => return body(window_id, *pane).map(|b| View::from(&b)),
+        Tree::Split { axis, children } => (*axis, children),
+    };
+    let panel = panel_create(None)?;
+    let layout = panel.set_to_box_layout(Some(&BoxLayoutSettings {
+        horizontal: (axis == Axis::Vertical).into(),
+        cross_axis_alignment: AxisAlignment::STRETCH,
+        ..Default::default()
+    }))?;
+    for (i, (child, share)) in children.iter().enumerate() {
+        path.push(i);
+        let child = build(window_id, child, path, panels, old_handles, handles);
+        path.pop();
+        if let Some(mut child) = child {
+            panel.add_child_view(Some(&mut child));
+            layout.set_flex_for_view(Some(&mut child), flex(*share));
+        }
+        if i + 1 == children.len() {
+            continue;
+        }
+        let id = rt_core::split::border_id(path, i);
+        let handle = match old_handles.iter().position(|(h, _, _)| *h == id) {
+            Some(at) => Some(old_handles.remove(at)),
+            None => new_handle(&id, axis),
+        };
+        if let Some((id, view, color)) = handle {
+            let mut handle = View::from(&view);
+            panel.add_child_view(Some(&mut handle));
+            layout.set_flex_for_view(Some(&mut handle), 0);
+            handles.push((id, view, color));
+        }
+    }
+    panels.push((path_key(path), panel.clone()));
+    Some(View::from(&panel))
+}
+
+fn path_key(path: &[usize]) -> String {
+    path.iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// A handle for the border `id` between panes split along `axis`.
+fn new_handle(id: &str, axis: Axis) -> Option<(String, BrowserView, u32)> {
+    let (gap, _) = split_colors();
+    let axis = if axis == Axis::Vertical { "v" } else { "h" };
+    let url = format!("{HANDLE_URL}#{axis}/{id}/{:06x}", gap & 0x00ff_ffff);
+    let view = crate::window::create_browser_view(crate::client::Role::SplitHandle, &url)?;
+    View::from(&view).set_focusable(0);
+    Some((id.to_string(), view, gap))
+}
+
+/// The layout kept its shape but its sizes changed: give each split's panes their new flex.
+fn resize_splits(window_id: u32, tree: &Tree<PaneId>) {
+    let Some(panels) = shell::with(|s| Some(window(s, window_id)?.split_panels.clone())).flatten()
+    else {
+        return;
+    };
+    fn walk(tree: &Tree<PaneId>, path: &mut Vec<usize>, panels: &[(String, Panel)]) {
+        let Tree::Split { children, .. } = tree else {
+            return;
+        };
+        let key = path_key(path);
+        if let Some((_, panel)) = panels.iter().find(|(k, _)| *k == key)
+            && let Some(layout) = panel.get_layout().and_then(|l| l.as_box_layout())
+        {
+            for (i, (_, share)) in children.iter().enumerate() {
+                if let Some(mut child) = panel.child_view_at(i32::try_from(2 * i).unwrap_or(0)) {
+                    layout.set_flex_for_view(Some(&mut child), flex(*share));
+                }
+            }
+            View::from(panel).invalidate_layout();
+        }
+        for (i, (child, _)) in children.iter().enumerate() {
+            path.push(i);
+            walk(child, path, panels);
+            path.pop();
+        }
+    }
+    walk(tree, &mut Vec::new(), &panels);
+}
+
+/// A handle along the focused pane's edge shows the focus color, the others the gaps' color.
+fn color_handles(window_id: u32) {
+    let (gap, accent) = split_colors();
+    let Some(Some((borders, focused, handles))) = shell::with(|s| {
+        let w = window(s, window_id)?;
+        let size = View::from(w.content.as_ref()?).bounds();
+        let focused = w
+            .layout
+            .bounds(size.width, size.height, GAP)
+            .into_iter()
+            .find(|(p, _)| *p == w.layout.focused())
+            .map(|(_, b)| b)?;
+        Some((
+            w.layout.borders(size.width, size.height, GAP),
+            focused,
+            w.pane_handles.clone(),
+        ))
+    }) else {
+        return;
+    };
+    let mut colors = Vec::new();
+    for (id, view, was) in &handles {
+        let Some(b) = borders.iter().find(|b| b.id == *id).map(|b| b.bounds) else {
+            colors.push(*was);
+            continue;
+        };
+        let touches = b.x < focused.x + focused.width + GAP
+            && focused.x < b.x + b.width + GAP
+            && b.y < focused.y + focused.height + GAP
+            && focused.y < b.y + b.height + GAP;
+        let color = if touches { accent } else { gap };
+        if color != *was
+            && let Some(frame) = view.browser().and_then(|b| b.main_frame())
+        {
+            shell::exec_js(
+                &frame,
+                &format!("window.rtColor && rtColor('#{:06x}')", color & 0x00ff_ffff),
+            );
+        }
+        colors.push(color);
+    }
+    shell::with(|s| {
+        if let Some(w) = window_mut(s, window_id) {
+            for ((_, _, color), new) in w.pane_handles.iter_mut().zip(colors) {
+                *color = new;
+            }
+        }
+    });
+}
+
+/// Show each pane's current tab and hide its others; a tab whose renderer
+/// died is replaced by its pane's crash notice. With `focus`, the focused
+/// pane's page (or notice) takes the keyboard focus.
+pub fn show(window_id: u32, focus: bool) {
+    arrange(window_id);
+    // Per pane: its id, body, tabs (view, current), crash notice URL and notice.
+    type Shown = (
+        PaneId,
+        Panel,
+        Vec<(BrowserView, bool)>,
+        Option<String>,
+        Option<BrowserView>,
+    );
+    let Some(Some((focused, mut panes))) = shell::with(|s| {
+        let w = window(s, window_id)?;
+        let describe = |pane: PaneId, tabs: &TabList<Tab>| -> Option<Shown> {
+            let views = w.views_of(pane)?;
+            let current = tabs.current_index();
+            let crashed = tabs
+                .current()
+                .and_then(|t| Some(crate::ui::crashed_url(&t.url, t.crashed.as_deref()?)));
+            Some((
+                pane,
+                views.body.clone(),
+                tabs.iter()
+                    .enumerate()
+                    .map(|(i, t)| (t.view.clone(), i == current))
+                    .collect(),
+                crashed,
+                views.notice.clone(),
+            ))
+        };
+        let focused = w.layout.focused();
+        let panes: Vec<Shown> = std::iter::once(describe(focused, &w.tabs))
+            .chain(w.panes.iter().map(|p| describe(p.id, &p.tabs)))
+            .flatten()
+            .collect();
+        Some((focused, panes))
+    }) else {
+        return;
+    };
+    for (pane, body, _, crashed, notice) in &mut panes {
+        match (crashed.as_deref(), notice.as_ref()) {
+            (Some(url), None) => {
+                *notice = crate::window::create_browser_view(crate::client::Role::Crashed, url);
+                if let Some(view) = notice.as_ref() {
+                    body.add_child_view(Some(&mut View::from(view)));
+                    let (pane, view) = (*pane, view.clone());
+                    shell::with(|s| {
+                        let views = window_mut(s, window_id)?
+                            .pane_views
+                            .iter_mut()
+                            .find(|v| v.pane == pane)?;
+                        views.notice = Some(view);
+                        Some(())
+                    });
+                }
+            }
+            // Only the fragment changes, so the notice redraws without reloading.
+            (Some(url), Some(view)) => {
+                if let Some(frame) = view.browser().and_then(|b| b.main_frame()) {
+                    frame.load_url(Some(&CefString::from(url)));
+                }
+            }
+            (None, _) => {}
+        }
+    }
+    // Show, then focus, then hide: hiding the focused view makes Chromium move
+    // the focus itself, which would read as a click in that pane.
+    for (_, _, tabs, crashed, notice) in &panes {
+        for (view, current) in tabs {
+            if *current && crashed.is_none() {
+                View::from(view).set_visible(1);
+                // A lazily restored tab loads once it's on screen.
+                crate::tabs::load_pending(view);
+            }
+        }
+        if let Some(notice) = notice.as_ref().filter(|_| crashed.is_some()) {
+            View::from(notice).set_visible(1);
+        }
+    }
+    if focus && let Some((_, _, tabs, crashed, notice)) = panes.iter().find(|p| p.0 == focused) {
+        let shown = match (crashed, notice) {
+            (Some(_), Some(notice)) => Some(notice),
+            _ => tabs.iter().find(|(_, current)| *current).map(|(v, _)| v),
+        };
+        if let Some(view) = shown {
+            focus_view(view);
+        }
+    }
+    for (_, _, tabs, crashed, notice) in &panes {
+        for (view, current) in tabs {
+            if !*current || crashed.is_some() {
+                View::from(view).set_visible(0);
+            }
+        }
+        if let Some(notice) = notice.as_ref().filter(|_| crashed.is_none()) {
+            View::from(notice).set_visible(0);
+        }
+    }
 }
 
 /// A border's handle was dragged `delta` pixels right or down.
@@ -478,92 +772,54 @@ pub fn drag(border: &str, delta: i32) {
 /// The drag ended: the keys go back to the focused pane's page.
 pub fn drop_border() {
     if let Some(Some(view)) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())) {
-        crate::panes::focus_view(&view);
+        focus_view(&view);
     }
-}
-
-/// Cover each other pane's crashed tab with a crash notice of its own, as
-/// the focused pane's is (`tabs::show_current_in`), and drop notices whose
-/// tab is back or off screen.
-pub fn show_crashes(window_id: u32, content: &Panel) {
-    let Some(Some((crashed, mut notices))) = shell::with(|s| {
-        let w = s.windows.iter_mut().find(|w| w.id == window_id)?;
-        let crashed: Vec<(BrowserView, String)> = w
-            .tabs
-            .iter()
-            .filter(|t| in_other_pane(w, &t.view))
-            .filter_map(|t| {
-                Some((
-                    t.view.clone(),
-                    crate::ui::crashed_url(&t.url, t.crashed.as_deref()?),
-                ))
-            })
-            .collect();
-        Some((crashed, std::mem::take(&mut w.pane_notices)))
-    }) else {
-        return;
-    };
-    let mut kept = Vec::new();
-    for (tab, url) in crashed {
-        View::from(&tab).set_visible(0);
-        let notice = match notices.iter().position(|(t, _)| same(t, &tab)) {
-            Some(i) => {
-                let (_, notice) = notices.remove(i);
-                if let Some(frame) = notice.browser().and_then(|b| b.main_frame()) {
-                    frame.load_url(Some(&CefString::from(url.as_str())));
-                }
-                notice
-            }
-            None => {
-                let Some(notice) =
-                    crate::window::create_browser_view(crate::client::Role::Crashed, &url)
-                else {
-                    continue;
-                };
-                content.add_child_view(Some(&mut View::from(&notice)));
-                notice
-            }
-        };
-        View::from(&notice).set_visible(1);
-        kept.push((tab, notice));
-    }
-    for (_, gone) in notices {
-        content.remove_child_view(Some(&mut View::from(&gone)));
-    }
-    shell::with(|s| {
-        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
-            w.pane_notices = kept;
-        }
-    });
 }
 
 /// Where the focused pane is in window `window_id`, in window coordinates,
 /// for things that belong over its page, such as an extension's popup.
 pub fn focused_area(window_id: u32) -> Option<Rect> {
-    let (content, pane) = shell::with(|s| {
-        let w = s.windows.iter().find(|w| w.id == window_id)?;
-        let content = w.content.clone()?;
-        let size = View::from(&content).bounds();
-        let pane = w
-            .layout
-            .bounds(size.width, size.height, GAP)
-            .into_iter()
-            .find(|(p, _)| *p == w.layout.focused())
-            .map(|(_, b)| b)?;
-        Some((content, pane))
+    let body = shell::with(|s| {
+        let w = window(s, window_id)?;
+        Some(w.views_of(w.layout.focused())?.body.clone())
     })
     .flatten()?;
-    let mut origin = Point {
-        x: pane.x,
-        y: pane.y,
-    };
-    View::from(&content).convert_point_to_window(Some(&mut origin));
+    let view = View::from(&body);
+    let size = view.bounds();
+    let mut origin = Point { x: 0, y: 0 };
+    view.convert_point_to_window(Some(&mut origin));
     Some(Rect {
         x: origin.x,
         y: origin.y,
-        width: pane.width,
-        height: pane.height,
+        width: size.width,
+        height: size.height,
     })
+}
+
+/// Each pane's place in the page area, for the test channel: its id, whether
+/// it's focused, and its bounds.
+pub fn pane_bounds(w: &WindowState) -> Vec<(PaneId, bool, Rect)> {
+    let Some(content) = w.content.as_ref().map(View::from) else {
+        return Vec::new();
+    };
+    let origin = content.bounds_in_screen();
+    w.pane_views
+        .iter()
+        .filter(|v| w.layout.contains(v.pane))
+        .map(|v| {
+            let b = View::from(&v.body).bounds_in_screen();
+            (
+                v.pane,
+                v.pane == w.layout.focused(),
+                Rect {
+                    x: b.x - origin.x,
+                    y: b.y - origin.y,
+                    width: b.width,
+                    height: b.height,
+                },
+            )
+        })
+        .collect()
 }
 
 /// Focus the current tab's `view`, unless the window isn't the active one
@@ -586,28 +842,6 @@ fn focus_current(window_id: u32, view: &BrowserView) {
     }
 }
 
-/// The window's pane border, below every tab view, made on first use.
-fn border(window_id: u32, content: &Panel) -> Option<Panel> {
-    let existing = shell::with(|s| {
-        s.windows
-            .iter()
-            .find(|w| w.id == window_id)
-            .and_then(|w| w.pane_border.clone())
-    })
-    .flatten();
-    if existing.is_some() {
-        return existing;
-    }
-    let panel = panel_create(None)?;
-    content.add_child_view_at(Some(&mut View::from(&panel)), 0);
-    shell::with(|s| {
-        if let Some(w) = s.windows.iter_mut().find(|w| w.id == window_id) {
-            w.pane_border = Some(panel.clone());
-        }
-    });
-    Some(panel)
-}
-
 fn arrange_active() {
     if let Some(window) = shell::with(|s| s.id) {
         arrange(window);
@@ -627,15 +861,45 @@ fn split_colors() -> (u32, u32) {
     (color("surface2", 0xff33_3333), color("accent", 0xff5f_87d7))
 }
 
-// The page area, which places its tab views itself (see `arrange`).
+// A pane's body: its tab views fill it, and its crash notice when its tab crashed.
 wrap_panel_delegate! {
-    pub struct ContentDelegate {
+    pub struct BodyDelegate {
         window: u32,
+        pane: PaneId,
     }
 
     impl ViewDelegate {
-        fn on_layout_changed(&self, _view: Option<&mut View>, new_bounds: Option<&Rect>) {
-            arrange_in(self.window, new_bounds.cloned());
+        fn on_layout_changed(&self, view: Option<&mut View>, new_bounds: Option<&Rect>) {
+            let (Some(view), Some(bounds)) = (view, new_bounds) else { return };
+            if bounds.width <= 0 || bounds.height <= 0 {
+                return;
+            }
+            // Hidden tabs aren't laid out; sized here, a background tab lays
+            // its page out at the size it'll be shown at.
+            if let Some(panel) = view.as_panel() {
+                let size = Rect { x: 0, y: 0, width: bounds.width, height: bounds.height };
+                for i in 0..panel.child_view_count() {
+                    let Some(child) = panel.child_view_at(i32::try_from(i).unwrap_or(0)) else { continue };
+                    if child.is_visible() == 0 {
+                        child.set_bounds(Some(&size));
+                    }
+                }
+            }
+            // A view can't take keyboard focus while it has no size, so the
+            // first tab asks again once it has one.
+            let (window, pane) = (self.window, self.pane);
+            let first = shell::with(|s| {
+                let w = window_mut(s, window)?;
+                if w.focused_with_size || w.layout.focused() != pane {
+                    return None;
+                }
+                w.focused_with_size = true;
+                Some(w.tabs.current()?.view.clone())
+            })
+            .flatten();
+            if let Some(tab) = first {
+                focus_current(window, &tab);
+            }
         }
     }
 
@@ -725,42 +989,42 @@ wrap_task! {
                 return;
             }
             shell::activate_browser(self.browser);
-            let index = shell::with(|s| {
-                let index = s
-                    .tabs
-                    .iter()
-                    .position(|t| t.browser().is_some_and(|b| b.identifier() == self.browser))?;
-                in_other_pane(s, &s.tabs.get(index)?.view).then_some(index)
-            })
-            .flatten();
-            if let Some(index) = index {
-                crate::tabs::select(index);
+            if focus_clicked(self.browser) {
                 shell::refresh_ui();
             }
         }
     }
 }
 
-/// The window's panes to save, each with its tab's saved index (`saved`
-/// maps a tab's index to it); `None` with one pane.
-pub fn saved(w: &WindowState, saved: impl Fn(usize) -> Option<usize>) -> Option<SplitState> {
+/// The window's panes to save, each with its tabs: `saved` maps a pane and
+/// a tab's index among its tabs to its index in the saved window. `None`
+/// with one pane.
+pub fn saved(
+    w: &WindowState,
+    saved: impl Fn(PaneId, usize) -> Option<usize>,
+) -> Option<SplitState> {
     let focused = w.layout.focused();
     let tree = w.layout.tree(|pane| {
-        let index = if pane == focused {
-            w.tabs.current_index()
+        let tabs = if pane == focused {
+            &w.tabs
         } else {
-            let view = &w.pane_tabs.iter().find(|(p, _)| *p == pane)?.1;
-            index_of(w, view)?
+            &w.panes.iter().find(|p| p.id == pane)?.tabs
         };
-        saved(index)
+        let current = saved(pane, tabs.current_index())?;
+        let all = (0..tabs.len()).filter_map(|i| saved(pane, i)).collect();
+        Some((current, all))
     })?;
     Some(to_state(tree))
 }
 
-fn to_state(tree: Tree<usize>) -> SplitState {
+/// A saved pane: the window's index of the tab it shows, and of all its tabs.
+type SavedPane = (usize, Vec<usize>);
+
+fn to_state(tree: Tree<SavedPane>) -> SplitState {
     match tree {
-        Tree::Pane(tab) => SplitState {
+        Tree::Pane((tab, tabs)) => SplitState {
             tab: Some(tab),
+            tabs,
             ..Default::default()
         },
         Tree::Split { axis, children } => SplitState {
@@ -770,18 +1034,27 @@ fn to_state(tree: Tree<usize>) -> SplitState {
                 .map(|(_, share)| (share * 1000.0).round() as u32)
                 .collect(),
             panes: children.into_iter().map(|(c, _)| to_state(c)).collect(),
-            tab: None,
+            ..Default::default()
         },
     }
 }
 
-fn from_state(state: &SplitState, index: &impl Fn(usize) -> Option<usize>) -> Option<Tree<usize>> {
+/// A saved layout with each pane's shown tab and all its tabs, mapped by `index`.
+fn from_state(
+    state: &SplitState,
+    index: &impl Fn(usize) -> Option<usize>,
+) -> Option<Tree<SavedPane>> {
     if let Some(tab) = state.tab {
-        return index(tab).map(Tree::Pane);
+        let shown = index(tab)?;
+        let mut tabs: Vec<usize> = state.tabs.iter().filter_map(|&t| index(t)).collect();
+        if !tabs.contains(&shown) {
+            tabs.push(shown);
+        }
+        return Some(Tree::Pane((shown, tabs)));
     }
     // Sizes that don't match the panes are ignored, and the panes share the room.
     let sized = state.sizes.len() == state.panes.len();
-    let mut children: Vec<(Tree<usize>, f64)> = state
+    let mut children: Vec<(Tree<SavedPane>, f64)> = state
         .panes
         .iter()
         .enumerate()
@@ -808,36 +1081,93 @@ fn from_state(state: &SplitState, index: &impl Fn(usize) -> Option<usize>) -> Op
     }
 }
 
-/// Put a saved window's panes back over its restored tabs: `index` maps a
-/// saved tab index to the window's, and the pane with `active` is focused.
+/// Put a saved window's panes back. Its tabs are all open in the focused
+/// pane, and `index` maps a saved tab's index to theirs. Each pane takes its
+/// tabs; the pane showing `active` keeps the tabs no pane names.
 pub fn restore(
-    w: &mut WindowState,
+    window_id: u32,
     state: &SplitState,
     index: impl Fn(usize) -> Option<usize>,
     active: usize,
 ) {
-    w.layout = Layout::new();
-    w.pane_tabs.clear();
     let Some(tree) = from_state(state, &index) else {
         return;
     };
-    let (layout, panes) = Layout::from_tree(tree, |&tab| tab == active);
-    let focused = layout.focused();
-    w.pane_tabs = panes
-        .into_iter()
-        .filter(|(pane, _)| *pane != focused)
-        .filter_map(|(pane, tab)| Some((pane, w.tabs.get(tab)?.view.clone())))
-        .collect();
-    w.layout = layout;
+    let moved = shell::with(|s| {
+        let w = window_mut(s, window_id)?;
+        let (mut layout, panes) = Layout::from_tree(tree, |(tab, _)| *tab == active);
+        let focused = layout.focused();
+        let mut slots: Vec<Option<(Tab, bool)>> = w.tabs.take_all().into_iter().map(Some).collect();
+        let mut take = |indices: &[usize], current: usize| {
+            let mut tabs = TabList::default();
+            let mut shown = None;
+            for &i in indices {
+                if let Some(tab) = slots.get_mut(i).and_then(Option::take) {
+                    if i == current {
+                        shown = Some(tabs.len());
+                    }
+                    tabs.append(vec![tab]);
+                }
+            }
+            if let Some(shown) = shown {
+                tabs.focus(shown);
+            }
+            tabs
+        };
+        let mut others = Vec::new();
+        let mut moved = Vec::new();
+        for (pane, (current, indices)) in &panes {
+            if *pane == focused {
+                continue;
+            }
+            let tabs = take(indices, *current);
+            if tabs.is_empty() {
+                layout.close(*pane);
+                continue;
+            }
+            moved.extend(tabs.iter().map(|t| (*pane, t.view.clone())));
+            others.push(Pane { id: *pane, tabs });
+        }
+        let rest: Vec<usize> = (0..slots.len()).collect();
+        let mut tabs = TabList::default();
+        let mut shown = None;
+        for i in rest {
+            if let Some(tab) = slots[i].take() {
+                if i == active {
+                    shown = Some(tabs.len());
+                }
+                tabs.append(vec![tab]);
+            }
+        }
+        if let Some(shown) = shown {
+            tabs.focus(shown);
+        }
+        w.tabs = tabs;
+        w.panes = others;
+        w.layout = layout;
+        Some(moved)
+    })
+    .flatten()
+    .unwrap_or_default();
+    arrange(window_id);
+    for (pane, view) in &moved {
+        if let Some(body) = body(window_id, *pane) {
+            reparent(view, &body);
+        }
+    }
+    arrange(window_id);
 }
 
-/// Whether a saved layout has a pane for the saved tab `tab`.
+/// Whether a saved layout has a pane showing the saved tab `tab`.
 pub fn shows(state: &SplitState, tab: usize) -> bool {
     state.tab == Some(tab) || state.panes.iter().any(|p| shows(p, tab))
 }
 
-/// One pane again, as in a new window.
+/// One pane again, as in a new window, with every tab in it.
 pub fn reset(w: &mut WindowState) {
-    w.layout = Layout::new();
-    w.pane_tabs.clear();
+    for mut pane in std::mem::take(&mut w.panes) {
+        let tabs = pane.tabs.take_all();
+        w.tabs.append(tabs);
+    }
+    w.layout.only();
 }

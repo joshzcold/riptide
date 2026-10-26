@@ -318,6 +318,27 @@ impl<T> TabList<T> {
         Some(tab)
     }
 
+    /// Take every tab out, each with whether it was pinned, leaving none.
+    pub fn take_all(&mut self) -> Vec<(T, bool)> {
+        let tabs = std::mem::take(&mut self.tabs);
+        let pinned = std::mem::take(&mut self.pinned);
+        *self = Self::default();
+        tabs.into_iter().zip(pinned).collect()
+    }
+
+    /// Add tabs after the others, a pinned one after the last pinned tab;
+    /// the current tab stays current.
+    pub fn append(&mut self, tabs: Vec<(T, bool)>) {
+        for (tab, pinned) in tabs {
+            if pinned {
+                let index = self.insert(tab, Position::At(self.pinned_count()), false);
+                self.set_pinned(index, true);
+            } else {
+                self.insert(tab, Position::Last, false);
+            }
+        }
+    }
+
     /// Move the current tab to `to` (clamped to its block), keeping it focused.
     pub fn move_current(&mut self, to: usize) {
         self.move_tab(self.current, to);
@@ -413,6 +434,20 @@ mod tests {
             tabs.focus(i);
         }
         assert_eq!(tabs.recent().collect::<Vec<_>>(), [1, 2, 0]);
+    }
+
+    #[test]
+    fn append_keeps_pinned_tabs_first_and_the_current_tab() {
+        let mut tabs = list(&["a", "b"]);
+        tabs.set_pinned(0, true);
+        tabs.focus(1);
+        let mut other = list(&["x", "y"]);
+        other.set_pinned(1, true);
+        tabs.append(other.take_all());
+        assert!(other.is_empty());
+        assert_eq!(names(&tabs), ["a", "y", "b", "x"]);
+        assert_eq!(tabs.pinned_count(), 2);
+        assert_eq!(tabs.current(), Some(&"b"));
     }
 
     #[test]

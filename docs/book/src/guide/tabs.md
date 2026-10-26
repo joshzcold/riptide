@@ -50,7 +50,7 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 
 ## Splits
 
-Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts a new pane on the right and `ss` (`:split [url]`) one below, each with `url`, or the default page, in a new tab. The new pane takes half of the focused pane's room and gets the focus. To move the current tab into the new pane instead, add `-m`: `:vsplit -m` leaves the old pane the tab you used before it, or a new tab when every other tab is already on screen (or when you give a `url`).
+Splits show several panes side by side in one window, each with tabs of its own. `sv` (`:vsplit [url]`) puts a new pane on the right and `ss` (`:split [url]`) one below, with `url`, or the default page, in a new tab. The new pane takes half of the focused pane's room and gets the focus. To move the current tab into the new pane instead, add `-m`: `:vsplit -m` leaves the old pane its other tabs, or gives it a new one when it has no other (or when you give a `url`).
 
 | Key | Command | Does |
 |---|---|---|
@@ -58,15 +58,20 @@ Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts
 | `ss` | `:split [url]` | Split one above the other |
 | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` | `:split-focus left\|down\|up\|right` | Move to the pane on that side |
 | `sw` | `:split-focus next` | Move to the next pane |
+| `sm` | `:tab-move-pane next` | Move the current tab to the next pane |
 | `s=` | `:split-equal` | Give every pane the same room |
 | `s>` `s<` | `:split-resize width +10` / `-10` | Make the focused pane wider or narrower |
 | `s+` `s-` | `:split-resize height +10` / `-10` | Make the focused pane taller or shorter |
 | `sc` | `:split-close`, or `:q` | Close the focused pane |
 | `so` | `:only` | Keep only the focused pane |
 
-The focused pane has a border in the theme's accent color and shows the current tab, so keys, hints, the status bar and every command act on it. Clicking a pane focuses it, and dragging the border between two panes resizes them. `J`, `K` and `:tab-select` change the focused pane's tab; picking a tab that another pane already shows moves the focus there instead, since a tab can only be in one pane. New tabs, such as `:open -t`, open in the focused pane, since a new tab becomes the current one; `:open -b` keeps it in the background. Closing a pane or using `:only` keeps its tab open; closing a pane's tab shows another tab that isn't on screen, or closes the pane when there's none.
+The focused pane's edges show the theme's accent color, and keys, hints, the status bar and every command act on it. Clicking a pane focuses it, and dragging the border between two panes resizes them.
 
-Sessions save each window's panes, their sizes and their tabs, so a restored window comes back split. With `session.lazy_restore`, the tabs on screen in other panes load straight away too.
+Tab commands work on the focused pane's tabs: `J`, `K`, `:tab-select`, tab numbers and `d` go through its tabs only, and new tabs, such as `:open -t` or `:open -b`, open in it. The tab bar shows the focused pane's tabs. `:tab-move-pane left|down|up|right|next` moves the current tab to another pane, which takes the focus; a pane left without tabs closes.
+
+Closing a pane (`sc`, `:q`) moves its tabs to the pane that takes its room, and `:only` gathers every pane's tabs into the focused one, so nothing closes with a pane. Closing a pane's last tab closes the pane.
+
+Sessions save each window's panes, their sizes and their tabs, so a restored window comes back split. With `session.lazy_restore`, the tab each pane shows loads straight away.
 
 ## Windows and private windows
 

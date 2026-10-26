@@ -70,7 +70,7 @@ fn open_pages() -> Vec<cef::Frame> {
     shell::with(|s| {
         s.windows
             .iter()
-            .flat_map(|w| w.tabs.iter())
+            .flat_map(|w| w.all_tabs())
             .filter(|t| t.url.starts_with(URL))
             .filter_map(|t| t.browser()?.main_frame())
             .collect()
