@@ -27,7 +27,7 @@ Uninstalling keeps your config and profile (see [Where things live](#where-thing
 
 ## macOS (experimental)
 
-The macOS app starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg`, for Apple silicon Macs. Open it and drag riptide onto Applications. For a `riptide` command too, link to the launcher inside the app (not to the binary, which finds CEF relative to itself):
+The macOS app starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg` for Apple silicon Macs and `riptide-X.Y.Z-macos-x86_64.dmg` for Intel Macs. Open it and drag riptide onto Applications. For a `riptide` command too, link to the launcher inside the app (not to the binary, which finds CEF relative to itself):
 
 ```sh
 ln -s /Applications/riptide.app/Contents/Resources/bin/riptide /usr/local/bin/riptide

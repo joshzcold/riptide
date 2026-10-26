@@ -181,7 +181,7 @@ jobs:
 
           - **Linux (x86_64):** the `.deb` for Ubuntu 24.04+ and Debian 13+ (`sudo apt install ./riptide_*.deb`), the `.AppImage`, or the `.tar.gz` (unpack and run `riptide`). See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for the sandbox setup.
           - **Windows:** an experimental installer (`-setup.exe`) or `.zip`; the build starts but is untested by hand.
-          - **macOS (Apple silicon):** an experimental `.dmg`; drag riptide onto Applications. It isn't notarized, so the first start needs **System Settings → Privacy & Security → Open Anyway**.
+          - **macOS:** an experimental `.dmg`, `-aarch64` for Apple silicon or `-x86_64` for Intel; drag riptide onto Applications. It isn't notarized, so the first start needs **System Settings → Privacy & Security → Open Anyway**.
           - Check a download with `sha256sum -c SHA256SUMS --ignore-missing`, or its build provenance with `gh attestation verify <file> --repo joshzcold/riptide`.
           EOF
       - name: Build provenance
