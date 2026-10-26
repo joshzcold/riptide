@@ -67,3 +67,22 @@ fn ctrl_v_pastes_the_clipboard_into_the_command_line() {
         s.status["command_line"]["text"].as_str() == Some(&format!(":open {url}"))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn ctrl_v_pastes_what_a_page_copied() {
+    // Chromium answers for what a page copied on the UI thread, so reading it there would hang.
+    let b = Browser::start("autofocus.html");
+    b.eval(
+        "const i = document.querySelector('input'); i.value = 'https://example.com/copied'; \
+         i.focus(); i.select(); 'ok'",
+    );
+    b.run("mode-enter insert");
+    b.wait_mode("insert");
+    b.keys("<Ctrl-c><Escape>");
+    b.wait_mode("normal");
+    b.keys(":open <Ctrl-v>");
+    b.wait_until("the copied text is pasted", |s| {
+        s.status["command_line"]["text"].as_str() == Some(":open https://example.com/copied")
+    });
+}

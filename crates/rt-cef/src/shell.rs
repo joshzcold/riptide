@@ -721,6 +721,7 @@ pub fn apply(effects: Vec<Effect>) {
             Effect::PassKey(key) => crate::client::send_to_page(key),
             Effect::DeleteCompletion(item) => storage::delete_completion(&item),
             Effect::YankText { text, primary } => clipboard::yank_to(&text, "text", primary),
+            Effect::ReadClipboard { line, count } => clipboard::read_then_run(line, count),
         }
     }
     for (name, args) in with(|s| s.engine.take_ran()).unwrap_or_default() {
