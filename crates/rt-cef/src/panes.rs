@@ -20,13 +20,18 @@ const HANDLE_URL: &str = "riptide://ui/split.html";
 
 pub fn run_command(command: &Command) -> bool {
     match command {
-        Command::Split { vertical, url } => split(
+        Command::Split {
+            vertical,
+            url,
+            move_tab,
+        } => split(
             if *vertical {
                 Axis::Vertical
             } else {
                 Axis::Horizontal
             },
             url.clone(),
+            *move_tab,
         ),
         Command::SplitClose => close_focused(),
         Command::SplitOnly => only(),
@@ -70,17 +75,33 @@ fn index_of(w: &WindowState, view: &BrowserView) -> Option<usize> {
 }
 
 /// Split the focused pane; the new pane gets `url` (or the default page) in
-/// a new tab, and the old one keeps its tab.
-fn split(axis: Axis, url: Option<String>) {
+/// a new tab, and the old one keeps its tab. With `move_tab` the current tab
+/// goes to the new pane instead, and the old one shows the tab used before
+/// it, or `url` in a new tab when given or when every other tab is on screen.
+fn split(axis: Axis, url: Option<String>, move_tab: bool) {
     let split = shell::with(|s| {
         let view = s.tabs.current()?.view.clone();
+        let earlier = (move_tab && url.is_none())
+            .then(|| {
+                s.tabs
+                    .recent()
+                    .filter_map(|i| s.tabs.get(i))
+                    .find(|t| !in_other_pane(s, &t.view))
+                    .map(|t| t.view.clone())
+            })
+            .flatten();
         let old = s.layout.focused();
         s.layout.split(axis);
-        s.pane_tabs.push((old, view));
-        Some(())
+        s.pane_tabs
+            .push((old, earlier.clone().unwrap_or_else(|| view.clone())));
+        Some((s.id, old, view, earlier.is_some()))
     })
     .flatten();
-    if split.is_none() {
+    let Some((window, old, moved, placed)) = split else {
+        return;
+    };
+    if placed {
+        crate::tabs::show_current_in(window, true);
         return;
     }
     shell::apply(vec![Effect::Run {
@@ -91,6 +112,19 @@ fn split(axis: Axis, url: Option<String>) {
         },
         count: None,
     }]);
+    if move_tab {
+        // The new tab takes the old pane, and the moved one is current in the new pane.
+        let index = shell::with(|s| {
+            let opened = s.tabs.current()?.view.clone();
+            let pane = s.pane_tabs.iter_mut().find(|(p, _)| *p == old)?;
+            pane.1 = opened;
+            index_of(s, &moved)
+        })
+        .flatten();
+        if let Some(index) = index {
+            crate::tabs::select(index);
+        }
+    }
 }
 
 /// Close the focused pane and focus its neighbour. Its tab stays open.

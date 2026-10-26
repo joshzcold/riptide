@@ -268,3 +268,20 @@ fn panes_stop_trading_focus_after_tab_switches() {
         assert_eq!(panes(&b.state()), settled, "the panes keep changing");
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn vsplit_m_moves_the_current_tab_into_the_new_pane() {
+    let b = Browser::start("page.html");
+    b.run(&format!("open -t {}", b.url("second.html")));
+    b.wait_until("second is current", |s| s.tab().title == "second");
+    // The old pane shows the tab used before.
+    b.run("vsplit -m");
+    b.wait_until("second moved right", |s| panes(s) == ["ready", "*second"]);
+    assert_eq!(b.state().window().tabs.len(), 2);
+    // With every other tab on screen, the old pane gets a new tab.
+    b.run("split -m");
+    let s = b.wait_until("second moved down", |s| s.window().panes.len() == 3);
+    assert_eq!(s.window().tabs.len(), 3);
+    assert_eq!(s.tab().title, "second");
+}

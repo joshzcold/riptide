@@ -270,6 +270,17 @@ impl<T> TabList<T> {
         self.previous
     }
 
+    /// The tabs focused before the current one, most recent first.
+    pub fn recent(&self) -> impl Iterator<Item = usize> + '_ {
+        let current = self.current;
+        let mut seen = Vec::new();
+        self.stack.iter().rev().copied().filter(move |&i| {
+            let new = i != current && !seen.contains(&i);
+            seen.push(i);
+            new
+        })
+    }
+
     /// The index `n` tabs away from the current one, wrapping around.
     pub fn offset(&self, n: i64) -> usize {
         let len = self.tabs.len().max(1) as i64;
@@ -393,6 +404,15 @@ mod tests {
         assert_eq!(at, 4);
         assert_eq!(tabs.current(), Some(&"y"));
         assert_eq!(tabs.previous(), Some(0));
+    }
+
+    #[test]
+    fn recent_lists_earlier_tabs_newest_first_once_each() {
+        let mut tabs = list(&["a", "b", "c", "d"]);
+        for i in [1, 2, 1, 3] {
+            tabs.focus(i);
+        }
+        assert_eq!(tabs.recent().collect::<Vec<_>>(), [1, 2, 0]);
     }
 
     #[test]

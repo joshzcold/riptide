@@ -50,7 +50,7 @@ With `tabs.mode_on_change = "restore"`, each tab keeps its own mode: leave a tab
 
 ## Splits
 
-Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts a new pane on the right and `ss` (`:split [url]`) one below, each with `url`, or the default page, in a new tab. The new pane takes half of the focused pane's room and gets the focus.
+Splits show several tabs side by side in one window. `sv` (`:vsplit [url]`) puts a new pane on the right and `ss` (`:split [url]`) one below, each with `url`, or the default page, in a new tab. The new pane takes half of the focused pane's room and gets the focus. To move the current tab into the new pane instead, add `-m`: `:vsplit -m` leaves the old pane the tab you used before it, or a new tab when every other tab is already on screen (or when you give a `url`).
 
 | Key | Command | Does |
 |---|---|---|
