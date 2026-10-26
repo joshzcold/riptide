@@ -297,7 +297,7 @@ pub fn reposition() {
         && !prompting
         && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
     {
-        View::from(&tab).request_focus();
+        crate::panes::focus_view(&tab);
     }
 }
 

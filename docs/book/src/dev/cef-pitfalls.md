@@ -16,6 +16,8 @@ Things CEF, Chromium and the `cef` crate do that cost time to find out. Add to t
 
 - The command line is a Rust-owned buffer; keys are consumed in `OnPreKeyEvent`, so UI pages never need keyboard focus.
 - **Chromium ignores input to a page while it shows a JavaScript dialog**, so prompt keys go through the status bar's browser, which gets focus for the duration.
+- **Focus riptide gives a tab is reported to `FocusHandler::on_got_focus` just like a click**, and so is focus Chromium moves by itself when the focused view is hidden. Acting on those as clicks once made two panes hand focus back and forth for good. `panes::focus_view` notes each request so its report is passed over, and `show_current_in` focuses the new tab before hiding the old one.
+- **`View::has_focus` on a call window's Chrome-style view crashes** (SIGSEGV).
 - **A new tab can miss focus requested before its browser existed**; `on_after_created` focuses it again.
 - **`send_key_event` to a hidden tab is dropped** (keys go to the window's focused view), and DevTools' `Input.dispatchKeyEvent` reports success without reaching the page in windowed browsers. The first key a page ever gets starts something that drops keys for about 400 ms (`client::send_when_ready`).
 - **Under Xvfb, a key sent just as a page finishes loading could be lost** below Views (about 1 in 5 in October 2026, for tabs opened from a typed `:open -t`). It didn't reproduce in 100 tries on 2026-10-23, so the smoke test no longer pauses for it; the e2e harness still waits two animation frames after each load.

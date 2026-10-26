@@ -358,14 +358,14 @@ fn arrange_in(window_id: u32, size: Option<Rect>) {
         split = panes,
         "placing tabs"
     );
-    for (i, (view, rect)) in tabs.iter().enumerate() {
-        let view = View::from(view);
+    for (i, (tab, rect)) in tabs.iter().enumerate() {
+        let view = View::from(tab);
         let was_empty = view.bounds().width <= 0 || view.bounds().height <= 0;
         view.set_bounds(Some(rect));
         // A view can't take keyboard focus while it has no size, so the
         // current tab asks again once it has one.
         if was_empty && i == current_index && rect.width > 0 && rect.height > 0 {
-            focus_current(window_id, &view);
+            focus_current(window_id, tab);
         }
     }
     if let Some(notice) = notice {
@@ -478,7 +478,7 @@ pub fn drag(border: &str, delta: i32) {
 /// The drag ended: the keys go back to the focused pane's page.
 pub fn drop_border() {
     if let Some(Some(view)) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())) {
-        View::from(&view).request_focus();
+        crate::panes::focus_view(&view);
     }
 }
 
@@ -568,7 +568,7 @@ pub fn focused_area(window_id: u32) -> Option<Rect> {
 
 /// Focus the current tab's `view`, unless the window isn't the active one
 /// or a question or the command line has the keys.
-fn focus_current(window_id: u32, view: &View) {
+fn focus_current(window_id: u32, view: &BrowserView) {
     let ours = shell::with(|s| {
         s.id == window_id
             && !matches!(
@@ -582,7 +582,7 @@ fn focus_current(window_id: u32, view: &View) {
             window = window_id,
             "focusing the current tab now that it has a size"
         );
-        view.request_focus();
+        focus_view(view);
     }
 }
 
@@ -643,6 +643,37 @@ wrap_panel_delegate! {
 }
 
 thread_local! {
+    /// Browsers riptide focused itself, and when, until Chromium reports it.
+    static OURS: std::cell::RefCell<Vec<(i32, std::time::Instant)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// The tab Chromium last reported focused.
+    static LAST_FOCUSED: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+}
+
+/// Focus `view` for riptide. Chromium reports it like a click, and a click in
+/// another pane switches panes, so its report is passed over (see [`RtFocusHandler`]).
+pub fn focus_view(view: &BrowserView) {
+    // A tab that has the focus already isn't reported again, and a request
+    // left waiting would swallow the next click on it. (`View::has_focus`
+    // would tell, but crashes on a call window's Chrome-style view.)
+    if let Some(id) = view.browser().map(|b| b.identifier())
+        && id != LAST_FOCUSED.get()
+    {
+        OURS.with(|o| o.borrow_mut().push((id, std::time::Instant::now())));
+    }
+    View::from(view).request_focus();
+}
+
+/// Whether `browser` got focus because riptide asked; each request answers once.
+fn focused_by_us(browser: i32) -> bool {
+    OURS.with(|o| {
+        let mut o = o.borrow_mut();
+        o.retain(|(_, at)| at.elapsed() < std::time::Duration::from_secs(1));
+        let found = o.iter().position(|(id, _)| *id == browser);
+        found.map(|i| o.remove(i)).is_some()
+    })
+}
+
+thread_local! {
     /// Tabs focused only to take keys riptide sends, such as a call's mute key
     /// in another window, and when: for a moment their focus doesn't switch windows.
     static LENT: std::cell::RefCell<Vec<(i32, std::time::Instant)>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -662,13 +693,20 @@ pub fn focus_lent(browser: i32) -> bool {
     })
 }
 
-// A click in another pane focuses that pane.
+// A click in another pane focuses that pane. Focus riptide gives a tab
+// (`focus_view`) reports here too, and acting on it could hand focus back
+// and forth between two panes for good.
 wrap_focus_handler! {
     pub struct RtFocusHandler;
 
     impl FocusHandler {
         fn on_got_focus(&self, browser: Option<&mut Browser>) {
             let Some(id) = browser.map(|b| b.identifier()) else { return };
+            LAST_FOCUSED.set(id);
+            if focused_by_us(id) {
+                tracing::debug!(browser = id, "tab got the focus riptide gave it");
+                return;
+            }
             tracing::debug!(browser = id, "tab got focus");
             let mut task = FocusPane::new(id);
             post_task(ThreadId::UI, Some(&mut task));
@@ -684,21 +722,6 @@ wrap_task! {
     impl Task {
         fn execute(&self) {
             if focus_lent(self.browser) {
-                return;
-            }
-            // Focusing a tab ourselves reports here too. If another tab has
-            // focus by now, acting on it would hand focus back, and two panes
-            // would then take it from each other for good.
-            let focused = shell::with(|s| {
-                s.windows
-                    .iter()
-                    .flat_map(|w| w.tabs.iter())
-                    .find(|t| t.browser().is_some_and(|b| b.identifier() == self.browser))
-                    .map(|t| View::from(&t.view).has_focus() != 0)
-            })
-            .flatten();
-            if focused == Some(false) {
-                tracing::debug!(browser = self.browser, "focus already moved on");
                 return;
             }
             shell::activate_browser(self.browser);

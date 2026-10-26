@@ -988,11 +988,11 @@ fn focus_for_prompt(prompting: bool) {
         let view = View::from(bar);
         view.set_focusable(prompting.into());
         if prompting {
-            view.request_focus();
+            crate::panes::focus_view(bar);
         }
     }
     if !prompting && let Some(tab) = &tab {
-        View::from(tab).request_focus();
+        crate::panes::focus_view(tab);
     }
 }
 

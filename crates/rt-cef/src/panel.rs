@@ -283,11 +283,11 @@ fn set_focus(id: Option<u32>) {
         })
     });
     if let Some(view) = page {
-        View::from(&view).request_focus();
+        crate::panes::focus_view(&view);
     } else if id.is_none()
         && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
     {
-        View::from(&tab).request_focus();
+        crate::panes::focus_view(&tab);
     }
 }
 
