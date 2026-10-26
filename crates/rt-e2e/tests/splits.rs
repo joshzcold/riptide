@@ -239,3 +239,32 @@ fn splits_come_back_with_the_session() {
         assert!((a - b).abs() <= 2, "{saved:?} then {restored:?}");
     }
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn panes_stop_trading_focus_after_tab_switches() {
+    // Focusing a tab reports back as a click; stale reports once made two panes take turns for good.
+    let b = Browser::start("page.html");
+    b.run(&format!("vsplit {}", b.url("second.html")));
+    b.wait_until("two panes", |s| panes(s) == ["ready", "*second"]);
+    b.run(&format!("open -b {}", b.url("dialogs.html")));
+    b.wait_until("three tabs", |s| s.window().tabs.len() == 3);
+    for command in [
+        "split-focus left",
+        "split-focus right",
+        "split-focus left",
+        "split-focus right",
+        "tab-next",
+        "tab-next",
+        "tab-next",
+    ] {
+        b.run(command);
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let settled = panes(&b.state());
+    for _ in 0..20 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(panes(&b.state()), settled, "the panes keep changing");
+    }
+}

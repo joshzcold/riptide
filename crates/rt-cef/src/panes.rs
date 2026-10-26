@@ -652,6 +652,21 @@ wrap_task! {
             if focus_lent(self.browser) {
                 return;
             }
+            // Focusing a tab ourselves reports here too. If another tab has
+            // focus by now, acting on it would hand focus back, and two panes
+            // would then take it from each other for good.
+            let focused = shell::with(|s| {
+                s.windows
+                    .iter()
+                    .flat_map(|w| w.tabs.iter())
+                    .find(|t| t.browser().is_some_and(|b| b.identifier() == self.browser))
+                    .map(|t| View::from(&t.view).has_focus() != 0)
+            })
+            .flatten();
+            if focused == Some(false) {
+                tracing::debug!(browser = self.browser, "focus already moved on");
+                return;
+            }
             shell::activate_browser(self.browser);
             let index = shell::with(|s| {
                 let index = s
