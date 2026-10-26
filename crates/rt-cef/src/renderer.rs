@@ -12,6 +12,7 @@ pub const FOCUS_MESSAGE: &str = "rt.focus";
 /// Browser → renderer: evaluate argument 1 (code) in the frame; argument 0 is a request id.
 pub const EVAL_MESSAGE: &str = "rt.eval";
 /// Browser → renderer, from the test channel only: abort the renderer process.
+#[cfg(any(debug_assertions, feature = "test-control"))]
 pub const CRASH_MESSAGE: &str = "rt.crash";
 /// Renderer → browser: id, success flag, and the string result or error message.
 pub const EVAL_RESULT_MESSAGE: &str = "rt.eval-result";

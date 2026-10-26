@@ -136,6 +136,7 @@ pub fn close(id: u32, by_lua: bool) {
 }
 
 /// The floats open, for the e2e tests: id, source, title, text, and whether it's placed.
+#[cfg(any(debug_assertions, feature = "test-control"))]
 pub fn test_state() -> serde_json::Value {
     FLOATS.with(|f| {
         f.borrow()
