@@ -235,6 +235,8 @@ pub enum Command {
     Split {
         vertical: bool,
         url: Option<String>,
+        /// Move the current tab into the new pane instead of opening one there.
+        move_tab: bool,
     },
     /// Close the focused pane; its tab stays open.
     SplitClose,
@@ -816,11 +818,11 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec("tab-only", "Close all tabs except the current one"),
     spec(
         "split",
-        "Split the page area, with a new pane below showing url (or the default page): :split [url]",
+        "Split the page area, with a new pane below showing url (or the default page), or with -m the current tab: :split [-m] [url]",
     ),
     spec(
         "vsplit",
-        "Split the page area, with a new pane on the right showing url (or the default page): :vsplit [url]",
+        "Split the page area, with a new pane on the right showing url (or the default page), or with -m the current tab: :vsplit [-m] [url]",
     ),
     spec("split-close", "Close the focused pane; its tab stays open"),
     spec(
@@ -1494,10 +1496,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             force: args.flag(&["-f", "--force"]).is_some(),
         },
         "split" | "vsplit" => {
+            let move_tab = args.flag(&["-m", "--move"]).is_some();
             let url = args.rest();
             Command::Split {
                 vertical: name == "vsplit",
                 url: (!url.is_empty()).then(|| url.to_string()),
+                move_tab,
             }
         }
         "split-close" => Command::SplitClose,
@@ -2372,14 +2376,32 @@ mod tests {
             parse("vsplit example.com/a b").unwrap(),
             Command::Split {
                 vertical: true,
-                url: Some("example.com/a b".into())
+                url: Some("example.com/a b".into()),
+                move_tab: false,
             }
         );
         assert_eq!(
             parse("split").unwrap(),
             Command::Split {
                 vertical: false,
-                url: None
+                url: None,
+                move_tab: false,
+            }
+        );
+        assert_eq!(
+            parse("vsplit -m").unwrap(),
+            Command::Split {
+                vertical: true,
+                url: None,
+                move_tab: true,
+            }
+        );
+        assert_eq!(
+            parse("split --move example.com").unwrap(),
+            Command::Split {
+                vertical: false,
+                url: Some("example.com".into()),
+                move_tab: true,
             }
         );
         assert_eq!(
