@@ -93,7 +93,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Packaging (M10)
 
-- macOS: trying the app by hand, notarization (needs an Apple Developer account), a Homebrew tap, the sandbox, an Intel build, and one shared helper binary instead of five copies. The app bundle (`scripts/bundle-macos.sh`, ad-hoc signed, in a `.dmg`) is done and starts on CI's macOS runner (`desktop_start.rs`). Windows: trying the browser by hand, and the sandbox (it needs riptide built as a DLL that CEF's `bootstrap.exe` loads). The installer (`packaging/windows/riptide.iss`, Inno Setup) and the icon in `riptide.exe` (`crates/riptide/riptide.rc`) are done. It starts on CI's Windows runner (`desktop_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
+- macOS: trying the app by hand, notarization (needs an Apple Developer account, and the cask in Homebrew's own repository needs it), the sandbox, and an Intel build. The app bundle (`scripts/bundle-macos.sh`, ad-hoc signed, in a `.dmg`) is done and starts on CI's macOS runner (`desktop_start.rs`); its helper apps run the small `riptide-helper`. The Homebrew tap ([joshzcold/homebrew-riptide](https://github.com/joshzcold/homebrew-riptide)) follows the releases. Windows: trying the browser by hand, and the sandbox (it needs riptide built as a DLL that CEF's `bootstrap.exe` loads). The installer (`packaging/windows/riptide.iss`, Inno Setup) and the icon in `riptide.exe` (`crates/riptide/riptide.rc`) are done. It starts on CI's Windows runner (`desktop_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
 ### Bugs

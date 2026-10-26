@@ -11,6 +11,10 @@ license.workspace = true
 name = "riptide"
 path = "src/main.rs"
 
+[[bin]]
+name = "riptide-helper"
+path = "src/helper.rs"
+
 [features]
 sandbox = ["rt-cef/sandbox"]
 test-control = ["rt-cef/test-control"]

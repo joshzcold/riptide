@@ -2,12 +2,14 @@
 # Builds riptide.app around a riptide binary, as CEF expects on macOS:
 #   scripts/bundle-macos.sh <riptide binary> <CEF dir> <out dir> [version]
 #     -> <out dir>/riptide.app, ad-hoc signed
+# The helper apps get riptide-helper from beside the binary.
 # The CEF dir holds "Chromium Embedded Framework.framework" (cef-dll-sys's
 # download, or CEF_PATH).
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 bin=$1 cef=$2 out=$3
+helper_bin=$(dirname "$bin")/riptide-helper
 version=${4:-$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo.toml" |
     sed -n 's/.*"name":"riptide","version":"\([^"]*\)".*/\1/p')}
 # CFBundleVersion takes only numbers and dots, so a nightly's name becomes 0.0.0.
@@ -16,6 +18,7 @@ id=io.github.joshzcold.riptide
 framework="Chromium Embedded Framework.framework"
 
 [[ -f $bin ]] || { echo "bundle-macos.sh: no binary at $bin" >&2; exit 1; }
+[[ -f $helper_bin ]] || { echo "bundle-macos.sh: no riptide-helper beside $bin" >&2; exit 1; }
 [[ -d $cef/$framework ]] || { echo "bundle-macos.sh: no $framework in $cef" >&2; exit 1; }
 
 app=$out/riptide.app
@@ -73,12 +76,13 @@ plist riptide riptide "$id" "$(cat <<'EOF'
 EOF
 )" >"$app/Contents/Info.plist"
 
-# Chromium starts each kind of subprocess from its own helper app.
+# Chromium starts each kind of subprocess from its own helper app. They run
+# riptide-helper, which leaves out the browser's code.
 for kind in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
     name="riptide Helper$kind"
     helper="$app/Contents/Frameworks/$name.app"
     mkdir -p "$helper/Contents/MacOS"
-    cp "$bin" "$helper/Contents/MacOS/$name"
+    cp "$helper_bin" "$helper/Contents/MacOS/$name"
     suffix=$(tr -d ' ()' <<<"$kind" | tr '[:upper:]' '[:lower:]')
     plist "$name" "$name" "$id.helper${suffix:+.$suffix}" \
         "  <key>LSUIElement</key><string>1</string>" >"$helper/Contents/Info.plist"

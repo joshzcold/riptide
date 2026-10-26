@@ -144,6 +144,23 @@ wrap_app! {
     }
 }
 
+// `RtApp` without the browser process, so a helper binary links only the renderer's code.
+wrap_app! {
+    struct HelperApp;
+
+    impl App {
+        fn on_register_custom_schemes(&self, registrar: Option<&mut SchemeRegistrar>) {
+            if let Some(registrar) = registrar {
+                scheme::register(registrar);
+            }
+        }
+
+        fn render_process_handler(&self) -> Option<RenderProcessHandler> {
+            Some(renderer::RtRenderProcessHandler::new())
+        }
+    }
+}
+
 wrap_browser_process_handler! {
     struct RtBrowserProcessHandler {
         startup: Option<Startup>,
@@ -312,6 +329,29 @@ fn early_cli() -> Result<(Cli, Paths), i32> {
         return Err(0);
     }
     Ok((cli, paths))
+}
+
+/// Entry point for `riptide-helper`, which runs only CEF's subprocesses (the
+/// macOS helper apps). Returns the exit code.
+pub fn run_helper() -> i32 {
+    #[cfg(target_os = "macos")]
+    let _library = {
+        let loader =
+            library_loader::LibraryLoader::new(&std::env::current_exe().unwrap_or_default(), true);
+        if !loader.load() {
+            eprintln!("riptide-helper: could not load the Chromium Embedded Framework");
+            return 1;
+        }
+        loader
+    };
+    let _ = api_hash(sys::CEF_API_VERSION_LAST, 0);
+    let args = args::Args::new();
+    let mut app = HelperApp::new();
+    execute_process(
+        Some(args.as_main_args()),
+        Some(&mut app),
+        std::ptr::null_mut(),
+    )
 }
 
 /// Entry point for the browser process and every CEF subprocess. Returns the exit code.
