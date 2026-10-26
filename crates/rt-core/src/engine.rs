@@ -63,6 +63,20 @@ pub enum Effect {
     },
     /// A replayed macro key the engine doesn't handle: send it to the page.
     PassKey(Key),
+    /// Read the clipboard and primary selection without blocking, then run
+    /// `line` with [`Engine::execute_with_clipboards`]. Only with
+    /// [`Engine::defer_clipboard`].
+    ReadClipboard {
+        line: String,
+        count: Option<u32>,
+    },
+}
+
+/// The clipboard and primary selection, read ahead of the commands that use them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Clipboards {
+    pub clipboard: Option<String>,
+    pub primary: Option<String>,
 }
 
 /// Completion results for one command line text, plus Tab-cycling state.
@@ -135,6 +149,9 @@ pub struct Engine {
     url: String,
     clipboard: Option<Box<dyn Fn() -> Option<String>>>,
     primary: Option<Box<dyn Fn() -> Option<String>>>,
+    defer_clipboard: bool,
+    /// What the readers are replaced by while a deferred line runs.
+    clipboards: Option<Clipboards>,
     /// Asked before each command runs (name, args, the page's URL, the
     /// mode); true cancels it. The browser's `command_before` hooks.
     command_filter: Option<Box<CommandFilter>>,
@@ -233,6 +250,8 @@ impl Engine {
             url: String::new(),
             clipboard: None,
             primary: None,
+            defer_clipboard: false,
+            clipboards: None,
             command_filter: None,
             unbound: None,
             completion_source: None,
@@ -766,6 +785,50 @@ impl Engine {
         self.primary = Some(Box::new(reader));
     }
 
+    /// Instead of calling the readers, a command line that needs the clipboard
+    /// stops there with [`Effect::ReadClipboard`]. On X11 a page in this browser
+    /// may own the clipboard, and it can't answer while the reader blocks its thread.
+    pub fn defer_clipboard(&mut self) {
+        self.defer_clipboard = true;
+    }
+
+    /// Run a line from [`Effect::ReadClipboard`] with what was read.
+    pub fn execute_with_clipboards(
+        &mut self,
+        line: &str,
+        count: Option<u32>,
+        clipboards: Clipboards,
+    ) -> Vec<Effect> {
+        let saved = self.clipboards.replace(clipboards);
+        let effects = self.execute_line(line, count, 0);
+        self.clipboards = saved;
+        effects
+    }
+
+    fn read_clipboard(&self, primary: bool) -> Option<String> {
+        if let Some(clipboards) = &self.clipboards {
+            return if primary {
+                clipboards.primary.clone()
+            } else {
+                clipboards.clipboard.clone()
+            };
+        }
+        let reader = if primary {
+            self.primary.as_ref().or(self.clipboard.as_ref())
+        } else {
+            self.clipboard.as_ref()
+        };
+        reader.and_then(|read| read())
+    }
+
+    fn needs_clipboard(&self, piece: &str) -> bool {
+        if !self.defer_clipboard || self.clipboards.is_some() {
+            return false;
+        }
+        let name = piece.trim_start_matches(':').split_whitespace().next();
+        piece.contains("{clipboard}") || piece.contains("{primary}") || name == Some("rl-paste")
+    }
+
     /// The words `hints.mode = word` labels with.
     pub fn set_hint_words(&mut self, words: std::rc::Rc<[String]>) {
         self.hint_words = words;
@@ -1025,7 +1088,12 @@ impl Engine {
 
     fn execute_line(&mut self, line: &str, count: Option<u32>, depth: usize) -> Vec<Effect> {
         let mut effects = Vec::new();
-        for piece in line.split(";;").map(str::trim).filter(|p| !p.is_empty()) {
+        let pieces: Vec<&str> = line
+            .split(";;")
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .collect();
+        for (i, &piece) in pieces.iter().enumerate() {
             // Aliases are the user's own commands, so they may contain `;;`;
             // expand them before variables are filled in.
             if let Some(expanded) = self.expand_alias(piece) {
@@ -1037,7 +1105,22 @@ impl Engine {
                     break;
                 }
                 effects.extend(self.execute_line(&expanded, count, depth + 1));
+                // The alias stopped to read the clipboard: the rest waits too.
+                if let Some(Effect::ReadClipboard { line, .. }) = effects.last_mut() {
+                    for rest in &pieces[i + 1..] {
+                        line.push_str(" ;; ");
+                        line.push_str(rest);
+                    }
+                    break;
+                }
                 continue;
+            }
+            if self.needs_clipboard(piece) {
+                effects.push(Effect::ReadClipboard {
+                    line: pieces[i..].join(" ;; "),
+                    count,
+                });
+                break;
             }
             let result = self
                 .substitute(piece)
@@ -1086,9 +1169,7 @@ impl Engine {
         let mut piece = piece.replace("{url}", &self.url);
         if piece.contains("{clipboard}") {
             let text = self
-                .clipboard
-                .as_ref()
-                .and_then(|read| read())
+                .read_clipboard(false)
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty())
                 .ok_or("Clipboard is empty")?;
@@ -1096,10 +1177,7 @@ impl Engine {
         }
         if piece.contains("{primary}") {
             let text = self
-                .primary
-                .as_ref()
-                .or(self.clipboard.as_ref())
-                .and_then(|read| read())
+                .read_clipboard(true)
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty())
                 .ok_or("Primary selection is empty")?;
@@ -1570,12 +1648,7 @@ impl Engine {
                 );
             }
             Command::RlPaste { primary } => {
-                let reader = if primary {
-                    self.primary.as_ref().or(self.clipboard.as_ref())
-                } else {
-                    self.clipboard.as_ref()
-                };
-                let Some(text) = reader.and_then(|read| read()) else {
+                let Some(text) = self.read_clipboard(primary) else {
                     return;
                 };
                 if self.mode == Mode::Prompt {
@@ -2242,6 +2315,13 @@ mod tests {
             .collect()
     }
 
+    fn runs_of(effects: &[Effect]) -> Vec<(Command, Option<u32>)> {
+        runs(&[KeyOutcome {
+            consumed: true,
+            effects: effects.to_vec(),
+        }])
+    }
+
     fn passed_keys(outcomes: &[KeyOutcome]) -> Vec<Key> {
         outcomes
             .iter()
@@ -2906,6 +2986,64 @@ mod tests {
         ));
         press(&mut e, "<Ctrl-v>");
         assert_eq!(e.prompt_view().unwrap().input, "https://a.org/x");
+    }
+
+    fn read_requests(outcomes: &[KeyOutcome]) -> Vec<String> {
+        outcomes
+            .iter()
+            .flat_map(|o| &o.effects)
+            .filter_map(|effect| match effect {
+                Effect::ReadClipboard { line, .. } => Some(line.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_deferred_clipboard_is_read_before_the_commands_that_use_it() {
+        let mut e = engine();
+        e.defer_clipboard();
+        e.set_clipboard_reader(|| panic!("the reader must not be called"));
+        let clipboards = || Clipboards {
+            clipboard: Some("https://a.org/x\n".into()),
+            primary: Some("two\nlines".into()),
+        };
+
+        let outcomes = press(&mut e, ":open <Ctrl-v>");
+        assert_eq!(read_requests(&outcomes), ["rl-paste"]);
+        assert_eq!(e.status().command_line.unwrap().text, ":open ");
+        e.execute_with_clipboards("rl-paste", None, clipboards());
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":open https://a.org/x"
+        );
+        press(&mut e, "<Escape>");
+
+        // The commands before it run now; it and the ones after wait for the read.
+        let effects = e.execute_str("back ;; open {clipboard} ;; reload", None);
+        assert_eq!(runs_of(&effects), vec![(Command::Back, None)]);
+        let Some(Effect::ReadClipboard { line, .. }) = effects.last() else {
+            panic!("no read: {effects:?}");
+        };
+        assert_eq!(line, "open {clipboard} ;; reload");
+        let effects = e.execute_with_clipboards(line, None, clipboards());
+        assert!(matches!(
+            runs_of(&effects).as_slice(),
+            [(Command::Open { url: Some(url), .. }, None), (Command::Reload { .. }, None)]
+                if url == "https://a.org/x"
+        ));
+
+        // An alias that reads the clipboard holds back the rest of the line too.
+        e.apply_config(&ConfigOp::Set {
+            name: "aliases".into(),
+            value: Value::Map([("pp".to_string(), "open {primary}".to_string())].into()),
+        })
+        .unwrap();
+        let effects = e.execute_str("pp ;; reload", None);
+        assert!(matches!(
+            effects.as_slice(),
+            [Effect::ReadClipboard { line, .. }] if line == "open {primary} ;; reload"
+        ));
     }
 
     #[test]

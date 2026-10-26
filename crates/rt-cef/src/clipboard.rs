@@ -3,7 +3,8 @@
 
 use std::cell::RefCell;
 
-use rt_core::engine::Level;
+use cef::*;
+use rt_core::engine::{Clipboards, Level};
 
 use crate::shell;
 
@@ -42,6 +43,39 @@ pub fn read_primary() -> Option<String> {
     #[cfg(not(target_os = "linux"))]
     {
         read()
+    }
+}
+
+/// Read the clipboard and primary selection on another thread, then run `line`
+/// with them. On X11 a page in riptide may own the clipboard, and Chromium
+/// answers for it on the UI thread, so reading there would wait for itself.
+pub fn read_then_run(line: String, count: Option<u32>) {
+    std::thread::spawn(move || {
+        let clipboards = Clipboards {
+            clipboard: read(),
+            primary: read_primary(),
+        };
+        let mut task = RunWithClipboards::new(line, count, clipboards);
+        post_task(ThreadId::UI, Some(&mut task));
+    });
+}
+
+wrap_task! {
+    struct RunWithClipboards {
+        line: String,
+        count: Option<u32>,
+        clipboards: Clipboards,
+    }
+
+    impl Task {
+        fn execute(&self) {
+            let clipboards = self.clipboards.clone();
+            if let Some(effects) =
+                shell::with(|s| s.engine.execute_with_clipboards(&self.line, self.count, clipboards))
+            {
+                shell::apply(effects);
+            }
+        }
     }
 }
 
