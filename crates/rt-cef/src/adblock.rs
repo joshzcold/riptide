@@ -424,12 +424,14 @@ fn watch(browser: i32, devtools: &BrowserHost) {
 }
 
 /// Pause each new frame from another site until it's told to go on.
+/// Chromium pauses new workers too, filter or not, so they're attached
+/// as well and let go at once (`frame_attached`).
 fn auto_attach() -> serde_json::Value {
     serde_json::json!({
         "autoAttach": true,
         "waitForDebuggerOnStart": true,
         "flatten": true,
-        "filter": [{ "type": "iframe" }],
+        "filter": [{ "type": "iframe" }, { "type": "worker" }],
     })
 }
 
@@ -445,6 +447,10 @@ fn frame_attached(browser: &Browser, params: &serde_json::Value) {
     };
     let send =
         |method: &str, params: serde_json::Value| send(&devtools, Some(session), method, params);
+    if params["targetInfo"]["type"] == "worker" {
+        send("Runtime.runIfWaitingForDebugger", serde_json::json!({}));
+        return;
+    }
     // The frame's address isn't in the target yet, but its navigation was
     // announced on its parent's session (a frame's id is its target's).
     let target = params["targetInfo"]["targetId"]

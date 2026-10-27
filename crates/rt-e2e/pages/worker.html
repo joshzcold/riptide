@@ -1,0 +1,8 @@
+<!doctype html>
+<title>worker</title>
+<script>
+  // A dedicated worker that answers once it runs.
+  const worker = new Worker(URL.createObjectURL(new Blob(["onmessage = () => postMessage('answered')"])));
+  worker.onmessage = (e) => { document.title = `worker ${e.data}`; };
+  worker.postMessage("ping");
+</script>
