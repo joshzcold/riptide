@@ -263,6 +263,41 @@ fn complete_set(parsed: &Parsed<'_>, settings: &Settings) -> Vec<Completion> {
         .collect()
 }
 
+/// `:split` and `:vsplit`'s flags: short name, long name, what it does.
+const SPLIT_FLAGS: &[(&str, &str, &str)] =
+    &[("-m", "--move", "Move the current tab to the new pane")];
+
+const DIRECTIONS: [(&str, &str); 5] = [
+    ("left", "The pane to the left"),
+    ("down", "The pane below"),
+    ("up", "The pane above"),
+    ("right", "The pane to the right"),
+    ("next", "The next pane, round to the first"),
+];
+
+/// The `flags` not given yet that start with what's typed, or all of them
+/// before anything is typed.
+fn flag_items(parsed: &Parsed<'_>, flags: &[(&str, &str, &str)]) -> Vec<Completion> {
+    let given: Vec<&str> = parsed.prefix.split_whitespace().skip(1).collect();
+    let typed = parsed.pattern;
+    if !typed.is_empty() && !typed.starts_with('-') {
+        return Vec::new();
+    }
+    flags
+        .iter()
+        .filter(|(short, long, _)| !given.contains(short) && !given.contains(long))
+        .filter(|(short, long, _)| short.starts_with(typed) || long.starts_with(typed))
+        .map(|(short, long, description)| Completion {
+            icon: None,
+            category: "Flags",
+            name: short.to_string(),
+            description: description.to_string(),
+            time: None,
+            detail: Some(long.to_string()),
+        })
+        .collect()
+}
+
 /// Items for the current command line text.
 pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<Completion> {
     let Some(typed) = text.strip_prefix(':') else {
@@ -331,6 +366,27 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
                 })
                 .collect();
         }
+        "split" | "vsplit" => {
+            let flags = flag_items(&parsed, SPLIT_FLAGS);
+            if parsed.pattern.starts_with('-') {
+                return flags;
+            }
+            let urls = source.map(|s| s(CompletionKind::Url, parsed.pattern));
+            return flags.into_iter().chain(urls.unwrap_or_default()).collect();
+        }
+        "split-focus" | "tab-move-pane" => {
+            return ranked(DIRECTIONS, parsed.pattern, |(name, _)| name)
+                .into_iter()
+                .map(|(name, description)| Completion {
+                    icon: None,
+                    category: "Directions",
+                    name: name.to_string(),
+                    description: description.to_string(),
+                    time: None,
+                    detail: None,
+                })
+                .collect();
+        }
         "open" => CompletionKind::Url,
         "quickmark-load" | "quickmark-del" => CompletionKind::Quickmark,
         "bookmark-load" | "bookmark-del" => CompletionKind::Bookmark,
@@ -356,7 +412,11 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
 pub fn insert(base: &str, item: &Completion) -> String {
     match parse(base) {
         Some(parsed) if item.category != "Commands" => {
-            let space = if item.category == "Settings" { " " } else { "" };
+            let space = if matches!(item.category, "Settings" | "Flags") {
+                " "
+            } else {
+                ""
+            };
             // Keep earlier words: `:set -u site name` or `:set name value`.
             let head = if matches!(item.category, "Settings" | "Values") {
                 parsed
@@ -491,6 +551,30 @@ mod tests {
         assert_eq!(match_words(":open -t rust docs"), ["rust", "docs"]);
         assert_eq!(match_words(":set "), Vec::<String>::new());
         assert_eq!(match_words("/search"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn split_offers_its_flag_then_urls() {
+        let s = source();
+        let settings = Settings::default();
+        let items = compute(":vsplit ", Some(&s), &settings);
+        assert_eq!(names(&items), ["-m", "Url:"]);
+        assert_eq!(items[0].detail.as_deref(), Some("--move"));
+        assert_eq!(names(&compute(":split --mo", Some(&s), &settings)), ["-m"]);
+        assert_eq!(names(&compute(":split -m ", Some(&s), &settings)), ["Url:"]);
+        assert_eq!(
+            names(&compute(":split rust", Some(&s), &settings)),
+            ["Url:rust"]
+        );
+        assert_eq!(insert(":vsplit -", &items[0]), ":vsplit -m ");
+        assert_eq!(
+            names(&compute(":tab-move-pane ", None, &settings)),
+            ["left", "down", "up", "right", "next"]
+        );
+        assert_eq!(
+            names(&compute(":split-focus ri", None, &settings)),
+            ["right"]
+        );
     }
 
     #[test]

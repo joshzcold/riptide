@@ -53,9 +53,10 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     let mut halves: Vec<_> = s.window().panes.iter().map(|p| p.bounds).collect();
     halves.sort_by_key(|b| b.x);
     let (left, right) = (halves[0], halves[1]);
+    // Each pane's page sits below the strip that marks the focused one.
     assert_eq!(
-        (left.x, left.height, right.height),
-        (0, full.height, full.height)
+        (left.x, left.y, left.height, right.y, right.height),
+        (0, 2, full.height - 2, 2, full.height - 2)
     );
     assert!(
         right.x > left.x + left.width,

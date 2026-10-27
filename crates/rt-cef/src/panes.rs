@@ -516,7 +516,10 @@ fn build(
     handles: &mut Vec<(String, BrowserView, u32)>,
 ) -> Option<View> {
     let (axis, children) = match tree {
-        Tree::Pane(pane) => return body(window_id, *pane).map(|b| View::from(&b)),
+        Tree::Pane(pane) if path.is_empty() => {
+            return body(window_id, *pane).map(|b| View::from(&b));
+        }
+        Tree::Pane(pane) => return framed(&body(window_id, *pane)?),
         Tree::Split { axis, children } => (*axis, children),
     };
     let panel = panel_create(None)?;
@@ -550,6 +553,27 @@ fn build(
     }
     panels.push((path_key(path), panel.clone()));
     Some(View::from(&panel))
+}
+
+/// Height of the strip along a pane's top that shows which pane has the focus.
+const FRAME: i32 = 2;
+
+/// A panel holding a split's pane `body` below its focus strip.
+fn framed(body: &Panel) -> Option<View> {
+    let frame = panel_create(None)?;
+    let layout = frame.set_to_box_layout(Some(&BoxLayoutSettings {
+        horizontal: 0,
+        cross_axis_alignment: AxisAlignment::STRETCH,
+        inside_border_insets: Insets {
+            top: FRAME,
+            ..Default::default()
+        },
+        ..Default::default()
+    }))?;
+    let mut body = View::from(body);
+    frame.add_child_view(Some(&mut body));
+    layout.set_flex_for_view(Some(&mut body), 1);
+    Some(View::from(&frame))
 }
 
 fn path_key(path: &[usize]) -> String {
@@ -599,37 +623,32 @@ fn resize_splits(window_id: u32, tree: &Tree<PaneId>) {
     walk(tree, &mut Vec::new(), &panels);
 }
 
-/// A handle along the focused pane's edge shows the focus color, the others the gaps' color.
+/// The focused pane's strip shows the focus color; the other strips and the handles, the gaps' color.
 fn color_handles(window_id: u32) {
     let (gap, accent) = split_colors();
-    let Some(Some((borders, focused, handles))) = shell::with(|s| {
+    let Some(Some((frames, handles))) = shell::with(|s| {
         let w = window(s, window_id)?;
-        let size = View::from(w.content.as_ref()?).bounds();
-        let focused = w
-            .layout
-            .bounds(size.width, size.height, GAP)
-            .into_iter()
-            .find(|(p, _)| *p == w.layout.focused())
-            .map(|(_, b)| b)?;
-        Some((
-            w.layout.borders(size.width, size.height, GAP),
-            focused,
-            w.pane_handles.clone(),
-        ))
+        if w.layout.panes().len() < 2 {
+            return None;
+        }
+        let frames: Vec<(View, bool)> = w
+            .pane_views
+            .iter()
+            .filter_map(|v| {
+                let frame = View::from(&v.body).parent_view()?;
+                Some((frame, v.pane == w.layout.focused()))
+            })
+            .collect();
+        Some((frames, w.pane_handles.clone()))
     }) else {
         return;
     };
+    for (frame, focused) in &frames {
+        frame.set_background_color(if *focused { accent } else { gap });
+    }
     let mut colors = Vec::new();
-    for (id, view, was) in &handles {
-        let Some(b) = borders.iter().find(|b| b.id == *id).map(|b| b.bounds) else {
-            colors.push(*was);
-            continue;
-        };
-        let touches = b.x < focused.x + focused.width + GAP
-            && focused.x < b.x + b.width + GAP
-            && b.y < focused.y + focused.height + GAP
-            && focused.y < b.y + b.height + GAP;
-        let color = if touches { accent } else { gap };
+    for (_, view, was) in &handles {
+        let color = gap;
         if color != *was
             && let Some(frame) = view.browser().and_then(|b| b.main_frame())
         {
