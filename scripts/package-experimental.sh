@@ -23,13 +23,11 @@ esac
 name=riptide-$version-$os-$arch
 
 [[ -f $build/$exe ]] || { echo "package-experimental.sh: run 'cargo build --release' first" >&2; exit 1; }
-# Without CEF_PATH, cef-dll-sys unpacks CEF into its build directory, marked by archive.json.
 if [[ -n ${CEF_PATH:-} && -f $CEF_PATH/archive.json ]]; then
     cef=$CEF_PATH
 else
-    cef=$(dirname "$(find "$build/build" -path '*cef-dll-sys-*/out/*/archive.json' | head -1)")
+    cef=$(scripts/cef-dir.sh "$build")
 fi
-[[ -f $cef/archive.json ]] || { echo "package-experimental.sh: can't find the CEF runtime" >&2; exit 1; }
 
 stage=dist/$name
 rm -rf "$stage"
