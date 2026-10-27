@@ -13,7 +13,9 @@ use rt_core::split::{Axis, Layout, PaneId, Tree};
 use rt_core::tabs::{Position, SelectOnRemove, TabList};
 use rt_storage::SplitState;
 
+use crate::client::Role;
 use crate::shell::{self, Pane, PaneViews, Shell, Tab, WindowState};
+use crate::window::{BarPlacement, TabBarSlot};
 
 /// Pixels between panes: the handle that drags the border between them.
 pub const GAP: i32 = 4;
@@ -333,6 +335,46 @@ pub fn focus_clicked(browser: i32) -> bool {
     switched.is_some()
 }
 
+/// A click or scroll in pane tab bar `browser`: its pane takes the focus first,
+/// so the tab it picks is that pane's.
+pub fn focus_bar(browser: i32) {
+    let switched = shell::with(|s| {
+        let pane = s
+            .pane_views
+            .iter()
+            .find(|v| {
+                v.bar
+                    .as_ref()
+                    .and_then(|b| b.browser())
+                    .is_some_and(|b| b.identifier() == browser)
+            })?
+            .pane;
+        s.focus_pane(pane).then_some(())
+    })
+    .flatten();
+    if switched.is_some() {
+        crate::tabs::show_current_tab();
+    }
+}
+
+/// Pane tab bar `browser` loaded its page, so it can be fed.
+pub fn bar_ready(browser: i32) {
+    shell::with(|s| {
+        let views = s
+            .windows
+            .iter_mut()
+            .flat_map(|w| w.pane_views.iter_mut())
+            .find(|v| {
+                v.bar
+                    .as_ref()
+                    .and_then(|b| b.browser())
+                    .is_some_and(|b| b.identifier() == browser)
+            })?;
+        views.bar_ready = true;
+        Some(())
+    });
+}
+
 /// Put `view` in `body`, out of whichever panel had it.
 fn reparent(view: &BrowserView, body: &Panel) {
     let mut child = View::from(view);
@@ -368,6 +410,10 @@ pub fn body(window_id: u32, pane: PaneId) -> Option<Panel> {
                 pane,
                 body: body.clone(),
                 notice: None,
+                bar: None,
+                bar_ready: false,
+                bar_shown: true,
+                last_bar: String::new(),
             });
         }
     });
@@ -443,9 +489,13 @@ pub fn arrange(window_id: u32) {
                 }
             }
             detach(&View::from(&views.body));
+            if let Some(bar) = &views.bar {
+                detach(&View::from(bar));
+            }
         }
     }
-    let shape = shape(&tree);
+    let slot = shell::with(|s| bar_slot(s.engine.settings())).flatten();
+    let shape = format!("{}{slot:?}", shape(&tree));
     if shape != built {
         rebuild(window_id, &content, &tree);
         shell::with(|s| {
@@ -464,7 +514,14 @@ pub fn arrange(window_id: u32) {
 fn rebuild(window_id: u32, content: &Panel, tree: &Tree<PaneId>) {
     let Some((bodies, splits, mut handles)) = shell::with(|s| {
         let w = window_mut(s, window_id)?;
-        let bodies: Vec<Panel> = w.pane_views.iter().map(|v| v.body.clone()).collect();
+        let bodies: Vec<View> = w
+            .pane_views
+            .iter()
+            .flat_map(|v| {
+                let bar = v.bar.as_ref().map(View::from);
+                std::iter::once(View::from(&v.body)).chain(bar)
+            })
+            .collect();
         Some((
             bodies,
             std::mem::take(&mut w.split_panels),
@@ -474,8 +531,8 @@ fn rebuild(window_id: u32, content: &Panel, tree: &Tree<PaneId>) {
     .flatten() else {
         return;
     };
-    for body in &bodies {
-        detach(&View::from(body));
+    for view in &bodies {
+        detach(view);
     }
     for (_, handle, _) in &handles {
         detach(&View::from(handle));
@@ -516,7 +573,10 @@ fn build(
     handles: &mut Vec<(String, BrowserView, u32)>,
 ) -> Option<View> {
     let (axis, children) = match tree {
-        Tree::Pane(pane) => return body(window_id, *pane).map(|b| View::from(&b)),
+        Tree::Pane(pane) if path.is_empty() => {
+            return body(window_id, *pane).map(|b| View::from(&b));
+        }
+        Tree::Pane(pane) => return framed(window_id, *pane),
         Tree::Split { axis, children } => (*axis, children),
     };
     let panel = panel_create(None)?;
@@ -550,6 +610,72 @@ fn build(
     }
     panels.push((path_key(path), panel.clone()));
     Some(View::from(&panel))
+}
+
+/// Height of the strip along a pane's top that shows which pane has the focus.
+const FRAME: i32 = 2;
+
+/// Where a split's panes have their tab bars: above or below each pane while
+/// the tab bar is a row. A bar at the side stays the window's.
+fn bar_slot(settings: &rt_core::settings::Settings) -> Option<TabBarSlot> {
+    match BarPlacement::from_settings(settings).tab_bar_slot() {
+        slot @ (TabBarSlot::Top | TabBarSlot::Bottom) => Some(slot),
+        TabBarSlot::Left | TabBarSlot::Right => None,
+    }
+}
+
+/// Whether the window's panes show tab bars of their own instead of the window's.
+pub fn bars_in_panes(w: &Shell) -> bool {
+    w.layout.is_split() && bar_slot(w.engine.settings()).is_some()
+}
+
+/// Pane `pane`'s tab bar, made if it's new.
+fn bar(window_id: u32, pane: PaneId) -> Option<BrowserView> {
+    let existing = shell::with(|s| window(s, window_id)?.views_of(pane)?.bar.clone()).flatten();
+    if existing.is_some() {
+        return existing;
+    }
+    let view = crate::window::create_browser_view(Role::PaneTabbar, crate::ui::TABBAR_URL)?;
+    View::from(&view).set_focusable(0);
+    shell::with(|s| {
+        let views = window_mut(s, window_id)?
+            .pane_views
+            .iter_mut()
+            .find(|v| v.pane == pane)?;
+        views.bar = Some(view.clone());
+        Some(())
+    });
+    Some(view)
+}
+
+/// A panel holding a split's pane: its focus strip, then its body with its
+/// tab bar above or below.
+fn framed(window_id: u32, pane: PaneId) -> Option<View> {
+    let body = body(window_id, pane)?;
+    let slot = shell::with(|s| bar_slot(s.engine.settings())).flatten();
+    let bar = slot.and_then(|_| bar(window_id, pane));
+    let frame = panel_create(None)?;
+    let layout = frame.set_to_box_layout(Some(&BoxLayoutSettings {
+        horizontal: 0,
+        cross_axis_alignment: AxisAlignment::STRETCH,
+        inside_border_insets: Insets {
+            top: FRAME,
+            ..Default::default()
+        },
+        ..Default::default()
+    }))?;
+    let mut body = View::from(&body);
+    frame.add_child_view(Some(&mut body));
+    layout.set_flex_for_view(Some(&mut body), 1);
+    if let Some(bar) = bar {
+        let mut bar = View::from(&bar);
+        match slot {
+            Some(TabBarSlot::Bottom) => frame.add_child_view(Some(&mut bar)),
+            _ => frame.add_child_view_at(Some(&mut bar), 0),
+        }
+        layout.set_flex_for_view(Some(&mut bar), 0);
+    }
+    Some(View::from(&frame))
 }
 
 fn path_key(path: &[usize]) -> String {
@@ -599,37 +725,32 @@ fn resize_splits(window_id: u32, tree: &Tree<PaneId>) {
     walk(tree, &mut Vec::new(), &panels);
 }
 
-/// A handle along the focused pane's edge shows the focus color, the others the gaps' color.
+/// The focused pane's strip shows the focus color; the other strips and the handles, the gaps' color.
 fn color_handles(window_id: u32) {
     let (gap, accent) = split_colors();
-    let Some(Some((borders, focused, handles))) = shell::with(|s| {
+    let Some(Some((frames, handles))) = shell::with(|s| {
         let w = window(s, window_id)?;
-        let size = View::from(w.content.as_ref()?).bounds();
-        let focused = w
-            .layout
-            .bounds(size.width, size.height, GAP)
-            .into_iter()
-            .find(|(p, _)| *p == w.layout.focused())
-            .map(|(_, b)| b)?;
-        Some((
-            w.layout.borders(size.width, size.height, GAP),
-            focused,
-            w.pane_handles.clone(),
-        ))
+        if w.layout.panes().len() < 2 {
+            return None;
+        }
+        let frames: Vec<(View, bool)> = w
+            .pane_views
+            .iter()
+            .filter_map(|v| {
+                let frame = View::from(&v.body).parent_view()?;
+                Some((frame, v.pane == w.layout.focused()))
+            })
+            .collect();
+        Some((frames, w.pane_handles.clone()))
     }) else {
         return;
     };
+    for (frame, focused) in &frames {
+        frame.set_background_color(if *focused { accent } else { gap });
+    }
     let mut colors = Vec::new();
-    for (id, view, was) in &handles {
-        let Some(b) = borders.iter().find(|b| b.id == *id).map(|b| b.bounds) else {
-            colors.push(*was);
-            continue;
-        };
-        let touches = b.x < focused.x + focused.width + GAP
-            && focused.x < b.x + b.width + GAP
-            && b.y < focused.y + focused.height + GAP
-            && focused.y < b.y + b.height + GAP;
-        let color = if touches { accent } else { gap };
+    for (_, view, was) in &handles {
+        let color = gap;
         if color != *was
             && let Some(frame) = view.browser().and_then(|b| b.main_frame())
         {

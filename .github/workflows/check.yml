@@ -92,14 +92,12 @@ jobs:
         run: cargo test --locked --no-fail-fast -p rt-core -p rt-config -p rt-storage -p rt-adblock
       # cef-dll-sys copies CEF's runtime next to the binary only when its build
       # script runs, which a restored cache skips; its downloaded CEF in the
-      # build directory is still there.
+      # build directory is still there (with older versions' downloads).
       - name: Put CEF next to riptide.exe
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          dll=$(find target/debug/build -name libcef.dll -print -quit)
-          [[ -n $dll ]] || { echo "no libcef.dll under target/debug/build"; exit 1; }
-          cef=$(dirname "$dll")
+          cef=$(scripts/cef-dir.sh target/debug)
           find "$cef" -maxdepth 1 -type f -exec cp {} target/debug/ \;
           cp -r "$cef/locales" target/debug/
       - name: Run without CEF (--version, --paths)
@@ -112,9 +110,7 @@ jobs:
       - name: Build riptide.app
         if: runner.os == 'macOS'
         run: |
-          framework=$(find target/debug/build -maxdepth 4 -name 'Chromium Embedded Framework.framework' -print -quit)
-          [[ -n $framework ]] || { echo "no CEF framework under target/debug/build"; exit 1; }
-          scripts/bundle-macos.sh target/debug/riptide "$(dirname "$framework")" target/debug
+          scripts/bundle-macos.sh target/debug/riptide "$(scripts/cef-dir.sh target/debug)" target/debug
           codesign --verify --deep --strict target/debug/riptide.app
           ln -s "$PWD/target/debug/riptide.app/Contents/Resources/bin/riptide" "$RUNNER_TEMP/riptide"
           "$RUNNER_TEMP/riptide" --version

@@ -30,6 +30,8 @@ pub static CLOSED_EVERY_BROWSER: std::sync::atomic::AtomicBool =
 pub enum Role {
     Tab,
     Tabbar,
+    /// A split pane's tab bar.
+    PaneTabbar,
     Statusbar,
     Completion,
     /// The notice shown in place of a tab whose renderer died.
@@ -243,6 +245,9 @@ wrap_client! {
                                 && let Some(browser) = &browser
                             {
                                 shell::activate_browser(browser.identifier());
+                                if self.role == Role::PaneTabbar {
+                                    crate::panes::focus_bar(browser.identifier());
+                                }
                             }
                             crate::ui::handle_message(message)
                         }
@@ -914,6 +919,11 @@ wrap_load_handler! {
                             _ => w.completion_ready = true,
                         }
                     });
+                }
+                Role::PaneTabbar => {
+                    if let Some(browser) = &browser {
+                        crate::panes::bar_ready(browser.identifier());
+                    }
                 }
                 Role::Crashed => return,
                 Role::Float => {
