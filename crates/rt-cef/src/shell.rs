@@ -147,12 +147,17 @@ pub struct Pane {
     pub tabs: TabList<Tab>,
 }
 
-/// A pane's views: the panel its tabs fill, and the notice shown in place of
-/// its current tab when that tab's renderer died (made on first use).
+/// A pane's views: the panel its tabs fill, the notice shown in place of
+/// its current tab when that tab's renderer died (made on first use), and
+/// its tab bar while the window is split.
 pub struct PaneViews {
     pub pane: rt_core::split::PaneId,
     pub body: Panel,
     pub notice: Option<BrowserView>,
+    pub bar: Option<BrowserView>,
+    pub bar_ready: bool,
+    pub bar_shown: bool,
+    pub last_bar: String,
 }
 
 /// One browser window: its views, tabs and what was last drawn in it.
@@ -479,7 +484,7 @@ impl Shell {
             is(&w.tabbar)
                 || is(&w.statusbar)
                 || is(&w.completion)
-                || w.pane_views.iter().any(|v| is(&v.notice))
+                || w.pane_views.iter().any(|v| is(&v.notice) || is(&v.bar))
                 || w.all_tabs()
                     .any(|t| t.browser().is_some_and(|b| b.identifier() == id))
         })
@@ -1209,6 +1214,8 @@ struct UiUpdate {
     expire_message: Option<(u64, i64)>,
     title: Option<(Window, String)>,
     bars: Option<BarsChange>,
+    /// Panes' tab bars to show or hide.
+    pane_bars: Vec<(BrowserView, bool)>,
     /// Refresh again after this many milliseconds (`tabs.show = switching`).
     refresh_after: Option<i64>,
 }
@@ -1283,6 +1290,9 @@ fn apply_ui_update(update: UiUpdate) {
         }
         // The overlay is anchored to the status bar.
         position_overlay();
+    }
+    for (bar, visible) in update.pane_bars {
+        View::from(&bar).set_visible(visible.into());
     }
     if let Some(delay) = update.refresh_after {
         let mut task = RefreshUi::new();
@@ -1410,70 +1420,7 @@ fn collect_ui_update(
         scripts.push((frame, status_json));
     }
 
-    let settings = s.engine.settings();
-    let favicons = settings.str("tabs.favicons.show");
-    let shrink = settings.bool("tabs.pinned.shrink")
-        && !matches!(settings.str("tabs.position"), "left" | "right");
-    let (format, format_pinned) = (
-        settings.str("tabs.title.format"),
-        settings.str("tabs.title.format_pinned"),
-    );
-    // Tabs with a question waiting, marked so it isn't forgotten.
-    let asking = s.engine.tabs_asking();
-    let tabs: Vec<_> = s
-        .tabs
-        .iter()
-        .enumerate()
-        .map(|(i, t)| {
-            let pinned = s.tabs.is_pinned(i);
-            let show_icon = favicons == "always" || (favicons == "pinned" && pinned);
-            let template = if pinned && shrink {
-                format_pinned
-            } else {
-                format
-            };
-            let label = rt_core::title::tab_label(
-                template,
-                &rt_core::title::TabFields {
-                    index: i + 1,
-                    count: s.tabs.len(),
-                    title: &t.title,
-                    url: &t.url,
-                    progress: t.progress,
-                    muted: t.muted,
-                    media: t.media,
-                    sharing: t.sharing.is_some(),
-                    private: s.private,
-                },
-            );
-            json!({
-                "label": label,
-                "title": t.title,
-                "url": t.url,
-                "loading": t.progress.is_some(),
-                "error": t.load_error,
-                "pinned": pinned,
-                "favicon": if show_icon { t.favicon.as_deref() } else { None },
-                "asking": t.browser().is_some_and(|b| asking.contains(&b.identifier())),
-            })
-        })
-        .collect();
-    let tabbar_json = json!({
-        "theme": theme,
-        "css": css,
-        "tabs": tabs,
-        "current": s.tabs.current_index(),
-        "shrink": settings.bool("tabs.pinned.shrink"),
-        "tooltips": settings.bool("tabs.tooltips"),
-        "vertical": matches!(settings.str("tabs.position"), "left" | "right"),
-        "alignment": settings.str("tabs.title.alignment"),
-        "min_width": settings.int("tabs.min_width"),
-        "max_width": settings.int("tabs.max_width"),
-        "indicator_width": settings.int("tabs.indicator.width"),
-        "close_button": settings.str("tabs.close_mouse_button"),
-        "selected_accent": settings.str("colors.tabs.selected.accent"),
-    })
-    .to_string();
+    let tabbar_json = tab_bar_json(s, &s.tabs, &theme, &css);
     if s.tabbar_ready
         && tabbar_json != s.last_tabbar
         && let Some(frame) = frame_of(&s.tabbar)
@@ -1482,6 +1429,7 @@ fn collect_ui_update(
         scripts.push((frame, tabbar_json));
     }
     let (bars, refresh_after) = bars_change(s, status.mode, status.message.is_some());
+    let pane_bars = pane_bars(s, &theme, &css, &mut scripts);
     // Recomputed every time: `{mode}` changes without the tab bar changing.
     let mut title = None;
     if let (Some(window), Some(tab)) = (s.window.clone(), s.tabs.current()) {
@@ -1617,8 +1565,128 @@ fn collect_ui_update(
         expire_message,
         title,
         bars,
+        pane_bars,
         refresh_after,
     }
+}
+
+/// Feed each pane's tab bar its pane's tabs; the bars to show or hide.
+fn pane_bars(
+    s: &mut Shell,
+    theme: &serde_json::Value,
+    css: &str,
+    scripts: &mut Vec<(Frame, String)>,
+) -> Vec<(BrowserView, bool)> {
+    let settings = s.engine.settings();
+    let in_panes = crate::panes::bars_in_panes(s);
+    let show = if settings.bool("tabs.tabs_are_windows") {
+        "never"
+    } else {
+        settings.str("tabs.show")
+    };
+    let switching = s
+        .switching_until
+        .is_some_and(|until| std::time::Instant::now() < until);
+    let focused = s.layout.focused();
+    let wanted: Vec<(usize, String, bool)> = s
+        .pane_views
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| v.bar.is_some())
+        .filter_map(|(i, v)| {
+            let tabs = if v.pane == focused {
+                &s.tabs
+            } else {
+                &s.panes.iter().find(|p| p.id == v.pane)?.tabs
+            };
+            let switching = switching && v.pane == focused;
+            let visible = in_panes && rt_core::tabs::bar_visible(show, tabs.len(), switching);
+            Some((i, tab_bar_json(s, tabs, theme, css), visible))
+        })
+        .collect();
+    let mut changed = Vec::new();
+    for (i, json, visible) in wanted {
+        let v = &mut s.pane_views[i];
+        if v.bar_ready
+            && json != v.last_bar
+            && let Some(frame) = frame_of(&v.bar)
+        {
+            v.last_bar = json.clone();
+            scripts.push((frame, json));
+        }
+        if visible != v.bar_shown {
+            v.bar_shown = visible;
+            changed.extend(v.bar.clone().map(|bar| (bar, visible)));
+        }
+    }
+    changed
+}
+
+/// What the tab bar page shows for `tabs`: the window's, or a pane's.
+fn tab_bar_json(s: &Shell, tabs: &TabList<Tab>, theme: &serde_json::Value, css: &str) -> String {
+    let settings = s.engine.settings();
+    let favicons = settings.str("tabs.favicons.show");
+    let shrink = settings.bool("tabs.pinned.shrink")
+        && !matches!(settings.str("tabs.position"), "left" | "right");
+    let (format, format_pinned) = (
+        settings.str("tabs.title.format"),
+        settings.str("tabs.title.format_pinned"),
+    );
+    // Tabs with a question waiting, marked so it isn't forgotten.
+    let asking = s.engine.tabs_asking();
+    let items: Vec<_> = tabs
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let pinned = tabs.is_pinned(i);
+            let show_icon = favicons == "always" || (favicons == "pinned" && pinned);
+            let template = if pinned && shrink {
+                format_pinned
+            } else {
+                format
+            };
+            let label = rt_core::title::tab_label(
+                template,
+                &rt_core::title::TabFields {
+                    index: i + 1,
+                    count: tabs.len(),
+                    title: &t.title,
+                    url: &t.url,
+                    progress: t.progress,
+                    muted: t.muted,
+                    media: t.media,
+                    sharing: t.sharing.is_some(),
+                    private: s.private,
+                },
+            );
+            json!({
+                "label": label,
+                "title": t.title,
+                "url": t.url,
+                "loading": t.progress.is_some(),
+                "error": t.load_error,
+                "pinned": pinned,
+                "favicon": if show_icon { t.favicon.as_deref() } else { None },
+                "asking": t.browser().is_some_and(|b| asking.contains(&b.identifier())),
+            })
+        })
+        .collect();
+    json!({
+        "theme": theme,
+        "css": css,
+        "tabs": items,
+        "current": tabs.current_index(),
+        "shrink": settings.bool("tabs.pinned.shrink"),
+        "tooltips": settings.bool("tabs.tooltips"),
+        "vertical": matches!(settings.str("tabs.position"), "left" | "right"),
+        "alignment": settings.str("tabs.title.alignment"),
+        "min_width": settings.int("tabs.min_width"),
+        "max_width": settings.int("tabs.max_width"),
+        "indicator_width": settings.int("tabs.indicator.width"),
+        "close_button": settings.str("tabs.close_mouse_button"),
+        "selected_accent": settings.str("colors.tabs.selected.accent"),
+    })
+    .to_string()
 }
 
 /// Where the bars should be and whether they should show, compared with
@@ -1646,7 +1714,9 @@ fn bars_change(s: &mut Shell, mode: Mode, message: bool) -> (Option<BarsChange>,
         s.last_tab_index = Some(index);
     }
     let switching = s.switching_until.is_some_and(|until| now < until);
-    let tabbar_visible = rt_core::tabs::bar_visible(&show, s.tabs.len(), switching);
+    // While the panes have tab bars of their own, the window's hides.
+    let tabbar_visible = rt_core::tabs::bar_visible(&show, s.tabs.len(), switching)
+        && !crate::panes::bars_in_panes(s);
     let placement = (placement != s.bar_placement).then(|| {
         s.bar_placement = placement.clone();
         placement

@@ -932,6 +932,10 @@ fn bar_size(role: Role) -> Size {
             width: crate::panes::GAP,
             height: crate::panes::GAP,
         },
+        Role::PaneTabbar => Size {
+            width: 1,
+            height: tabbar_height,
+        },
         Role::Tabbar => {
             let (width, height) = TABBAR_SIZE.with(Cell::get);
             // A row (height above 1) takes the height its page asked for; a

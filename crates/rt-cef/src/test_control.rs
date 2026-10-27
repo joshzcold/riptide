@@ -127,7 +127,10 @@ mod enabled {
             "statusbar" => s.statusbar.clone(),
             "completion" => s.completion.clone(),
             "crash_notice" => s.crash_notice(),
-            _ => None,
+            _ => {
+                let pane = bar.strip_prefix("pane_tabbar:")?.parse().ok()?;
+                s.views_of(pane)?.bar.clone()
+            }
         })
         .flatten();
         let Some(browser) = view.and_then(|v| v.browser()) else {
@@ -187,7 +190,13 @@ mod enabled {
                             } else {
                                 &w.panes.iter().find(|p| p.id == pane)?.tabs
                             };
+                            let bar = w
+                                .views_of(pane)
+                                .and_then(|v| v.bar.as_ref().map(|_| v.bar_shown))
+                                .unwrap_or(false);
                             Some(json!({
+                                "id": pane,
+                                "bar": bar && w.layout.is_split(),
                                 "tab": tabs.current_index(),
                                 "title": tabs.current().map(|t| t.title.clone()),
                                 "page_url": tabs
@@ -207,6 +216,7 @@ mod enabled {
                         "current_tab": w.tabs.current_index(),
                         "tabs": tabs,
                         "panes": panes,
+                        "tabbar": w.tabbar_shown,
                         "split_handles": w
                             .pane_handles
                             .iter()
