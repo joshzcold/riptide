@@ -53,11 +53,11 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
     let mut halves: Vec<_> = s.window().panes.iter().map(|p| p.bounds).collect();
     halves.sort_by_key(|b| b.x);
     let (left, right) = (halves[0], halves[1]);
-    // Each pane's page sits below the strip that marks the focused one.
-    assert_eq!(
-        (left.x, left.y, left.height, right.y, right.height),
-        (0, 2, full.height - 2, 2, full.height - 2)
-    );
+    // Each pane's page sits below the strip that marks the focused one and the pane's tab bar.
+    assert_eq!((left.x, left.y, left.height), (0, right.y, right.height));
+    assert!(left.y > 2, "{halves:?}");
+    // The window's tab bar hides, so the panes reach at least as far down.
+    assert!(left.y + left.height >= full.y + full.height, "{halves:?}");
     assert!(
         right.x > left.x + left.width,
         "a gap between them: {halves:?}"
@@ -74,7 +74,7 @@ fn vsplit_shows_a_new_tab_beside_the_current_one() {
         handle.x <= left.x + left.width && handle.x + handle.width >= right.x,
         "{handle:?} {halves:?}"
     );
-    assert_eq!(handle.height, full.height);
+    assert!(handle.height >= full.height, "{handle:?} {full:?}");
 }
 
 #[test]
@@ -133,6 +133,45 @@ fn each_pane_has_tabs_of_its_own() {
     b.keys("<Ctrl-h>");
     let s = b.wait_until("the left pane", |s| panes(s) == ["*ready", "dialogs"]);
     assert_eq!(s.tabs().len(), 1);
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn each_pane_has_a_tab_bar_of_its_own() {
+    let b = Browser::start("page.html");
+    assert!(b.state().window().tabbar);
+    b.run(&format!("vsplit {}", b.url("second.html")));
+    b.run(&format!("open -t {}", b.url("dialogs.html")));
+    let s = b.wait_until("two bars, the window's hidden", |s| {
+        panes(s) == ["ready", "*dialogs"]
+            && s.window().panes.iter().all(|p| p.bar)
+            && !s.window().tabbar
+    });
+    let mut sorted = s.window().panes.clone();
+    sorted.sort_by_key(|p| p.bounds.x);
+    let (left, right) = (sorted[0].id, sorted[1].id);
+    let text = |pane: u32| b.eval_bar(&format!("pane_tabbar:{pane}"), "document.body.innerText");
+    b.wait_until("each bar lists its pane's tabs", |_| {
+        let (l, r) = (text(left), text(right));
+        l.contains("ready")
+            && !l.contains("second")
+            && r.contains("second")
+            && r.contains("dialogs")
+    });
+    // A click in the other pane's bar focuses that pane and picks the tab.
+    b.keys("<Ctrl-h>");
+    b.wait_until("the left pane", |s| panes(s) == ["*ready", "dialogs"]);
+    let click = "const t = document.querySelectorAll('.tab')[0];
+        const at = t.getBoundingClientRect();
+        for (type of ['pointerdown', 'pointerup']) t.dispatchEvent(new PointerEvent(type,
+            { bubbles: true, button: 0, clientX: at.x + 2, clientY: at.y + 2 }));
+        ''";
+    b.eval_bar(&format!("pane_tabbar:{right}"), click);
+    b.wait_until("second, on the right", |s| panes(s) == ["ready", "*second"]);
+    b.keys("so");
+    b.wait_until("the window's bar again", |s| {
+        s.window().panes.len() == 1 && s.window().tabbar && !s.window().panes[0].bar
+    });
 }
 
 #[test]

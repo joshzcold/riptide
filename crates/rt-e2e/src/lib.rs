@@ -71,6 +71,9 @@ pub struct WindowState {
     /// The handles over the borders between panes, to drag them.
     #[serde(default)]
     pub split_handles: Vec<Bounds>,
+    /// The window's tab bar is on screen.
+    #[serde(default)]
+    pub tabbar: bool,
     /// The notice shown in place of a crashed tab is on screen.
     pub crash_notice: bool,
     /// Crash notices over crashed tabs in panes other than the focused one.
@@ -81,6 +84,12 @@ pub struct WindowState {
 /// A split pane: its tabs, the one it shows, and where it is in the page area.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Pane {
+    /// For `eval_bar("pane_tabbar:{id}", …)`.
+    #[serde(default)]
+    pub id: u32,
+    /// The pane's own tab bar is on screen.
+    #[serde(default)]
+    pub bar: bool,
     /// The shown tab's index among the pane's tabs.
     pub tab: usize,
     /// The shown tab's title.
@@ -498,7 +507,8 @@ impl Browser {
             .unwrap_or_else(|e| panic!("crash tab: {e}"));
     }
 
-    /// Evaluate JavaScript in the `tabbar`, `statusbar`, `completion` overlay or `crash_notice`; its value must be a string.
+    /// Evaluate JavaScript in the `tabbar`, `statusbar`, `completion` overlay,
+    /// `crash_notice` or a pane's `pane_tabbar:{id}`; its value must be a string.
     pub fn eval_bar(&self, bar: &str, code: &str) -> String {
         self.request(TestRequest::EvalBar {
             code: code.into(),
