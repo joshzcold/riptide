@@ -103,6 +103,17 @@ fn scriptlets_run_first_and_redirects_stand_in() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn workers_start_in_pages_that_get_scriptlets() {
+    // Chromium pauses a page's new workers while its frames are paused for scriptlets.
+    let b = with_lists(&["filters-scriptlets.txt"]);
+    b.open("scriptlets.html");
+    b.wait_eval("document.title.split(' ')[0]", "constant=false");
+    b.open("worker.html");
+    b.wait_eval("document.title", "worker answered");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn scriptlets_run_first_in_frames_from_other_sites() {
     let b = with_lists(&["filters-scriptlets.txt"]);
     let blocked = "frame constant=false aopr=aborted";
