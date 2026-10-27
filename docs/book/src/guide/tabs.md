@@ -59,6 +59,7 @@ Splits show several panes side by side in one window, each with tabs of its own.
 | `<Ctrl-h>` `<Ctrl-j>` `<Ctrl-k>` `<Ctrl-l>` | `:split-focus left\|down\|up\|right` | Move to the pane on that side |
 | `sw` | `:split-focus next` | Move to the next pane |
 | `sm` | `:tab-move-pane next` | Move the current tab to the next pane |
+| `sH` `sJ` `sK` `sL` | `:tab-move-pane left` / `down` / `up` / `right` | Move the current tab to the pane in that direction |
 | `s=` | `:split-equal` | Give every pane the same room |
 | `s>` `s<` | `:split-resize width +10` / `-10` | Make the focused pane wider or narrower |
 | `s+` `s-` | `:split-resize height +10` / `-10` | Make the focused pane taller or shorter |

@@ -132,6 +132,10 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `s<Greater>` | `split-resize width +10` |
 | `s<Less>` | `split-resize width -10` |
 | `s=` | `split-equal` |
+| `sH` | `tab-move-pane left` |
+| `sJ` | `tab-move-pane down` |
+| `sK` | `tab-move-pane up` |
+| `sL` | `tab-move-pane right` |
 | `sc` | `split-close` |
 | `sm` | `tab-move-pane next` |
 | `so` | `only` |
