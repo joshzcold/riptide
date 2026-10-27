@@ -416,6 +416,11 @@ const NORMAL_DEFAULTS: &[(&str, &str)] = &[
     ("sc", "split-close"),
     ("sw", "split-focus next"),
     ("sm", "tab-move-pane next"),
+    // Like Vim's <Ctrl-w>H/J/K/L: s and a capital moves the tab that way.
+    ("sH", "tab-move-pane left"),
+    ("sJ", "tab-move-pane down"),
+    ("sK", "tab-move-pane up"),
+    ("sL", "tab-move-pane right"),
     ("s=", "split-equal"),
     ("s>", "split-resize width +10"),
     ("s<Less>", "split-resize width -10"),
@@ -641,6 +646,10 @@ mod tests {
         assert_eq!(
             map.lookup(Mode::Normal, &seq("sv")),
             Lookup::Exact("vsplit")
+        );
+        assert_eq!(
+            map.lookup(Mode::Normal, &seq("sL")),
+            Lookup::Exact("tab-move-pane right")
         );
     }
 

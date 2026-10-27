@@ -149,7 +149,7 @@ fn tab_move_pane_moves_the_tab_and_the_focus() {
     let s = b.wait_until("dialogs went left", |s| panes(s) == ["*dialogs", "second"]);
     assert_eq!(s.tabs().len(), 2);
     // Moving a pane's only tab closes the pane.
-    b.run("tab-move-pane right");
+    b.keys("sL");
     b.wait_until("dialogs went right", |s| panes(s) == ["ready", "*dialogs"]);
     b.keys("<Ctrl-h>");
     b.wait_until("the left pane", |s| panes(s) == ["*ready", "dialogs"]);
