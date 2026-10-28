@@ -10,7 +10,7 @@ Releases are cut from GitHub Actions; nothing needs to run locally.
    - git-cliff works out the version from the [Conventional Commits](contributing.md#commit-messages) since the last tag. In 0.x, a `feat` or a breaking change (`fix!:`, `feat!:`) bumps the minor version and a `fix` the patch version; 1.0 is set by hand. `docs`, `test`, `ci` and `chore` commits don't open one.
    - Each update replaces the branch, so fix the notes through `cliff.toml` on `main` (for example a `{ sha = "…", skip = true }` parser for a commit to leave out), not by editing the pull request.
 2. **Merge the pull request** when you want to release. That's the release: the push to `main` builds, smoke-tests, tags and publishes it.
-3. Merge the second pull request, `chore(release): update the AUR and Nix packages for vX.Y.Z`, which points the packages at the new tarball.
+3. The publish job then opens and merges a second pull request, `chore(release): update the AUR and Nix packages for vX.Y.Z`, which points the packages at the new tarball. It merges as the riptide GitHub App (on the "Protect main" ruleset's bypass list) only if the pull request changes nothing outside `packaging/` and its AUR and Nix checksums are the released tarball's; otherwise it fails and leaves the pull request for you.
 
 **Actions → release → Run workflow** on `main` does step 1 on demand:
 - With **Dry run** ticked (the default), it builds and tests everything, then keeps the packages and release notes as a `release-dry-run` artifact for a day, without pushing or publishing. Do this before merging a release with packaging changes.
@@ -24,7 +24,7 @@ If Actions isn't allowed to create pull requests (**Settings → Actions → Gen
 |---|---|
 | plan | **From Actions:** prepares the release pull request, or for a dry run, the version to build. **On every push to `main`:** releases the commit if `Cargo.toml`'s version has no tag yet (a merged release pull request). Otherwise it updates the release pull request, or closes it if nothing since the last tag would be in the changelog. |
 | build | Runs [`build-release.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/build-release.yml) on the release commit (below). |
-| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release, which tags the commit, with that version's section of the changelog. Then [`scripts/update-packages.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/update-packages.sh) points the AUR and Nix packages at the new release, in a pull request. Pre-releases leave the packages alone, and a dry run only prints the change. |
+| publish | Writes `SHA256SUMS`, records [build provenance](#verifying-a-download) for every package, and creates the GitHub release, which tags the commit, with that version's section of the changelog. Then [`scripts/update-packages.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/update-packages.sh) points the AUR and Nix packages at the new release, in a pull request that it then merges. Pre-releases leave the packages alone, and a dry run only prints the change. |
 
 Because a new version in `Cargo.toml` is what triggers a release, change it only through the release pull request.
 

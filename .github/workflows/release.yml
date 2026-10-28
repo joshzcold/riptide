@@ -228,6 +228,41 @@ jobs:
           scripts/open-pr.sh "release/v$VERSION-packages" \
             "chore(release): update the AUR and Nix packages for v$VERSION" \
             "Points the AUR packages in \`packaging/aur/\` and \`packaging/nix/package.nix\` (and so the flake) at v$VERSION."
+      # As the riptide GitHub App, which bypasses main's review rule and whose
+      # push starts aur.yml (a push with GITHUB_TOKEN wouldn't).
+      - uses: actions/create-github-app-token@v2
+        if: env.PUBLISH == 'true' && !contains(needs.plan.outputs.version, '-')
+        id: app
+        with:
+          app-id: ${{ secrets.CEF_UPDATE_APP_ID }}
+          private-key: ${{ secrets.CEF_UPDATE_APP_KEY }}
+      - name: Merge the packages pull request
+        if: steps.app.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          branch=release/v$VERSION-packages
+          pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [[ -z $pr ]]; then
+            echo "no packages pull request to merge"
+            exit 0
+          fi
+          other=$(gh pr diff "$pr" --name-only | grep -v '^packaging/' || true)
+          if [[ -n $other ]]; then
+            echo "::error::#$pr changes more than packaging/: $other"
+            exit 1
+          fi
+          # The AUR and Nix checksums must be the released tarball's.
+          sum=$(awk -v f="riptide-$VERSION-linux-x86_64.tar.gz" '$2 == f { print $1 }' dist/SHA256SUMS)
+          sri="sha256-$(xxd -r -p <<<"$sum" | base64 -w0)"
+          diff=$(gh pr diff "$pr")
+          if [[ -z $sum ]] || ! grep -Fq "+sha256sums=('$sum')" <<<"$diff" || ! grep -Fq "\"$sri\"" <<<"$diff"; then
+            echo "::error::#$pr doesn't point at the released tarball ($sum); merge it by hand after checking"
+            exit 1
+          fi
+          gh pr merge "$pr" --merge --admin --match-head-commit "$(git rev-parse HEAD)"
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
+          echo "Merged #$pr, which publishes the AUR packages." >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v7
