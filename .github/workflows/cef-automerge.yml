@@ -24,6 +24,8 @@ jobs:
       startsWith(github.event.workflow_run.head_branch, 'deps/cef-')
     runs-on: ubuntu-24.04
     steps:
+      # main's scripts, not the pull request's.
+      - uses: actions/checkout@v7
       - uses: actions/create-github-app-token@v2
         id: app
         with:
@@ -36,6 +38,8 @@ jobs:
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           SHA: ${{ github.event.workflow_run.head_sha }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_ACCESS_TOKEN: ${{ secrets.NTFY_ACCESS_TOKEN }}
         run: |
           read -r pr head author < <(gh pr list --state open --head "$BRANCH" \
             --json number,headRefOid,author --jq '.[0] | "\(.number) \(.headRefOid) \(.author.login)"') || true
@@ -49,12 +53,14 @@ jobs:
           fi
           if [[ $author != "app/$APP_SLUG" ]]; then
             echo "#$pr is by $author, not the app; leaving it for review"
+            scripts/notify.sh "CEF pull request #$pr needs review" "It's by $author, so it isn't merged automatically." "https://github.com/$GH_REPO/pull/$pr" eyes
             exit 0
           fi
           extra=$(gh pr diff "$pr" --name-only | grep -vxE 'Cargo\.toml|Cargo\.lock|packaging/nix/source\.nix' || true)
           if [[ -n $extra ]]; then
             echo "#$pr changes more than the CEF pins, so it needs review:"
             echo "$extra"
+            scripts/notify.sh "CEF pull request #$pr needs review" "It changes more than the CEF pins: $extra" "https://github.com/$GH_REPO/pull/$pr" eyes
             exit 0
           fi
           # Every check run on the commit, from check.yml and audit.yml alike,
@@ -68,3 +74,4 @@ jobs:
           fi
           gh pr merge "$pr" --merge --admin --match-head-commit "$SHA"
           gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$BRANCH"
+          scripts/notify.sh "Merged a CEF upgrade" "$(gh pr view "$pr" --json title --jq .title). It's in the release pull request now." "https://github.com/$GH_REPO/pull/$pr" white_check_mark

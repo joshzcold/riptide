@@ -28,6 +28,16 @@ If Actions isn't allowed to create pull requests (**Settings → Actions → Gen
 
 Because a new version in `Cargo.toml` is what triggers a release, change it only through the release pull request.
 
+## Notifications
+
+[`scripts/notify.sh`](https://github.com/joshzcold/riptide/blob/main/scripts/notify.sh) sends a push notification through [ntfy.sh](https://ntfy.sh) to the topic in the `NTFY_TOPIC` secret, with the access token in `NTFY_ACCESS_TOKEN`; subscribe to that topic in the ntfy app. It notifies when:
+
+- the release pull request opens or its version changes (not on every commit added to it), and when a release is published;
+- `cef-update` opens a CEF upgrade or a lag issue, and `cef-automerge` merges one or leaves it for review;
+- the `release`, `aur`, `cef update` or `cef automerge` workflow fails, or the checks on a CEF upgrade do ([`notify.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/notify.yml)).
+
+Running **Actions → notify → Run workflow** sends a test notification. Without the secrets nothing is sent, and a failed send never fails a job. The topic isn't reserved (ntfy.sh's free plan can't), so keep its name long, random and secret.
+
 ## What gets built
 
 `build-release.yml` is shared by releases and nightlies:
