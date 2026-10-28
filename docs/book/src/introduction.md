@@ -1,8 +1,8 @@
 # Riptide
 
-*Surfing the web really fast.* Riptide is a keyboard-driven browser built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) and controlled entirely from Rust through the [`cef`](https://github.com/tauri-apps/cef-rs) crate.
+*Surfing the web really fast.* Riptide is a keyboard-driven browser built on [CEF](https://github.com/chromiumembedded/cef) and controlled entirely from Rust through the [`cef`](https://github.com/tauri-apps/cef-rs) crate.
 
-> **Status:** early. Linux on X11 is the main platform; Wayland is untested. The macOS build is tried by hand on Apple silicon before each release, and the Windows and Intel macOS builds start but are untested by hand. It's usable day to day, but expect rough edges. The [project plan](https://github.com/joshzcold/riptide/blob/main/docs/PLAN.md) tracks what's done and what's missing.
+> **Status:** early. Linux on X11 is the main platform; Wayland is untested. The Apple silicon macOS build is tried by hand before each release, and the Intel macOS and Windows builds start but are untested by hand ([what's tested](https://github.com/joshzcold/riptide#readme)). It's usable day to day, but expect rough edges. The [project plan](https://github.com/joshzcold/riptide/blob/main/docs/PLAN.md) tracks what's done and what's missing.
 
 ## Features
 
