@@ -65,6 +65,8 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_ACCESS_TOKEN: ${{ secrets.NTFY_ACCESS_TOKEN }}
         run: |
           current=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
 
@@ -131,10 +133,18 @@ jobs:
 
           $(scripts/git-cliff.sh --unreleased --tag "v$version" --strip header 2>/dev/null)"
           if [[ -n $open_pr ]]; then
+            old_title=$(gh pr view "$open_pr" --json title --jq .title)
             gh pr edit "$open_pr" --title "$title" --body "$body"
             echo "Updated #$open_pr: $title" >> "$GITHUB_STEP_SUMMARY"
           else
             scripts/open-pr.sh "$branch" "$title" "$body"
+          fi
+          # A new release pull request or a new version is news; another commit in it isn't.
+          if [[ -z $open_pr || $old_title != "$title" ]]; then
+            url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')
+            scripts/notify.sh "riptide v$version is ready to release" \
+              "$(scripts/git-cliff.sh --unreleased --tag "v$version" --strip all 2>/dev/null | head -c 3000)" \
+              "${url:-https://github.com/$GITHUB_REPOSITORY/pulls}" package
           fi
           echo "build=false" >> "$GITHUB_OUTPUT"
 
@@ -263,6 +273,15 @@ jobs:
           gh pr merge "$pr" --merge --admin --match-head-commit "$(git rev-parse HEAD)"
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
           echo "Merged #$pr, which publishes the AUR packages." >> "$GITHUB_STEP_SUMMARY"
+      - name: Notify
+        if: env.PUBLISH == 'true'
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_ACCESS_TOKEN: ${{ secrets.NTFY_ACCESS_TOKEN }}
+        run: |
+          scripts/notify.sh "riptide v$VERSION is released" \
+            "The release is published, and the AUR and Nix packages pull request is merged (pre-releases have none)." \
+            "https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION" tada
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v7
