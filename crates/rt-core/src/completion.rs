@@ -109,6 +109,16 @@ fn skipped_letters(name: &str, typed: &str) -> Option<usize> {
     Some((2 * gaps).saturating_sub(part_starts))
 }
 
+/// How well an item with several fields (a mark's name and URL) matches
+/// typed words: each word's best [`rank`] in any field, and the worst of the
+/// words. Words can be in any order; no words match everything.
+pub fn rank_words(pattern: &str, fields: &[&str]) -> Option<u8> {
+    pattern.split_whitespace().try_fold(0, |worst, word| {
+        let best = fields.iter().filter_map(|f| rank(f, word)).min()?;
+        Some(worst.max(best))
+    })
+}
+
 /// The items whose name contains `typed`, best matches first and otherwise
 /// in their original order.
 pub fn ranked<T>(
@@ -116,9 +126,18 @@ pub fn ranked<T>(
     typed: &str,
     name: impl Fn(&T) -> &str,
 ) -> Vec<T> {
+    best_first(items, |item| rank(name(item), typed))
+}
+
+/// The items `rank` matches, best first and otherwise in their original
+/// order, as [`ranked`] does.
+pub fn best_first<T>(
+    items: impl IntoIterator<Item = T>,
+    rank: impl Fn(&T) -> Option<u8>,
+) -> Vec<T> {
     let mut ranked: Vec<(u8, T)> = items
         .into_iter()
-        .filter_map(|item| Some((rank(name(&item), typed)?, item)))
+        .filter_map(|item| Some((rank(&item)?, item)))
         .collect();
     // Skipped-letter matches only when nothing contains the text.
     if ranked.iter().any(|(rank, _)| *rank <= CONTAINS) {
@@ -516,6 +535,35 @@ mod tests {
         assert_eq!(rank("fullscreen", "scr"), Some(3));
         assert!(rank("colors.hints.bg", "hnt").is_some_and(|r| r > CONTAINS));
         assert_eq!(rank("colors.hints.bg", "hn"), None);
+    }
+
+    #[test]
+    fn words_rank_by_their_best_field_and_the_worst_word() {
+        let mark = ["gh", "https://github.com/joshzcold"];
+        assert_eq!(rank_words("", &mark), Some(0));
+        assert_eq!(rank_words("gh", &mark), Some(0));
+        assert_eq!(rank_words("joshz GH", &mark), Some(2));
+        assert_eq!(rank_words("hub gh", &mark), Some(CONTAINS));
+        assert!(rank_words("gthb", &mark).is_some_and(|r| r > CONTAINS));
+        assert_eq!(rank_words("gh gitlab", &mark), None);
+    }
+
+    #[test]
+    fn best_first_keeps_skipped_letters_for_when_nothing_contains_the_text() {
+        let marks = [
+            ("docs", "https://doc.rust-lang.org"),
+            ("gh", "https://github.com"),
+            ("hub", "https://hub.docker.com"),
+        ];
+        let found = |p: &str| -> Vec<&str> {
+            best_first(marks, |(n, u)| rank_words(p, &[n, u]))
+                .into_iter()
+                .map(|(n, _)| n)
+                .collect()
+        };
+        assert_eq!(found("hub"), ["hub", "gh"]);
+        assert_eq!(found("rstlng"), ["docs"]);
+        assert_eq!(found("ghb"), ["gh"]);
     }
 
     #[test]

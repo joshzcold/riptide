@@ -342,3 +342,33 @@ fn quickmarks_visited_lately_come_first() {
     b.wait_until("file order", |s| names(s) == ["first", "second"]);
     b.keys("<Escape>");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn quickmarks_rank_like_commands_and_match_letters_with_gaps() {
+    let b = Browser::start("page.html");
+    let url = b.url("nav1.html");
+    std::fs::write(
+        b.config_dir().join("quickmarks"),
+        format!("trust {url}\nrust-docs {url}\nrust {url}\n"),
+    )
+    .unwrap();
+    b.run("quickmarks-reload");
+    let names = |s: &State| -> Vec<String> { items(s).into_iter().map(|(_, n)| n).collect() };
+    b.keys(":quickmark-load rust");
+    b.wait_until("the whole name, its start, then anywhere", |s| {
+        names(s) == ["rust", "rust-docs", "trust"]
+    });
+    b.keys("<Escape>");
+    b.keys(":quickmark-load rstdcs");
+    b.wait_until("letters with gaps find rust-docs", |s| {
+        names(s) == ["rust-docs"]
+    });
+    b.wait_until("the popup marks those letters", |_| {
+        b.eval_bar(
+            "completion",
+            "[...document.querySelectorAll('.name .match')].map(m => m.textContent).join('')",
+        ) == "rstdcs"
+    });
+    b.keys("<Escape>");
+}
