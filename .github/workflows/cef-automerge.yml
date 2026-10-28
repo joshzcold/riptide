@@ -1,0 +1,70 @@
+name: cef automerge
+
+# Merges the pull request cef-update.yml opened once every check on its newest
+# commit has passed, as the riptide GitHub App (which bypasses main's review
+# rule). Anything but the app's own change to the CEF pins is left for review.
+on:
+  workflow_run:
+    workflows: [check, audit]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cef-automerge
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: merge a passing CEF upgrade
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'deps/cef-')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.CEF_UPDATE_APP_ID }}
+          private-key: ${{ secrets.CEF_UPDATE_APP_KEY }}
+      - name: Merge it if it's the app's and everything passed
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          read -r pr head author < <(gh pr list --state open --head "$BRANCH" \
+            --json number,headRefOid,author --jq '.[0] | "\(.number) \(.headRefOid) \(.author.login)"') || true
+          if [[ -z $pr || $pr == null ]]; then
+            echo "no open pull request for $BRANCH"
+            exit 0
+          fi
+          if [[ $head != "$SHA" ]]; then
+            echo "#$pr has moved on to $head; its own checks decide"
+            exit 0
+          fi
+          if [[ $author != "app/$APP_SLUG" ]]; then
+            echo "#$pr is by $author, not the app; leaving it for review"
+            exit 0
+          fi
+          extra=$(gh pr diff "$pr" --name-only | grep -vxE 'Cargo\.toml|Cargo\.lock|packaging/nix/source\.nix' || true)
+          if [[ -n $extra ]]; then
+            echo "#$pr changes more than the CEF pins, so it needs review:"
+            echo "$extra"
+            exit 0
+          fi
+          # Every check run on the commit, from check.yml and audit.yml alike,
+          # must have finished and passed; whichever workflow ends last merges.
+          states=$(gh api --paginate "repos/$GH_REPO/commits/$SHA/check-runs" \
+            --jq '.check_runs[] | select(.app.slug == "github-actions") | "\(.status)/\(.conclusion)"')
+          echo "$states" | sort | uniq -c
+          if [[ -z $states ]] || grep -qvxE 'completed/(success|skipped|neutral)' <<<"$states"; then
+            echo "not every check on $SHA has passed yet"
+            exit 0
+          fi
+          gh pr merge "$pr" --merge --admin --match-head-commit "$SHA"
+          gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$BRANCH"
