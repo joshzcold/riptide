@@ -1,12 +1,13 @@
 name: cef update
 
-# Once a week, compare the pinned `cef` crate (Cargo.lock) with the newest
-# release on crates.io, and open a pull request that upgrades to it. It acts
-# as the riptide GitHub App (secrets CEF_UPDATE_APP_ID and CEF_UPDATE_APP_KEY),
-# since a pull request opened with GITHUB_TOKEN wouldn't start check.yml.
+# Every day, compare the pinned `cef` crate (Cargo.lock) with the newest
+# release on crates.io, and open a pull request that upgrades to it;
+# cef-automerge.yml merges it once its checks pass. It acts as the riptide
+# GitHub App (secrets CEF_UPDATE_APP_ID and CEF_UPDATE_APP_KEY), since a pull
+# request opened with GITHUB_TOKEN wouldn't start check.yml.
 on:
   schedule:
-    - cron: '0 6 * * 2'
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,40 @@ jobs:
   update:
     name: upgrade to a new CEF
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
     steps:
+      # cef-rs publishes a crate some time after each CEF build, and Chromium's
+      # security fixes come in those builds, so an issue says when it lags.
+      - name: Open an issue when CEF has a build the newest crate doesn't bind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          latest=$(curl -fsSL -H 'User-Agent: riptide-cef-update (github.com/joshzcold/riptide)' \
+            https://crates.io/api/v1/crates/cef | jq -r '.crate.max_stable_version')
+          bound=${latest#*+}
+          upstream=$(curl -fsSL https://cef-builds.spotifycdn.com/index.json |
+            jq -r '.linux64.versions[] | select(.channel == "stable") | .cef_version' | sort -V | tail -1)
+          build=${upstream%%+*}
+          chromium=${upstream##*+chromium-}
+          echo "the cef crate binds $bound, CEF's newest stable build is $build"
+          if [[ -z $build || $latest == null || $build == "$bound" ||
+                $(printf '%s\n' "$build" "$bound" | sort -V | tail -1) != "$build" ]]; then
+            exit 0
+          fi
+          title="CEF $build (Chromium $chromium) is out, but the cef crate binds $bound"
+          if [[ -n $(gh issue list --state all --search "\"CEF $build\" in:title" --json number --jq '.[0].number // empty') ]]; then
+            echo "an issue for CEF $build exists already"
+            exit 0
+          fi
+          gh issue create --title "$title" --body "$(cat <<EOF
+          CEF's newest stable build is $upstream, and the newest \`cef\` crate on crates.io is $latest. riptide can't use the new build until cef-rs publishes a crate for it: https://github.com/tauri-apps/cef-rs/releases
+
+          If it carries a Chromium security fix (https://chromereleases.googleblog.com), consider asking cef-rs for a release. The daily \`cef-update\` workflow opens the upgrade pull request once the crate is out.
+          EOF
+          )"
       - uses: actions/create-github-app-token@v2
         id: app
         with:
@@ -85,15 +119,22 @@ jobs:
           git commit -qam "$subject"
           git push -q origin "$branch"
 
-          # Replaces the issue the older version of this workflow opened.
-          issue=$(gh issue list --state open --search "\"Update CEF to $latest\" in:title" --json number --jq '.[0].number // empty')
-          gh pr create --base main --head "$branch" --title "$subject" --body "$(cat <<EOF
+          # Closes the issue the step above opened while the crate lagged.
+          issue=$(gh issue list --state open --search "\"CEF $build\" in:title" --json number --jq '.[0].number // empty')
+          pr=$(gh pr create --base main --head "$branch" --title "$subject" --body "$(cat <<EOF
           The \`cef\` crate $latest is out (riptide pins $pinned): https://github.com/tauri-apps/cef-rs/releases
 
           This bumps \`Cargo.toml\`, \`Cargo.lock\` and the CEF build in \`packaging/nix/source.nix\`. The check below runs the lint, unit, e2e and smoke tests against the new CEF. If the generated bindings changed, push the fixes to this branch.
           ${issue:+
           Closes #$issue}
 
-          Opened by the weekly \`cef-update\` workflow.
+          Opened by the daily \`cef-update\` workflow, and merged by \`cef-automerge\` once its checks pass.
           EOF
-          )"
+          )")
+
+          # An older upgrade that never merged is out of date now.
+          gh pr list --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"deps/cef-\")) | select(.headRefName != \"$branch\") | .number" |
+            while read -r old; do
+              gh pr close "$old" --delete-branch --comment "Superseded by $pr."
+            done
