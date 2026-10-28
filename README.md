@@ -25,10 +25,20 @@ A keyboard-driven browser with vim-like bindings, built on Chromium and Rust.
 
 </div>
 
-Riptide is built on [CEF](https://github.com/chromiumembedded/cef) (Chromium 154) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate, with everything else in Rust.
+Riptide is built on [CEF](https://github.com/chromiumembedded/cef) through the [`cef`](https://github.com/tauri-apps/cef-rs) crate, with everything else in Rust.
 
 > [!NOTE]
-> **Status:** early. Linux on X11 is the main platform; Wayland is untested. The macOS (`.dmg`) build is tried by hand on Apple silicon before each release, and the Windows (installer) and Intel macOS builds start but are untested by hand. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+> **Status:** early. It's usable day to day, but expect rough edges; the [roadmap](docs/PLAN.md) tracks what's done and what's missing.
+
+| Platform | Packages | Tested |
+|---|---|---|
+| Linux x86_64, X11 | [`.deb`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, AppImage and `.tar.gz` pass the full smoke test, and the AUR source package is built before it's published. |
+| Linux, Wayland | The Linux packages | Untested |
+| macOS, Apple silicon | `.dmg`, Homebrew cask | Each release is tried by hand. CI opens a window, and checks each release `.dmg`'s signature. |
+| macOS, Intel | `.dmg`, Homebrew cask | Untested by hand. CI checks each release `.dmg`'s signature and runs `--version`; it doesn't open a window. |
+| Windows x86_64 | Installer (`-setup.exe`), `.zip` | Untested by hand. CI opens a window, and each release's installer is installed, started with `--version` and uninstalled. |
+
+See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for each package.
 
 <table>
   <tr>
