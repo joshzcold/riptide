@@ -327,8 +327,27 @@
     }
   }
 
-  // Fill `el` with `text`, the typed words (any case) marked as matches.
-  function setMatched(el, text, words) {
+  // Where `word`'s letters first appear in order in `lower`, or null.
+  function lettersAt(lower, word) {
+    const at = [];
+    for (const c of word) {
+      const i = lower.indexOf(c, at.length ? at[at.length - 1] + 1 : 0);
+      if (i === -1) return null;
+      at.push(i);
+    }
+    return at;
+  }
+
+  // Words that match a row only as letters with gaps (`clrhnt`), which
+  // completion allows from three letters.
+  function scatteredWords(row, words) {
+    const fields = [row.name, row.description].map((t) => t.toLowerCase());
+    return (words || []).filter((w) => [...w].length >= 3 && !fields.some((f) => f.includes(w.toLowerCase())));
+  }
+
+  // Fill `el` with `text`, the typed words (any case) marked as matches, and
+  // the letters of `scattered` words where they appear in order.
+  function setMatched(el, text, words, scattered) {
     const lower = text.toLowerCase();
     const marked = new Array(text.length).fill(false);
     for (const word of words || []) {
@@ -337,6 +356,9 @@
       for (let i = lower.indexOf(w); i !== -1; i = lower.indexOf(w, i + w.length)) {
         marked.fill(true, i, i + w.length);
       }
+    }
+    for (const word of scattered || []) {
+      for (const i of lettersAt(lower, word.toLowerCase()) || []) marked[i] = true;
     }
     // toLowerCase can change the length (e.g. İ); then don't mark anything.
     if (lower.length !== text.length) return void (el.textContent = text);
@@ -388,7 +410,8 @@
       el.className = row.selected ? "row selected" : "row";
       const name = document.createElement("span");
       name.className = "name";
-      setMatched(name, row.name, payload.words);
+      const scattered = scatteredWords(row, payload.words);
+      setMatched(name, row.name, payload.words, scattered);
       if (row.icon) {
         // The site's icon, before its URL or tab.
         const icon = document.createElement("img");
@@ -399,7 +422,9 @@
       }
       const desc = document.createElement("span");
       desc.className = "desc";
-      setMatched(desc, row.description, payload.words);
+      // A word's letters are marked in the name if they're all there.
+      const inName = row.name.toLowerCase();
+      setMatched(desc, row.description, payload.words, scattered.filter((w) => !lettersAt(inName, w.toLowerCase())));
       el.append(name, desc);
       if (row.detail != null) {
         const detail = document.createElement("span");

@@ -8,9 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use cef::*;
 use rt_config::Paths;
 use rt_core::Command;
-use rt_core::completion::{Completion, CompletionKind};
+use rt_core::completion::{Completion, CompletionKind, best_first, rank_words};
 use rt_core::engine::Level;
-use rt_storage::{Session, Storage, matches};
+use rt_storage::{Session, Storage};
 
 use crate::{shell, tabs};
 
@@ -97,6 +97,19 @@ fn most_used<'a>(
     let mut ranked: Vec<(f64, (&str, &str))> = scores.into_iter().zip(marks).collect();
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
     ranked.into_iter().map(|(_, mark)| mark).collect()
+}
+
+/// The marks that match `pattern`, best matches first and otherwise in
+/// [`most_used`] order.
+fn matching_marks<'a>(
+    s: &Storage,
+    marks: impl Iterator<Item = (&'a str, &'a str)>,
+    pattern: &str,
+    url: fn(&(&'a str, &'a str)) -> &'a str,
+) -> Vec<(&'a str, &'a str)> {
+    let rank = |&(a, b): &(&str, &str)| rank_words(pattern, &[a, b]);
+    let matching = best_first(marks, rank);
+    best_first(most_used(s, matching, url), rank)
 }
 
 fn with_icon(mut item: Completion, url: &str) -> Completion {
@@ -293,28 +306,18 @@ pub fn complete(kind: CompletionKind, pattern: &str) -> Vec<Completion> {
     with(|s| {
         let mut items = Vec::new();
         if kind == CompletionKind::Quickmark {
-            let marks = s
-                .quickmarks
-                .iter()
-                .filter(|(n, u)| matches(pattern, &[n, u]))
-                .collect();
-            for (name, url) in most_used(s, marks, |m| m.1) {
+            for (name, url) in matching_marks(s, s.quickmarks.iter(), pattern, |m| m.1) {
                 items.push(with_icon(item("Quickmarks", name, url), url));
             }
         }
         if kind == CompletionKind::Bookmark {
-            let marks = s
-                .bookmarks
-                .iter()
-                .filter(|(u, t)| matches(pattern, &[u, t]))
-                .collect();
-            for (url, title) in most_used(s, marks, |m| m.0) {
+            for (url, title) in matching_marks(s, s.bookmarks.iter(), pattern, |m| m.0) {
                 items.push(with_icon(item("Bookmarks", url, title), url));
             }
         }
         if kind == CompletionKind::Session {
-            for name in s.sessions.list().iter().filter(|n| matches(pattern, &[n])) {
-                items.push(item("Sessions", name, ""));
+            for name in best_first(s.sessions.list(), |n| rank_words(pattern, &[n])) {
+                items.push(item("Sessions", &name, ""));
             }
         }
         items
@@ -339,24 +342,14 @@ fn open_category(category: &str, pattern: &str) -> Vec<Completion> {
                 .collect()
         }
         "quickmarks" => with(|s| {
-            let marks = s
-                .quickmarks
-                .iter()
-                .filter(|(n, u)| matches(pattern, &[n, u]))
-                .collect();
-            most_used(s, marks, |m| m.1)
+            matching_marks(s, s.quickmarks.iter(), pattern, |m| m.1)
                 .into_iter()
                 .map(|(name, url)| with_icon(item("Quickmarks", url, name), url))
                 .collect()
         })
         .unwrap_or_default(),
         "bookmarks" => with(|s| {
-            let marks = s
-                .bookmarks
-                .iter()
-                .filter(|(u, t)| matches(pattern, &[u, t]))
-                .collect();
-            most_used(s, marks, |m| m.0)
+            matching_marks(s, s.bookmarks.iter(), pattern, |m| m.0)
                 .into_iter()
                 .map(|(url, title)| with_icon(item("Bookmarks", url, title), url))
                 .collect()

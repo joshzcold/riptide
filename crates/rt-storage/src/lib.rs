@@ -68,30 +68,3 @@ impl Storage {
         errors
     }
 }
-
-/// qutebrowser-style matching: every word appears somewhere in the fields,
-/// in any order, ignoring case.
-pub fn matches(pattern: &str, fields: &[&str]) -> bool {
-    let haystack = fields.join(" ").to_lowercase();
-    pattern
-        .split_whitespace()
-        .all(|word| haystack.contains(&word.to_lowercase()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn matching_is_word_based() {
-        assert!(matches("", &["anything"]));
-        assert!(matches(
-            "rust DOCS",
-            &["https://doc.rust-lang.org", "Rust Docs"]
-        ));
-        assert!(!matches(
-            "rust python",
-            &["https://doc.rust-lang.org", "Rust Docs"]
-        ));
-    }
-}

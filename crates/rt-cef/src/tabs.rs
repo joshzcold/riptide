@@ -4,6 +4,7 @@
 use cef::*;
 use rt_core::Command;
 use rt_core::command::{TabMoveTarget, TabTarget};
+use rt_core::completion::{best_first, rank_words};
 use rt_core::engine::Level;
 use rt_core::tabs::{Position, SelectOnRemove, StackDirection, resolve_index};
 
@@ -816,34 +817,39 @@ pub fn remember_open_tabs(s: &shell::Shell) {
     OPEN_TABS.with(|o| *o.borrow_mut() = tabs);
 }
 
-/// Whether an open tab matches what was typed: a number is a tab in the
-/// current window, `w/t` a position, and every other word must appear in
-/// the title or URL.
-fn tab_matches(t: &OpenTab, words: &[String]) -> bool {
-    let hay = format!("{} {}", t.title, t.url).to_lowercase();
-    words.iter().all(|w| {
-        if let Ok(n) = w.parse::<usize>() {
-            return t.current_window && t.tab == n;
-        }
-        w.starts_with(&format!("{}/", t.window))
+/// How well an open tab matches what was typed, as [`rank_words`] ranks it:
+/// a number is a tab in the current window, `w/t` a position, and every
+/// other word must match the title or URL.
+fn tab_rank(t: &OpenTab, words: &[String]) -> Option<u8> {
+    words.iter().try_fold(0, |worst, w| {
+        let rank = if let Ok(n) = w.parse::<usize>() {
+            (t.current_window && t.tab == n).then_some(0)?
+        } else if w.starts_with(&format!("{}/", t.window))
             && format!("{}/{}", t.window, t.tab).starts_with(w.as_str())
-            || hay.contains(w.as_str())
+        {
+            0
+        } else {
+            rank_words(w, &[&t.title, &t.url])?
+        };
+        Some(worst.max(rank))
     })
 }
 
 /// Completions for `:tab-select` (`gt`): the current window's tabs first,
-/// as plain tab numbers, then other windows' as `window/tab`, narrowed by
-/// [`tab_matches`]. `others_only` is for `:tab-take`.
+/// as plain tab numbers, then other windows' as `window/tab`, best
+/// [`tab_rank`] first. `others_only` is for `:tab-take`.
 pub fn completions(pattern: &str, others_only: bool) -> Vec<rt_core::completion::Completion> {
     let words: Vec<String> = pattern.split_whitespace().map(str::to_lowercase).collect();
     OPEN_TABS.with(|o| {
         let tabs = o.borrow();
         let (current, others): (Vec<&OpenTab>, Vec<&OpenTab>) =
             tabs.iter().partition(|t| t.current_window);
-        current
+        let candidates = current
             .into_iter()
             .chain(others)
-            .filter(|t| !(others_only && t.current_window) && tab_matches(t, &words))
+            .filter(|t| !(others_only && t.current_window));
+        best_first(candidates, |t| tab_rank(t, &words))
+            .into_iter()
             .map(|t| rt_core::completion::Completion {
                 icon: crate::storage::completion_icon(&t.url),
                 time: None,
@@ -864,8 +870,8 @@ pub fn completions(pattern: &str, others_only: bool) -> Vec<rt_core::completion:
     })
 }
 
-/// `:tab-select`: `window/tab` from completion, or the first tab whose title
-/// or URL contains every word of `target`.
+/// `:tab-select`: `window/tab` from completion, or the tab whose title and
+/// URL best match the words of `target`.
 fn select_tab(target: &str) {
     let found = OPEN_TABS.with(|o| {
         let tabs = o.borrow();
@@ -884,10 +890,10 @@ fn select_tab(target: &str) {
                 let words: Vec<String> = target.split_whitespace().map(str::to_lowercase).collect();
                 let (current, others): (Vec<&OpenTab>, Vec<&OpenTab>) =
                     tabs.iter().partition(|t| t.current_window);
-                current
-                    .into_iter()
-                    .chain(others)
-                    .find(|t| !words.is_empty() && tab_matches(t, &words))
+                let candidates = current.into_iter().chain(others);
+                best_first(candidates, |t| tab_rank(t, &words))
+                    .first()
+                    .filter(|_| !words.is_empty())
                     .map(|t| (t.window, t.tab))
             }
         }
