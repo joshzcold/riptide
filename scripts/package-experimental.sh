@@ -3,7 +3,7 @@
 #   scripts/package-experimental.sh [version]
 #     -> dist/riptide-<version>-macos-<arch>.dmg (riptide.app), or on Windows
 #        -windows-<arch>.zip and the installer, -windows-<arch>-setup.exe
-# Both start on CI but are untested by hand; the macOS app is ad-hoc signed.
+# Both start on CI, and Apple silicon releases are tried by hand; the macOS app is ad-hoc signed.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -46,6 +46,7 @@ else
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
 status="starts, but is untested by hand"
+[[ $os-$arch == macos-aarch64 ]] && status="is tried by hand before each release"
 cat >"$stage/EXPERIMENTAL.txt" <<EOF
 This $os build of riptide $version is experimental and $status.
 Linux is the only supported platform for now. See https://joshzcold.github.io/riptide/
