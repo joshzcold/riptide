@@ -39,6 +39,28 @@ fn focusing_a_field_enters_insert_mode_and_escape_leaves_it() {
 
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
+fn an_iframe_loading_keeps_insert_mode_and_a_new_page_leaves_it() {
+    let b = Browser::start("page.html");
+    b.run("hint inputs");
+    b.wait_mode("hint");
+    b.keys("a");
+    b.wait_mode("insert");
+    // Pages such as Gemini add iframes while you type.
+    b.eval(
+        "window.framed = 'no'; const f = document.createElement('iframe'); \
+         f.onload = () => { framed = 'yes' }; f.src = 'data:text/html,late'; \
+         document.body.append(f); 'ok'",
+    );
+    b.wait_eval("framed", "yes");
+    b.keys("abc");
+    b.wait_eval("document.getElementById('f').value", "abc");
+    assert_eq!(b.state().mode, "insert");
+    b.run("reload");
+    b.wait_mode("normal");
+}
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
 fn passthrough_sends_letters_to_the_page() {
     let b = Browser::start("page.html");
     b.eval("window.keys = ''; addEventListener('keydown', e => { keys += e.key }); 'ok'");
