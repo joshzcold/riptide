@@ -31,14 +31,31 @@ fn call(code: &str, done: impl FnOnce(Result<String, String>) + 'static) {
         .and_then(|id| browser.frame_by_identifier(Some(&CefString::from(id.as_str()))))
         .filter(|f| f.is_valid() != 0)
         .or_else(|| browser.main_frame());
-    let Some(frame) = frame else {
-        return;
-    };
-    eval::eval_frame(
-        &frame,
-        &format!("{CARET_JS}\nwindow.__rtCaret.{code}"),
-        done,
-    );
+    if let Some(frame) = frame {
+        call_in(&frame, code, done);
+    }
+}
+
+fn call_in(frame: &Frame, code: &str, done: impl FnOnce(Result<String, String>) + 'static) {
+    eval::eval_frame(frame, &format!("{CARET_JS}\nwindow.__rtCaret.{code}"), done);
+}
+
+/// The frame whose selection `:yank selection` takes: caret mode's, else
+/// the focused one, so selections in iframes count.
+pub fn selection_frame(browser: &Browser) -> Option<Frame> {
+    let caret = shell::with(|s| s.engine.mode() == rt_core::Mode::Caret).unwrap_or(false);
+    let id = FRAME.with(|f| f.borrow().clone()).filter(|_| caret);
+    match id {
+        Some(id) => browser.frame_by_identifier(Some(&CefString::from(id.as_str()))),
+        None if caret => browser.main_frame(),
+        None => browser.focused_frame().or_else(|| browser.main_frame()),
+    }
+    .filter(|f| f.is_valid() != 0)
+}
+
+/// The selected text in `frame` as a JSON string, text fields included.
+pub fn selected_text(frame: &Frame, done: impl FnOnce(Result<String, String>) + 'static) {
+    call_in(frame, "text()", done);
 }
 
 /// The frame caret mode starts in: the one asked for, else the focused one.
@@ -89,7 +106,13 @@ pub fn run_command(command: &Command, count: Option<u32>) -> bool {
 
 /// `:yank selection`, to the primary selection with `primary`.
 pub fn yank(primary: bool) {
-    call("text()", move |result| {
+    let Some(frame) = shell::with(|s| s.current_browser())
+        .flatten()
+        .and_then(|b| selection_frame(&b))
+    else {
+        return;
+    };
+    selected_text(&frame, move |result| {
         let text = result
             .ok()
             .and_then(|json| serde_json::from_str::<String>(&json).ok())
