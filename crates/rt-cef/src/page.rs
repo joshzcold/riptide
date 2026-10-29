@@ -281,12 +281,20 @@ pub fn carry_out(plugin: Option<&str>, pages: Option<&[String]>, request: PageRe
             });
         }
         PageRequest::Selection { callback } => {
+            let Some(frame) = crate::caret::selection_frame(&browser) else {
+                return refuse("the page is gone".into());
+            };
+            let frame_url = CefString::from(&frame.url()).to_string();
+            if !allowed(&frame_url, pages) {
+                return refuse(format!(
+                    "may not act on {}, a frame in this page",
+                    rt_core::url::host(&frame_url)
+                ));
+            }
             let plugin = plugin.map(str::to_string);
-            crate::eval::eval(
-                &browser,
-                "JSON.stringify(String(getSelection()))",
-                move |result| answer(plugin.as_deref(), callback, result),
-            );
+            crate::caret::selected_text(&frame, move |result| {
+                answer(plugin.as_deref(), callback, result)
+            });
         }
         PageRequest::FillLogin {
             host,

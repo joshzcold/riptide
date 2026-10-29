@@ -126,6 +126,13 @@
       return "null";
     },
     text() {
+      // getSelection() doesn't see inside text fields; email and number
+      // fields have no selectionStart at all.
+      const el = document.activeElement;
+      if (el && (el.localName === "input" || el.localName === "textarea")
+          && el.selectionStart != null && el.selectionStart !== el.selectionEnd) {
+        return JSON.stringify(el.value.slice(el.selectionStart, el.selectionEnd));
+      }
       return JSON.stringify(sel().toString());
     },
     leave() {
