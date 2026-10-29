@@ -10,8 +10,8 @@ name: release
 #      a version to use instead (until main next changes).
 #   2. Merging that pull request is the release: on the push to main, a
 #      Cargo.toml version with no tag yet is built (build-release.yml: the
-#      Linux tarball, AppImage and .deb, smoke-tested, plus experimental macOS
-#      and Windows packages), tagged and published with SHA256SUMS, build
+#      Linux tarball, AppImage and .deb, smoke-tested, plus macOS and
+#      Windows packages), tagged and published with SHA256SUMS, build
 #      provenance and the changelog section.
 #   3. A second pull request points the AUR and Nix packages at the new
 #      tarball (not for pre-releases).
@@ -191,7 +191,7 @@ jobs:
 
           - **Linux (x86_64):** the `.deb` for Ubuntu 24.04+ and Debian 13+ (`sudo apt install ./riptide_*.deb`), the `.AppImage`, or the `.tar.gz` (unpack and run `riptide`). See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for the sandbox setup.
           - **Windows:** an experimental installer (`-setup.exe`) or `.zip`; the build starts but is untested by hand.
-          - **macOS:** an experimental `.dmg`, `-aarch64` for Apple silicon or `-x86_64` for Intel; drag riptide onto Applications. It isn't notarized, so the first start needs **System Settings → Privacy & Security → Open Anyway**.
+          - **macOS:** a `.dmg`, `-aarch64` for Apple silicon (supported) or `-x86_64` for Intel (experimental, untested by hand); drag riptide onto Applications. It isn't notarized, so the first start needs **System Settings → Privacy & Security → Open Anyway**.
           - Check a download with `sha256sum -c SHA256SUMS --ignore-missing`, or its build provenance with `gh attestation verify <file> --repo joshzcold/riptide`.
           EOF
       - name: Build provenance
