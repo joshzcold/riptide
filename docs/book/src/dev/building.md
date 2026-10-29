@@ -1,6 +1,6 @@
 # Building
 
-Requirements: Rust 1.88+ (edition 2024). The smoke test also needs `Xvfb` and `xdotool`.
+Requirements: Rust 1.88+ (edition 2024), `cmake` and `ninja` (`./task setup` says how to install them if they're missing). The smoke and end-to-end tests also need `Xvfb` and `xdotool`, so they only run on Linux; on other systems `./task check` skips them and CI runs them.
 
 Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your installed `task` if there is one. Otherwise it downloads a pinned, checksum-verified release into `.bin/`. Arguments pass straight through.
 
@@ -12,7 +12,9 @@ Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your i
 
 `./task setup` reads the pinned `cef` crate version from `Cargo.lock` and fetches the matching CEF build. It skips the download when that version is already installed, and `build`, `run` and `lint` run it automatically. Set `CEF_PATH` to keep the binaries somewhere else.
 
-The build copies `libcef.so` and Chromium's resources next to the binary. The binary finds them through an `$ORIGIN` rpath.
+On macOS, CEF needs the browser inside an app bundle. `./task bundle` makes a release build at `dist/riptide.app`, and `./task install` copies it to `/Applications`, keeping the previous app as `riptide.app.bak`. Quit riptide before installing.
+
+On Linux, the build copies `libcef.so` and Chromium's resources next to the binary. The binary finds them through an `$ORIGIN` rpath.
 
 Logging goes to stderr and uses the `RT_LOG` filter, e.g. `RT_LOG=rt_cef=trace ./task run`. Browser data and `cef.log` live in `~/.local/share/riptide/`.
 
