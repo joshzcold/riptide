@@ -21,12 +21,30 @@ tasks:
 
   setup:
     desc: Download the CEF binaries that match the pinned cef crate into $CEF_PATH
+    deps: [tools]
     status:
       - grep -q "cef_binary_{{.CEF_BUILD}}+" "$CEF_PATH/archive.json"
     cmds:
       - rm -rf "{{.CEF_RS_DIR}}"
       - git clone --depth 1 --branch "cef-v{{.CEF_CRATE_VERSION}}" https://github.com/tauri-apps/cef-rs "{{.CEF_RS_DIR}}"
       - cd "{{.CEF_RS_DIR}}" && cargo run -q -p export-cef-dir -- --force "$CEF_PATH"
+
+  tools:
+    internal: true
+    silent: true
+    cmds:
+      # cef-dll-sys builds its C wrapper with these, and panics without them.
+      - |
+        missing=""
+        for tool in cmake ninja; do command -v "$tool" >/dev/null || missing="$missing $tool"; done
+        if [ -n "$missing" ]; then
+          echo "Missing build tools:$missing" >&2
+          case "$(uname)" in
+            Darwin) echo "Install them with: brew install$missing" >&2 ;;
+            *) echo "Install them with your package manager (Debian/Ubuntu: apt install cmake ninja-build)" >&2 ;;
+          esac
+          exit 1
+        fi
 
   build:
     desc: Debug build
@@ -57,6 +75,28 @@ tasks:
     deps: [release]
     cmds:
       - scripts/package-linux.sh --deb
+
+  bundle:
+    desc: Release build as dist/riptide.app (macOS)
+    platforms: [darwin]
+    deps: [release]
+    cmds:
+      - scripts/bundle-macos.sh target/release/riptide "$CEF_PATH" dist
+
+  install:
+    desc: Bundle and install into /Applications, keeping the previous app as riptide.app.bak (macOS)
+    platforms: [darwin]
+    deps: [bundle]
+    cmds:
+      - |
+        if pgrep -qf '^/Applications/riptide.app/Contents/MacOS/riptide'; then
+          echo "riptide is running; quit it first, then run task install again" >&2
+          exit 1
+        fi
+      - rm -rf /Applications/riptide.app.bak
+      - if [ -d /Applications/riptide.app ]; then mv /Applications/riptide.app /Applications/riptide.app.bak; fi
+      - ditto dist/riptide.app /Applications/riptide.app
+      - /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/riptide.app
 
   changelog:
     desc: 'Regenerate CHANGELOG.md; for a release: task changelog -- --tag v0.2.0'
@@ -114,12 +154,16 @@ tasks:
       - scripts/tool.sh cargo-deny check --hide-inclusion-graph bans licenses sources
 
   check:
-    desc: Everything CI would run - lint, unit tests, e2e tests, smoke test
+    desc: Everything CI would run - lint, unit tests, e2e tests, smoke test (e2e and smoke only on Linux)
     cmds:
       - task: lint
       - task: test
       - task: e2e
+        if: '[ "$(uname)" = Linux ]'
       - task: smoke
+        if: '[ "$(uname)" = Linux ]'
+      - cmd: echo "Skipped e2e and smoke tests; they need Xvfb, so they run on Linux and in CI"
+        platforms: [darwin, windows]
 
   hooks:
     desc: Install a git hook that checks commit messages (Conventional Commits)
