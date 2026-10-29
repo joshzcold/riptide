@@ -550,6 +550,8 @@ const COMMAND_DEFAULTS: &[(&str, &str)] = &[
     ("<Alt-Backspace>", "rl-backward-kill-word"),
     ("<Ctrl-y>", "rl-yank"),
     ("<Ctrl-v>", "rl-paste"),
+    // macOS's paste key.
+    ("<Meta-v>", "rl-paste"),
     ("<Shift-Insert>", "rl-paste --sel"),
 ];
 

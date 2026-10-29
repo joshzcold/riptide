@@ -177,7 +177,9 @@ Quickmarks, bookmarks, sessions and open tabs (`:tab-select`) match the same way
 | `completion.use_best_match` | `Return` on an unknown command runs the first one it starts, so `:rel` runs `:reload` |
  `:set`, `:quickmark-load`, `:bookmark-load` and `:session-load` complete their own names. `:session-save [name]`, `:session-load name` and `:session-delete name` manage sessions. With `auto_save.session = true`, the tabs are saved on quit and restored at the next start.
 
-The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, `Ctrl-v` to paste the clipboard and `Shift-Insert` the primary selection, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
+The command line and prompts support readline keys (`Ctrl-a/e/u/k/w/h`, `Alt-b`/`Alt-f` by word, `Alt-d`/`Alt-Backspace` to delete a word, `Ctrl-y` to paste what was last deleted, `Ctrl-v` or `Meta-v` (Cmd+V) to paste the clipboard and `Shift-Insert` the primary selection, arrows), history (`Up`/`Down`), command chaining with `;;`, and completion of command names.
+
+On macOS, riptide has the standard Edit menu, so Cmd+Z, Shift+Cmd+Z, Cmd+X, Cmd+C, Cmd+V and Cmd+A work in pages as in other apps, including when a key remapper such as Karabiner-Elements sends the Cmd. Pages see the key first, so web apps that handle these keys themselves still do.
 
 To clean up what completion offers, select an entry with `Tab` and press `Ctrl-d` (`:completion-item-del`). It deletes history entries, quickmarks, bookmarks and sessions, and closes tabs listed by `T`. `Ctrl-c` (`:completion-item-yank`) copies the selected entry, and `Ctrl-Shift-c` copies it to the primary selection.
 

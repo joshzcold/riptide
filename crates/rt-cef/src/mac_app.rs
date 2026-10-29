@@ -1,6 +1,7 @@
 //! macOS: Chromium needs the shared `NSApplication` to be one that tracks
 //! whether it is inside `sendEvent:` (`CefAppProtocol`), before CEF starts.
-//! It also takes the links macOS opens in the default browser.
+//! It also takes the links macOS opens in the default browser, and has the
+//! standard Edit menu that macOS's editing shortcuts go through.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -55,6 +56,7 @@ define_class!(
         fn finish_launching(&self) {
             // SAFETY: NSApplication's own finishLaunching.
             let () = unsafe { msg_send![super(self), finishLaunching] };
+            install_menu(self);
             // AppKit installs its own handler in finishLaunching, so ours goes after it.
             // SAFETY: we are the shared application and live as long as the process.
             unsafe {
@@ -90,6 +92,51 @@ define_class!(
         }
     }
 );
+
+fn ns_string(text: &str) -> *mut AnyObject {
+    let text = std::ffi::CString::new(text).unwrap_or_default();
+    // SAFETY: a NUL-terminated UTF-8 string, copied by NSString.
+    unsafe { msg_send![class!(NSString), stringWithUTF8String: text.as_ptr()] }
+}
+
+/// The standard Edit menu, so Cmd+Z, Cmd+X, Cmd+C, Cmd+V and Cmd+A reach the
+/// focused page through AppKit's responder chain.
+fn install_menu(app: &RiptideApplication) {
+    // SAFETY: plain NSMenu and NSMenuItem construction on the main thread; the
+    // menus are retained by their parents and the bar by NSApp.
+    unsafe {
+        let new_menu = |title: &str| -> *mut AnyObject {
+            let menu: *mut AnyObject = msg_send![class!(NSMenu), alloc];
+            msg_send![menu, initWithTitle: ns_string(title)]
+        };
+        let add_submenu = |bar: *mut AnyObject, menu: *mut AnyObject| {
+            let item: *mut AnyObject = msg_send![class!(NSMenuItem), new];
+            let () = msg_send![item, setSubmenu: menu];
+            let () = msg_send![bar, addItem: item];
+        };
+        let bar = new_menu("");
+        // macOS treats the first menu as the application menu.
+        add_submenu(bar, new_menu("riptide"));
+        let edit = new_menu("Edit");
+        for (title, action, key) in [
+            ("Undo", sel!(undo:), "z"),
+            ("Redo", sel!(redo:), "Z"),
+            ("Cut", sel!(cut:), "x"),
+            ("Copy", sel!(copy:), "c"),
+            ("Paste", sel!(paste:), "v"),
+            ("Select All", sel!(selectAll:), "a"),
+        ] {
+            let _: *mut AnyObject = msg_send![
+                edit,
+                addItemWithTitle: ns_string(title),
+                action: action,
+                keyEquivalent: ns_string(key)
+            ];
+        }
+        add_submenu(bar, edit);
+        let () = msg_send![app, setMainMenu: bar];
+    }
+}
 
 /// Make `RiptideApplication` the shared application. Call on the main thread,
 /// after the framework is loaded (it defines the protocols) and before CEF starts.
