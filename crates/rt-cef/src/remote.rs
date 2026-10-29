@@ -147,9 +147,29 @@ wrap_task! {
 
     impl Task {
         fn execute(&self) {
-            if let Some(request) = self.request.borrow_mut().take() {
+            let Some(request) = self.request.borrow_mut().take() else { return };
+            // A link that launched the browser can arrive before its first window.
+            let ready = shell::with(|s| s.windows.iter().any(|w| w.content.is_some()));
+            if ready == Some(true) {
                 handle(request);
+            } else {
+                let mut task = HandleRequest::new(RefCell::new(Some(request)));
+                post_delayed_task(ThreadId::UI, Some(&mut task), 50);
             }
         }
     }
+}
+
+/// Open links macOS sends as a "get URL" Apple Event, as if passed by another process.
+#[cfg(target_os = "macos")]
+pub fn open_urls(urls: Vec<String>) {
+    let request = Request {
+        version: remote::PROTOCOL_VERSION,
+        cwd: std::env::current_dir().unwrap_or_default(),
+        args: urls,
+        target: None,
+        test: None,
+    };
+    let mut task = HandleRequest::new(RefCell::new(Some(request)));
+    post_task(ThreadId::UI, Some(&mut task));
 }
