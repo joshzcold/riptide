@@ -10,6 +10,8 @@ riptide ':tab-focus 1' ':reload'   # arguments starting with ':' run as commands
 
 With several windows open, URLs go to the one you used last; `new_instance_open_target_window` can pick the `first-opened` or `last-opened` window instead.
 
+On macOS, links opened while riptide is the default browser (System Settings → Desktop & Dock → Default web browser) are handled the same way, including the link that starts it.
+
 The browser listens on a Unix socket in `$XDG_RUNTIME_DIR/riptide/` (or the data directory), inside a `0700` directory and with `0600` permissions, so only your user can send commands. On Windows it's a named pipe, `\\.\pipe\riptide-<id>`, that only your user may open and that refuses other machines; `riptide` only sends to a pipe your own user's process holds, and says so if another user's does.
 
 ## Internal pages
