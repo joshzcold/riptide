@@ -66,6 +66,11 @@ fn ctrl_v_pastes_the_clipboard_into_the_command_line() {
     b.wait_until("the URL is pasted", |s| {
         s.status["command_line"]["text"].as_str() == Some(&format!(":open {url}"))
     });
+    // Cmd+V, as macOS users paste.
+    b.keys("<Escape>:open <Meta-v>");
+    b.wait_until("the URL is pasted with Meta-v", |s| {
+        s.status["command_line"]["text"].as_str() == Some(&format!(":open {url}"))
+    });
 }
 
 #[test]

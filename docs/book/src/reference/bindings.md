@@ -194,6 +194,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Escape>` | `mode-leave` |
 | `<Home>` | `rl-beginning-of-line` |
 | `<Left>` | `rl-backward-char` |
+| `<Meta-v>` | `rl-paste` |
 | `<Return>` | `command-accept` |
 | `<Right>` | `rl-forward-char` |
 | `<Shift-Insert>` | `rl-paste --sel` |
@@ -243,6 +244,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Escape>` | `mode-leave` |
 | `<Home>` | `rl-beginning-of-line` |
 | `<Left>` | `rl-backward-char` |
+| `<Meta-v>` | `rl-paste` |
 | `<Return>` | `prompt-accept` |
 | `<Right>` | `rl-forward-char` |
 | `<Shift-Insert>` | `rl-paste --sel` |
