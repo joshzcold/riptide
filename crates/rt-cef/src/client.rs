@@ -634,7 +634,36 @@ fn handle_key_event(event: &KeyEvent) -> bool {
         "key"
     );
     shell::apply(outcome.effects);
+    if !outcome.consumed && cfg!(target_os = "macos") && edit_shortcut(key) {
+        shell::with(|s| s.suppress_char = true);
+        return true;
+    }
     outcome.consumed
+}
+
+/// macOS: Cmd+C, Cmd+V and Cmd+X run the focused frame's copy, paste and cut,
+/// which still fire the page's clipboard events. AppKit's native path ignores
+/// a Cmd injected by a key remapper (#137).
+fn edit_shortcut(key: rt_core::Key) -> bool {
+    let rt_core::KeyCode::Char(c) = key.code else {
+        return false;
+    };
+    if !key.mods.meta || key.mods.ctrl || key.mods.alt || key.mods.shift {
+        return false;
+    }
+    let Some(frame) = shell::with(|s| s.current_browser())
+        .flatten()
+        .and_then(|b| b.focused_frame().or_else(|| b.main_frame()))
+    else {
+        return false;
+    };
+    match c {
+        'c' => frame.copy(),
+        'v' => frame.paste(),
+        'x' => frame.cut(),
+        _ => return false,
+    }
+    true
 }
 
 wrap_display_handler! {
