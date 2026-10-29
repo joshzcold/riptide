@@ -75,7 +75,7 @@ See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for 
 
 ## Install
 
-Each [release](https://github.com/joshzcold/riptide/releases/latest) has Linux x86_64 packages, with `SHA256SUMS` and build provenance:
+Each [release](https://github.com/joshzcold/riptide/releases/latest) has x86_64 packages for Linux, macOS and Windows, and Apple silicon ones for macOS, with `SHA256SUMS` and build provenance:
 
 | On | Get |
 |---|---|
@@ -83,8 +83,10 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has Linux x
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide`, or `github:joshzcold/riptide#riptide-source` to build it from source |
 | **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |
+| **macOS** (experimental) | `brew install --cask joshzcold/riptide/riptide`, or the `.dmg` for your Mac (`aarch64` for Apple silicon, `x86_64` for Intel) |
+| **Windows** (experimental) | the `-setup.exe` installer, or the `.zip` (unpack it and run `riptide.exe`) |
 
-The [`nightly`](https://github.com/joshzcold/riptide/releases/tag/nightly) pre-release is rebuilt from `main` every night it changes. [Installing](https://joshzcold.github.io/riptide/guide/installing.html) covers the sandbox setup.
+The [`nightly`](https://github.com/joshzcold/riptide/releases/tag/nightly) pre-release is rebuilt from `main` every night it changes. [Installing](https://joshzcold.github.io/riptide/guide/installing.html) covers the Linux sandbox setup and opening the unnotarized macOS app.
 
 ## Documentation
 
