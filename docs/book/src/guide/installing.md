@@ -25,9 +25,9 @@ The Windows build starts, and CI checks that it opens a window and quits, but it
 
 Uninstalling keeps your config and profile (see [Where things live](#where-things-live)).
 
-## macOS (experimental)
+## macOS
 
-CI checks that the macOS app opens a window and quits, and since 0.12.0 each release is tried by hand on an Apple silicon Mac. The Intel build hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg` for Apple silicon Macs and `riptide-X.Y.Z-macos-x86_64.dmg` for Intel Macs. Open it and drag riptide onto Applications. For a `riptide` command too, link to the launcher inside the app (not to the binary, which finds CEF relative to itself):
+macOS on Apple silicon is supported and used day to day, and since 0.12.0 each release is tried by hand on it. CI checks that the app opens a window and quits. The Intel build hasn't been used by hand yet. Each release and nightly has `riptide-X.Y.Z-macos-aarch64.dmg` for Apple silicon Macs and `riptide-X.Y.Z-macos-x86_64.dmg` for Intel Macs. Open it and drag riptide onto Applications. For a `riptide` command too, link to the launcher inside the app (not to the binary, which finds CEF relative to itself):
 
 ```sh
 ln -s /Applications/riptide.app/Contents/Resources/bin/riptide /usr/local/bin/riptide
