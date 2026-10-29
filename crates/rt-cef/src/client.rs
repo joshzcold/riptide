@@ -801,34 +801,40 @@ wrap_load_handler! {
                 return;
             }
             let window = browser.as_deref().and_then(crate::tabs::window_of_crashed);
-            let effects = shell::with_tab(browser, |s, index, current| {
-                let tab = s.tabs.get_mut(index)?;
+            shell::with_tab(browser, |s, index, current| {
+                let Some(tab) = s.tabs.get_mut(index) else { return };
                 tab.can_go_back = can_go_back != 0;
                 tab.can_go_forward = can_go_forward != 0;
                 tab.search_match = None;
                 tab.scroll = None;
                 if is_loading == 0 {
                     tab.progress = None;
-                    return None;
+                    return;
                 }
                 tab.progress = Some(0.0);
                 tab.load_error = false;
                 tab.crashed = None;
-                current.then(|| s.engine.load_started())
-            })
-            .flatten();
+                if current {
+                    s.engine.load_started();
+                }
+            });
             if is_loading != 0
                 && let Some(window) = window
             {
                 crate::tabs::show_current_in(window, true);
             }
-            shell::apply(effects.unwrap_or_default());
         }
 
         fn on_load_start(&self, browser: Option<&mut Browser>, frame: Option<&mut Frame>, _transition_type: TransitionType) {
             if self.role == Role::Tab
                 && let Some(frame) = frame.filter(|f| f.is_main() != 0)
             {
+                // Loading state also changes when an iframe loads, which must not
+                // end insert mode, so only a new main-frame page counts.
+                let effects = shell::with_tab(browser, |s, _, current| {
+                    current.then(|| s.engine.page_started())
+                });
+                shell::apply(effects.flatten().unwrap_or_default());
                 crate::userstyle::inject(frame);
                 let url = CefString::from(&frame.url()).to_string();
                 crate::lua::emit("load_started", &[("url", &url)]);

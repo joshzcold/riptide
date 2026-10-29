@@ -1000,11 +1000,16 @@ impl Engine {
         effects
     }
 
-    pub fn load_started(&mut self) -> Vec<Effect> {
-        let mut effects = Vec::new();
+    /// The current tab started loading, perhaps only an iframe.
+    pub fn load_started(&mut self) {
         if !std::mem::take(&mut self.messages).is_empty() {
             self.dirty = true;
         }
+    }
+
+    /// The current tab started loading a new page in its main frame.
+    pub fn page_started(&mut self) -> Vec<Effect> {
+        let mut effects = Vec::new();
         let leave_insert =
             self.mode == Mode::Insert && self.settings.bool("input.insert_mode.leave_on_load");
         let leave_hints = self.mode == Mode::Hint && self.settings.bool("hints.leave_on_load");
