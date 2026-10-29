@@ -273,6 +273,23 @@ jobs:
           gh pr merge "$pr" --merge --admin --match-head-commit "$(git rev-parse HEAD)"
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
           echo "Merged #$pr, which publishes the AUR packages." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/create-github-app-token@v2
+        if: env.PUBLISH == 'true' && !contains(needs.plan.outputs.version, '-')
+        id: tap
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.CEF_UPDATE_APP_ID }}
+          private-key: ${{ secrets.CEF_UPDATE_APP_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-riptide
+      - name: Update the Homebrew cask
+        if: steps.tap.outputs.token != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.tap.outputs.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY_OWNER/homebrew-riptide/dispatches" -f event_type=release
+          echo "Asked joshzcold/homebrew-riptide to update the cask." >> "$GITHUB_STEP_SUMMARY"
       - name: Notify
         if: env.PUBLISH == 'true'
         env:
@@ -280,7 +297,7 @@ jobs:
           NTFY_ACCESS_TOKEN: ${{ secrets.NTFY_ACCESS_TOKEN }}
         run: |
           scripts/notify.sh "riptide v$VERSION is released" \
-            "The release is published, and the AUR and Nix packages pull request is merged (pre-releases have none)." \
+            "The release is published, the AUR and Nix packages pull request is merged and the Homebrew cask is updating (pre-releases have none)." \
             "https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION" tada
       - name: Keep the files (dry run)
         if: env.PUBLISH != 'true'
