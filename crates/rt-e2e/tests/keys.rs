@@ -60,3 +60,18 @@ fn a_field_focused_on_load_takes_insert_mode_only_with_auto_load() {
     b.run("reload");
     b.wait_mode("insert");
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn clicking_a_field_the_page_focused_enters_insert_mode() {
+    let b = Browser::start("autofocus.html");
+    b.wait_eval("String(document.activeElement.localName)", "input");
+    assert_eq!(b.state().mode, "normal");
+    // Focus doesn't move, so only the click itself can say so.
+    b.run("hint inputs");
+    b.wait_mode("hint");
+    b.keys("a");
+    b.wait_mode("insert");
+    b.keys("abc");
+    b.wait_eval("document.activeElement.value", "abc");
+}

@@ -318,6 +318,7 @@ wrap_render_process_handler! {
             if !may_send {
                 if !url.starts_with("riptide://") {
                     install_share_watch(context);
+                    install_refocus(context);
                     install_media(context, &url);
                     run_greasemonkey(frame, context, &url);
                     if ROCKER.with(std::cell::Cell::get) {
@@ -354,14 +355,7 @@ wrap_render_process_handler! {
             let Some(frame) = frame else { return };
             let user = !editable
                 || eval(&frame, &CefString::from(USER_ACTIVATION_JS)).as_deref() == Ok("true");
-            let Some(mut message) = process_message_create(Some(&CefString::from(FOCUS_MESSAGE))) else {
-                return;
-            };
-            if let Some(args) = message.argument_list() {
-                args.set_bool(0, editable.into());
-                args.set_bool(1, user.into());
-            }
-            frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
+            send_focus(&frame, editable, user);
         }
 
         fn on_process_message_received(
@@ -516,6 +510,30 @@ const ROCKER_JS: &str = r#"(function (go) {
   addEventListener("click", (e) => { if (used) { stop(e); if (!left && !right) used = false; } }, true);
   addEventListener("contextmenu", stop, true);
 })"#;
+
+/// A click on the field that already has focus, as on a page that focused
+/// it by itself, moves no focus. This tells the browser about it instead.
+const REFOCUS_JS: &str = r#"(function (clicked) {
+  const editable = (el) => el.isContentEditable
+    || el.localName === "textarea"
+    || (el.localName === "input" && !/^(button|checkbox|color|file|hidden|image|radio|range|reset|submit)$/.test(el.type));
+  addEventListener("mousedown", (e) => {
+    if (!e.isTrusted || e.button !== 0) return;
+    let active = document.activeElement;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    if (active && editable(active) && e.composedPath().includes(active)) clicked();
+  }, true);
+})"#;
+
+fn install_refocus(context: &V8Context) {
+    let mut handler = RtRefocusHandler::new();
+    install_with(
+        context,
+        REFOCUS_JS,
+        "riptide:refocus",
+        v8_value_create_function(Some(&CefString::from("clicked")), Some(&mut handler)),
+    );
+}
 
 fn install_rocker(context: &V8Context) {
     let mut handler = RtRockerHandler::new();
@@ -855,6 +873,41 @@ wrap_v8_handler! {
             1
         }
     }
+}
+
+// The refocus listener's way to the browser.
+wrap_v8_handler! {
+    struct RtRefocusHandler {}
+
+    impl V8Handler {
+        fn execute(
+            &self,
+            _name: Option<&CefString>,
+            _object: Option<&mut V8Value>,
+            _arguments: Option<&[Option<V8Value>]>,
+            _retval: Option<&mut Option<V8Value>>,
+            _exception: Option<&mut CefString>,
+        ) -> ::std::os::raw::c_int {
+            if let Some(frame) = v8_context_get_current_context().and_then(|c| c.frame())
+                && eval(&frame, &CefString::from(USER_ACTIVATION_JS)).as_deref() == Ok("true")
+            {
+                send_focus(&frame, true, true);
+            }
+            1
+        }
+    }
+}
+
+/// Send [`FOCUS_MESSAGE`] for `frame`.
+fn send_focus(frame: &Frame, editable: bool, user: bool) {
+    let Some(mut message) = process_message_create(Some(&CefString::from(FOCUS_MESSAGE))) else {
+        return;
+    };
+    if let Some(args) = message.argument_list() {
+        args.set_bool(0, editable.into());
+        args.set_bool(1, user.into());
+    }
+    frame.send_process_message(ProcessId::BROWSER, Some(&mut message));
 }
 
 // The rocker listener's way to the browser.
