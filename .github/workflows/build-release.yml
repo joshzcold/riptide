@@ -83,10 +83,10 @@ jobs:
             dist/*.deb
           retention-days: 3
 
-  # Experimental: untested by hand (M10), so a failure here doesn't stop a
-  # release; the artifact is simply left out.
+  # A failure here doesn't stop a release, since the free macOS runners are
+  # sometimes unavailable; the artifact is simply left out.
   other:
-    name: ${{ matrix.os }} (experimental package)
+    name: ${{ matrix.os }} (package)
     continue-on-error: true
     strategy:
       fail-fast: false
@@ -116,7 +116,7 @@ jobs:
           if (!(Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
       - name: Package
         shell: bash
-        run: scripts/package-experimental.sh "${{ inputs.version }}"
+        run: scripts/package-macos-windows.sh "${{ inputs.version }}"
       # Install for this user, start the installed copy, then uninstall.
       - name: Try the installer
         if: matrix.platform == 'windows'

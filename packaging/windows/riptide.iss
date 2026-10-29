@@ -1,4 +1,4 @@
-; The Windows installer, built by scripts/package-experimental.sh:
+; The Windows installer, built by scripts/package-macos-windows.sh:
 ;   iscc -DVersion=0.9.0 -DArch=x86_64 -DSource=dist\riptide-0.9.0-windows-x86_64 -DOutput=dist riptide.iss
 ; It installs for the current user without admin rights, or for everyone when
 ; run as admin, and can list riptide in Windows' default apps.

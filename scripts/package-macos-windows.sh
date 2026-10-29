@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Packs an experimental macOS or Windows release build with its CEF runtime:
-#   scripts/package-experimental.sh [version]
+# Packs a macOS or Windows release build with its CEF runtime:
+#   scripts/package-macos-windows.sh [version]
 #     -> dist/riptide-<version>-macos-<arch>.dmg (riptide.app), or on Windows
 #        -windows-<arch>.zip and the installer, -windows-<arch>-setup.exe
 # Both start on CI, and Apple silicon releases are tried by hand; the macOS app is ad-hoc signed.
@@ -14,7 +14,7 @@ version=${1:-$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":
 case $(uname -s) in
     Darwin) os=macos exe=riptide ;;
     MINGW* | MSYS* | CYGWIN*) os=windows exe=riptide.exe ;;
-    *) echo "package-experimental.sh: for macOS and Windows; use package-linux.sh on Linux" >&2; exit 1 ;;
+    *) echo "package-macos-windows.sh: for macOS and Windows; use package-linux.sh on Linux" >&2; exit 1 ;;
 esac
 case $(uname -m) in
     arm64 | aarch64) arch=aarch64 ;;
@@ -22,7 +22,7 @@ case $(uname -m) in
 esac
 name=riptide-$version-$os-$arch
 
-[[ -f $build/$exe ]] || { echo "package-experimental.sh: run 'cargo build --release' first" >&2; exit 1; }
+[[ -f $build/$exe ]] || { echo "package-macos-windows.sh: run 'cargo build --release' first" >&2; exit 1; }
 if [[ -n ${CEF_PATH:-} && -f $CEF_PATH/archive.json ]]; then
     cef=$CEF_PATH
 else
@@ -45,12 +45,12 @@ else
     cp -R "$cef/locales" "$stage/"
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
-status="starts, but is untested by hand"
-[[ $os-$arch == macos-aarch64 ]] && status="is tried by hand before each release"
-cat >"$stage/EXPERIMENTAL.txt" <<EOF
-This $os build of riptide $version is experimental and $status.
-Linux is the only supported platform for now. See https://joshzcold.github.io/riptide/
+if [[ $os-$arch != macos-aarch64 ]]; then
+    cat >"$stage/EXPERIMENTAL.txt" <<EOF
+This $os $arch build of riptide $version is experimental: it starts, but is untested by hand.
+Linux and macOS on Apple silicon are supported. See https://joshzcold.github.io/riptide/
 EOF
+fi
 
 if [[ $os == macos ]]; then
     hdiutil create -quiet -volname "riptide $version" -srcfolder "$stage" -ov -format UDZO "dist/$name.dmg"
@@ -59,7 +59,7 @@ else
     (cd dist && 7z a -tzip -bso0 "$name.zip" "$name")
     echo "dist/$name.zip"
     iscc=$(command -v iscc || echo "/c/Program Files (x86)/Inno Setup 6/ISCC.exe")
-    [[ -x $iscc ]] || { echo "package-experimental.sh: Inno Setup's iscc isn't installed" >&2; exit 1; }
+    [[ -x $iscc ]] || { echo "package-macos-windows.sh: Inno Setup's iscc isn't installed" >&2; exit 1; }
     "$iscc" -Q "-DVersion=$version" "-DArch=$arch" "-DSource=$(cygpath -w "$root/$stage")" \
         "-DOutput=$(cygpath -w "$root/dist")" "$(cygpath -w "$root/packaging/windows/riptide.iss")"
     echo "dist/$name-setup.exe"
