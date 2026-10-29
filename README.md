@@ -34,7 +34,7 @@ Riptide is built on [CEF](https://github.com/chromiumembedded/cef) through the [
 |---|---|---|
 | Linux x86_64, X11 | [`.deb`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, AppImage and `.tar.gz` pass the full smoke test, and the AUR source package is built before it's published. |
 | Linux, Wayland | The Linux packages | Untested |
-| macOS, Apple silicon | `.dmg`, Homebrew cask | Each release is tried by hand. CI opens a window, and checks each release `.dmg`'s signature. |
+| macOS, Apple silicon | `.dmg`, Homebrew cask | Supported, used day to day. Each release is tried by hand. CI opens a window, and checks each release `.dmg`'s signature. |
 | macOS, Intel | `.dmg`, Homebrew cask | Untested by hand. CI checks each release `.dmg`'s signature and runs `--version`; it doesn't open a window. |
 | Windows x86_64 | Installer (`-setup.exe`), `.zip` | Untested by hand. CI opens a window, and each release's installer is installed, started with `--version` and uninstalled. |
 
@@ -83,7 +83,7 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has x86_64 
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide`, or `github:joshzcold/riptide#riptide-source` to build it from source |
 | **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |
-| **macOS** (experimental) | `brew install --cask joshzcold/riptide/riptide`, or the `.dmg` for your Mac (`aarch64` for Apple silicon, `x86_64` for Intel) |
+| **macOS** | `brew install --cask joshzcold/riptide/riptide`, or the `.dmg` for your Mac (`aarch64` for Apple silicon, `x86_64` for Intel) |
 | **Windows** (experimental) | the `-setup.exe` installer, or the `.zip` (unpack it and run `riptide.exe`) |
 
 The [`nightly`](https://github.com/joshzcold/riptide/releases/tag/nightly) pre-release is rebuilt from `main` every night it changes. [Installing](https://joshzcold.github.io/riptide/guide/installing.html) covers the Linux sandbox setup and opening the unnotarized macOS app.
