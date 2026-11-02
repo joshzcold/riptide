@@ -240,7 +240,7 @@ jobs:
             "Points the AUR packages in \`packaging/aur/\` and \`packaging/nix/package.nix\` (and so the flake) at v$VERSION."
       # As the riptide GitHub App, which bypasses main's review rule and whose
       # push starts aur.yml (a push with GITHUB_TOKEN wouldn't).
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         if: env.PUBLISH == 'true' && !contains(needs.plan.outputs.version, '-')
         id: app
         with:
@@ -273,7 +273,7 @@ jobs:
           gh pr merge "$pr" --merge --admin --match-head-commit "$(git rev-parse HEAD)"
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
           echo "Merged #$pr, which publishes the AUR packages." >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         if: env.PUBLISH == 'true' && !contains(needs.plan.outputs.version, '-')
         id: tap
         continue-on-error: true
