@@ -178,6 +178,10 @@ pub struct Engine {
     last_command: Option<(String, Option<u32>)>,
     /// Tab was pressed, for `completion.show = auto`.
     completion_opened: bool,
+    /// Completions marked to open together, with `completion.multi_select`,
+    /// and the command and flags they were marked for.
+    marked: Vec<Completion>,
+    marked_for: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -267,6 +271,8 @@ impl Engine {
             message_log: VecDeque::new(),
             last_command: None,
             completion_opened: false,
+            marked: Vec::new(),
+            marked_for: None,
             user_commands: Vec::new(),
         }
     }
@@ -455,13 +461,65 @@ impl Engine {
                     items,
                     selected: None,
                     words: completion::match_words(text),
+                    marked: Vec::new(),
                 },
             });
         }
-        self.completion
-            .as_ref()
-            .map(|s| s.view.clone())
-            .unwrap_or_default()
+        // Marks last while the filter changes, but not into another command.
+        if completion::multi_select_prefix(self.cmdline.text()) != self.marked_for {
+            self.marked.clear();
+            self.marked_for = None;
+        }
+        let Some(state) = self.completion.as_ref() else {
+            return CompletionView::default();
+        };
+        let mut view = state.view.clone();
+        view.marked = (0..view.items.len())
+            .filter(|&i| self.marked.iter().any(|m| same_item(m, &view.items[i])))
+            .collect();
+        view
+    }
+
+    /// Whether Tab marks completions to open together here.
+    fn multi_select_active(&self) -> bool {
+        self.settings.bool("completion.multi_select")
+            && completion::multi_select_prefix(self.cmdline.text()).is_some()
+    }
+
+    /// Mark or unmark the selected completion (the first or last if none
+    /// is), then select the next or previous one. The command line stays as
+    /// typed, so typing more narrows the list again.
+    fn mark_completion(&mut self, forward: bool) {
+        if !self.multi_select_active() {
+            return self.focus_completion(forward);
+        }
+        self.completion_opened = true;
+        self.completions();
+        let Some(state) = self.completion.as_mut() else {
+            return;
+        };
+        let len = state.view.items.len();
+        if len == 0 {
+            return;
+        }
+        let current = state
+            .view
+            .selected
+            .unwrap_or(if forward { 0 } else { len - 1 });
+        let item = &state.view.items[current];
+        match self.marked.iter().position(|m| same_item(m, item)) {
+            Some(i) => {
+                self.marked.remove(i);
+            }
+            None => self.marked.push(item.clone()),
+        }
+        self.marked_for = completion::multi_select_prefix(self.cmdline.text());
+        state.view.selected = Some(if forward {
+            (current + 1) % len
+        } else {
+            (current + len - 1) % len
+        });
+        self.dirty = true;
     }
 
     fn path_prompt(&self) -> bool {
@@ -1246,18 +1304,25 @@ impl Engine {
 
     fn handle_command(&mut self, key: Key) -> KeyOutcome {
         let before = self.cmdline.text().to_string();
-        let mut effects =
-            if let Lookup::Exact(cmd) = self.keymap.lookup_at(Mode::Command, &[key], &self.url) {
-                let cmd = cmd.to_string();
-                self.execute_str(&cmd, None)
-            } else {
-                if let Some(c) = key.text() {
-                    self.cmdline.insert(c);
-                    self.history.reset();
-                    self.dirty = true;
-                }
-                Vec::new()
-            };
+        let multi = self
+            .multi_select_active()
+            .then(|| self.keymap.multi_select_binding(key))
+            .flatten();
+        let bound = match self.keymap.lookup_at(Mode::Command, &[key], &self.url) {
+            _ if multi.is_some() => multi.map(str::to_string),
+            Lookup::Exact(cmd) => Some(cmd.to_string()),
+            _ => None,
+        };
+        let mut effects = if let Some(cmd) = bound {
+            self.execute_str(&cmd, None)
+        } else {
+            if let Some(c) = key.text() {
+                self.cmdline.insert(c);
+                self.history.reset();
+                self.dirty = true;
+            }
+            Vec::new()
+        };
         // Search as you type.
         if self.mode == Mode::Command
             && self.settings.bool("search.incremental")
@@ -1605,10 +1670,23 @@ impl Engine {
             }
             Command::CommandAccept => {
                 let text = self.cmdline.text().to_string();
+                let marked = std::mem::take(&mut self.marked);
+                let multi = self
+                    .settings
+                    .bool("completion.multi_select")
+                    .then(|| completion::multi_select_prefix(&text))
+                    .flatten()
+                    .filter(|_| !marked.is_empty());
                 self.history.push(&text);
                 self.history
                     .truncate(self.settings.int("completion.cmd_history_max_items").max(0) as usize);
                 self.set_mode(Mode::Normal, effects);
+                if let Some(prefix) = multi {
+                    for line in completion::multi_select_lines(&prefix, &marked) {
+                        effects.extend(self.execute_str(&line, None));
+                    }
+                    return;
+                }
                 if let Some((reverse, needle)) = search_text(&text) {
                     let search = Command::Search {
                         text: needle.to_string(),
@@ -1697,6 +1775,9 @@ impl Engine {
             },
             Command::CompletionFocus(direction) => {
                 self.focus_completion(direction == FocusDirection::Next)
+            }
+            Command::CompletionMark(direction) => {
+                self.mark_completion(direction == FocusDirection::Next)
             }
             Command::Message { level, text } => {
                 self.show_message(level, text);
@@ -2248,6 +2329,8 @@ impl Engine {
         if self.mode == Mode::Command {
             self.cmdline.clear();
             self.history.reset();
+            self.marked.clear();
+            self.marked_for = None;
         }
         if self.mode == Mode::Hint {
             self.hints = None;
@@ -2264,6 +2347,11 @@ impl Engine {
         self.mode = mode;
         self.dirty = true;
     }
+}
+
+/// The same mark, bookmark or page, wherever it is in the list.
+fn same_item(a: &Completion, b: &Completion) -> bool {
+    a.category == b.category && a.name == b.name
 }
 
 fn consumed(effects: Vec<Effect>) -> KeyOutcome {
@@ -2838,6 +2926,110 @@ mod tests {
             e.status().command_line.unwrap().text,
             ":set -u example.com hints.mode "
         );
+    }
+
+    fn quickmark_engine(multi_select: bool) -> Engine {
+        let mut e = engine();
+        e.apply_config(&ConfigOp::Set {
+            name: "completion.multi_select".into(),
+            value: Value::Bool(multi_select),
+        })
+        .unwrap();
+        e.set_completion_source(|_, typed| {
+            completion::ranked(["github", "gitlab", "reddit"], typed, |n| n)
+                .into_iter()
+                .map(|n| Completion {
+                    icon: None,
+                    time: None,
+                    detail: None,
+                    category: "Quickmarks",
+                    name: n.to_string(),
+                    description: String::new(),
+                })
+                .collect()
+        });
+        e
+    }
+
+    fn quickmarks_loaded(outcomes: &[KeyOutcome]) -> Vec<(OpenTarget, String)> {
+        all_effects(outcomes)
+            .into_iter()
+            .filter_map(|e| match e {
+                Effect::Run {
+                    command: Command::QuickmarkLoad { target, name },
+                    ..
+                } => Some((target, name)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn multi_select_marks_completions_and_opens_them_all() {
+        let mut e = quickmark_engine(true);
+        press(&mut e, "b<Tab>");
+        let view = e.completions();
+        assert_eq!(view.marked, [0], "github is marked");
+        assert_eq!(view.selected, Some(1));
+        assert_eq!(e.status().command_line.unwrap().text, ":quickmark-load ");
+        // Marks last while typing narrows the list.
+        press(&mut e, "red<Tab>");
+        assert_eq!(e.completions().marked, [0], "reddit is marked");
+        press(&mut e, "<Backspace><Backspace><Backspace>");
+        assert_eq!(e.completions().marked, [0, 2]);
+        // Ctrl-j and Ctrl-k move without marking; Tab again unmarks.
+        press(&mut e, "<Ctrl-j><Ctrl-j><Ctrl-k>");
+        assert_eq!(e.completions().selected, Some(0));
+        press(&mut e, "<Tab>");
+        assert_eq!(e.completions().marked, [2], "github is unmarked");
+        press(&mut e, "<Tab>");
+        let out = press(&mut e, "<Return>");
+        assert_eq!(
+            quickmarks_loaded(&out),
+            [
+                (OpenTarget::Current, "reddit".to_string()),
+                (OpenTarget::Background, "gitlab".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn multi_select_keeps_a_new_tab_for_the_first_mark() {
+        let mut e = quickmark_engine(true);
+        press(&mut e, "B<Tab><Tab>");
+        let out = press(&mut e, "<Return>");
+        assert_eq!(
+            quickmarks_loaded(&out),
+            [
+                (OpenTarget::Tab, "github".to_string()),
+                (OpenTarget::Background, "gitlab".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn multi_select_is_off_by_default_and_only_for_urls() {
+        let mut e = quickmark_engine(false);
+        press(&mut e, "b<Tab>");
+        assert!(e.completions().marked.is_empty());
+        assert_eq!(
+            e.status().command_line.unwrap().text,
+            ":quickmark-load github"
+        );
+        press(&mut e, "<Escape>");
+        let mut e = quickmark_engine(true);
+        // Elsewhere Tab completes and Ctrl-k kills the line as usual.
+        press(&mut e, ":set tabs.show<Left><Left><Ctrl-k>");
+        assert_eq!(e.status().command_line.unwrap().text, ":set tabs.sh");
+        // Config's own binding wins over the multi-select one.
+        e.apply_config(&ConfigOp::Bind {
+            mode: Mode::Command,
+            keys: "<Tab>".into(),
+            command: "completion-item-focus next".into(),
+        })
+        .unwrap();
+        press(&mut e, "<Escape>b<Tab>");
+        assert!(e.completions().marked.is_empty());
     }
 
     #[test]
