@@ -26,7 +26,7 @@ jobs:
     steps:
       # main's scripts, not the pull request's.
       - uses: actions/checkout@v7
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.CEF_UPDATE_APP_ID }}

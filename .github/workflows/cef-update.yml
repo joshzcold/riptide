@@ -21,7 +21,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # cef-rs publishes a crate some time after each CEF build, and Chromium's
       # security fixes come in those builds, so an issue says when it lags.
       - name: Open an issue when CEF has a build the newest crate doesn't bind
@@ -55,12 +55,12 @@ jobs:
           EOF
           )")"
           scripts/notify.sh "CEF $build is out, but the cef crate lags" "$title" "$issue" warning
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.CEF_UPDATE_APP_ID }}
           private-key: ${{ secrets.CEF_UPDATE_APP_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           token: ${{ steps.app.outputs.token }}
       - uses: dtolnay/rust-toolchain@stable
