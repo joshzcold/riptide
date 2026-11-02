@@ -79,6 +79,18 @@ Pages run in processes separate from the browser. If a page's process crashes, r
 
 In completions (`b`, `gb`, `:open`), the quickmarks and bookmarks you've used most lately come first. Each visit to the mark's page, or to a page under it, counts, and counts half as much every 30 days. Marks you haven't visited follow in their file's order. `completion.marks_order = "file"` keeps the file's order for all of them.
 
+### Opening several at once
+
+Set `completion.multi_select = true` to pick several quickmarks, bookmarks or `:open` completions and open them together, as in `fzf -m`:
+
+| Keys | Does |
+|---|---|
+| `Tab` / `Shift-Tab` | Mark or unmark the selected item, then move down / up |
+| `Ctrl-j` / `Ctrl-k` | Move down / up without marking |
+| `Return` | Open every marked item |
+
+Marked items show a `+`, and stay marked while you type to narrow the list. The first opens where the command says (`b` here, `B` in a new tab) and the rest in background tabs. With nothing marked, `Return` works as usual. Keys you've bound yourself in command mode keep their bindings.
+
 `:bookmark-list` shows your quickmarks and bookmarks on a page (`-t` in a new tab). If you edit the `quickmarks` or `bookmarks/urls` files by hand, `:quickmarks-reload` (or `:bookmarks-reload`) reads them again. `:quickmark-save` writes the quickmarks file, although every change is saved anyway.
 
 ## Restarting

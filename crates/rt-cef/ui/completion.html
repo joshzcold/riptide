@@ -53,6 +53,8 @@
   .message.warning { background: var(--warning-bg); color: var(--warning-fg); }
   .row.selected { background: var(--selected-bg); color: var(--selected-fg); }
   .row.selected .desc { color: var(--selected-fg); }
+  .row.marked .name::before { content: "+ "; color: var(--match-fg); font-weight: bold; }
+  .row.selected.marked .name::before { color: inherit; }
   .match { color: var(--match-fg); font-weight: bold; }
   .site-icon { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
   .row.selected .match { color: inherit; text-decoration: underline; }
@@ -269,7 +271,7 @@
   }
 
   // Either {kind: "prompt", prompt}, {kind: "keyhints", …} or {kind: "rows", rows, timestamp_format, words},
-  // where rows are {header}, {name, description, detail, time, selected}, or {message, level}
+  // where rows are {header}, {name, description, detail, time, selected, marked}, or {message, level}
   // for messages older than the one in the status bar.
 
   // The height one line of text needs in `font`, at `lineHeight`.
@@ -407,7 +409,7 @@
         el.textContent = row.message;
         return el;
       }
-      el.className = row.selected ? "row selected" : "row";
+      el.className = ["row", row.selected && "selected", row.marked && "marked"].filter(Boolean).join(" ");
       const name = document.createElement("span");
       name.className = "name";
       const scattered = scatteredWords(row, payload.words);

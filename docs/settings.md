@@ -64,6 +64,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `completion.height` | string | `12` | Height of the completion list: rows (12) or a percentage of the window (50%) |
 | `completion.marks_order` | visits \| file | `visits` | Order of quickmarks and bookmarks in completions: the most visited lately first (visits), or as in their files (file) |
 | `completion.min_chars` | integer | `0` | Characters to type after a command before its arguments complete |
+| `completion.multi_select` | boolean | `false` | In :open, :quickmark-load and :bookmark-load completions, Tab and Shift-Tab mark items and Return opens them all; Ctrl-j and Ctrl-k move without marking |
 | `completion.open_categories` | string[] | `["searchengines","quickmarks","bookmarks","history","filesystem"]` | What :open completes from, in order: searchengines, quickmarks, bookmarks, history, filesystem |
 | `completion.quick` | boolean | `true` | When only one command or setting name is left, Tab takes it and moves on to completing the next part |
 | `completion.show` | always \| auto \| never | `always` | When to show completions: always, only after pressing Tab (auto), or never |

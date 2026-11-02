@@ -54,6 +54,9 @@ pub struct CompletionView {
     pub selected: Option<usize>,
     /// The typed words, for highlighting where items match.
     pub words: Vec<String>,
+    /// Items marked to open together, with `completion.multi_select`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub marked: Vec<usize>,
 }
 
 /// How well `name` matches `typed`, best first: the whole name, its start,
@@ -425,6 +428,34 @@ pub fn compute(text: &str, source: Option<&Source>, settings: &Settings) -> Vec<
         _ => return Vec::new(),
     };
     source.map(|s| s(kind, parsed.pattern)).unwrap_or_default()
+}
+
+/// Commands whose completions can be marked and opened together.
+const MULTI_SELECT_COMMANDS: &[&str] = &["open", "quickmark-load", "bookmark-load"];
+
+/// The command and its flags, e.g. `open -t`, if its completions can be
+/// marked and opened together.
+pub fn multi_select_prefix(text: &str) -> Option<String> {
+    let parsed = parse(text)?;
+    MULTI_SELECT_COMMANDS
+        .contains(&parsed.command)
+        .then_some(parsed.prefix)
+}
+
+/// The command lines that open `marked` items for `prefix`: the first as
+/// typed, the rest in background tabs unless it opens a window.
+pub fn multi_select_lines(prefix: &str, marked: &[Completion]) -> Vec<String> {
+    let own_window = prefix
+        .split_whitespace()
+        .any(|f| matches!(f, "-w" | "--window" | "-p" | "--private" | "--call"));
+    marked
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let bg = if i > 0 && !own_window { " -b" } else { "" };
+            format!("{prefix}{bg} {}", item.name)
+        })
+        .collect()
 }
 
 /// The command line after choosing `item` from completions of `base`.

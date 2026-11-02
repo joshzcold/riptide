@@ -293,6 +293,9 @@ pub enum Command {
         tab: bool,
     },
     CompletionFocus(FocusDirection),
+    /// Mark or unmark the selected completion, then select the next or
+    /// previous one, as with `completion.multi_select`.
+    CompletionMark(FocusDirection),
     /// Fill a file-name prompt with a folder from `fileselect.folder.command`.
     PromptFileselectExternal,
     /// Copy the prompt's URL (or its text) to the clipboard, or the primary selection.
@@ -1322,6 +1325,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "completion-item-focus",
         "Select the next or previous completion",
     ),
+    hidden(
+        "completion-item-mark",
+        "Mark the selected completion and move to the next or previous one, to open several (completion.multi_select)",
+    ),
     spec(
         "prompt-fileselect-external",
         "In a file prompt, pick the folder with fileselect.folder.command (Alt-e)",
@@ -2196,6 +2203,11 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             "prev" => FocusDirection::Prev,
             other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
         }),
+        "completion-item-mark" => Command::CompletionMark(match args.required("direction")? {
+            "next" => FocusDirection::Next,
+            "prev" => FocusDirection::Prev,
+            other => return Err(args.error(format!("expected next or prev, got {other:?}"))),
+        }),
         "completion-item-del" => Command::CompletionItemDel,
         "prompt-fileselect-external" => Command::PromptFileselectExternal,
         "prompt-yank" => Command::PromptYank {
@@ -2905,6 +2917,7 @@ mod tests {
             "session-load",
             "session-delete",
             "completion-item-focus",
+            "completion-item-mark",
             "prompt-accept",
             "spell-replace",
             "spawn",

@@ -963,6 +963,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Characters to type after a command before its arguments complete"
     ),
     def!(
+        "completion.multi_select",
+        Kind::Bool,
+        Value::Bool(false),
+        "In :open, :quickmark-load and :bookmark-load completions, Tab and Shift-Tab mark items and Return opens them all; Ctrl-j and Ctrl-k move without marking"
+    ),
+    def!(
         "completion.open_categories",
         Kind::List,
         Value::List(OPEN_CATEGORIES.iter().map(|c| c.to_string()).collect()),

@@ -209,6 +209,19 @@ impl Keymap {
         (now != source).then_some((command.as_str(), source.as_str()))
     }
 
+    /// The command `key` runs in command mode while `completion.multi_select`
+    /// applies, if config hasn't bound it.
+    pub fn multi_select_binding(&self, key: Key) -> Option<&'static str> {
+        MULTI_SELECT_DEFAULTS
+            .iter()
+            .find(|(keys, _)| Key::parse_sequence(keys).is_ok_and(|seq| seq == [key]))
+            .filter(|(keys, _)| {
+                self.source(Mode::Command, keys) == "default"
+                    || self.lookup(Mode::Command, &[key]) == Lookup::None
+            })
+            .map(|(_, command)| *command)
+    }
+
     /// Where the binding for `keys` came from; empty if unknown or unbound.
     pub fn source(&self, mode: Mode, keys: &str) -> &str {
         Key::parse_sequence(keys)
@@ -516,6 +529,15 @@ const CARET_DEFAULTS: &[(&str, &str)] = &[
     ("Y", "yank -s selection"),
     ("<Return>", "yank selection"),
     ("<Escape>", "mode-leave"),
+];
+
+/// Command mode keys that change while `completion.multi_select` applies,
+/// unless config has bound them.
+const MULTI_SELECT_DEFAULTS: &[(&str, &str)] = &[
+    ("<Tab>", "completion-item-mark next"),
+    ("<Shift-Tab>", "completion-item-mark prev"),
+    ("<Ctrl-j>", "completion-item-focus next"),
+    ("<Ctrl-k>", "completion-item-focus prev"),
 ];
 
 const COMMAND_DEFAULTS: &[(&str, &str)] = &[

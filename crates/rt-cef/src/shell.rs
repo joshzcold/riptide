@@ -1863,6 +1863,7 @@ fn completion_rows(view: &CompletionView, max_rows: usize) -> Vec<serde_json::Va
                 "detail": item.detail,
                 "icon": item.icon,
                 "selected": view.selected == Some(i),
+                "marked": view.marked.contains(&i),
             }));
         }
         // Many headers can push the selection out of view; start at it then.
