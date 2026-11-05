@@ -225,6 +225,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Alt-d>` | `rl-kill-word` |
 | `<Alt-e>` | `prompt-fileselect-external` |
 | `<Alt-f>` | `rl-forward-word` |
+| `<Alt-o>` | `prompt-fileselect-native` |
 | `<Alt-y>` | `prompt-yank` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |
@@ -234,12 +235,16 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Ctrl-h>` | `rl-backward-delete-char` |
 | `<Ctrl-j>` | `prompt-accept` |
 | `<Ctrl-k>` | `rl-kill-line` |
+| `<Ctrl-l>` | `prompt-fileselect-enter` |
+| `<Ctrl-n>` | `completion-item-focus next` |
+| `<Ctrl-p>` | `completion-item-focus prev` |
 | `<Ctrl-u>` | `rl-unix-line-discard` |
 | `<Ctrl-v>` | `rl-paste` |
 | `<Ctrl-w>` | `rl-filename-rubout` |
 | `<Ctrl-x>` | `prompt-open-download` |
 | `<Ctrl-y>` | `rl-yank` |
 | `<Delete>` | `rl-delete-char` |
+| `<Down>` | `completion-item-focus next` |
 | `<End>` | `rl-end-of-line` |
 | `<Escape>` | `mode-leave` |
 | `<Home>` | `rl-beginning-of-line` |
@@ -248,7 +253,9 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Return>` | `prompt-accept` |
 | `<Right>` | `rl-forward-char` |
 | `<Shift-Insert>` | `rl-paste --sel` |
+| `<Shift-Tab>` | `completion-item-mark prev` |
 | `<Tab>` | `prompt-complete` |
+| `<Up>` | `completion-item-focus prev` |
 
 ## yesno mode
 

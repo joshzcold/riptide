@@ -19,6 +19,16 @@ pub enum PromptKind {
     /// Pick one of `items` with its key (see [`select_key`]); the answer is
     /// the item's index as text. Return picks the first.
     Select { items: Vec<String> },
+    /// The file picker: typing narrows the files under a folder, and the
+    /// answer is [`PromptAnswer::Files`].
+    Files(crate::fileselect::FileRequest),
+    /// Where to save a download, with the file picker's list under the text
+    /// (`downloads.location.picker`): typing narrows what's in `dir` or the
+    /// folder typed, Tab completes, and the answer is the text.
+    Save {
+        default: String,
+        dir: std::path::PathBuf,
+    },
 }
 
 /// The keys that pick a [`PromptKind::Select`] item, in order.
@@ -59,6 +69,8 @@ pub enum Topic {
     Login,
     Download,
     Certificate,
+    /// The file picker, for an upload field or `rt.ui.pick_files`.
+    Files,
     /// riptide asking before doing something, e.g. quitting.
     Confirm,
 }
@@ -71,6 +83,7 @@ impl Topic {
             Topic::Login => "login",
             Topic::Download => "download",
             Topic::Certificate => "certificate",
+            Topic::Files => "files",
             Topic::Confirm => "confirm",
         }
     }
@@ -100,6 +113,8 @@ pub struct Prompt {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PromptAnswer {
     Text(String),
+    /// The file picker's choice: absolute paths.
+    Files(Vec<String>),
     /// `remember` is set by `A`/`N`, e.g. to keep a permission decision.
     Yes {
         remember: bool,
@@ -138,6 +153,9 @@ pub struct PromptView {
     pub asks: Vec<crate::permissions::Ask>,
     /// What answering "always" does, for questions whose answer can be kept.
     pub always: Option<String>,
+    /// The file picker's list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<crate::fileselect::FilesView>,
 }
 
 /// One way to answer a prompt: a key, and what it does.
@@ -198,6 +216,28 @@ impl Prompt {
                 }
             }
             PromptKind::Alert => vec![option("<Return>", "Return or Escape", "close")],
+            PromptKind::Save { .. } => vec![
+                option("<Tab>", "Tab", "complete"),
+                option("<Return>", "Return", "save"),
+                option("<Alt-e>", "Alt-e", "pick folder"),
+                option("<Alt-o>", "Alt-o", "system dialog"),
+                option("<Escape>", "Escape", "cancel"),
+            ],
+            PromptKind::Files(ref request) => {
+                let mut options = Vec::new();
+                let tab = if request.mode == crate::fileselect::FileMode::Multiple {
+                    "mark or complete"
+                } else {
+                    "complete"
+                };
+                options.push(option("<Tab>", "Tab", tab));
+                options.push(option("<Return>", "Return", "choose"));
+                options.push(option("<Ctrl-l>", "Ctrl-l", "into folder"));
+                options.push(option("<Alt-e>", "Alt-e", "external"));
+                options.push(option("<Alt-o>", "Alt-o", "system dialog"));
+                options.push(option("<Escape>", "Escape", "cancel"));
+                options
+            }
             PromptKind::Select { ref items } => {
                 let mut options: Vec<PromptOption> = items
                     .iter()

@@ -75,6 +75,13 @@
   .prompt-hint { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); color: var(--desc-fg); }
   .cursor { background: var(--fg); color: var(--bg); }
   .prompt-message, .prompt-input, .prompt-hint { font: var(--font-prompt); }
+  .files-status { padding: 0 4px; height: var(--row-height); line-height: var(--row-height); font: var(--font-prompt); color: var(--desc-fg); white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .files-status.error { background: var(--error-bg); color: var(--error-fg); }
+  .row.file.dir .name { opacity: .8; }
+  .prompt-keys { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 0 4px; min-height: var(--row-height); align-items: center; }
+  .prompt-key { all: unset; cursor: pointer; font: var(--font-prompt); color: var(--desc-fg); white-space: nowrap; }
+  .prompt-key:hover { color: var(--prompt-fg); }
+  .prompt-key kbd { font: var(--font-prompt); margin-right: 4px; padding: 0 4px; border-radius: 3px; background: var(--prompt-key-bg); color: var(--prompt-accent); }
   /* A floating prompt: the overlay view is the box, so frame it and pad it.
      Amber marks it as a question without shouting. */
   :root { --prompt-accent: var(--rt-prompts-border, #d9b44a); --prompt-key-bg: var(--rt-prompts-key-bg, #3a3420); }
@@ -182,7 +189,7 @@
     } else {
       parts.push(div("prompt-message", p.message));
     }
-    if (p.kind === "text") {
+    if (p.kind === "text" || p.kind === "files") {
       const input = div("prompt-input");
       const chars = Array.from(p.input);
       const caret = document.createElement("span");
@@ -191,7 +198,9 @@
       input.append(chars.slice(0, p.cursor).join(""), caret, chars.slice(p.cursor + 1).join(""));
       parts.push(input);
     }
-    if (floating) {
+    if (p.files) parts.push(...fileRows(p.files));
+    // The file picker's keys fit on one line; buttons would push files out.
+    if (floating && !p.files) {
       // One button per option; a click presses its key.
       const options = div("prompt-options", "");
       for (const option of p.options) {
@@ -206,6 +215,20 @@
       }
       parts.push(options);
       if (p.always) parts.push(div("prompt-always", p.always));
+    } else if (p.files) {
+      // The picker's keys on one line, each a button that presses it.
+      const keys = div("prompt-keys", "");
+      for (const option of p.options) {
+        const button = document.createElement("button");
+        button.className = "prompt-key";
+        const kbd = document.createElement("kbd");
+        kbd.textContent = option.keys;
+        button.append(kbd, option.label);
+        button.addEventListener("mousedown", (e) => e.preventDefault());
+        button.addEventListener("click", () => rt.send("prompt-key", JSON.stringify({ key: option.key })));
+        keys.append(button);
+      }
+      parts.push(keys);
     } else if (p.kind === "select") {
       // A docked picker lists its items a row each.
       for (const option of p.options) parts.push(div("prompt-hint", `${option.keys}  ${option.label}`));
@@ -213,6 +236,24 @@
       parts.push(div("prompt-hint", p.hint));
     }
     list.replaceChildren(...parts);
+  }
+
+  // The file picker's list: what's listed and how much matches, then a row
+  // per file, folders ending in "/", with the typed words marked.
+  function fileRows(files) {
+    let status = `${files.matched}/${files.total}${files.marked ? `  ${files.marked} marked` : ""}  ${files.root}`;
+    if (files.loading) status = `listing…  ${files.root}`;
+    if (files.error) status = files.error;
+    const rows = [div(`files-status${files.error ? " error" : ""}`, status)];
+    for (const file of files.items) {
+      const el = div(["row", "file", file.dir && "dir", file.selected && "selected", file.marked && "marked"].filter(Boolean).join(" "));
+      const name = document.createElement("span");
+      name.className = "name";
+      setMatched(name, file.name, files.words, scatteredWords({ name: file.name, description: "" }, files.words));
+      el.append(name);
+      rows.push(el);
+    }
+    return rows;
   }
 
   // Either {kind: "prompt", prompt} or {kind: "rows", rows}, where rows are

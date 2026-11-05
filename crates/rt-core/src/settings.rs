@@ -1378,6 +1378,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where downloads go; empty means the system Downloads folder"
     ),
     def!(
+        "downloads.location.picker",
+        Kind::Bool,
+        Value::Bool(false),
+        "List the folder's files under the \"Save file to\" prompt, as the file picker does: typing narrows them and Tab completes the path"
+    ),
+    def!(
         "downloads.location.prompt",
         Kind::Bool,
         Value::Bool(true),
@@ -1440,6 +1446,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Folders of unpacked Chrome extensions to load, besides the ones :extension-install installs (after a restart)"
     ),
     def!(
+        "fileselect.directory",
+        Kind::Str,
+        s(""),
+        "Folder the file picker (and {dir} in fileselect.*.command) starts in; empty means the last folder files were chosen from, or your home folder"
+    ),
+    def!(
         "fileselect.folder.command",
         Kind::List,
         Value::List(vec![
@@ -1448,13 +1460,13 @@ pub static SETTINGS: &[SettingDef] = &[
             "ranger".to_string(),
             "--choosedir={}".to_string()
         ]),
-        "Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to"
+        "Program that picks a folder for fileselect.handler = external and Alt-e; {} is the file it writes the path to, {dir} the folder to start in"
     ),
     def!(
         "fileselect.handler",
-        Kind::Enum(&["default", "external"]),
+        Kind::Enum(&["default", "external", "prompt"]),
         s("default"),
-        "File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external)"
+        "File pickers for upload fields: Chromium's own (default), the fileselect.*.command programs (external), or riptide's fuzzy picker in the prompt area (prompt)"
     ),
     def!(
         "fileselect.multiple_files.command",
@@ -1465,7 +1477,38 @@ pub static SETTINGS: &[SettingDef] = &[
             "ranger".to_string(),
             "--choosefiles={}".to_string()
         ]),
-        "Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line"
+        "Program that picks several files for fileselect.handler = external and Alt-e; {} is the file it writes the paths to, one per line, {dir} the folder to start in, {extensions} what the page accepts"
+    ),
+    def!(
+        "fileselect.prompt.command",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Program that lists what the file picker offers, one path per line, run in the folder listed ({dir} and {extensions} are filled in); empty lists the folder itself"
+    ),
+    def!(
+        "fileselect.prompt.hidden",
+        Kind::Bool,
+        Value::Bool(false),
+        "Offer files and folders whose names start with a dot in the file picker"
+    ),
+    def!(
+        "fileselect.prompt.ignore",
+        Kind::List,
+        Value::List(vec![
+            "node_modules".to_string(),
+            "target".to_string(),
+            "__pycache__".to_string()
+        ]),
+        "Folders the file picker doesn't look inside (it still lists them)"
+    ),
+    def!(
+        "fileselect.prompt.max_files",
+        Kind::Int {
+            min: 100,
+            max: 1_000_000
+        },
+        Value::Int(50_000),
+        "The most files and folders the file picker lists, nearest first"
     ),
     def!(
         "fileselect.single_file.command",
@@ -1476,7 +1519,7 @@ pub static SETTINGS: &[SettingDef] = &[
             "ranger".to_string(),
             "--choosefile={}".to_string()
         ]),
-        "Program that picks a file for fileselect.handler = external; {} is the file it writes the path to"
+        "Program that picks a file for fileselect.handler = external and Alt-e; {} is the file it writes the path to, {dir} the folder to start in, {extensions} what the page accepts"
     ),
     def!(
         "fonts.completion.category",

@@ -431,6 +431,13 @@ function rt.spawn(argv, opts, callback) end
 ---@return string|nil
 function rt.which(program) end
 
+---Answer an upload field that a `fileselect` hook took (by returning true):
+---`paths` are the files (or folder) to give the page, and nil cancels.
+---Plugins need the files permission.
+---@param id string|integer the event's `e.id`
+---@param paths? string[]
+function rt.answer_fileselect(id, paths) end
+
 rt.ui = {{}}
 
 ---@class rt.SelectOpts
@@ -455,6 +462,20 @@ function rt.ui.select(items, opts, on_choice) end
 ---@param opts? rt.InputOpts
 ---@param on_confirm fun(text: string|nil)
 function rt.ui.input(opts, on_confirm) end
+
+---@class rt.PickFilesOpts
+---@field prompt? string the question
+---@field dir? string the folder to start in (`~` works); fileselect.directory by default
+---@field multiple? boolean choose several files: Tab marks them
+---@field folder? boolean choose a folder instead of files
+---@field extensions? string[] only offer files with these extensions, e.g. `{{ "png", "jpg" }}`
+
+---Choose files in riptide's fuzzy file picker, the one `fileselect.handler =
+---"prompt"` uses for upload fields. `on_choice` gets a list of absolute
+---paths (one, unless `multiple`), or nil when cancelled.
+---@param opts? rt.PickFilesOpts
+---@param on_choice fun(paths: string[]|nil)
+function rt.ui.pick_files(opts, on_choice) end
 
 ---@alias rt.Highlight "title"|"muted"|"accent"|"match"|"url"|"key"|"info"|"warning"|"error"
 

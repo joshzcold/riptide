@@ -296,8 +296,13 @@ pub enum Command {
     /// Mark or unmark the selected completion, then select the next or
     /// previous one, as with `completion.multi_select`.
     CompletionMark(FocusDirection),
-    /// Fill a file-name prompt with a folder from `fileselect.folder.command`.
+    /// Fill a file-name prompt with a folder from `fileselect.folder.command`,
+    /// or answer the file picker with the field's `fileselect.*.command`.
     PromptFileselectExternal,
+    /// In the file picker, list the selected folder.
+    PromptFileselectEnter,
+    /// In the file picker, choose with the system's file dialog instead.
+    PromptFileselectNative,
     /// Copy the prompt's URL (or its text) to the clipboard, or the primary selection.
     PromptYank {
         primary: bool,
@@ -1080,7 +1085,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         "crash-report",
         "Show the newest crash report, to check and send as a GitHub issue or by email",
     ),
-    hidden("prompt-complete", "Complete the file path in the prompt"),
+    hidden(
+        "prompt-complete",
+        "Complete the file path in the prompt; in the file picker, put the next match's path in the text, or mark the file in a field that takes several",
+    ),
     spec(
         "selection-follow",
         "Follow the link around the selection, e.g. after a search (Return; -t: new tab)",
@@ -1331,7 +1339,15 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     spec(
         "prompt-fileselect-external",
-        "In a file prompt, pick the folder with fileselect.folder.command (Alt-e)",
+        "In a file prompt, pick the folder with fileselect.folder.command; in the file picker, pick with the field's fileselect.*.command (Alt-e)",
+    ),
+    hidden(
+        "prompt-fileselect-native",
+        "In the file picker or the save prompt, choose with the system's file dialog instead (Alt-o)",
+    ),
+    hidden(
+        "prompt-fileselect-enter",
+        "In the file picker, list the selected folder (Ctrl-l)",
     ),
     spec(
         "hint-follow",
@@ -2210,6 +2226,8 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
         }),
         "completion-item-del" => Command::CompletionItemDel,
         "prompt-fileselect-external" => Command::PromptFileselectExternal,
+        "prompt-fileselect-enter" => Command::PromptFileselectEnter,
+        "prompt-fileselect-native" => Command::PromptFileselectNative,
         "prompt-yank" => Command::PromptYank {
             primary: args.flag(&["-s", "--sel"]).is_some(),
         },

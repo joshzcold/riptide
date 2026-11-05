@@ -1446,6 +1446,12 @@ fn collect_ui_update(
     }
 
     let mut keyhint_wait = None;
+    // The file picker shows as many files as completion would, and asks for
+    // a folder's listing when its text names another one.
+    s.engine.set_file_rows(completion_max_rows(s));
+    if let Some(wanted) = s.engine.take_file_listing() {
+        crate::fileselect::list(wanted, s.engine.settings());
+    }
     // A prompt takes the overlay; otherwise it shows command completions.
     let prompt = if focused {
         s.engine.prompt_view()
@@ -1941,8 +1947,18 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
             .sum()
     };
     let message_rows = lines(&prompt.message);
-    let input_row = usize::from(prompt.kind == "text");
-    let text_rows = 1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row;
+    let input_row = usize::from(matches!(prompt.kind, "text" | "files"));
+    // The file picker: a line saying what's listed, then its files, as
+    // tall as completion unless completion.shrink.
+    let file_rows = prompt.files.as_ref().map_or(0, |files| {
+        let listed = if s.engine.settings().bool("completion.shrink") {
+            files.items.len()
+        } else {
+            completion_max_rows(s)
+        };
+        1 + listed
+    });
+    let text_rows = 1 + message_rows.clamp(1, MAX_MESSAGE_ROWS) + input_row + file_rows;
     // A permission request draws the site large and what it wants as chips
     // (two rows each when floating), then what "always" keeps.
     let text_rows = match (&prompt.site, floating_prompt_box(s)) {
@@ -1952,10 +1968,12 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
     };
     match floating_prompt_box(s) {
         // One button per option instead of the one-line hint.
-        Some(_) => text_rows + prompt.options.len(),
+        Some(_) if prompt.files.is_none() => text_rows + prompt.options.len(),
         // A docked picker lists its items a row each.
         None if prompt.kind == "select" => text_rows + prompt.options.len(),
-        None => text_rows + 1,
+        // The file picker's key buttons wrap like its one-line hint would.
+        _ if prompt.files.is_some() => text_rows + lines(&prompt.hint),
+        _ => text_rows + 1,
     }
 }
 
@@ -1969,7 +1987,12 @@ const PROMPT_OPTIONS_GAP: i32 = 8;
 
 /// A floating prompt's height in pixels: its text rows, then a button per option.
 fn floating_prompt_height(rows: usize, prompt: &rt_core::prompt::PromptView) -> i32 {
-    let options = prompt.options.len();
+    // The file picker shows its keys as a one-line hint instead.
+    let options = if prompt.files.is_some() {
+        0
+    } else {
+        prompt.options.len()
+    };
     let text_rows = rows.saturating_sub(options) as i32;
     text_rows * row_height()
         + options as i32 * prompt_option_height()

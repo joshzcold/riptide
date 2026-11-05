@@ -85,7 +85,7 @@ pub fn rank(name: &str, typed: &str) -> Option<u8> {
 }
 
 /// [`rank`] for a name that contains the text; worse ranks only match letters.
-const CONTAINS: u8 = 3;
+pub(crate) const CONTAINS: u8 = 3;
 
 /// `typed`'s letters in `name` in order, with gaps: a score, lower is
 /// better, from the gaps and how many letters start a part of the name.

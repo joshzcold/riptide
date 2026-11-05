@@ -129,6 +129,7 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `content.widevine_update_interval` | integer | `7` | Every this many days, a start with content.widevine on lets Chromium update the CDM, with its other components (0: never) |
 | `crash_report.email` | string | `` | Where :crash-report's Email button sends a report; empty hides the button |
 | `downloads.location.directory` | string | `` | Where downloads go; empty means the system Downloads folder |
+| `downloads.location.picker` | boolean | `false` | List the folder's files under the "Save file to" prompt, as the file picker does: typing narrows them and Tab completes the path |
 | `downloads.location.prompt` | boolean | `true` | Ask where to save each download (false saves straight to the directory) |
 | `downloads.location.remember` | boolean | `true` | Start the save prompt in the folder the last download went to |
 | `downloads.location.suggestion` | both \| path \| filename | `both` | What the save prompt starts with: the folder and file name (both), the folder (path), or the file name |
@@ -138,10 +139,15 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `editor.remove_file` | boolean | `true` | Delete the temporary file after the editor closes; false keeps it, e.g. to recover text |
 | `extensions.check_interval` | integer | `1` | Every this many days, check extensions installed from the Web Store for newer versions in the background and say once which have updates; nothing updates by itself (0: never) |
 | `extensions.load` | string[] | `[]` | Folders of unpacked Chrome extensions to load, besides the ones :extension-install installs (after a restart) |
-| `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external; {} is the file it writes the path to |
-| `fileselect.handler` | default \| external | `default` | File pickers for upload fields: Chromium's own (default), or the fileselect.*.command programs (external) |
-| `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external; {} is the file it writes the paths to, one per line |
-| `fileselect.single_file.command` | string[] | `["xterm","-e","ranger","--choosefile={}"]` | Program that picks a file for fileselect.handler = external; {} is the file it writes the path to |
+| `fileselect.directory` | string | `` | Folder the file picker (and {dir} in fileselect.*.command) starts in; empty means the last folder files were chosen from, or your home folder |
+| `fileselect.folder.command` | string[] | `["xterm","-e","ranger","--choosedir={}"]` | Program that picks a folder for fileselect.handler = external and Alt-e; {} is the file it writes the path to, {dir} the folder to start in |
+| `fileselect.handler` | default \| external \| prompt | `default` | File pickers for upload fields: Chromium's own (default), the fileselect.*.command programs (external), or riptide's fuzzy picker in the prompt area (prompt) |
+| `fileselect.multiple_files.command` | string[] | `["xterm","-e","ranger","--choosefiles={}"]` | Program that picks several files for fileselect.handler = external and Alt-e; {} is the file it writes the paths to, one per line, {dir} the folder to start in, {extensions} what the page accepts |
+| `fileselect.prompt.command` | string[] | `[]` | Program that lists what the file picker offers, one path per line, run in the folder listed ({dir} and {extensions} are filled in); empty lists the folder itself |
+| `fileselect.prompt.hidden` | boolean | `false` | Offer files and folders whose names start with a dot in the file picker |
+| `fileselect.prompt.ignore` | string[] | `["node_modules","target","__pycache__"]` | Folders the file picker doesn't look inside (it still lists them) |
+| `fileselect.prompt.max_files` | integer | `50000` | The most files and folders the file picker lists, nearest first |
+| `fileselect.single_file.command` | string[] | `["xterm","-e","ranger","--choosefile={}"]` | Program that picks a file for fileselect.handler = external and Alt-e; {} is the file it writes the path to, {dir} the folder to start in, {extensions} what the page accepts |
 | `fonts.completion.category` | string | `bold default_size default_family` | Font of completion category headers (default_size and default_family stand for those settings) |
 | `fonts.completion.entry` | string | `default_size default_family` | Font of completion entries |
 | `fonts.default_family` | string | `"DejaVu Sans Mono", Monospace, monospace` | Font family that the other fonts.* settings call default_family |

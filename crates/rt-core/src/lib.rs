@@ -9,6 +9,7 @@ pub mod config;
 pub mod dictionaries;
 pub mod engine;
 pub mod extensions;
+pub mod fileselect;
 pub mod help;
 pub mod hints;
 pub mod html;
