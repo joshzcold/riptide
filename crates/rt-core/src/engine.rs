@@ -4366,6 +4366,8 @@ mod tests {
         assert_eq!(e.prompt_view().unwrap().input, "~/x.txt");
     }
 
+    // Typed paths here are Unix ones; the fileselect tests cover joining paths.
+    #[cfg(unix)]
     #[test]
     fn the_file_picker_narrows_marks_enters_folders_and_answers() {
         use crate::fileselect::{Entry, FileMode, FileRequest};
