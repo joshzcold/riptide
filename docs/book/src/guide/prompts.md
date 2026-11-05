@@ -121,14 +121,15 @@ With `fileselect.handler = "prompt"`, the picker lists the files under a folder,
 | Key | What it does |
 |---|---|
 | `Down`/`Up`, `Ctrl-n`/`Ctrl-p` | select the next or previous file |
-| `Tab`/`Shift-Tab` | in a field that takes several files, mark the selected one; otherwise move |
+| `Tab`/`Shift-Tab` | complete, as on the command line: put the next or previous match's path in the text while the list stays; type `/` after a folder to list it. In a field that takes several files, `Tab` on a file marks it instead |
 | `Return` | choose the marked files, or the selected (or best) one; on a folder, list it instead |
 | `Ctrl-l` | list the selected folder |
 | `Ctrl-w` | go up a folder |
 | `Alt-e` | choose with the field's `fileselect.*.command` instead |
+| `Alt-o` | choose with the system's file dialog instead; cancelling it comes back to the picker |
 | `Escape` | cancel |
 
-Typing a path that starts with `/` or `~/` lists that folder: `~/Pictures/ cat` finds the cats in your Pictures. In a folder field, the first entry, `./`, is the folder being listed.
+The keys are also buttons on the picker's last line, for the mouse. Typing a path that starts with `/` or `~/` lists that folder: `~/Pictures/ cat` finds the cats in your Pictures. In a folder field, the first entry, `./`, is the folder being listed.
 
 It starts in `fileselect.directory`, or the folder you last chose files from. These settings change what it lists:
 

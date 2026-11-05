@@ -1971,6 +1971,8 @@ fn prompt_rows(s: &Shell, prompt: &rt_core::prompt::PromptView) -> usize {
         Some(_) if prompt.files.is_none() => text_rows + prompt.options.len(),
         // A docked picker lists its items a row each.
         None if prompt.kind == "select" => text_rows + prompt.options.len(),
+        // The file picker's key buttons wrap like its one-line hint would.
+        _ if prompt.files.is_some() => text_rows + lines(&prompt.hint),
         _ => text_rows + 1,
     }
 }

@@ -225,6 +225,7 @@ Change these with `:bind`, `[bindings.<mode>]` in `config.toml` or `rt.bind()` i
 | `<Alt-d>` | `rl-kill-word` |
 | `<Alt-e>` | `prompt-fileselect-external` |
 | `<Alt-f>` | `rl-forward-word` |
+| `<Alt-o>` | `prompt-fileselect-native` |
 | `<Alt-y>` | `prompt-yank` |
 | `<Backspace>` | `rl-backward-delete-char` |
 | `<Ctrl-a>` | `rl-beginning-of-line` |

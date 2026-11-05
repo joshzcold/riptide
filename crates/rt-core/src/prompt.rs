@@ -211,12 +211,16 @@ impl Prompt {
             PromptKind::Alert => vec![option("<Return>", "Return or Escape", "close")],
             PromptKind::Files(ref request) => {
                 let mut options = Vec::new();
-                if request.mode == crate::fileselect::FileMode::Multiple {
-                    options.push(option("<Tab>", "Tab", "mark"));
-                }
+                let tab = if request.mode == crate::fileselect::FileMode::Multiple {
+                    "mark or complete"
+                } else {
+                    "complete"
+                };
+                options.push(option("<Tab>", "Tab", tab));
                 options.push(option("<Return>", "Return", "choose"));
                 options.push(option("<Ctrl-l>", "Ctrl-l", "into folder"));
                 options.push(option("<Alt-e>", "Alt-e", "external"));
+                options.push(option("<Alt-o>", "Alt-o", "system dialog"));
                 options.push(option("<Escape>", "Escape", "cancel"));
                 options
             }

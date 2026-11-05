@@ -189,6 +189,9 @@ pub struct Engine {
     file_listing: Option<ListRequest>,
     /// How many of the picker's files fit in the overlay.
     file_rows: usize,
+    /// Tab completed an entry into the picker's text: what was typed before
+    /// (the list stays as it narrowed) and the text Tab put in.
+    file_tab: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -284,6 +287,7 @@ impl Engine {
             files: None,
             file_listing: None,
             file_rows: 10,
+            file_tab: None,
         }
     }
 
@@ -845,8 +849,17 @@ impl Engine {
             Some(picker) if picker.prompt == id => picker,
             files => files.insert(Picker::new(id, request)),
         };
+        // While the text is what Tab put in, the list follows what was typed.
+        let text = self.prompt_editor.text();
+        let text = match &self.file_tab {
+            Some((typed, inserted)) if inserted == text => typed.as_str(),
+            _ => {
+                self.file_tab = None;
+                text
+            }
+        };
         let home = std::env::home_dir();
-        if let Some(wanted) = picker.sync(self.prompt_editor.text(), home.as_deref()) {
+        if let Some(wanted) = picker.sync(text, home.as_deref()) {
             self.file_listing = Some(wanted);
             self.dirty = true;
         }
@@ -935,6 +948,50 @@ impl Engine {
         }
         let paths = chosen.iter().map(|p| p.display().to_string()).collect();
         self.answer_prompt(PromptAnswer::Files(paths), effects);
+    }
+
+    /// Tab in the file picker, like completion: the selected entry's path
+    /// goes into the text (a folder's without its `/`), and the list stays
+    /// as what was typed narrowed it, so Tab again puts in the next one.
+    /// Typing makes the text the search again. In a field that takes several
+    /// files, Tab marks a file instead.
+    fn complete_file(&mut self, forward: bool) {
+        let text = self.prompt_editor.text().to_string();
+        let cycling = self
+            .file_tab
+            .as_ref()
+            .is_some_and(|(_, inserted)| *inserted == text);
+        let typed = match &self.file_tab {
+            Some((typed, _)) if cycling => typed.clone(),
+            _ => text,
+        };
+        let Some(picker) = self.file_picker() else {
+            return;
+        };
+        let multiple = picker.request.mode == FileMode::Multiple;
+        if !cycling && multiple && picker.current().is_some_and(|e| !e.dir) {
+            picker.mark(forward);
+            self.dirty = true;
+            return;
+        }
+        if cycling {
+            picker.focus(forward);
+        } else {
+            picker.select_current();
+        }
+        // `./`, the folder listed, is already in the text.
+        let path = picker
+            .current()
+            .filter(|e| e.path != ".")
+            .and_then(|_| picker.current_path());
+        self.dirty = true;
+        let Some(path) = path else {
+            return;
+        };
+        let home = std::env::home_dir();
+        let inserted = crate::fileselect::display(&path, home.as_deref());
+        self.prompt_editor.set(&inserted);
+        self.file_tab = Some((typed, inserted));
     }
 
     /// List the selected folder in the file picker.
@@ -1801,12 +1858,16 @@ impl Engine {
                 }
             }
             Command::PromptFileselectEnter => self.enter_folder(),
-            Command::PromptComplete if self.file_prompt().is_some() => {
-                if let Some(picker) = self.file_picker() {
-                    picker.mark(true);
-                    self.dirty = true;
-                }
+            Command::PromptFileselectNative if self.file_prompt().is_some() => {
+                effects.push(Effect::Run {
+                    command: Command::PromptFileselectNative,
+                    count: None,
+                });
             }
+            Command::PromptFileselectNative => {
+                self.show_message(Level::Error, "This prompt doesn't choose files");
+            }
+            Command::PromptComplete if self.file_prompt().is_some() => self.complete_file(true),
             Command::PromptComplete => {
                 let path = matches!(
                     self.active_prompt().map(|p| &p.kind),
@@ -1939,14 +2000,11 @@ impl Engine {
             Command::CompletionFocus(direction) | Command::CompletionMark(direction)
                 if self.mode == Mode::Prompt =>
             {
-                let mark = matches!(cmd, Command::CompletionMark(_));
-                if let Some(picker) = self.file_picker() {
-                    let forward = direction == FocusDirection::Next;
-                    if mark {
-                        picker.mark(forward);
-                    } else {
-                        picker.focus(forward);
-                    }
+                let forward = direction == FocusDirection::Next;
+                if matches!(cmd, Command::CompletionMark(_)) {
+                    self.complete_file(forward);
+                } else if let Some(picker) = self.file_picker() {
+                    picker.focus(forward);
                     self.dirty = true;
                 }
             }
@@ -4300,6 +4358,42 @@ mod tests {
         // Return on a folder lists it; Ctrl-w goes back up.
         e.push_prompt(prompt(2, request(FileMode::Single)));
         let wanted = e.take_file_listing().unwrap();
+        let start = vec![entry("docs", true), entry("readme.md", false)];
+        e.set_file_listing(2, &wanted.root, start.clone(), None);
+        // Tab writes the selected file's path in.
+        press(&mut e, "read<Tab>");
+        assert_eq!(e.prompt_view().unwrap().input, "/start/readme.md");
+        press(&mut e, "<Ctrl-u>");
+        e.take_file_listing();
+        e.set_file_listing(2, &wanted.root, start, None);
+        // Tab on a folder writes its path in without the `/`; the list stays
+        // as typing narrowed it, so Tab again takes the next match.
+        press(&mut e, "<Ctrl-u>");
+        e.take_file_listing();
+        e.set_file_listing(
+            2,
+            &wanted.root,
+            vec![entry("docs", true), entry("dotfiles", true)],
+            None,
+        );
+        press(&mut e, "do<Tab>");
+        assert_eq!(e.prompt_view().unwrap().input, "/start/docs");
+        assert!(e.take_file_listing().is_none());
+        let names = |e: &Engine| -> Vec<String> {
+            let view = e.prompt_view().unwrap().files.unwrap();
+            view.items.into_iter().map(|r| r.name).collect()
+        };
+        assert_eq!(names(&e), ["docs/", "dotfiles/"]);
+        press(&mut e, "<Tab>");
+        assert_eq!(e.prompt_view().unwrap().input, "/start/dotfiles");
+        press(&mut e, "<Shift-Tab>");
+        assert_eq!(e.prompt_view().unwrap().input, "/start/docs");
+        // Typing `/` lists the folder.
+        press(&mut e, "/");
+        let docs = e.take_file_listing().expect("lists the folder typed");
+        assert_eq!(docs.root, std::path::PathBuf::from("/start/docs/"));
+        press(&mut e, "<Ctrl-u>");
+        e.take_file_listing();
         e.set_file_listing(2, &wanted.root, vec![entry("docs", true)], None);
         assert!(answers(&press(&mut e, "<Return>")).is_empty());
         assert_eq!(e.prompt_view().unwrap().input, "/start/docs/");
@@ -4310,6 +4404,10 @@ mod tests {
         let wanted = e.take_file_listing().expect("lists the folder above");
         assert_eq!(wanted.root, std::path::PathBuf::from("/start/"));
         assert!(e.file_prompt().is_some());
+        assert_eq!(
+            runs(&press(&mut e, "<Alt-o>")),
+            vec![(Command::PromptFileselectNative, None)]
+        );
         // An external picker's answer, then Escape on an empty one cancels.
         assert!(e.answer_file_prompt(2, Vec::new()).is_empty());
         let out = e.answer_file_prompt(2, vec!["/x".into()]);

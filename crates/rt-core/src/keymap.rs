@@ -488,6 +488,7 @@ const PROMPT_DEFAULTS: &[(&str, &str)] = &[
     ("<Alt-y>", "prompt-yank"),
     ("<Ctrl-x>", "prompt-open-download"),
     ("<Alt-e>", "prompt-fileselect-external"),
+    ("<Alt-o>", "prompt-fileselect-native"),
     ("<Shift-Tab>", "completion-item-mark prev"),
     ("<Down>", "completion-item-focus next"),
     ("<Up>", "completion-item-focus prev"),

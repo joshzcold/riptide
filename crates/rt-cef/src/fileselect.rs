@@ -22,6 +22,10 @@ use crate::{prompts, shell, spawn};
 /// field's `fileselect.*.command`; in a file prompt, put the folder a
 /// picker chose into it.
 pub fn run_command(command: &Command) -> bool {
+    if *command == Command::PromptFileselectNative {
+        native();
+        return true;
+    }
     if *command != Command::PromptFileselectExternal {
         return false;
     }
@@ -49,6 +53,62 @@ pub fn run_command(command: &Command) -> bool {
         }
     });
     true
+}
+
+thread_local! {
+    /// `:prompt-fileselect-native` opened the system's dialog: until it's
+    /// dismissed, file dialogs are that one, so Chromium shows its own.
+    static NATIVE_OPEN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// `:prompt-fileselect-native`: answer the file picker with the system's
+/// file dialog. Cancelling it leaves the picker open.
+fn native() {
+    let found = shell::with(|s| {
+        let (id, request) = s.engine.file_prompt()?;
+        let host = s.tabs.current()?.browser()?.host()?;
+        Some((id, request, host))
+    })
+    .flatten();
+    let Some((id, request, host)) = found else {
+        return shell::show_message(Level::Error, "No tab to show the file dialog for");
+    };
+    let mode = match request.mode {
+        FileMode::Single => FileDialogMode::OPEN,
+        FileMode::Multiple => FileDialogMode::OPEN_MULTIPLE,
+        FileMode::Folder => FileDialogMode::OPEN_FOLDER,
+    };
+    let mut filters = CefStringList::new();
+    for extension in &request.extensions {
+        filters.append(&format!(".{extension}"));
+    }
+    let dir = CefString::from(request.dir.display().to_string().as_str());
+    let mut callback = RtNativeDialog::new(id);
+    NATIVE_OPEN.with(|n| n.set(true));
+    host.run_file_dialog(
+        mode,
+        None,
+        Some(&dir),
+        Some(&mut filters),
+        Some(&mut callback),
+    );
+}
+
+wrap_run_file_dialog_callback! {
+    struct RtNativeDialog {
+        prompt: u64,
+    }
+
+    impl RunFileDialogCallback {
+        fn on_file_dialog_dismissed(&self, file_paths: Option<&mut CefStringList>) {
+            NATIVE_OPEN.with(|n| n.set(false));
+            let paths = file_paths.map(crate::favicons::read_list).unwrap_or_default();
+            if let Some(effects) = shell::with(|s| s.engine.answer_file_prompt(self.prompt, paths)) {
+                shell::apply(effects);
+            }
+            shell::refresh_ui();
+        }
+    }
 }
 
 fn setting_list(name: &str) -> Vec<String> {
@@ -275,6 +335,10 @@ wrap_dialog_handler! {
             _accept_descriptions: Option<&mut CefStringList>,
             callback: Option<&mut FileDialogCallback>,
         ) -> ::std::os::raw::c_int {
+            // Chromium's own dialog runner asks again; both are the native one.
+            if NATIVE_OPEN.with(Cell::get) {
+                return 0;
+            }
             let mode = if mode == FileDialogMode::OPEN_MULTIPLE {
                 FileMode::Multiple
             } else if mode == FileDialogMode::OPEN_FOLDER {

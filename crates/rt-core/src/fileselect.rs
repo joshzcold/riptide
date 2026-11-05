@@ -432,6 +432,13 @@ impl Picker {
         self.current().map(|e| self.absolute(e))
     }
 
+    /// Select the current entry: the best match, if none is selected.
+    pub fn select_current(&mut self) {
+        if self.selected.is_none() && !self.ranked.is_empty() {
+            self.selected = Some(0);
+        }
+    }
+
     pub fn focus(&mut self, forward: bool) {
         let len = self.ranked.len();
         if len == 0 {
