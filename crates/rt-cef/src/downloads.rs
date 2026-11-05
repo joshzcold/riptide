@@ -251,15 +251,16 @@ wrap_download_handler! {
             if crate::extensions::crx_download(&url, &name) {
                 return 1;
             }
-            let (ask, remember, suggest) = shell::with(|s| {
+            let (ask, remember, suggest, picker) = shell::with(|s| {
                 let settings = s.engine.settings();
                 (
                     settings.bool("downloads.location.prompt"),
                     settings.bool("downloads.location.remember"),
                     settings.str("downloads.location.suggestion").to_string(),
+                    settings.bool("downloads.location.picker"),
                 )
             })
-            .unwrap_or((true, true, "both".into()));
+            .unwrap_or((true, true, "both".into(), false));
             let dir = LAST_DIR
                 .with(|d| d.borrow().clone())
                 .filter(|d| remember && d.is_dir())
@@ -275,12 +276,18 @@ wrap_download_handler! {
                 _ => suggestion.to_string_lossy().into_owned(),
             };
             let prompt_url = url.clone();
+            // downloads.location.picker: the folder's files under the text.
+            let kind = if picker {
+                PromptKind::Save { default, dir: dir.clone() }
+            } else {
+                PromptKind::Text { default, masked: false, path: true }
+            };
             prompts::ask_about(
                 browser,
                 Scope::Other, rt_core::prompt::Topic::Download,
                 "Save file to",
                 name.clone(),
-                PromptKind::Text { default, masked: false, path: true },
+                kind,
                 Some(prompt_url),
                 true,
                 move |answer| {

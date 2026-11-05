@@ -18,6 +18,8 @@ pub enum FileMode {
     Multiple,
     /// A folder (`<input webkitdirectory>`).
     Folder,
+    /// Where to save a download: the list only helps complete the path typed.
+    Save,
 }
 
 impl FileMode {
@@ -27,6 +29,7 @@ impl FileMode {
             FileMode::Single => "file",
             FileMode::Multiple => "files",
             FileMode::Folder => "folder",
+            FileMode::Save => "save",
         }
     }
 
@@ -44,7 +47,7 @@ impl FileMode {
         match self {
             FileMode::Single => "fileselect.single_file.command",
             FileMode::Multiple => "fileselect.multiple_files.command",
-            FileMode::Folder => "fileselect.folder.command",
+            FileMode::Folder | FileMode::Save => "fileselect.folder.command",
         }
     }
 }

@@ -1343,7 +1343,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     ),
     hidden(
         "prompt-fileselect-native",
-        "In the file picker, choose with the system's file dialog instead (Alt-o)",
+        "In the file picker or the save prompt, choose with the system's file dialog instead (Alt-o)",
     ),
     hidden(
         "prompt-fileselect-enter",

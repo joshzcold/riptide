@@ -121,3 +121,28 @@ end)
         s.message() == Some(&format!("picked {}", chosen.display()))
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn the_save_prompt_lists_the_folder_and_tab_completes_into_it() {
+    let b = Browser::launch()
+        .toml(
+            "downloads.location.directory = \"{scratch}/dl\"\ndownloads.location.prompt = true\n\
+             downloads.location.picker = true\n",
+        )
+        .start("download.html");
+    std::fs::create_dir_all(b.scratch().join("dl/sub")).unwrap();
+    b.follow_hint("hint", |h| h.text == "download");
+    b.wait_mode("prompt");
+    // Without the name, the folder's entries show; typing narrows them.
+    b.keys("<Ctrl-w>su");
+    b.wait_until("the folder narrows to sub", |s| listed(s) == ["sub/"]);
+    b.keys("<Tab>");
+    b.wait_until("Tab completes the folder", |s| {
+        s.prompt
+            .as_ref()
+            .is_some_and(|p| p["input"].as_str().is_some_and(|i| i.ends_with("/dl/sub")))
+    });
+    b.keys("<Return>");
+    assert_eq!(b.wait_file(&b.scratch().join("dl/sub/saved.txt")), "hello");
+}

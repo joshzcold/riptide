@@ -22,6 +22,13 @@ pub enum PromptKind {
     /// The file picker: typing narrows the files under a folder, and the
     /// answer is [`PromptAnswer::Files`].
     Files(crate::fileselect::FileRequest),
+    /// Where to save a download, with the file picker's list under the text
+    /// (`downloads.location.picker`): typing narrows what's in `dir` or the
+    /// folder typed, Tab completes, and the answer is the text.
+    Save {
+        default: String,
+        dir: std::path::PathBuf,
+    },
 }
 
 /// The keys that pick a [`PromptKind::Select`] item, in order.
@@ -209,6 +216,13 @@ impl Prompt {
                 }
             }
             PromptKind::Alert => vec![option("<Return>", "Return or Escape", "close")],
+            PromptKind::Save { .. } => vec![
+                option("<Tab>", "Tab", "complete"),
+                option("<Return>", "Return", "save"),
+                option("<Alt-e>", "Alt-e", "pick folder"),
+                option("<Alt-o>", "Alt-o", "system dialog"),
+                option("<Escape>", "Escape", "cancel"),
+            ],
             PromptKind::Files(ref request) => {
                 let mut options = Vec::new();
                 let tab = if request.mode == crate::fileselect::FileMode::Multiple {

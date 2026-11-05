@@ -96,12 +96,15 @@ Downloads go to `downloads.location.directory`, or the system Downloads folder i
 
 In the "Save file to" prompt, `Tab` completes file and directory names, as in a shell, and `Alt-e` picks the folder with `fileselect.folder.command` (see below). `Ctrl-x` opens the file instead of keeping it: it downloads to a temporary folder and opens with `downloads.open_dispatcher` or your desktop's default; `:prompt-open-download zathura` names a program. `Alt-y` copies the download's URL, in any prompt that has one.
 
+With `downloads.location.picker = true`, the save prompt lists what's in the folder you're typing in, the way the upload file picker does. The name typed narrows it, so a file it would replace shows up. Delete the name (`Ctrl-w`) to see the folder's files and folders, type to narrow them, and press `Tab` (or `Down`/`Up`) to complete a match into the path. Type `/` after a folder to list it. `Return` saves to what's typed; a folder keeps the download's name. `Alt-o` opens the system's save dialog at the path typed instead.
+
 `:download-open` uses `downloads.open_dispatcher` if you set one (`{}` is the file, or it goes at the end), and the system's opener (`xdg-open`, `open` or `start`) otherwise.
 
 | Setting | What it does |
 |---|---|
 | `downloads.location.suggestion` | What the save prompt starts with: folder and name (`both`), the folder (`path`), or the name (`filename`; a bare name saves into the download folder) |
 | `downloads.location.remember` | Start the prompt in the folder the last download went to (on by default) |
+| `downloads.location.picker` | List the folder under the prompt, as [the file picker](#the-file-picker) does (off by default) |
 | `downloads.remove_finished` | Take finished downloads off the list after this many milliseconds (`-1`, the default, keeps them) |
 
 ## Choosing files to upload

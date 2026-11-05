@@ -61,28 +61,40 @@ thread_local! {
     static NATIVE_OPEN: Cell<bool> = const { Cell::new(false) };
 }
 
-/// `:prompt-fileselect-native`: answer the file picker with the system's
-/// file dialog. Cancelling it leaves the picker open.
+/// `:prompt-fileselect-native`: answer the file picker (or the save prompt)
+/// with the system's file dialog. Cancelling it leaves the prompt open.
 fn native() {
     let found = shell::with(|s| {
-        let (id, request) = s.engine.file_prompt()?;
+        let (id, request, text) = s.engine.picker_request()?;
         let host = s.tabs.current()?.browser()?.host()?;
-        Some((id, request, host))
+        Some((id, request, text, host))
     })
     .flatten();
-    let Some((id, request, host)) = found else {
+    let Some((id, request, text, host)) = found else {
         return shell::show_message(Level::Error, "No tab to show the file dialog for");
     };
     let mode = match request.mode {
         FileMode::Single => FileDialogMode::OPEN,
         FileMode::Multiple => FileDialogMode::OPEN_MULTIPLE,
         FileMode::Folder => FileDialogMode::OPEN_FOLDER,
+        FileMode::Save => FileDialogMode::SAVE,
     };
     let mut filters = CefStringList::new();
     for extension in &request.extensions {
         filters.append(&format!(".{extension}"));
     }
-    let dir = CefString::from(request.dir.display().to_string().as_str());
+    // Saving, the dialog starts at the path typed (a bare name in the folder).
+    let start = if request.mode == FileMode::Save && !text.trim().is_empty() {
+        let typed = rt_config::downloads::expand_home(text.trim(), std::env::home_dir().as_deref());
+        if typed.is_relative() {
+            request.dir.join(typed)
+        } else {
+            typed
+        }
+    } else {
+        request.dir.clone()
+    };
+    let dir = CefString::from(start.display().to_string().as_str());
     let mut callback = RtNativeDialog::new(id);
     NATIVE_OPEN.with(|n| n.set(true));
     host.run_file_dialog(
@@ -162,6 +174,7 @@ pub fn ask(
 ) {
     let message = match (request.mode, request.extensions.is_empty()) {
         (FileMode::Folder, _) => "Choose a folder".to_string(),
+        (FileMode::Save, _) => "Save to".to_string(),
         (FileMode::Multiple, true) => "Choose files".to_string(),
         (FileMode::Single, true) => "Choose a file".to_string(),
         (_, false) => format!("Choose {}", request.extensions.join(", ")),

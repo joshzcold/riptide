@@ -1378,6 +1378,12 @@ pub static SETTINGS: &[SettingDef] = &[
         "Where downloads go; empty means the system Downloads folder"
     ),
     def!(
+        "downloads.location.picker",
+        Kind::Bool,
+        Value::Bool(false),
+        "List the folder's files under the \"Save file to\" prompt, as the file picker does: typing narrows them and Tab completes the path"
+    ),
+    def!(
         "downloads.location.prompt",
         Kind::Bool,
         Value::Bool(true),
