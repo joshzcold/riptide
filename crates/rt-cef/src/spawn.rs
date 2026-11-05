@@ -63,8 +63,13 @@ thread_local! {
 type Picked = Box<dyn FnOnce(Vec<String>)>;
 
 /// Run a `fileselect.*.command` `template` (with `{}` replaced by a file to
-/// write the chosen paths to) and hand `picked` the paths.
-pub fn pick_files(template: &[String], picked: impl FnOnce(Vec<String>) + 'static) {
+/// write the chosen paths to, and `{dir}`, `{extensions}` and the
+/// `RIPTIDE_FILESELECT_*` variables from `request`) and hand `picked` the paths.
+pub fn pick_files(
+    template: &[String],
+    request: Option<&rt_core::fileselect::FileRequest>,
+    picked: impl FnOnce(Vec<String>) + 'static,
+) {
     let started = temp_dir("fileselect").and_then(|dir| {
         let file = dir.join("chosen.txt");
         std::fs::write(&file, "")?;
@@ -78,7 +83,10 @@ pub fn pick_files(template: &[String], picked: impl FnOnce(Vec<String>) + 'stati
         }
     };
     let path = file.to_string_lossy();
-    let argv: Vec<String> = template.iter().map(|a| a.replace("{}", &path)).collect();
+    let argv: Vec<String> = match request {
+        Some(request) => request.expand(template, &path),
+        None => template.iter().map(|a| a.replace("{}", &path)).collect(),
+    };
     let Some((program, args)) = argv.split_first() else {
         picked(Vec::new());
         return shell::show_message(Level::Error, "The fileselect command is empty");
@@ -95,6 +103,9 @@ pub fn pick_files(template: &[String], picked: impl FnOnce(Vec<String>) + 'stati
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
+    if let Some(request) = request {
+        process.envs(request.env());
+    }
     run_in_background(process, Then::FileSelect { file, id }, Some(dir));
 }
 

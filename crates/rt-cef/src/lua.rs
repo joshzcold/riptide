@@ -121,6 +121,7 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 post_delayed_task(ThreadId::UI, Some(&mut task), i64::from(ms));
             }
             Action::Spawn(request) => crate::spawn::run_for_lua(request),
+            Action::AnswerFileselect { id, paths } => crate::fileselect::answer_taken(id, paths),
             Action::Bind {
                 mode,
                 keys,
@@ -257,6 +258,20 @@ pub fn carry_out_for(source: &str, result: Result<Vec<Action>, String>) {
                 ask,
             } => {
                 let kind = match ask {
+                    lua::Ask::Files {
+                        mode,
+                        dir,
+                        extensions,
+                    } => {
+                        let request =
+                            crate::fileselect::lua_request(mode, dir.as_deref(), extensions);
+                        crate::fileselect::ask(None, source, request, move |paths| {
+                            let json =
+                                (!paths.is_empty()).then(|| serde_json::json!(paths).to_string());
+                            carry_out(lua::answered(id, json, &context(None)));
+                        });
+                        continue;
+                    }
                     lua::Ask::Select(items) => rt_core::prompt::PromptKind::Select { items },
                     lua::Ask::Input { default, secret } => rt_core::prompt::PromptKind::Text {
                         default,
@@ -389,6 +404,18 @@ pub fn check_theme() {
 /// Hand an `rt.spawn` program's result to its callback.
 pub fn spawned(callback: u32, result: &lua::SpawnResult) {
     carry_out(lua::spawned(callback, result, &context(None)));
+}
+
+/// An upload field wants files: a `fileselect` hook may take it, to answer
+/// with `rt.answer_fileselect`. Returns whether one did.
+pub fn fileselect(fields: &[(&str, &str)]) -> bool {
+    if !lua::has_hooks("fileselect") {
+        return false;
+    }
+    let result = lua::fileselect(fields, &context(None));
+    let taken = matches!(result, Ok((true, _)));
+    carry_out(result.map(|(_, actions)| actions));
+    taken
 }
 
 /// Keys in normal mode that nothing is bound to: `key` hooks may keep them

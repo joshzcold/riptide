@@ -43,7 +43,10 @@ wrap_jsdialog_handler! {
                 let (ok, input) = match answer {
                     PromptAnswer::Ok | PromptAnswer::Yes { .. } => (1, String::new()),
                     PromptAnswer::Text(text) => (1, text),
-                    PromptAnswer::No { .. } | PromptAnswer::Cancelled | PromptAnswer::OpenDownload { .. } => {
+                    PromptAnswer::No { .. }
+                    | PromptAnswer::Cancelled
+                    | PromptAnswer::OpenDownload { .. }
+                    | PromptAnswer::Files(_) => {
                         (0, String::new())
                     }
                 };

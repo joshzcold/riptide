@@ -106,10 +106,72 @@ In the "Save file to" prompt, `Tab` completes file and directory names, as in a 
 
 ## Choosing files to upload
 
-Upload fields open Chromium's file dialog. To use a terminal file manager instead, set `fileselect.handler = "external"`. Riptide runs the command for the field (`fileselect.single_file.command`, `fileselect.multiple_files.command` or `fileselect.folder.command`) with `{}` replaced by a file to write the chosen paths to, one per line. The defaults run ranger in xterm. For yazi in foot:
+Upload fields open Chromium's file dialog. `fileselect.handler` picks something else:
+
+| `fileselect.handler` | What an upload field opens |
+|---|---|
+| `default` | Chromium's file dialog |
+| `prompt` | riptide's fuzzy file picker, in the prompt area |
+| `external` | a program of yours, such as ranger, yazi or fzf in a terminal |
+
+### The file picker
+
+With `fileselect.handler = "prompt"`, the picker lists the files under a folder, nearest first, and typing narrows them the way `:open` completion does: words in any order, then letters with gaps (`dgprm` finds `docs/guide/prompts.md`). If the page accepts only some file types (`accept=".pdf"`), other files are hidden.
+
+| Key | What it does |
+|---|---|
+| `Down`/`Up`, `Ctrl-n`/`Ctrl-p` | select the next or previous file |
+| `Tab`/`Shift-Tab` | in a field that takes several files, mark the selected one; otherwise move |
+| `Return` | choose the marked files, or the selected (or best) one; on a folder, list it instead |
+| `Ctrl-l` | list the selected folder |
+| `Ctrl-w` | go up a folder |
+| `Alt-e` | choose with the field's `fileselect.*.command` instead |
+| `Escape` | cancel |
+
+Typing a path that starts with `/` or `~/` lists that folder: `~/Pictures/ cat` finds the cats in your Pictures. In a folder field, the first entry, `./`, is the folder being listed.
+
+It starts in `fileselect.directory`, or the folder you last chose files from. These settings change what it lists:
+
+| Setting | What it does |
+|---|---|
+| `fileselect.prompt.hidden` | Offer names starting with a dot |
+| `fileselect.prompt.ignore` | Folders not to look inside (`node_modules`, `target` and `__pycache__` by default) |
+| `fileselect.prompt.max_files` | The most it lists (50,000) |
+| `fileselect.prompt.command` | A program that lists the files instead, one path per line |
+
+For example, to list what `fd` finds, which skips what `.gitignore` ignores:
+
+```toml
+fileselect.handler = "prompt"
+fileselect.prompt.command = ["fd", "--hidden", "--exclude", ".git"]
+```
+
+The program runs in the folder being listed, gets `{dir}` and `{extensions}` filled in like the external commands below, and may print paths relative to that folder or absolute ones.
+
+### An external picker
+
+With `fileselect.handler = "external"`, riptide runs the command for the field (`fileselect.single_file.command`, `fileselect.multiple_files.command` or `fileselect.folder.command`) with `{}` replaced by a file to write the chosen paths to, one per line. The defaults run ranger in xterm. For yazi in foot:
 
 ```toml
 fileselect.handler = "external"
 fileselect.single_file.command = ["foot", "yazi", "--chooser-file={}"]
 fileselect.multiple_files.command = ["foot", "yazi", "--chooser-file={}"]
 ```
+
+The command also gets what the page asked for:
+
+| | Placeholder | Environment variable |
+|---|---|---|
+| The folder to start in | `{dir}` | `RIPTIDE_FILESELECT_DIR` |
+| The extensions the page accepts, comma-separated (empty for any) | `{extensions}` | `RIPTIDE_FILESELECT_EXTENSIONS` |
+| `file`, `files` or `folder` | | `RIPTIDE_FILESELECT_MODE` |
+
+For fzf in a terminal, from the folder riptide suggests:
+
+```toml
+fileselect.handler = "external"
+fileselect.single_file.command = ["foot", "sh", "-c", "cd \"$RIPTIDE_FILESELECT_DIR\" && fd --type f | fzf | sed \"s|^|$PWD/|\" > \"$1\"", "sh", "{}"]
+fileselect.multiple_files.command = ["foot", "sh", "-c", "cd \"$RIPTIDE_FILESELECT_DIR\" && fd --type f | fzf --multi | sed \"s|^|$PWD/|\" > \"$1\"", "sh", "{}"]
+```
+
+Pressing `Escape` in fzf writes nothing, which cancels the upload. To decide per site, or to write your own picker in Lua, see [the `fileselect` event](../configuration/lua.md#choosing-files).

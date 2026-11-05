@@ -183,6 +183,31 @@ end)
 rt.ui.input({ prompt = "Passphrase", secret = true }, function(text) --[[ nil if cancelled ]] end)
 ```
 
+### Choosing files
+
+`rt.ui.pick_files(opts, on_choice)` opens riptide's file picker (see [choosing files to upload](../guide/prompts.md#choosing-files-to-upload)) and calls `on_choice` with a list of absolute paths, or `nil` if you cancel. `opts` takes `prompt`, `dir`, `multiple`, `folder` and `extensions`:
+
+```lua
+rt.command("upload-shot", function()
+  rt.ui.pick_files({ dir = "~/Pictures/Screenshots", extensions = { "png" } }, function(paths)
+    if paths then rt.notify("Picked " .. paths[1]) end
+  end)
+end)
+```
+
+The `fileselect` event runs when an upload field asks for files, before `fileselect.handler` is used. `e` has `mode` (`file`, `files` or `folder`), `dir`, `extensions` (comma-separated), `title`, `url` and `id`. A hook that returns `true` takes the field, and answers it later with `rt.answer_fileselect(e.id, paths)`, where `nil` cancels. For example, a different start folder on one site, and the usual handler everywhere else:
+
+```lua
+rt.on("fileselect", { pattern = "*.github.com" }, function(e)
+  rt.ui.pick_files({ dir = "~/src", multiple = e.mode == "files" }, function(paths)
+    rt.answer_fileselect(e.id, paths)
+  end)
+  return true
+end)
+```
+
+A plugin needs the `files` permission for the `fileselect` event and `rt.answer_fileselect`, since whatever it answers goes to the site.
+
 `rt.page` acts on the current tab's page:
 
 | | |

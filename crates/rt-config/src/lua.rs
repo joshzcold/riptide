@@ -245,6 +245,8 @@ local GATED = {
   spawn = "spawn", which = "spawn", run = "commands", set = "settings", get = "settings",
   history = "history", bookmarks = "history", quickmarks = "history",
   set_bookmarks = "marks", set_quickmarks = "marks",
+  -- Answering an upload field hands a site any file.
+  answer_fileselect = "files",
 }
 -- Defined further down, with rt.ui and rt.page.
 local ui_for, page_for, secret_for
@@ -294,7 +296,7 @@ function rt._sandbox(name, permissions, require_fn)
   -- the pages permission, and the browser checks the site again when it runs.
   local own = ui_for(name)
   api.ui = copy(rt.ui)
-  api.ui.select, api.ui.input = own.select, own.input
+  api.ui.select, api.ui.input, api.ui.pick_files = own.select, own.input, own.pick_files
   api.ui.float = rt._float_for(name)
   api.ui.panel = rt._panel_for(name)
   api.ui.page = rt._page_for(name)
@@ -323,6 +325,9 @@ function rt._sandbox(name, permissions, require_fn)
     if event == "key" and not permissions.keys then
       error("the key event needs the keys permission", 2)
     end
+    if event == "fileselect" and not permissions.files then
+      error("the fileselect event needs the files permission", 2)
+    end
     return on(event, opts, fn)
   end
   -- Passthrough gives the page every key, riptide's included: a plugin that
@@ -348,6 +353,7 @@ function rt._trusted(name)
   local ui = setmetatable({
     select = own.select,
     input = own.input,
+    pick_files = own.pick_files,
     float = rt._float_for(name),
     panel = rt._panel_for(name),
     page = rt._page_for(name),
@@ -379,6 +385,16 @@ function ui_for(source)
     if type(opts) == "function" then opts, on_confirm = {}, opts end
     opts = opts or {}
     rt._ask(source, "input", opts.prompt or "Answer", { default = opts.default, secret = opts.secret }, on_confirm)
+  end
+  function ui.pick_files(opts, on_choice)
+    if type(opts) == "function" then opts, on_choice = {}, opts end
+    opts = opts or {}
+    local mode = opts.folder and "folder" or (opts.multiple and "files" or "file")
+    local data = { mode = mode, dir = opts.dir, extensions = opts.extensions or {} }
+    rt._ask(source, "files", opts.prompt or "Choose a file", data, function(answer)
+      if answer == nil then return on_choice(nil) end
+      on_choice(rt.json.decode(answer))
+    end)
   end
   return ui
 end
@@ -757,7 +773,7 @@ pub const EVENTS: &[(&str, &str)] = &[
     ),
     (
         "prompt_shown",
-        "riptide asked a question (topic: dialog, permission, login, download, certificate or confirm; title, message, url)",
+        "riptide asked a question (topic: dialog, permission, login, download, certificate, files or confirm; title, message, url)",
     ),
     (
         "permission_answered",
@@ -767,6 +783,10 @@ pub const EVENTS: &[(&str, &str)] = &[
     (
         "download_finished",
         "a download finished (url, path, state: done, failed or cancelled)",
+    ),
+    (
+        "fileselect",
+        "an upload field asks for files (mode: file, files or folder; dir; extensions, comma-separated; title; url; id); a hook that returns true answers it later with rt.answer_fileselect(e.id, paths)",
     ),
 ];
 
@@ -1009,6 +1029,9 @@ pub enum Action {
     },
     /// The plugin test runner is done: quit with this exit code.
     Exit(i32),
+    /// `rt.answer_fileselect`: answer upload field `id`, which a
+    /// `fileselect` hook took; `None` cancels it.
+    AnswerFileselect { id: u64, paths: Option<Vec<String>> },
     /// A page handle's `send`: `json` to plugin `source`'s page `id`.
     PluginPageSend {
         source: String,
@@ -1025,6 +1048,13 @@ pub enum Ask {
     Select(Vec<String>),
     /// Type an answer; `secret` masks it.
     Input { default: String, secret: bool },
+    /// Choose files in the file picker, starting in `dir` (`~` allowed; none
+    /// means `fileselect.directory`). The answer is a JSON list of paths.
+    Files {
+        mode: rt_core::fileselect::FileMode,
+        dir: Option<String>,
+        extensions: Vec<String>,
+    },
 }
 
 /// What `rt.page` does to the current page.
@@ -1470,6 +1500,15 @@ pub fn command_before(
     context: &Context,
 ) -> Result<(bool, Vec<Action>), String> {
     cancellable("command_before", &[("name", name), ("args", args)], context)
+}
+
+/// Ask the `fileselect` hooks about an upload field: true if one took it,
+/// to answer with `rt.answer_fileselect`.
+pub fn fileselect(
+    fields: &[(&str, &str)],
+    context: &Context,
+) -> Result<(bool, Vec<Action>), String> {
+    cancellable("fileselect", fields, context)
 }
 
 /// How long `key` hooks get, since they run as you type.
@@ -2878,6 +2917,23 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
             Ok(())
         })?,
     )?;
+    let s = state.clone();
+    api.set(
+        "answer_fileselect",
+        lua.create_function(move |_, (id, paths): (Value, Option<Vec<String>>)| {
+            let id = match id {
+                Value::Integer(n) => u64::try_from(n).ok(),
+                Value::Number(n) if n >= 0.0 => Some(n as u64),
+                Value::String(text) => text.to_str()?.parse().ok(),
+                _ => None,
+            }
+            .ok_or_else(|| mlua::Error::runtime("rt.answer_fileselect needs the event's id"))?;
+            s.borrow_mut()
+                .actions
+                .push(Action::AnswerFileselect { id, paths });
+            Ok(())
+        })?,
+    )?;
     api.set(
         "which",
         lua.create_function(|_, program: String| {
@@ -2948,6 +3004,21 @@ fn setup(lua: &Lua, paths: &Paths, state: Rc<RefCell<State>>) -> mlua::Result<()
                         default: opts.get::<Option<String>>("default")?.unwrap_or_default(),
                         secret: opts.get::<Option<bool>>("secret")?.unwrap_or(false),
                     },
+                    ("files", Value::Table(opts)) => {
+                        let mode: String = opts.get("mode")?;
+                        let mode = rt_core::fileselect::FileMode::from_name(&mode)
+                            .ok_or_else(|| mlua::Error::runtime("rt.ui.pick_files: bad mode"))?;
+                        let extensions: Vec<String> = opts
+                            .get::<mlua::Table>("extensions")?
+                            .sequence_values::<String>()
+                            .map(|e| e.map(|e| e.trim_start_matches('.').to_lowercase()))
+                            .collect::<mlua::Result<_>>()?;
+                        Ask::Files {
+                            mode,
+                            dir: opts.get("dir")?,
+                            extensions,
+                        }
+                    }
                     _ => return Err(mlua::Error::runtime("rt.ui: bad arguments")),
                 };
                 let id = {
@@ -4285,6 +4356,69 @@ assert(pcall(with.rt.on, "command", function() end))
             command_before("open", "fine.example", &ctx).unwrap(),
             (false, Vec::new())
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn fileselect_hooks_take_upload_fields_and_need_the_files_permission() {
+        let dir = std::env::temp_dir().join(format!("rt-lua-fileselect-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.lua"),
+            r#"
+rt.on("fileselect", function(e)
+  if e.mode ~= "files" then return end
+  rt.answer_fileselect(e.id, { e.dir .. "/a.png" })
+  return true
+end)
+rt.command("pick", function()
+  rt.ui.pick_files({ dir = "~/x", multiple = true, extensions = { ".PNG" } }, function(paths)
+    rt.message(paths and table.concat(paths, ",") or "cancelled")
+  end)
+end)
+local without = rt._sandbox("p", {}, require)
+assert(not pcall(without.rt.on, "fileselect", function() end))
+assert(without.rt.answer_fileselect == nil)
+local with = rt._sandbox("q", { files = true }, require)
+assert(pcall(with.rt.on, "fileselect", function() end))
+assert(with.rt.answer_fileselect ~= nil)
+assert(with.rt.ui.pick_files ~= nil and without.rt.ui.pick_files ~= nil)
+"#,
+        )
+        .unwrap();
+        let paths = Paths::resolve(Some(&dir)).unwrap();
+        let (_, error) = run(&dir.join("config.lua"), &paths, Settings::default());
+        assert_eq!(error, None);
+        let ctx = Context::default();
+        let fields = |mode| [("mode", mode), ("dir", "/up"), ("id", "12")];
+        let (taken, actions) = fileselect(&fields("files"), &ctx).unwrap();
+        assert!(taken);
+        assert_eq!(
+            actions,
+            [Action::AnswerFileselect {
+                id: 12,
+                paths: Some(vec!["/up/a.png".into()])
+            }]
+        );
+        assert_eq!(
+            fileselect(&fields("file"), &ctx).unwrap(),
+            (false, Vec::new())
+        );
+
+        let asks = run_command("pick", "", &ctx).unwrap();
+        let [Action::Ask { id, ask, .. }] = asks.as_slice() else {
+            panic!("{asks:?}");
+        };
+        assert_eq!(
+            ask,
+            &Ask::Files {
+                mode: rt_core::fileselect::FileMode::Multiple,
+                dir: Some("~/x".into()),
+                extensions: vec!["png".into()],
+            }
+        );
+        let answer = answered(*id, Some(r#"["/a","/b"]"#.into()), &ctx).unwrap();
+        assert!(matches!(answer.as_slice(), [Action::Message { text, .. }] if text == "/a,/b"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
