@@ -25,16 +25,16 @@ let
 
   # The CEF build for the pinned cef crate (154.4.0+154.0.33 is CEF 154.0.33).
   # The weekly cef-update workflow updates these with Cargo.lock.
-  cefVersion = "156.0.15";
-  cefGitRevision = "cf671c0";
-  cefChromiumVersion = "156.0.8078.80";
-  cefSha1 = "09235427222e026a4f34399742df27c5d98a4f8a";
+  cefVersion = "156.0.26";
+  cefGitRevision = "8ea0c73";
+  cefChromiumVersion = "156.0.8078.88";
+  cefSha1 = "cacfbb7d7261fea682fb67c108de7e4347519ff7";
   cef =
     (cef-binary.override {
       version = cefVersion;
       gitRevision = cefGitRevision;
       chromiumVersion = cefChromiumVersion;
-      srcHashes.x86_64-linux = "sha256-aHP5dbsEcxZoDqGDmYDtW9TDPIzUzkV2HJQhGFZgU4g=";
+      srcHashes.x86_64-linux = "sha256-YArAuPN8uVP4hOfImZimwgDSSVmqdIIK1DG2HV6882A=";
     }).overrideAttrs
       (old: {
         # CEF 154 no longer ships libEGL.so and libGLESv2.so, which nixpkgs'
