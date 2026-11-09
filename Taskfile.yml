@@ -76,6 +76,12 @@ tasks:
     cmds:
       - scripts/package-linux.sh --deb
 
+  rpm:
+    desc: Release build as a tarball and an RPM package in dist/ (Linux; needs rpmbuild)
+    deps: [release]
+    cmds:
+      - scripts/package-linux.sh --rpm
+
   bundle:
     desc: Release build as dist/riptide.app (macOS)
     platforms: [darwin]
