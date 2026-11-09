@@ -256,7 +256,7 @@ rt.ui.page({ path = "pick.html", where = "float", title = "Pick a login", width 
 rt.ui.page({ where = "float", over = { x = 8, y = 93, width = 583, height = 240 }, keys = "all" })
 ```
 
-Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
+Pages run only their own files: inline scripts, other sites' scripts and `eval` are blocked. Audio and video play from the plugin's own files or from `blob:` URLs the page makes, e.g. from bytes the plugin sends it. They may show other sites in iframes only over https and only for the hosts the `frames` permission lists, and connect to only the hosts `network` lists. A plugin's pages are served once it has loaded.
 
 ### Testing
 

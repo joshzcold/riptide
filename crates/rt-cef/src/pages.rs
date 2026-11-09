@@ -95,8 +95,8 @@ fn csp(permissions: &Permissions, trusted: bool) -> String {
     };
     format!(
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
-         img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; \
-         form-action 'none'; frame-src {frames}; connect-src {connect}",
+         img-src 'self' data:; media-src 'self' blob:; font-src 'self'; object-src 'none'; \
+         base-uri 'none'; form-action 'none'; frame-src {frames}; connect-src {connect}",
     )
 }
 
@@ -186,6 +186,8 @@ pub(crate) fn mime(path: &Path) -> &'static str {
         "jpg" | "jpeg" => "image/jpeg",
         "gif" => "image/gif",
         "webp" => "image/webp",
+        "ogg" | "opus" => "audio/ogg",
+        "wav" => "audio/wav",
         "ico" => "image/x-icon",
         "woff" => "font/woff",
         "woff2" => "font/woff2",
@@ -402,6 +404,7 @@ mod tests {
             "{csp}"
         );
         assert!(csp.contains("script-src 'self';"), "{csp}");
+        assert!(csp.contains("media-src 'self' blob:;"), "{csp}");
         assert!(csp.contains("connect-src 'none'"), "{csp}");
         assert_eq!(serve("vault", "/js/app.js").unwrap().1, "text/javascript");
         for bad in [
