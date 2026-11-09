@@ -189,7 +189,7 @@ jobs:
 
           ### Downloads
 
-          - **Linux (x86_64):** the `.deb` for Ubuntu 22.04+ and Debian 12+ (`sudo apt install ./riptide_*.deb`), the `.rpm` for Fedora (`sudo dnf install ./riptide-*.rpm`), the `.AppImage`, or the `.tar.gz` (unpack and run `riptide`). See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for the sandbox setup.
+          - **Linux (x86_64, and experimental aarch64):** the `.deb` for Ubuntu 22.04+ and Debian 12+ (`sudo apt install ./riptide_*.deb`), the `.rpm` for Fedora (`sudo dnf install ./riptide-*.rpm`), the `.AppImage`, or the `.tar.gz` (unpack and run `riptide`). See [Installing](https://joshzcold.github.io/riptide/guide/installing.html) for the sandbox setup.
           - **Windows:** an experimental installer (`-setup.exe`) or `.zip`; the build starts but is untested by hand.
           - **macOS:** a `.dmg`, `-aarch64` for Apple silicon (supported) or `-x86_64` for Intel (experimental, untested by hand); drag riptide onto Applications. It isn't notarized, so the first start needs **System Settings → Privacy & Security → Open Anyway**.
           - Check a download with `sha256sum -c SHA256SUMS --ignore-missing`, or its build provenance with `gh attestation verify <file> --repo joshzcold/riptide`.

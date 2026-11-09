@@ -2,7 +2,7 @@
 
 ## Release downloads
 
-Each [GitHub release](https://github.com/joshzcold/riptide/releases) has four Linux x86_64 downloads, with `SHA256SUMS`. Each contains the binary and the CEF runtime it needs.
+Each [GitHub release](https://github.com/joshzcold/riptide/releases) has four Linux downloads for x86_64, and the same four for ARM (aarch64), with `SHA256SUMS`. Each contains the binary and the CEF runtime it needs.
 
 | Download | Install |
 |---|---|
@@ -10,6 +10,8 @@ Each [GitHub release](https://github.com/joshzcold/riptide/releases) has four Li
 | `riptide-X.Y.Z-1.x86_64.rpm` | Fedora and other RPM distributions: `sudo dnf install ./riptide-X.Y.Z-1.x86_64.rpm`. It installs the same files as the `.deb`. Each release is tested on Fedora; on openSUSE it installs, but typing into pages doesn't work yet. |
 | `riptide-X.Y.Z-linux-x86_64.AppImage` | Any distribution with glibc 2.35 or later: `chmod +x` it and run it. |
 | `riptide-X.Y.Z-linux-x86_64.tar.gz` | Any distribution with glibc 2.35 or later: unpack it anywhere and run `riptide`. |
+
+On ARM, the names say `aarch64` (`arm64` for the `.deb`): `riptide_X.Y.Z_arm64.deb`, `riptide-X.Y.Z-1.aarch64.rpm`, `riptide-X.Y.Z-linux-aarch64.AppImage` and `riptide-X.Y.Z-linux-aarch64.tar.gz`. The ARM build is experimental: each release passes the same smoke tests as x86_64 on CI's ARM runners, but nobody has used it by hand yet. It isn't in the AUR or Nix packages yet, and Widevine may not be available, since Chromium downloads it only where Google publishes it.
 
 To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify where it was built with `gh attestation verify <file> --repo joshzcold/riptide`.
 
