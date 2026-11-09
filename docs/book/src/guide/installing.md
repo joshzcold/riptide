@@ -2,13 +2,14 @@
 
 ## Release downloads
 
-Each [GitHub release](https://github.com/joshzcold/riptide/releases) has three Linux x86_64 downloads, with `SHA256SUMS`. Each contains the binary and the CEF runtime it needs.
+Each [GitHub release](https://github.com/joshzcold/riptide/releases) has four Linux x86_64 downloads, with `SHA256SUMS`. Each contains the binary and the CEF runtime it needs.
 
 | Download | Install |
 |---|---|
-| `riptide_X.Y.Z_amd64.deb` | Ubuntu 24.04+ and Debian 13+: `sudo apt install ./riptide_X.Y.Z_amd64.deb`. It installs to `/opt/riptide` with `riptide` on your `PATH`, a desktop entry, and apt-managed dependencies. Its setuid sandbox helper works even where user namespaces are blocked. |
-| `riptide-X.Y.Z-linux-x86_64.AppImage` | Any distribution: `chmod +x` it and run it. |
-| `riptide-X.Y.Z-linux-x86_64.tar.gz` | Unpack it anywhere and run `riptide`. |
+| `riptide_X.Y.Z_amd64.deb` | Ubuntu 22.04+ and Debian 12+: `sudo apt install ./riptide_X.Y.Z_amd64.deb`. It installs to `/opt/riptide` with `riptide` on your `PATH`, a desktop entry, and apt-managed dependencies. Its setuid sandbox helper works even where user namespaces are blocked. |
+| `riptide-X.Y.Z-1.x86_64.rpm` | Fedora and other RPM distributions: `sudo dnf install ./riptide-X.Y.Z-1.x86_64.rpm`. It installs the same files as the `.deb`. Each release is tested on Fedora; on openSUSE it installs, but typing into pages doesn't work yet. |
+| `riptide-X.Y.Z-linux-x86_64.AppImage` | Any distribution with glibc 2.35 or later: `chmod +x` it and run it. |
+| `riptide-X.Y.Z-linux-x86_64.tar.gz` | Any distribution with glibc 2.35 or later: unpack it anywhere and run `riptide`. |
 
 To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify where it was built with `gh attestation verify <file> --repo joshzcold/riptide`.
 

@@ -96,6 +96,32 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 - macOS: trying the app by hand, notarization (needs an Apple Developer account, and the cask in Homebrew's own repository needs it), and the sandbox. The app bundle (`scripts/bundle-macos.sh`, ad-hoc signed, in a `.dmg`) is done and starts on CI's macOS runner (`desktop_start.rs`); releases also build it on an Intel runner, where it's only checked with `--version`; its helper apps run the small `riptide-helper`. The Homebrew tap ([joshzcold/homebrew-riptide](https://github.com/joshzcold/homebrew-riptide)) follows the releases. Windows: trying the browser by hand, and the sandbox (it needs riptide built as a DLL that CEF's `bootstrap.exe` loads). The installer (`packaging/windows/riptide.iss`, Inno Setup) and the icon in `riptide.exe` (`crates/riptide/riptide.rc`) are done. It starts on CI's Windows runner (`desktop_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
 - Wayland: not tested; check key handling and the desktop portal for screen sharing.
 
+### More Linux distributions (M30)
+
+Today: `.deb` (Ubuntu 22.04+, Debian 12+) and `.rpm` (Fedora), both built on Ubuntu 22.04 and smoke-tested installed on Ubuntu, Debian and Fedora; AppImage, tarball, AUR, Nix. In order:
+
+1. **openSUSE:** the `.rpm` installs on Tumbleweed and the sandbox works, but in the smoke test typed text never reaches a field (keys arrive, characters don't) and `:open -w` opens no second window. Installing `xkeyboard-config` doesn't help. Find out why, then add `opensuse/tumbleweed` to `linux-install` in `build-release.yml`.
+2. **Package repositories**, so `.deb` and `.rpm` users get updates from apt and dnf instead of downloading each release. Packages are ~100 MB, too big for GitHub Pages, so use a host made for it (Cloudsmith's free open-source plan, or the openSUSE Build Service, which also builds for many distributions from the tarball), with a signing key in the release job's secrets. Add a step to `release.yml` after publishing.
+3. **Linux aarch64:** a `linux-aarch64` job on GitHub's free `ubuntu-24.04-arm` runners. CEF has arm64 Linux builds and `package-linux.sh` already knows appimagetool's aarch64 checksum. Then the AUR and Nix recipes gain the second architecture.
+4. **Flatpak (Flathub):** the widest reach, with updates through the software centre, but the most work: Chromium's sandbox needs `zypak` inside Flatpak, and `:spawn`, userscripts, `:open-editor` and native messaging hosts need `flatpak-spawn --host`, a permission Flathub reviews. Do it after the rest.
+
+Not planned: Snap (Ubuntu is covered by the `.deb`, and strict confinement has the Flatpak problems without Flathub's reach), and Alpine and other musl distributions (CEF needs glibc). Gentoo and Void packages are left to their communities, pointed at the tarball.
+
+### Updates outside a package manager (M31)
+
+Package managers (apt, dnf, pacman, Nix, Homebrew) own their installs; riptide must never replace those files. Downloads that nothing updates (the AppImage, the tarball, the Windows `.zip` and installer, the macOS `.dmg`) get an update check and, where it's safe, `:update`.
+
+1. **How riptide was installed.** Each package script writes `install.toml` next to the binary (`source = "deb" | "rpm" | "aur" | "nix" | "homebrew" | "appimage" | "tarball" | "windows-setup" | "windows-zip" | "dmg"`, plus `self_update = false` for packagers that want none). `$APPIMAGE` confirms an AppImage. A missing file means a source build: no checks. `:version` shows the source.
+2. **The check.** A daily background check like the plugins' and extensions', off with `updates.check = false`, and on demand with `:update-check`. It reads `https://github.com/joshzcold/riptide/releases/latest/download/SHA256SUMS` (no API, no rate limit; the file names carry the version) through `crate::fetch`, or the `nightly` release for `updates.channel = "nightly"`. It mentions a version once (as `first_mention` does for extensions). Package-managed installs only get the message, with their command (`sudo apt upgrade riptide`), or nothing when the repositories from M30 already notify. Document the request in the privacy guide.
+3. **Signed releases.** The release job signs `SHA256SUMS` with minisign (key in the job's secrets); riptide embeds the public key and checks the signature with the `minisign-verify` crate (MIT, pure Rust) before trusting a checksum. A checksum from the same server alone proves nothing.
+4. **`:update`** downloads the matching file into the data directory, checks it, stages it, then offers `:restart` (which keeps the session):
+   - **AppImage:** write the new file beside `$APPIMAGE` and rename it over; the running copy keeps its mount. Also embed AppImage update information and publish a `.zsync`, so AppImageLauncher and Gear Lever can update it too.
+   - **Tarball:** unpack beside the install directory, then rename the old one to `.old` and the new one into place. The next start deletes `.old` once it's past crash-loop detection (M23); a crash loop on the new version offers to roll back to `.old`.
+   - **Windows installer:** download `-setup.exe` and run it with `/SILENT /CURRENTUSER` after riptide quits. The `.zip` gets the message only.
+   - **macOS:** the message only, pointing at Homebrew, until the app is notarized; replacing an ad-hoc-signed app makes macOS ask for the camera, microphone and keychain again.
+   - If the install directory isn't writable, say so and give the download link instead.
+5. Tests: an e2e test against a local release server (`RIPTIDE_UPDATE_URL`, as `RIPTIDE_EXTENSION_UPDATE_URL`), covering a bad signature, a bad checksum, a read-only directory and a package-managed install.
+
 ### Bugs
 
 - Widevine: protected playback against a real stream isn't verified (needs a real desktop and a service that serves VP9/AV1).

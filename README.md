@@ -32,7 +32,7 @@ Riptide is built on [CEF](https://github.com/chromiumembedded/cef) through the [
 
 | Platform | Packages | Tested |
 |---|---|---|
-| Linux x86_64, X11 | [`.deb`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, AppImage and `.tar.gz` pass the full smoke test, and the AUR source package is built before it's published. |
+| Linux x86_64, X11 | [`.deb`, `.rpm`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, `.rpm`, AppImage and `.tar.gz` pass the full smoke test (the packages on Ubuntu, Debian and Fedora), and the AUR source package is built before it's published. |
 | Linux, Wayland | The Linux packages | Untested |
 | macOS, Apple silicon | `.dmg`, Homebrew cask | Supported, used day to day. Each release is tried by hand. CI opens a window, and checks each release `.dmg`'s signature. |
 | macOS, Intel | `.dmg`, Homebrew cask | Untested by hand. CI checks each release `.dmg`'s signature and runs `--version`; it doesn't open a window. |
@@ -79,7 +79,8 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has x86_64 
 
 | On | Get |
 |---|---|
-| **Ubuntu 24.04+, Debian 13+** | the `.deb`: `sudo apt install ./riptide_*_amd64.deb` |
+| **Ubuntu 22.04+, Debian 12+** | the `.deb`: `sudo apt install ./riptide_*_amd64.deb` |
+| **Fedora** | the `.rpm`: `sudo dnf install ./riptide-*.x86_64.rpm` |
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide`, or `github:joshzcold/riptide#riptide-source` to build it from source |
 | **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |

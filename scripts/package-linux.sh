@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Packs a release build and the CEF runtime it needs into a tarball, and
-# with --appimage and --deb also into an AppImage and a Debian package:
-#   scripts/package-linux.sh [--appimage] [--deb] [version]
-#     -> dist/riptide-<version>-linux-<arch>.tar.gz (.AppImage, riptide_<version>_<arch>.deb)
+# with --appimage, --deb and --rpm also into an AppImage, a Debian package
+# and an RPM package:
+#   scripts/package-linux.sh [--appimage] [--deb] [--rpm] [version]
+#     -> dist/riptide-<version>-linux-<arch>.tar.gz (.AppImage,
+#        riptide_<version>_<arch>.deb, riptide-<version>-1.<arch>.rpm)
 # The binary finds libcef.so next to itself through its $ORIGIN rpath.
 set -euo pipefail
 
@@ -16,10 +18,12 @@ appimagetool_sha256() {
 
 appimage=false
 deb=false
+rpm=false
 while [[ ${1:-} == --* ]]; do
     case $1 in
         --appimage) appimage=true ;;
         --deb) deb=true ;;
+        --rpm) rpm=true ;;
         *) echo "package-linux.sh: unknown option $1" >&2; exit 1 ;;
     esac
     shift
@@ -136,13 +140,16 @@ EOF
     chmod 4755 "$tree/opt/riptide/chrome-sandbox"
 
     # Depends: the system libraries the binaries link, as packages of the
-    # distribution this runs on (built on Ubuntu 24.04: also Debian 13).
+    # distribution this runs on. Releases build on Ubuntu 22.04, whose names
+    # (libasound2, not libasound2t64) the t64 packages of Ubuntu 24.04 and
+    # Debian 13 still provide, so one package covers Ubuntu 22.04+ and Debian 12+.
     shlib=$(mktemp -d)
     mkdir -p "$shlib/debian"
     printf 'Source: riptide\n\nPackage: riptide\nArchitecture: any\n' >"$shlib/debian/control"
     depends=$(cd "$shlib" && dpkg-shlibdeps -O -l"$root/$tree/opt/riptide" \
         "$root/$tree/opt/riptide/riptide" "$root/$tree/opt/riptide/libcef.so" \
-        "$root/$tree/opt/riptide/libvk_swiftshader.so" 2>/dev/null | sed -n 's/^shlibs:Depends=//p')
+        "$root/$tree/opt/riptide/libvk_swiftshader.so" 2>"$shlib/errors" | sed -n 's/^shlibs:Depends=//p') ||
+        { grep error "$shlib/errors" >&2; rm -rf "$shlib"; exit 1; }
     rm -rf "$shlib"
     [[ -n $depends ]] || { echo "package-linux.sh: dpkg-shlibdeps found no dependencies" >&2; exit 1; }
     size=$(du -sk --exclude=DEBIAN "$tree" | cut -f1)
@@ -165,5 +172,75 @@ EOF
     dpkg-deb --root-owner-group -Zxz --build "$tree" "$deb_file" >&2
     rm -rf "$tree"
     echo "$deb_file"
+fi
+
+if $rpm; then
+    rpm_arch=$(uname -m)
+    # RPM versions can't hold a hyphen. A nightly keeps the crate's version
+    # and sorts after it by its release; 0.2.0-rc.1 becomes 0.2.0~rc.1, which
+    # sorts before 0.2.0.
+    rpm_version=$version
+    rpm_release=1
+    if [[ $version =~ ^nightly-([0-9]+)-([0-9a-f]+)$ ]]; then
+        rpm_version=$(cargo metadata --no-deps --format-version 1 | sed -n 's/.*"name":"riptide","version":"\([^"]*\)".*/\1/p')
+        rpm_release=1.nightly${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
+    else
+        rpm_version=${version/-/\~}
+    fi
+    [[ $rpm_version =~ ^[0-9][0-9A-Za-z.~+]*$ ]] || { echo "package-linux.sh: $version is not an RPM version" >&2; exit 1; }
+    top=$(mktemp -d)
+    tree=$top/tree
+    mkdir -p "$tree/opt" "$tree/usr/bin"
+    cp -a "$stage" "$tree/opt/riptide"
+    ln -s /opt/riptide/riptide "$tree/usr/bin/riptide"
+    install -Dm644 packaging/riptide.desktop "$tree/usr/share/applications/riptide.desktop"
+    install -Dm644 packaging/riptide.svg "$tree/usr/share/icons/hicolor/scalable/apps/riptide.svg"
+    chmod -R go-w "$tree"
+    # %defattr makes it root's; setuid for kernels without unprivileged user namespaces.
+    chmod 4755 "$tree/opt/riptide/chrome-sandbox"
+    # Requires are found from the binaries' sonames. The bundled libraries
+    # are neither required nor provided, so they never stand in for the system's.
+    cat >"$top/riptide.spec" <<EOF
+%global debug_package %{nil}
+%global __os_install_post %{nil}
+%global _build_id_links none
+%global _binary_payload w6.xzdio
+%global __provides_exclude_from ^/opt/riptide/.*\$
+%global __requires_exclude ^(libcef|libvk_swiftshader|libvulkan)\\\\.so.*\$
+
+Name: riptide
+Version: $rpm_version
+Release: $rpm_release
+Summary: Keyboard-driven web browser with vim-like bindings
+License: GPL-3.0-or-later
+URL: https://joshzcold.github.io/riptide/
+Requires: xdg-utils
+
+%description
+Riptide is a keyboard-driven browser built on the Chromium Embedded
+Framework (CEF) and controlled from Rust: modes, hints, a command
+line, and configuration in TOML or Lua. Its license has an additional
+permission for loading a content decryption module such as Widevine
+(/opt/riptide/LICENSE-EXCEPTION); Chromium's and CEF's licenses are in
+/opt/riptide/CREDITS.html.
+
+%install
+cp -a "$tree/." %{buildroot}/
+
+%files
+%defattr(-,root,root,-)
+/opt/riptide
+/usr/bin/riptide
+/usr/share/applications/riptide.desktop
+/usr/share/icons/hicolor/scalable/apps/riptide.svg
+EOF
+    rpm_file=dist/riptide-$rpm_version-$rpm_release.$rpm_arch.rpm
+    rpmbuild -bb --quiet --target "$rpm_arch" \
+        --define "_topdir $top" --define "_rpmdir $root/dist" \
+        --define "_build_name_fmt riptide-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
+        "$top/riptide.spec" >&2
+    rm -rf "$top"
+    [[ -f $rpm_file ]] || { echo "package-linux.sh: rpmbuild didn't write $rpm_file" >&2; exit 1; }
+    echo "$rpm_file"
 fi
 rm -rf "$stage"
