@@ -216,9 +216,9 @@ jobs:
           # Creates the tag on the merged release commit.
           gh release create "v$VERSION" --target "$REF" --title "riptide v$VERSION" \
             --notes-file notes.md "${flags[@]}" dist/*
-      # The AUR and Nix packages download the release tarball, so a pull
+      # The AUR, Nix and OBS packages download the release tarball, so a pull
       # request points them at the new version. A dry run shows the change.
-      - name: Update the AUR and Nix packages
+      - name: Update the AUR, Nix and OBS packages
         if: ${{ !contains(needs.plan.outputs.version, '-') }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -234,11 +234,11 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "chore(release): update the AUR and Nix packages for v$VERSION" -- packaging
+          git commit -q -m "chore(release): update the AUR, Nix and OBS packages for v$VERSION" -- packaging
           git push -q origin "HEAD:refs/heads/release/v$VERSION-packages"
           scripts/open-pr.sh "release/v$VERSION-packages" \
-            "chore(release): update the AUR and Nix packages for v$VERSION" \
-            "Points the AUR packages in \`packaging/aur/\` and \`packaging/nix/package.nix\` (and so the flake) at v$VERSION."
+            "chore(release): update the AUR, Nix and OBS packages for v$VERSION" \
+            "Points the AUR packages in \`packaging/aur/\`, \`packaging/nix/package.nix\` (and so the flake) and the openSUSE Build Service package in \`packaging/obs/\` at v$VERSION."
       # As the riptide GitHub App, which bypasses main's review rule and whose
       # push starts aur.yml (a push with GITHUB_TOKEN wouldn't).
       - uses: actions/create-github-app-token@v3
@@ -273,6 +273,15 @@ jobs:
           fi
           gh pr merge "$pr" --merge --admin --match-head-commit "$(git rev-parse HEAD)"
           gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch"
+      # home:joshzcold/riptide's _service takes packaging/obs from main, now
+      # at this release, and OBS rebuilds the apt, dnf and zypper repositories.
+      # The token can only run that package's services.
+      - name: Rebuild the openSUSE Build Service packages
+        if: steps.app.outcome == 'success'
+        env:
+          OBS_TOKEN: ${{ secrets.OPENSUSE_BUILD_SERVICE_TOKEN }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Token $OBS_TOKEN" https://api.opensuse.org/trigger/runservice
           echo "Merged #$pr, which publishes the AUR packages." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/create-github-app-token@v3
         if: env.PUBLISH == 'true' && !contains(needs.plan.outputs.version, '-')

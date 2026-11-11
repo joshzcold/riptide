@@ -1,0 +1,16 @@
+<!-- Upload this as the _service file of home:joshzcold/riptide. The release
+     workflow runs it: it takes packaging/obs from main, then downloads the
+     release tarballs that riptide.spec names. -->
+<services>
+  <service name="obs_scm">
+    <param name="url">https://github.com/joshzcold/riptide.git</param>
+    <param name="scm">git</param>
+    <param name="revision">main</param>
+    <param name="subdir">packaging/obs</param>
+    <param name="extract">riptide.spec</param>
+    <param name="extract">riptide.dsc</param>
+    <param name="extract">riptide-rpmlintrc</param>
+    <param name="extract">debian.*</param>
+  </service>
+  <service name="download_files"/>
+</services>

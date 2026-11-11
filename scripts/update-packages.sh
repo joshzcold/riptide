@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Points the AUR and Nix packages at a release: its version, the Linux
-# tarball's checksum, and for the AUR source package the CEF build to fetch.
+# Points the AUR, Nix and openSUSE Build Service packages at a release: its
+# version, the Linux tarball's checksum, and for the AUR source package the
+# CEF build to fetch. OBS downloads the tarballs itself.
 #   scripts/update-packages.sh <version> <riptide-<version>-linux-x86_64.tar.gz>
 # release.yml runs it after publishing and commits the result.
 set -euo pipefail
@@ -14,6 +15,7 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 pkgbuild=$root/packaging/aur/riptide-browser-bin/PKGBUILD
 source_pkgbuild=$root/packaging/aur/riptide-browser/PKGBUILD
 nix=$root/packaging/nix/package.nix
+obs=$root/packaging/obs
 
 hex=$(sha256sum "$tarball" | cut -d' ' -f1)
 # Nix wants the same hash as base64 (SRI).
@@ -49,11 +51,26 @@ sed -i -E \
     -e "s|^(        hash = \")sha256-[^\"]*(\";)$|\1$sri\2|" \
     "$nix"
 
+sed -i -E "s/^(Version:[[:space:]]+).*/\1$version/" "$obs/riptide.spec"
+sed -i -E \
+    -e "s/^Version: .*/Version: $version-1/" \
+    -e "s/riptide-[^ ]+-linux-x86_64\.tar\.gz/riptide-$version-linux-x86_64.tar.gz/g" \
+    "$obs/riptide.dsc"
+cat >"$obs/debian.changelog" <<EOF
+riptide ($version-1) unstable; urgency=medium
+
+  * Release $version: https://github.com/joshzcold/riptide/releases/tag/v$version
+
+ -- Joshua Cold <joshzcold@gmail.com>  $(date -uR)
+EOF
+
 # Every field must have changed to (or already be) the new values.
 if ! grep -qx "pkgver=$version" "$pkgbuild" || ! grep -qx "sha256sums=('$hex')" "$pkgbuild" \
     || ! grep -qx "pkgver=$version" "$source_pkgbuild" || ! grep -qx "_cef=$cef" "$source_pkgbuild" \
     || ! grep -qF "'$sha1')" "$source_pkgbuild" \
-    || ! grep -qF "  version ? \"$version\"," "$nix" || ! grep -qF "hash = \"$sri\";" "$nix"; then
+    || ! grep -qF "  version ? \"$version\"," "$nix" || ! grep -qF "hash = \"$sri\";" "$nix" \
+    || ! grep -qE "^Version:[[:space:]]+$version\$" "$obs/riptide.spec" || ! grep -qx "Version: $version-1" "$obs/riptide.dsc" \
+    || [[ $(grep -c "riptide-$version-linux-x86_64.tar.gz" "$obs/riptide.dsc") != 2 ]]; then
     echo "update-packages.sh: a field wasn't updated; check the patterns" >&2
     exit 1
 fi

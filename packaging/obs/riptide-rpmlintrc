@@ -1,0 +1,4 @@
+# riptide finds libcef.so next to itself through its $ORIGIN runpath, and
+# keeps Chromium's runtime together in /opt/riptide like other prebuilt browsers.
+addFilter("binary-or-shlib-defines-rpath")
+addFilter("filelist-forbidden-opt")
