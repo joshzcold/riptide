@@ -17,6 +17,37 @@ To check a download, run `sha256sum -c SHA256SUMS --ignore-missing`, or verify w
 
 The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/nightly) is rebuilt from `main` every night it changes. It has the newest features, and may be broken.
 
+## Package repositories
+
+Add riptide's repository and your package manager installs it and keeps it updated with the rest of your system. Each release is built into it on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:joshzcold/riptide), from the same Linux tarball as the downloads above.
+
+**Debian and Ubuntu** (x86_64 only). Set `repo` to `Debian_12`, `Debian_13`, `xUbuntu_22.04` or `xUbuntu_24.04`:
+
+```sh
+repo=Debian_12
+curl -fsSL https://download.opensuse.org/repositories/home:/joshzcold/$repo/Release.key \
+  | gpg --dearmor | sudo tee /usr/share/keyrings/riptide.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/riptide.gpg] https://download.opensuse.org/repositories/home:/joshzcold/$repo/ /" \
+  | sudo tee /etc/apt/sources.list.d/riptide.list
+sudo apt update && sudo apt install riptide
+```
+
+**Fedora** 43 and 44, x86_64 and aarch64. Use your Fedora version in the URL:
+
+```sh
+sudo dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/joshzcold/Fedora_44/home:joshzcold.repo
+sudo dnf install riptide
+```
+
+**openSUSE Tumbleweed** (x86_64). It installs, but typing into pages doesn't work yet. The sandbox helper isn't setuid there, since openSUSE only allows setuid files it lists itself, so the sandbox uses user namespaces, which openSUSE allows.
+
+```sh
+sudo zypper addrepo https://download.opensuse.org/repositories/home:/joshzcold/openSUSE_Tumbleweed/home:joshzcold.repo
+sudo zypper refresh && sudo zypper install riptide
+```
+
+The packages install the same files as the `.deb` and `.rpm` downloads. On ARM Debian and Ubuntu, use the `_arm64.deb` download instead.
+
 ## Windows (experimental)
 
 The Windows build starts, and CI checks that it opens a window and quits, but it hasn't been used by hand yet. Each release and nightly has two x86_64 downloads:
