@@ -80,8 +80,8 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has x86_64 
 
 | On | Get |
 |---|---|
-| **Ubuntu 22.04+, Debian 12+** | the `.deb`: `sudo apt install ./riptide_*_amd64.deb` (`_arm64.deb` on ARM) |
-| **Fedora** | the `.rpm`: `sudo dnf install ./riptide-*.x86_64.rpm` (`.aarch64.rpm` on ARM) |
+| **Ubuntu 22.04+, Debian 12+** | the apt [repository](https://joshzcold.github.io/riptide/guide/installing.html#package-repositories) (x86_64), or the `.deb`: `sudo apt install ./riptide_*_amd64.deb` (`_arm64.deb` on ARM) |
+| **Fedora** | the dnf [repository](https://joshzcold.github.io/riptide/guide/installing.html#package-repositories), or the `.rpm`: `sudo dnf install ./riptide-*.x86_64.rpm` (`.aarch64.rpm` on ARM) |
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide`, or `github:joshzcold/riptide#riptide-source` to build it from source |
 | **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |
