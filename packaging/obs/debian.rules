@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+# Repackages a release tarball, already stripped, into /opt/riptide.
+%:
+	dh $@
+
+override_dh_auto_install:
+	mkdir -p debian/riptide/opt/riptide debian/riptide/usr/bin
+	find . -mindepth 1 -maxdepth 1 ! -name debian -exec cp -a {} debian/riptide/opt/riptide/ \;
+	ln -s /opt/riptide/riptide debian/riptide/usr/bin/riptide
+	install -Dm644 riptide.desktop debian/riptide/usr/share/applications/riptide.desktop
+	install -Dm644 riptide.svg debian/riptide/usr/share/icons/hicolor/scalable/apps/riptide.svg
+
+# The bundled libraries are private, so they get no shlibs or symbols.
+override_dh_makeshlibs override_dh_strip override_dh_dwz override_dh_strip_nondeterminism:
+
+override_dh_shlibdeps:
+	dh_shlibdeps -l$(CURDIR)/debian/riptide/opt/riptide
+
+# The sandbox helper must be setuid root where user namespaces are blocked.
+override_dh_fixperms:
+	dh_fixperms
+	chmod 4755 debian/riptide/opt/riptide/chrome-sandbox
