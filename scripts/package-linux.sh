@@ -215,6 +215,8 @@ Summary: Keyboard-driven web browser with vim-like bindings
 License: GPL-3.0-or-later
 URL: https://joshzcold.github.io/riptide/
 Requires: xdg-utils
+# Chromium aborts without a font; minimal installs of openSUSE have none.
+Requires: (dejavu-fonts or font(dejavusans))
 
 %description
 Riptide is a keyboard-driven browser built on the Chromium Embedded

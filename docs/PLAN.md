@@ -98,12 +98,11 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### More Linux distributions (M30)
 
-Today: `.deb` (Ubuntu 22.04+, Debian 12+) and `.rpm` (Fedora), both built on Ubuntu 22.04 and smoke-tested installed on Ubuntu, Debian and Fedora; AppImage, tarball, AUR, Nix. In order:
+Today: `.deb` (Ubuntu 22.04+, Debian 12+) and `.rpm` (Fedora), both built on Ubuntu 22.04 and smoke-tested installed on Ubuntu, Debian, Fedora and openSUSE Tumbleweed; AppImage, tarball, AUR, Nix. In order:
 
-1. **openSUSE:** the `.rpm` installs on Tumbleweed and the sandbox works, but in the smoke test typed text never reaches a field (keys arrive, characters don't) and `:open -w` opens no second window. Installing `xkeyboard-config` doesn't help. Find out why, then add `opensuse/tumbleweed` to `linux-install` in `build-release.yml`.
-2. **Package repositories** on the openSUSE Build Service (`home:joshzcold/riptide`, from `packaging/obs/`), so `.deb` and `.rpm` users get updates from apt, dnf and zypper. Live since 0.22.0 for Debian 12/13, Ubuntu 22.04/24.04, Fedora 43/44 and Tumbleweed. Left: Debian and Ubuntu on arm64, which need a second OBS package, and Tumbleweed on aarch64.
-3. **Linux aarch64:** releases build, package and smoke-test it on GitHub's `ubuntu-24.04-arm` runners. Left: try it by hand on real ARM hardware (and Widevine there), then give the AUR and Nix recipes the second architecture (`scripts/update-packages.sh` needs the aarch64 tarball's checksum too).
-4. **Flatpak (Flathub):** the widest reach, with updates through the software centre, but the most work: Chromium's sandbox needs `zypak` inside Flatpak, and `:spawn`, userscripts, `:open-editor` and native messaging hosts need `flatpak-spawn --host`, a permission Flathub reviews. Do it after the rest.
+1. **Package repositories** on the openSUSE Build Service (`home:joshzcold/riptide`, from `packaging/obs/`), so `.deb` and `.rpm` users get updates from apt, dnf and zypper. Live since 0.22.0 for Debian 12/13, Ubuntu 22.04/24.04, Fedora 43/44 and Tumbleweed. Left: Debian and Ubuntu on arm64, which need a second OBS package, and Tumbleweed on aarch64.
+2. **Linux aarch64:** releases build, package and smoke-test it on GitHub's `ubuntu-24.04-arm` runners. Left: try it by hand on real ARM hardware (and Widevine there), then give the AUR and Nix recipes the second architecture (`scripts/update-packages.sh` needs the aarch64 tarball's checksum too).
+3. **Flatpak (Flathub):** the widest reach, with updates through the software centre, but the most work: Chromium's sandbox needs `zypak` inside Flatpak, and `:spawn`, userscripts, `:open-editor` and native messaging hosts need `flatpak-spawn --host`, a permission Flathub reviews. Do it after the rest.
 
 Not planned: Snap (Ubuntu is covered by the `.deb`, and strict confinement has the Flatpak problems without Flathub's reach), and Alpine and other musl distributions (CEF needs glibc). Gentoo and Void packages are left to their communities, pointed at the tarball.
 

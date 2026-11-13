@@ -32,7 +32,7 @@ Riptide is built on [CEF](https://github.com/chromiumembedded/cef) through the [
 
 | Platform | Packages | Tested |
 |---|---|---|
-| Linux x86_64, X11 | [`.deb`, `.rpm`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, `.rpm`, AppImage and `.tar.gz` pass the full smoke test (the packages on Ubuntu, Debian and Fedora), and the AUR source package is built before it's published. |
+| Linux x86_64, X11 | [`.deb`, `.rpm`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest), AUR (`riptide-browser`, `riptide-browser-bin`), Nix flake | The main platform, used day to day. Each release's `.deb`, `.rpm`, AppImage and `.tar.gz` pass the full smoke test (the packages on Ubuntu, Debian, Fedora and openSUSE), and the AUR source package is built before it's published. |
 | Linux aarch64, X11 | [`.deb`, `.rpm`, AppImage, `.tar.gz`](https://github.com/joshzcold/riptide/releases/latest) | Experimental: each release passes the same smoke tests on CI's ARM runners, but it's untested by hand. Not in the AUR or Nix yet. |
 | Linux, Wayland | The Linux packages | Untested |
 | macOS, Apple silicon | `.dmg`, Homebrew cask | Supported, used day to day. Each release is tried by hand. CI opens a window, and checks each release `.dmg`'s signature. |
@@ -82,6 +82,7 @@ Each [release](https://github.com/joshzcold/riptide/releases/latest) has x86_64 
 |---|---|
 | **Ubuntu 22.04+, Debian 12+** | the apt [repository](https://joshzcold.github.io/riptide/guide/installing.html#package-repositories) (x86_64), or the `.deb`: `sudo apt install ./riptide_*_amd64.deb` (`_arm64.deb` on ARM) |
 | **Fedora** | the dnf [repository](https://joshzcold.github.io/riptide/guide/installing.html#package-repositories), or the `.rpm`: `sudo dnf install ./riptide-*.x86_64.rpm` (`.aarch64.rpm` on ARM) |
+| **openSUSE Tumbleweed** | the zypper [repository](https://joshzcold.github.io/riptide/guide/installing.html#package-repositories) (x86_64), or the `.rpm` |
 | **Any distribution** | the `.AppImage` (`chmod +x` it and run it), or the `.tar.gz` (unpack it and run `riptide`) |
 | **Nix** | `nix run github:joshzcold/riptide`, or `github:joshzcold/riptide#riptide-source` to build it from source |
 | **Arch Linux** | `yay -S riptide-browser-bin` from the AUR, or `riptide-browser` to build it from source |

@@ -7,7 +7,7 @@ Each [GitHub release](https://github.com/joshzcold/riptide/releases) has four Li
 | Download | Install |
 |---|---|
 | `riptide_X.Y.Z_amd64.deb` | Ubuntu 22.04+ and Debian 12+: `sudo apt install ./riptide_X.Y.Z_amd64.deb`. It installs to `/opt/riptide` with `riptide` on your `PATH`, a desktop entry, and apt-managed dependencies. Its setuid sandbox helper works even where user namespaces are blocked. |
-| `riptide-X.Y.Z-1.x86_64.rpm` | Fedora and other RPM distributions: `sudo dnf install ./riptide-X.Y.Z-1.x86_64.rpm`. It installs the same files as the `.deb`. Each release is tested on Fedora; on openSUSE it installs, but typing into pages doesn't work yet. |
+| `riptide-X.Y.Z-1.x86_64.rpm` | Fedora and other RPM distributions: `sudo dnf install ./riptide-X.Y.Z-1.x86_64.rpm`. It installs the same files as the `.deb`. Each release is tested on Fedora and openSUSE Tumbleweed. |
 | `riptide-X.Y.Z-linux-x86_64.AppImage` | Any distribution with glibc 2.35 or later: `chmod +x` it and run it. |
 | `riptide-X.Y.Z-linux-x86_64.tar.gz` | Any distribution with glibc 2.35 or later: unpack it anywhere and run `riptide`. |
 
@@ -39,7 +39,7 @@ sudo dnf config-manager addrepo --from-repofile=https://download.opensuse.org/re
 sudo dnf install riptide
 ```
 
-**openSUSE Tumbleweed** (x86_64). It installs, but typing into pages doesn't work yet. The sandbox helper isn't setuid there, since openSUSE only allows setuid files it lists itself, so the sandbox uses user namespaces, which openSUSE allows.
+**openSUSE Tumbleweed** (x86_64). The sandbox helper isn't setuid there, since openSUSE only allows setuid files it lists itself, so the sandbox uses user namespaces, which openSUSE allows.
 
 ```sh
 sudo zypper addrepo https://download.opensuse.org/repositories/home:/joshzcold/openSUSE_Tumbleweed/home:joshzcold.repo
