@@ -98,7 +98,7 @@ nix-build -E 'with import <nixpkgs> {}; callPackage ./packaging/nix/package.nix 
 
 ## Building from source
 
-Requirements: Rust 1.88+ (edition 2024).
+Requirements: Rust 1.89+ (edition 2024).
 
 Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your installed `task` if there is one. Otherwise it downloads a pinned, checksum-verified release into `.bin/`.
 
