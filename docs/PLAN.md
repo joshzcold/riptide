@@ -124,6 +124,7 @@ Package managers (apt, dnf, pacman, Nix, Homebrew) own their installs; riptide m
 
 ### Bugs
 
+- Rust 1.100's build-script layout breaks `cef-dll-sys` (see [Building](book/src/dev/building.md)); `rust-toolchain.toml` pins 1.99.1. Report it to cef-rs, then unpin. Also drop `vendor/download-cef` once cef-rs raises its 10 MB index limit.
 - Widevine: protected playback against a real stream isn't verified (needs a real desktop and a service that serves VP9/AV1).
 
 ### Test reliability

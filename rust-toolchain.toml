@@ -1,0 +1,5 @@
+# Rust 1.100 moved build-script output (build/<crate>/<hash>/out), so cef-dll-sys
+# copies CEF's runtime into target/<profile>/build; unpin once cef-rs handles it.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]
