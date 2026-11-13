@@ -1,6 +1,6 @@
 # Building
 
-Requirements: Rust 1.88+ (edition 2024; `rust-toolchain.toml` pins 1.99.1 for now, see below), `cmake` and `ninja` (`./task setup` says how to install them if they're missing). The smoke and end-to-end tests also need `Xvfb` and `xdotool`, so they only run on Linux; on other systems `./task check` skips them and CI runs them.
+Requirements: Rust 1.89+ (edition 2024; `rust-toolchain.toml` pins 1.99.1 for now, see below), `cmake` and `ninja` (`./task setup` says how to install them if they're missing). The smoke and end-to-end tests also need `Xvfb` and `xdotool`, so they only run on Linux; on other systems `./task check` skips them and CI runs them.
 
 Tasks run through [Task](https://taskfile.dev). The `./task` wrapper uses your installed `task` if there is one. Otherwise it downloads a pinned, checksum-verified release into `.bin/`. Arguments pass straight through.
 

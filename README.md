@@ -103,7 +103,7 @@ In the browser, `F1` or `:help` shows every command, setting and binding with yo
 
 ## Quick start
 
-Requirements: Rust 1.88+ (edition 2024).
+Requirements: Rust 1.89+ (edition 2024).
 
 ```sh
 ./task setup          # once: download CEF (~1.5 GB) into $CEF_PATH, default ~/.local/share/cef
