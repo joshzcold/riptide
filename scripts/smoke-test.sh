@@ -25,8 +25,8 @@ for tool in Xvfb xdotool; do
 done
 [[ -x $BIN ]] || { echo "smoke-test: $BIN not found; run 'task build' first" >&2; exit 1; }
 # Without one, Chromium aborts and typed text never shows up, which looks like a key-handling bug.
-[[ -n $(find /usr/share/fonts /usr/local/share/fonts -type f \( -name '*.ttf' -o -name '*.otf' -o -name '*.ttc' \) -print -quit 2>/dev/null) ]] \
-    || { echo "smoke-test: no fonts installed (e.g. install dejavu-fonts or fonts-dejavu-core)" >&2; exit 1; }
+fonts=$(shopt -s globstar nullglob; echo /usr/share/fonts/**/*.[ot]t[fc] /usr/local/share/fonts/**/*.[ot]t[fc])
+[[ -n $fonts ]] || { echo "smoke-test: no fonts installed (e.g. install dejavu-fonts or fonts-dejavu-core)" >&2; exit 1; }
 
 work=$(mktemp -d)
 xvfb_pid=""
