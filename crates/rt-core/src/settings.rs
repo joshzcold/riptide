@@ -465,6 +465,25 @@ fn log_levels(value: &Value) -> Result<(), String> {
     }
 }
 
+/// The codecs `content.media.blocked_codecs` can hide from pages.
+pub const BLOCKABLE_CODECS: &[&str] = &["av1", "vp9", "vp8"];
+
+fn blocked_codecs(value: &Value) -> Result<(), String> {
+    match value {
+        Value::List(items) => match items
+            .iter()
+            .find(|i| !BLOCKABLE_CODECS.contains(&i.as_str()))
+        {
+            Some(bad) => Err(format!(
+                "{bad:?} isn't a codec riptide can block; use {}",
+                BLOCKABLE_CODECS.join(", ")
+            )),
+            None => Ok(()),
+        },
+        _ => Ok(()),
+    }
+}
+
 fn proxy(value: &Value) -> Result<(), String> {
     match value {
         Value::Str(text) => crate::network::parse_proxy(text).map(|_| ()),
@@ -1211,6 +1230,13 @@ pub static SETTINGS: &[SettingDef] = &[
         Kind::Enum(ASK),
         s("ask"),
         "Let sites use your microphone: ask, true or false"
+    ),
+    def!(
+        "content.media.blocked_codecs",
+        Kind::List,
+        Value::List(Vec::new()),
+        "Video codecs pages are told the browser can't play, so sites like YouTube send another: av1, vp9, vp8; block av1 if your GPU can't decode it (new pages)",
+        blocked_codecs
     ),
     def!(
         "content.media.camera",
@@ -2503,6 +2529,17 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocked_codecs_take_only_codecs_riptide_can_block() {
+        let def = find("content.media.blocked_codecs").unwrap();
+        assert_eq!(
+            def.parse(r#"["av1", "vp9"]"#),
+            Ok(Value::List(vec!["av1".into(), "vp9".into()]))
+        );
+        let err = def.parse(r#"["h264"]"#).unwrap_err();
+        assert!(err.contains("\"h264\" isn't a codec"), "{err}");
+    }
 
     #[test]
     fn call_sites_cover_meeting_links_but_not_the_rest_of_the_site() {

@@ -22,6 +22,8 @@ thread_local! {
     static ROCKER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// `content.media.*` devices, likewise.
     static MEDIA: RefCell<MediaChoices> = RefCell::new(MediaChoices::default());
+    /// `content.media.blocked_codecs`, likewise.
+    static BLOCKED_CODECS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     /// `content.notifications.presenter = messages`, likewise.
     static NOTIFICATION_MESSAGES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// `@require` URLs already tried this session, so a failing one isn't
@@ -55,10 +57,12 @@ pub fn sync_settings(settings: &rt_core::settings::Settings) {
     // Both take notifications from riptide's stand-in instead of Chromium.
     let messages = crate::notifications::presenter(settings) != "auto";
     let media = MediaChoices::from_settings(settings);
+    let codecs = settings.list("content.media.blocked_codecs").to_vec();
     let changed = ROCKER.with(|r| r.replace(rocker))
         != rocker
             | (NOTIFICATION_MESSAGES.with(|n| n.replace(messages)) != messages)
-            | (MEDIA.with(|m| m.replace(media.clone())) != media);
+            | (MEDIA.with(|m| m.replace(media.clone())) != media)
+            | (BLOCKED_CODECS.with(|b| b.replace(codecs.clone())) != codecs);
     if changed {
         publish();
         send_to_renderers();
@@ -78,6 +82,7 @@ fn publish() -> u64 {
             rocker_gestures: ROCKER.with(std::cell::Cell::get),
             notification_messages: NOTIFICATION_MESSAGES.with(std::cell::Cell::get),
             media: MEDIA.with(|m| m.borrow().clone()),
+            blocked_codecs: BLOCKED_CODECS.with(|b| b.borrow().clone()),
         })
         .unwrap_or_default()
     });
