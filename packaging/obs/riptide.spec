@@ -16,6 +16,8 @@ Source0:        https://github.com/joshzcold/riptide/releases/download/v%{versio
 Source1:        https://github.com/joshzcold/riptide/releases/download/v%{version}/riptide-%{version}-linux-aarch64.tar.gz
 ExclusiveArch:  x86_64 aarch64
 Requires:       xdg-utils
+# Chromium aborts without a font; minimal installs of openSUSE have none.
+Requires:       (dejavu-fonts or font(dejavusans))
 %if 0%{?suse_version}
 # Owns the icon directory; openSUSE's build fails on unowned directories.
 BuildRequires:  hicolor-icon-theme
