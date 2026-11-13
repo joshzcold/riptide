@@ -4,7 +4,7 @@ members = ["crates/*"]
 exclude = ["vendor"]
 
 [workspace.package]
-version = "0.22.0"
+version = "0.22.1"
 # Not on crates.io; also lets cargo-deny accept the path dependencies between crates.
 publish = false
 edition = "2024"
