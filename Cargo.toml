@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+exclude = ["vendor"]
 
 [workspace.package]
 version = "0.22.0"
@@ -58,3 +59,7 @@ thiserror = "2"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CEF's index.json outgrew download-cef 3.0.0's 10 MB response limit; vendor/README.md says when to drop this.
+[patch.crates-io]
+download-cef = { path = "vendor/download-cef" }

@@ -27,6 +27,10 @@ tasks:
     cmds:
       - rm -rf "{{.CEF_RS_DIR}}"
       - git clone --depth 1 --branch "cef-v{{.CEF_CRATE_VERSION}}" https://github.com/tauri-apps/cef-rs "{{.CEF_RS_DIR}}"
+      # The patched download-cef in vendor/ (see vendor/README.md).
+      - |
+        grep -qx 'version = "3.0.0"' "{{.CEF_RS_DIR}}/download-cef/Cargo.toml" || { echo "setup: cef-rs no longer uses download-cef 3.0.0; update or drop vendor/download-cef" >&2; exit 1; }
+        cp vendor/download-cef/src/lib.rs "{{.CEF_RS_DIR}}/download-cef/src/lib.rs"
       - cd "{{.CEF_RS_DIR}}" && cargo run -q -p export-cef-dir -- --force "$CEF_PATH"
 
   tools:
