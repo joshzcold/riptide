@@ -1706,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "riptide"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "embed-resource",
  "rt-cef",
@@ -1726,7 +1726,7 @@ dependencies = [
 
 [[package]]
 name = "rt-adblock"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "adblock",
  "psl",
@@ -1736,7 +1736,7 @@ dependencies = [
 
 [[package]]
 name = "rt-cef"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "apple-native-keyring-store",
  "arboard",
@@ -1761,7 +1761,7 @@ dependencies = [
 
 [[package]]
 name = "rt-config"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "mlua",
  "rt-core",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "rt-core"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1785,7 +1785,7 @@ dependencies = [
 
 [[package]]
 name = "rt-e2e"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "linux-keyutils",
  "rt-config",
@@ -1797,7 +1797,7 @@ dependencies = [
 
 [[package]]
 name = "rt-storage"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "rusqlite",
  "serde",
