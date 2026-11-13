@@ -30,6 +30,18 @@ From the keyboard, in a text field:
 
 Right-clicking a misspelled word works too: its fixes are the menu items marked with a pencil (`✎`).
 
+## Video codecs
+
+riptide plays VP8, VP9 and AV1 video, but not H.264 or AAC: the prebuilt Chromium it's built on leaves out patented codecs. Sites like YouTube then send AV1 where they can. AV1 is the hardest of these to decode, and on an older machine without AV1 hardware decoding it can stutter or drain the battery.
+
+`content.media.blocked_codecs` tells pages the codecs you list can't be played, so they send another one. VP9 takes less work, so blocking AV1 is usually enough:
+
+```lua
+c.content.media.blocked_codecs = { "av1" }
+```
+
+It applies to pages opened or reloaded after the change. Blocking both `av1` and `vp9` leaves YouTube little or nothing to play.
+
 ## Widevine (DRM)
 
 Off by default. With `c.content.widevine = true` and a restart, Chromium downloads Google's Widevine CDM (about 21 MB) into the data directory, and it loads from the next start. Chromium has no switch for a single component, so component updates are on during that one run, and they go back off once the CDM is installed.

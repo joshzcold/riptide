@@ -52,6 +52,9 @@ pub struct Scripts {
     /// The devices `:media-devices` picked.
     #[serde(default)]
     pub media: MediaChoices,
+    /// `content.media.blocked_codecs`.
+    #[serde(default)]
+    pub blocked_codecs: Vec<String>,
 }
 
 /// `content.media.camera`, `.microphone` and `.speaker`, which pages apply themselves.
@@ -132,6 +135,7 @@ thread_local! {
     /// Each page context's function that stops its shares.
     static SHARE_STOPPERS: RefCell<Vec<(V8Context, V8Value)>> = const { RefCell::new(Vec::new()) };
     static MEDIA: RefCell<MediaChoices> = RefCell::new(MediaChoices::default());
+    static BLOCKED_CODECS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     /// Each page context's media device helper, from [`MEDIA_JS`].
     static MEDIA_HELPERS: RefCell<Vec<(V8Context, V8Value)>> = const { RefCell::new(Vec::new()) };
 }
@@ -156,11 +160,12 @@ fn granted_api(script: &Script) -> String {
 fn set_scripts(json: &str) {
     match serde_json::from_str::<Scripts>(json) {
         Ok(scripts) => {
-            let (generation, rocker, messages, media) = (
+            let (generation, rocker, messages, media, codecs) = (
                 scripts.generation,
                 scripts.rocker_gestures,
                 scripts.notification_messages,
                 scripts.media.clone(),
+                scripts.blocked_codecs.clone(),
             );
             let current = SCRIPTS.with(|s| {
                 let mut state = s.borrow_mut();
@@ -170,6 +175,7 @@ fn set_scripts(json: &str) {
             if current == generation {
                 ROCKER.with(|r| r.set(rocker));
                 NOTIFICATION_MESSAGES.with(|n| n.set(messages));
+                BLOCKED_CODECS.with(|b| *b.borrow_mut() = codecs);
                 if MEDIA.with(|m| m.replace(media.clone())) != media {
                     apply_media();
                 }
@@ -317,6 +323,7 @@ wrap_render_process_handler! {
                 || rt_core::ui_message::plugin_page(&url).is_some();
             if !may_send {
                 if !url.starts_with("riptide://") {
+                    install_codec_filter(context);
                     install_share_watch(context);
                     install_refocus(context);
                     install_media(context, &url);
@@ -601,6 +608,8 @@ fn install_notification_messages(context: &V8Context) {
 /// "stopped sharing" handling, and stops by the page itself are polled for.
 const MEDIA_JS: &str = include_str!("media_devices.js");
 
+const CODECS_JS: &str = include_str!("codecs.js");
+
 const SHARE_JS: &str = r#"(function (report) {
   const streams = new Set();
   let timer = 0, last = "";
@@ -659,6 +668,19 @@ fn install_share_watch(context: &V8Context) {
             stoppers.push((context.clone(), stop));
         });
     }
+}
+
+/// Hides `content.media.blocked_codecs` from the page's codec checks.
+fn install_codec_filter(context: &V8Context) {
+    let blocked = BLOCKED_CODECS.with(|b| b.borrow().clone());
+    if blocked.is_empty() {
+        return;
+    }
+    let code = format!(
+        "({CODECS_JS})({})",
+        serde_json::to_string(&blocked).unwrap_or_default()
+    );
+    install_with(context, &code, "riptide:codecs", None);
 }
 
 /// [`MEDIA_JS`] in a page, told the devices picked for its site.
@@ -1125,6 +1147,7 @@ mod tests {
                 rocker_gestures: false,
                 notification_messages: false,
                 media: MediaChoices::default(),
+                blocked_codecs: Vec::new(),
             },
         );
         assert_eq!(state.1[0].name, "new");
@@ -1136,6 +1159,7 @@ mod tests {
                 rocker_gestures: false,
                 notification_messages: false,
                 media: MediaChoices::default(),
+                blocked_codecs: Vec::new(),
             },
         );
         assert_eq!((state.0, state.1[0].name.as_str()), (3, "newer"));
@@ -1166,6 +1190,7 @@ mod tests {
                 rocker_gestures: false,
                 notification_messages: false,
                 media: MediaChoices::default(),
+                blocked_codecs: Vec::new(),
             },
         );
         assert_eq!(state.1[1].values, values);

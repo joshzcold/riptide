@@ -311,3 +311,14 @@ fn content_notifications_presenter_messages_shows_them_in_the_status_bar() {
         s.message() == Some("Hello: from a page")
     });
 }
+
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn blocked_codecs_read_as_unsupported_in_new_pages() {
+    const CHECK: &str = "['av01.0.05M.08', 'vp9'].map((c) => MediaSource.isTypeSupported(`video/webm; codecs=\"${c}\"`) + document.createElement('video').canPlayType(`video/webm; codecs=\"${c}\"`)).join(' ')";
+    let b = Browser::start("page.html");
+    b.wait_eval(CHECK, "trueprobably trueprobably");
+    b.run("set content.media.blocked_codecs [\"av1\"]");
+    b.run("reload");
+    b.wait_eval(CHECK, "false trueprobably");
+}
