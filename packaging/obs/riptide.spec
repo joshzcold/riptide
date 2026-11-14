@@ -7,7 +7,7 @@
 %global __requires_exclude ^(libcef|libvk_swiftshader|libvulkan)\\.so.*$
 
 Name:           riptide
-Version:        0.22.1
+Version:        0.23.0
 Release:        0
 Summary:        Keyboard-driven web browser with vim-like bindings
 License:        GPL-3.0-or-later
