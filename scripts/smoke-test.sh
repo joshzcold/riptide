@@ -74,10 +74,16 @@ cat >"$work/nav2.html" <<'EOF'
 <!doctype html><title>nav2</title><link rel="prev" href="nav1.html">
 EOF
 
-Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>/dev/null &
+Xvfb -displayfd 3 -screen 0 1280x900x24 3>"$work/display" 2>"$work/xvfb.log" &
 xvfb_pid=$!
-for _ in $(seq 50); do [[ -s $work/display ]] && break; sleep 0.1; done
+# Up to 15 s, as the e2e harness waits, and with its log when it fails.
+for _ in $(seq 150); do [[ -s $work/display ]] && break; sleep 0.1; done
 display=$(cat "$work/display")
+if [[ -z $display ]]; then
+    echo "Xvfb reported no display; its log:" >&2
+    cat "$work/xvfb.log" >&2
+    exit 1
+fi
 export DISPLAY=":$display"
 
 failures=0
