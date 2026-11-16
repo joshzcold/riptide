@@ -40,7 +40,7 @@ riptide plays VP8, VP9 and AV1 video, but not H.264 or AAC: the prebuilt Chromiu
 c.content.media.blocked_codecs = { "av1" }
 ```
 
-It applies to pages opened or reloaded after the change. Blocking both `av1` and `vp9` leaves YouTube little or nothing to play.
+It applies to pages opened or reloaded after the change. Blocking both `av1` and `vp9` leaves YouTube little or nothing to play, unless you [build CEF with H.264](h264.md).
 
 ## Widevine (DRM)
 
