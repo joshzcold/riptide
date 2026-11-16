@@ -5,9 +5,8 @@
 #![cfg(unix)]
 
 use std::process::{Child, Stdio};
-use std::time::{Duration, Instant};
 
-use rt_e2e::{Browser, Desktop, TIMEOUT};
+use rt_e2e::{Browser, Desktop};
 
 fn start(desktop: Desktop) -> Browser {
     Browser::launch().desktop(desktop).start("page.html")
@@ -33,8 +32,9 @@ fn wl_copy(b: &Browser, text: &str) -> Child {
         .expect("wl-copy is needed (wl-clipboard)")
 }
 
-/// Type through the compositor, as a keyboard would. Each `wtype` adds a
-/// keyboard to the seat, so it waits for riptide to bind that before typing.
+/// Type through the compositor, as a keyboard would, with wtype 0.5 or newer.
+/// Each `wtype` adds a keyboard to the seat, so it waits for riptide to bind
+/// that before typing.
 fn wtype(b: &Browser, args: &[&str]) {
     let status = b
         .client("wtype")
@@ -84,25 +84,8 @@ fn ctrl_v_pastes_what_a_wayland_app_copied(desktop: Desktop) {
 fn wayland_keyboard_input_reaches_riptide() {
     let b = start(Desktop::Wayland);
     // The compositor gives keys to the focused window; sway focuses new ones.
-    // The first key can come before riptide has bound the new keyboard on a
-    // slow runner, so it's sent again until the mode changes.
-    let start = Instant::now();
-    loop {
-        wtype(&b, &[":"]);
-        let waited = Instant::now();
-        while b.state().mode != "command" && waited.elapsed() < Duration::from_secs(2) {
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        if b.state().mode == "command" {
-            break;
-        }
-        assert!(
-            start.elapsed() < TIMEOUT,
-            "':' never reached riptide; sway's seats and windows:\n{}\n{}",
-            swaymsg(&b, "get_seats"),
-            swaymsg(&b, "get_tree")
-        );
-    }
+    wtype(&b, &[":"]);
+    b.wait_mode("command");
     wtype(&b, &["open wayland"]);
     b.wait_until("typed text reaches the command line", |s| {
         s.status["command_line"]["text"].as_str() == Some(":open wayland")
