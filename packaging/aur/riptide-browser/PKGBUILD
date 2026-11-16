@@ -41,6 +41,9 @@ build() {
     export CARGO_TARGET_DIR=target
     export CEF_PATH="$srcdir/cef"
     cargo build --frozen --release --bin riptide
+    # Rust 1.100 moved build-script output, so cef-dll-sys copies CEF's runtime
+    # into target/release/build; put it next to riptide, as the packaging expects.
+    cp -a "$CEF_PATH"/. target/release/
     # Stages the runtime files, as for the release tarball, and unpacks them.
     scripts/package-linux.sh "$pkgver"
     tar -xzf "dist/riptide-${pkgver}-linux-x86_64.tar.gz" -C "$srcdir"
