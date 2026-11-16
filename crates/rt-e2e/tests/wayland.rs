@@ -5,8 +5,9 @@
 #![cfg(unix)]
 
 use std::process::{Child, Stdio};
+use std::time::{Duration, Instant};
 
-use rt_e2e::{Browser, Desktop};
+use rt_e2e::{Browser, Desktop, TIMEOUT};
 
 fn start(desktop: Desktop) -> Browser {
     Browser::launch().desktop(desktop).start("page.html")
@@ -44,6 +45,15 @@ fn wtype(b: &Browser, args: &[&str]) {
     assert!(status.success(), "wtype {args:?}");
 }
 
+fn swaymsg(b: &Browser, kind: &str) -> String {
+    let out = b
+        .client("swaymsg")
+        .args(["-t", kind])
+        .output()
+        .expect("swaymsg is needed (sway)");
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
 fn yank_reaches_wayland_apps(desktop: Desktop) {
     let b = start(desktop);
     let url = b.url("page.html");
@@ -74,8 +84,25 @@ fn ctrl_v_pastes_what_a_wayland_app_copied(desktop: Desktop) {
 fn wayland_keyboard_input_reaches_riptide() {
     let b = start(Desktop::Wayland);
     // The compositor gives keys to the focused window; sway focuses new ones.
-    wtype(&b, &[":"]);
-    b.wait_mode("command");
+    // The first key can come before riptide has bound the new keyboard on a
+    // slow runner, so it's sent again until the mode changes.
+    let start = Instant::now();
+    loop {
+        wtype(&b, &[":"]);
+        let waited = Instant::now();
+        while b.state().mode != "command" && waited.elapsed() < Duration::from_secs(2) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        if b.state().mode == "command" {
+            break;
+        }
+        assert!(
+            start.elapsed() < TIMEOUT,
+            "':' never reached riptide; sway's seats and windows:\n{}\n{}",
+            swaymsg(&b, "get_seats"),
+            swaymsg(&b, "get_tree")
+        );
+    }
     wtype(&b, &["open wayland"]);
     b.wait_until("typed text reaches the command line", |s| {
         s.status["command_line"]["text"].as_str() == Some(":open wayland")
@@ -112,16 +139,8 @@ fn wayland_ctrl_v_pastes_what_a_wayland_app_copied() {
 #[ignore = "starts a browser; run with ./task e2e"]
 fn wayland_window_has_the_riptide_app_id() {
     let b = start(Desktop::Wayland);
-    let tree = || {
-        let out = b
-            .client("swaymsg")
-            .args(["-t", "get_tree"])
-            .output()
-            .expect("swaymsg is needed (sway)");
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    };
     b.wait_until("sway lists an xdg_shell window with app_id riptide", |_| {
-        let tree = tree();
+        let tree = swaymsg(&b, "get_tree");
         tree.contains(r#""app_id": "riptide""#) && tree.contains(r#""shell": "xdg_shell""#)
     });
 }
