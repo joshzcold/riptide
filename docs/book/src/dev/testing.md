@@ -3,7 +3,7 @@
 | Command | What it runs |
 |---|---|
 | `./task test` | Unit tests for `rt-core`, `rt-config`, `rt-storage`, `rt-adblock` and `rt-cef` (modes, keys, commands, settings, config files, paths for all three platforms, history, marks, sessions, and the CEF layer's decisions); no browser needed. `rt-cef`'s tests link CEF, so they run on Linux only. |
-| `./task e2e` | End-to-end tests in [`crates/rt-e2e`](#end-to-end-tests): real browsers, each on its own Xvfb display, driven through the test channel. `./task e2e -- tabs` runs only the tests whose names contain `tabs`. |
+| `./task e2e` | End-to-end tests in [`crates/rt-e2e`](#end-to-end-tests): real browsers, each on its own Xvfb display (or headless sway, for the Wayland tests), driven through the test channel. `./task e2e -- tabs` runs only the tests whose names contain `tabs`. |
 | `./task smoke` | A short check with real X11 input (xdotool keys and clicks, window focus) that the e2e tests can't give: typing into a field, a trusted click, tab keys, a second window, the bundled help page, and `:wq` with a restart. `build-release.yml` also runs it against the release packages, installed on Ubuntu, Debian, Fedora and openSUSE Tumbleweed. It stops early if no fonts are installed, since Chromium then aborts and typed text never appears, which looks like a key-handling bug. |
 | `./task lint` | `cargo fmt --check`, `clippy -D warnings`, ShellCheck on the scripts, actionlint on the workflows, and cargo-deny (below) |
 | `./task check` | All of the above |
@@ -45,6 +45,7 @@ fn d_closes_the_tab() {
 - **Painting:** `start()` and `open()` wait until the page has drawn a frame. Under load Chromium drops keys sent to a page that has loaded but not painted, so call `wait_painted()` after navigating some other way.
 - **Every test is `#[ignore]`d,** so a plain `cargo test` never starts browsers. `./task e2e` runs them with `--ignored`, two at a time (`E2E_THREADS` changes that).
 - **Clicks that should count as the user's go through hints** (`follow_hint`). Insert mode ignores a script's `focus()`, so pages can't switch it on, and that includes test scripts.
+- **Wayland:** `Browser::launch().desktop(Desktop::XWayland)` runs the browser in a headless sway on its Xwayland, as riptide runs on a Wayland desktop by default; `Desktop::Wayland` runs it as a native Wayland client (`--ozone-platform=wayland`). `b.client("wl-paste")` gives a `Command` with the session's `WAYLAND_DISPLAY`, `DISPLAY` and `SWAYSOCK`, for checking what Wayland apps see. `tests/wayland.rs` checks the clipboard both ways with `wl-copy`/`wl-paste`, keys typed through the compositor with `wtype`, and the window's app ID with `swaymsg`. sway's headless backend works without a GPU (`WLR_RENDERER=pixman`) and has no input devices, so each `wtype` waits half a second for riptide to bind the keyboard it adds. `wtype` isn't usable against Xwayland: it sends each run with its own keymap, which Chromium's X11 backend doesn't pick up (`:` arrives as `1`). GNOME (mutter), weston and Hyprland don't fit this harness: the first two lack the data-control protocol `wl-paste` reads through without a keyboard, and Hyprland needs a GPU.
 - **The smoke test stays** for what needs real X11 input (xdotool) and for checking the release packages. New behaviour gets an e2e test.
 - **Spell checking needs a dictionary,** which tests don't download. `tests/spell.rs` copies an installed one (`RT_E2E_DICTIONARY=<file>.bdic`, or `en-US-*.bdic` from `~/.local/share/riptide/Dictionaries`) and passes without checking anything when there is none, as on CI.
 
@@ -93,7 +94,7 @@ The [local-testing skill](https://github.com/joshzcold/riptide/blob/main/.claude
 | Job | Runs |
 |---|---|
 | commit messages | `scripts/check-commits.sh` on the new commits |
-| linux | `./task lint`, `./task test`, `./task smoke` (Xvfb, cached CEF download) |
+| linux | `./task lint`, `./task test`, `./task smoke` and `./task e2e` (Xvfb and headless sway, cached CEF download) |
 | macos, windows | `cargo build`, the unit tests, and `--version`/`--paths`; then `crates/riptide/tests/desktop_start.rs` starts the browser, waits for its window over the named pipe or socket, checks that riptide's renderer code runs (in `riptide-helper` on macOS) and quits it |
 | docs | builds this book and checks its internal links and anchors with [lychee](https://github.com/lycheeverse/lychee) |
 

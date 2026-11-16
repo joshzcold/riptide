@@ -80,7 +80,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 ### Next up (as of 2026-10-22)
 
-1. **Check by hand on a real desktop:** calls (below), and key handling on Wayland.
+1. **Check by hand on a real desktop:** calls (below), and Wayland beyond what `crates/rt-e2e/tests/wayland.rs` checks under headless sway (clipboard, keys, app ID).
 2. **macOS and Windows packages** (M10), the largest milestone left.
 
 ### Extensions (M28)
@@ -94,7 +94,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 ### Packaging (M10)
 
 - macOS: trying the app by hand, notarization (needs an Apple Developer account, and the cask in Homebrew's own repository needs it), and the sandbox. The app bundle (`scripts/bundle-macos.sh`, ad-hoc signed, in a `.dmg`) is done and starts on CI's macOS runner (`desktop_start.rs`); releases also build it on an Intel runner, where it's only checked with `--version`; its helper apps run the small `riptide-helper`. The Homebrew tap ([joshzcold/homebrew-riptide](https://github.com/joshzcold/homebrew-riptide)) follows the releases. Windows: trying the browser by hand, and the sandbox (it needs riptide built as a DLL that CEF's `bootstrap.exe` loads). The installer (`packaging/windows/riptide.iss`, Inno Setup) and the icon in `riptide.exe` (`crates/riptide/riptide.rc`) are done. It starts on CI's Windows runner (`desktop_start.rs`: a window, the named pipe and `:quit`), with its manifest embedded in `riptide.exe`.
-- Wayland: not tested; check key handling and the desktop portal for screen sharing.
+- Wayland: the e2e tests check the clipboard and keys under headless sway, through Xwayland and natively (`--ozone-platform=wayland`). Not checked: GNOME and KDE by hand, fractional scaling, IME, and the desktop portal for screen sharing. Should native Wayland become the default (`--ozone-platform-hint=auto`)?
 
 ### More Linux distributions (M30)
 

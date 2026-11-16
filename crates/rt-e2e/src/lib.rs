@@ -1,12 +1,13 @@
 //! End-to-end test harness. Each [`Browser`] is a real riptide on its own
-//! Xvfb display, with a scratch profile, its own command socket and a local
-//! HTTP server for the fixture pages in `pages/`. Tests drive it through the
-//! test channel (`rt_config::remote::TestRequest`) and poll its state instead
-//! of sleeping.
+//! Xvfb display (or headless sway, see [`Desktop`]), with a scratch profile,
+//! its own command socket and a local HTTP server for the fixture pages in
+//! `pages/`. Tests drive it through the test channel
+//! (`rt_config::remote::TestRequest`) and poll its state instead of sleeping.
 //!
 //! Needs a debug (or `--features test-control`) build of riptide, Xvfb, and
-//! Linux. The tests are `#[ignore]`d so a plain `cargo test` never starts
-//! browsers; `./task e2e` builds riptide and runs them with `--ignored`.
+//! Linux; the Wayland tests also need sway, Xwayland, wl-clipboard and wtype.
+//! The tests are `#[ignore]`d so a plain `cargo test` never starts browsers;
+//! `./task e2e` builds riptide and runs them with `--ignored`.
 #![cfg(unix)]
 
 use std::cell::RefCell;
@@ -159,6 +160,19 @@ impl State {
     }
 }
 
+/// The desktop a [`Browser`] runs on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Desktop {
+    /// Xvfb.
+    #[default]
+    X11,
+    /// Headless sway, with riptide on its Xwayland, as riptide runs on a
+    /// Wayland desktop by default.
+    XWayland,
+    /// Headless sway, with riptide a native Wayland client (`--ozone-platform=wayland`).
+    Wayland,
+}
+
 /// Options for starting a [`Browser`]: `Browser::launch().lua("…").start("page.html")`.
 ///
 /// Config and files may use `{server}` (the fixture server, e.g.
@@ -167,6 +181,7 @@ impl State {
 /// known once the test starts.
 #[derive(Default)]
 pub struct Launch {
+    desktop: Desktop,
     config_toml: Option<String>,
     config_lua: Option<String>,
     /// `(path under the profile, contents, executable)`.
@@ -212,6 +227,12 @@ impl Launch {
         self
     }
 
+    /// Run on another desktop than Xvfb.
+    pub fn desktop(mut self, desktop: Desktop) -> Self {
+        self.desktop = desktop;
+        self
+    }
+
     /// An extra command line argument, e.g. a Chromium switch.
     pub fn arg(mut self, arg: &str) -> Self {
         self.args.push(arg.into());
@@ -254,22 +275,32 @@ impl Launch {
             }
         }
 
-        let (xvfb, display) = start_xvfb();
+        let session = match self.desktop {
+            Desktop::X11 => {
+                let (server, display) = start_xvfb();
+                Session {
+                    desktop: self.desktop,
+                    server,
+                    display,
+                    wayland: None,
+                }
+            }
+            Desktop::XWayland | Desktop::Wayland => start_sway(&dir, self.desktop),
+        };
         let url = format!("http://127.0.0.1:{port}/{page}");
         let socket = remote::socket_path(&base.join("data"), Some(&run));
         let mut args: Vec<&str> = self.args.iter().map(String::as_str).collect();
         args.push(&url);
         let env: Vec<(String, String)> =
             self.env.iter().map(|(k, v)| (k.clone(), fill(v))).collect();
-        let browser = spawn_browser(&dir, &display, &env, &args);
+        let browser = spawn_browser(&dir, &session, &env, &args);
         let b = Browser {
             dir,
             socket,
             port,
-            display,
             env,
             browser: RefCell::new(browser),
-            xvfb: RefCell::new(xvfb),
+            session: RefCell::new(session),
         };
         b.wait_until("the start page loads", |s| {
             s.tabs().len() == 1 && s.tab().is_loaded(&url)
@@ -284,10 +315,19 @@ pub struct Browser {
     dir: PathBuf,
     socket: PathBuf,
     port: u16,
-    display: String,
     env: Vec<(String, String)>,
     browser: RefCell<Child>,
-    xvfb: RefCell<Child>,
+    session: RefCell<Session>,
+}
+
+/// The display server under a browser: Xvfb, or sway in its own process group.
+struct Session {
+    desktop: Desktop,
+    server: Child,
+    /// The X display number, Xvfb's or sway's Xwayland.
+    display: String,
+    /// sway's `WAYLAND_DISPLAY` and `SWAYSOCK`.
+    wayland: Option<(String, String)>,
 }
 
 impl Browser {
@@ -328,7 +368,7 @@ impl Browser {
             .arg("--basedir")
             .arg(self.dir.join("base"))
             .args(args)
-            .env("DISPLAY", format!(":{}", self.display))
+            .envs(self.session.borrow().env())
             .env("XDG_RUNTIME_DIR", self.dir.join("run"))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -389,11 +429,12 @@ impl Browser {
     /// Stop the X server under the browser, as ending the desktop session
     /// does. [`Browser::restart`] starts a new one on the same display.
     pub fn lose_display(&self) {
-        let mut xvfb = self.xvfb.borrow_mut();
+        let mut session = self.session.borrow_mut();
+        assert_eq!(session.desktop, Desktop::X11, "lose_display() needs Xvfb");
         let _ = Command::new("kill")
-            .args(["-s", "TERM", &xvfb.id().to_string()])
+            .args(["-s", "TERM", &session.server.id().to_string()])
             .status();
-        let _ = xvfb.wait();
+        let _ = session.server.wait();
     }
 
     /// Kill the browser without letting it shut down, as a crash would.
@@ -413,17 +454,34 @@ impl Browser {
             matches!(self.browser.borrow_mut().try_wait(), Ok(Some(_))),
             "restart() needs the browser to have exited first"
         );
-        if matches!(self.xvfb.borrow_mut().try_wait(), Ok(Some(_))) {
-            *self.xvfb.borrow_mut() = start_xvfb_on(&self.display);
+        {
+            let mut session = self.session.borrow_mut();
+            if matches!(session.server.try_wait(), Ok(Some(_))) {
+                session.server = start_xvfb_on(&session.display);
+            }
         }
         // A crash can leave the socket behind; the new browser replaces it.
-        *self.browser.borrow_mut() = spawn_browser(&self.dir, &self.display, &self.env, args);
+        *self.browser.borrow_mut() =
+            spawn_browser(&self.dir, &self.session.borrow(), &self.env, args);
         self.wait_until("the browser is back", |s| !s.tabs().is_empty());
     }
 
-    /// The X display number the browser runs on, for `xprop` and friends.
-    pub fn display(&self) -> &str {
-        &self.display
+    /// The X display number the browser runs on, for `xprop` and friends:
+    /// Xvfb's, or under sway its Xwayland's.
+    pub fn display(&self) -> String {
+        self.session.borrow().display.clone()
+    }
+
+    /// `program` set up to run on the browser's desktop, e.g. `wl-paste`,
+    /// `wtype` or `xclip`, with the display variables a desktop gives its apps.
+    pub fn client(&self, program: &str) -> Command {
+        let mut command = Command::new(program);
+        command
+            .envs(self.session.borrow().env())
+            .env("XDG_RUNTIME_DIR", self.dir.join("run"))
+            .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+            .stdin(Stdio::null());
+        command
     }
 
     /// The URL of a fixture page on this browser's server.
@@ -673,9 +731,15 @@ impl Drop for Browser {
             );
         }
         self.stop_browser();
-        let mut xvfb = self.xvfb.borrow_mut();
-        let _ = xvfb.kill();
-        let _ = xvfb.wait();
+        let mut session = self.session.borrow_mut();
+        // sway leads its own process group, with Xwayland and the clients it started.
+        if session.desktop != Desktop::X11 {
+            let _ = Command::new("kill")
+                .args(["-s", "KILL", "--", &format!("-{}", session.server.id())])
+                .status();
+        }
+        let _ = session.server.kill();
+        let _ = session.server.wait();
         if !std::thread::panicking() {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
@@ -689,18 +753,20 @@ fn secret_service(dir: &Path) -> String {
     )
 }
 
-fn spawn_browser(dir: &Path, display: &str, env: &[(String, String)], args: &[&str]) -> Child {
+fn spawn_browser(dir: &Path, session: &Session, env: &[(String, String)], args: &[&str]) -> Child {
     let log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(dir.join("browser.log"))
         .unwrap();
     let mut command = Command::new(binary());
+    command.arg("--basedir").arg(dir.join("base"));
+    if session.desktop == Desktop::Wayland {
+        command.arg("--ozone-platform=wayland");
+    }
     command
-        .arg("--basedir")
-        .arg(dir.join("base"))
         .args(args)
-        .env("DISPLAY", format!(":{display}"))
+        .envs(session.env())
         .env("XDG_RUNTIME_DIR", dir.join("run"))
         // Not the desktop's session bus: tests must not pop up notifications
         // or talk to services on the user's screen.
@@ -775,6 +841,85 @@ fn pages_dir() -> PathBuf {
 fn set_private(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+impl Session {
+    /// The display variables a desktop session gives its apps.
+    fn env(&self) -> Vec<(&'static str, String)> {
+        let mut env = vec![("DISPLAY", format!(":{}", self.display))];
+        if let Some((wayland, sway)) = &self.wayland {
+            env.push(("WAYLAND_DISPLAY", wayland.clone()));
+            env.push(("SWAYSOCK", sway.clone()));
+        }
+        env
+    }
+}
+
+/// Headless sway with Xwayland and the virtual keyboard `wtype` uses, its
+/// sockets in the test's runtime directory. It writes its displays to a file
+/// once it's ready.
+fn start_sway(dir: &Path, desktop: Desktop) -> Session {
+    let ready = dir.join("sway.env");
+    let config = dir.join("sway.conf");
+    std::fs::write(
+        &config,
+        format!(
+            "output HEADLESS-1 resolution 1280x800\n\
+             xwayland force\n\
+             exec sh -c 'echo \"$WAYLAND_DISPLAY $DISPLAY $SWAYSOCK\" > {}.tmp && mv {0}.tmp {0}'\n",
+            ready.display()
+        ),
+    )
+    .unwrap();
+    let log = std::fs::File::create(dir.join("sway.log")).unwrap();
+    let mut command = Command::new("sway");
+    command
+        .arg("--config")
+        .arg(&config)
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("SWAYSOCK")
+        .env("XDG_RUNTIME_DIR", dir.join("run"))
+        .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+        .env("WLR_BACKENDS", "headless")
+        .env("WLR_RENDERER", "pixman")
+        .env("WLR_LIBINPUT_NO_DEVICES", "1")
+        .stdin(Stdio::null())
+        .stdout(log.try_clone().unwrap())
+        .stderr(log);
+    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    let mut server = command
+        .spawn()
+        .expect("can't start sway; install sway and Xwayland to run the Wayland tests");
+    let start = Instant::now();
+    let line = loop {
+        if let Ok(line) = std::fs::read_to_string(&ready) {
+            break line;
+        }
+        if start.elapsed() > TIMEOUT || matches!(server.try_wait(), Ok(Some(_))) {
+            let _ = server.kill();
+            let log = std::fs::read_to_string(dir.join("sway.log")).unwrap_or_default();
+            panic!("sway didn't start:\n{log}");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let mut parts = line.split_whitespace();
+    let wayland = parts
+        .next()
+        .expect("sway gave no WAYLAND_DISPLAY")
+        .to_string();
+    let display = parts
+        .next()
+        .and_then(|d| d.strip_prefix(':'))
+        .expect("sway started no Xwayland")
+        .to_string();
+    let sway = parts.next().expect("sway gave no SWAYSOCK").to_string();
+    Session {
+        desktop,
+        server,
+        display,
+        wayland: Some((wayland, sway)),
+    }
 }
 
 /// Xvfb picks a free display itself and reports it on stdout (`-displayfd 1`).
