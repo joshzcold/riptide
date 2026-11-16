@@ -732,10 +732,20 @@ impl Drop for Browser {
         }
         self.stop_browser();
         let mut session = self.session.borrow_mut();
-        // sway leads its own process group, with Xwayland and the clients it started.
+        // SIGTERM first, so Xwayland removes its /tmp/.X<n>-lock; a stale lock
+        // stops a later Xvfb from restarting on that display.
         if session.desktop != Desktop::X11 {
+            let id = session.server.id().to_string();
+            let _ = Command::new("kill").args(["-s", "TERM", &id]).status();
+            let start = Instant::now();
+            while !matches!(session.server.try_wait(), Ok(Some(_)))
+                && start.elapsed() < Duration::from_secs(5)
+            {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            // Then whatever is left of its process group, e.g. a wl-copy.
             let _ = Command::new("kill")
-                .args(["-s", "KILL", "--", &format!("-{}", session.server.id())])
+                .args(["-s", "KILL", "--", &format!("-{id}")])
                 .status();
         }
         let _ = session.server.kill();
