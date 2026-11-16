@@ -2878,7 +2878,3 @@ dependencies = [
  "log",
  "simd-adler32",
 ]
-
-[[patch.unused]]
-name = "download-cef"
-version = "3.0.0"
