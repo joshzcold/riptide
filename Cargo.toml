@@ -29,7 +29,9 @@ cef = { version = "=156.6.0", default-features = false }
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling", "css-validation"] }
 # The public suffix list adblock already uses, for telling sites apart.
 psl = "2"
-arboard = { version = "3.6", default-features = false }
+# On Wayland, the clipboard through the data-control protocol, falling back to
+# X11 (XWayland) where the compositor lacks it.
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 # The OS keyring for plugins' secret options, through keyring-core: the
 # stores keyring's v1 uses on macOS and Windows, and on Linux the Secret
 # Service through libdbus, built in (vendored) with Rust crypto. keyring's own

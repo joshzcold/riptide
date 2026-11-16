@@ -138,6 +138,16 @@ riptide's windows have the class `riptide` (`WM_CLASS` `riptide`, `Riptide`) for
 
 If another browser's screen-share picker doesn't list riptide's window, check its state with `xprop WM_STATE` and click the window. Programs that list windows skip any that aren't in the `Normal` state. dwm's swallow patch leaves a program started from a terminal in the `Withdrawn` state, because it marks the program's window instead of the terminal's. Either fix the patch (in `swallow()`, mark `p` instead of `c` as withdrawn), or exclude riptide from swallowing with a rule for the class `Riptide`.
 
+## Wayland
+
+On a Wayland desktop riptide runs through Xwayland, as an X11 app. To run it as a native Wayland app, start it with `--ozone-platform=wayland`:
+
+```sh
+riptide --ozone-platform=wayland
+```
+
+Native Wayland is less tested than Xwayland. Yanking and pasting work with other Wayland apps on compositors with the data-control protocol (sway, Hyprland, KDE and other wlroots compositors); on GNOME riptide uses the X11 clipboard instead.
+
 ## Where things live
 
 Run `riptide --paths` to see the config and data directories.

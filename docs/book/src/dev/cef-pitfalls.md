@@ -25,6 +25,7 @@ Things CEF, Chromium and the `cef` crate do that cost time to find out. Add to t
 - **Under Xvfb, a key sent just as a page finishes loading could be lost** below Views (about 1 in 5 in October 2026, for tabs opened from a typed `:open -t`). It didn't reproduce in 100 tries on 2026-10-23, so the smoke test no longer pauses for it; the e2e harness still waits two animation frames after each load.
 - **Middle-clicks and Ctrl+clicks come through `OnOpenURLFromTab`**, not popups, and Alloy loads them in the same tab if it isn't handled.
 - **On X11, reading the clipboard on the UI thread hangs for 4 s when a page copied the text**: Chromium answers for its pages' clipboard on that same thread. Commands that need it (`rl-paste`, `{clipboard}`, `{primary}`) stop with `Effect::ReadClipboard`, and `clipboard::read_then_run` reads on another thread before running them.
+- **CEF picks X11 even on a Wayland desktop**: without `--ozone-platform=wayland` it runs on Xwayland, and with no `DISPLAY` it exits ("Missing X server"). As a native Wayland client, the X11 clipboard isn't the one Wayland apps paste from, so `arboard` is built with `wayland-data-control` and talks to the compositor directly where it supports the protocol (wlroots compositors, KDE), falling back to X11 (GNOME).
 - **Ctrl+wheel over a bar zooms every `riptide://ui` page** (Chromium saves zoom per host). The bar pages refuse it, and `on_load_end` resets a saved zoom for non-tab roles.
 
 ## Pages and navigation
