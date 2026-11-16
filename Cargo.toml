@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
-exclude = ["vendor"]
 
 [workspace.package]
 version = "0.23.0"
@@ -25,7 +24,7 @@ rt-core = { path = "crates/rt-core" }
 rt-cef = { path = "crates/rt-cef" }
 rt-config = { path = "crates/rt-config" }
 rt-storage = { path = "crates/rt-storage" }
-cef = { version = "=156.4.0", default-features = false }
+cef = { version = "=156.6.0", default-features = false }
 # Without "single-thread" the engine is Send + Sync, for CEF's IO thread.
 adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling", "css-validation"] }
 # The public suffix list adblock already uses, for telling sites apart.
@@ -59,7 +58,3 @@ thiserror = "2"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# CEF's index.json outgrew download-cef 3.0.0's 10 MB response limit; vendor/README.md says when to drop this.
-[patch.crates-io]
-download-cef = { path = "vendor/download-cef" }

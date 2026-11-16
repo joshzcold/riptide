@@ -21,16 +21,13 @@ Logging goes to stderr and uses the `RT_LOG` filter, e.g. `RT_LOG=rt_cef=trace .
 ## Without Task
 
 ```sh
-git clone --depth 1 --branch cef-v156.4.0+156.0.26 https://github.com/tauri-apps/cef-rs /tmp/cef-rs
-cp vendor/download-cef/src/lib.rs /tmp/cef-rs/download-cef/src/lib.rs
+git clone --depth 1 --branch cef-v156.6.0+156.0.30 https://github.com/tauri-apps/cef-rs /tmp/cef-rs
 (cd /tmp/cef-rs && cargo run -p export-cef-dir -- --force "$HOME/.local/share/cef")
 export CEF_PATH="$HOME/.local/share/cef"
 cargo build && ./target/debug/riptide
 ```
 
 Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `target/` instead.
-
-Both downloads go through a patched copy of cef-rs's `download-cef` crate in `vendor/download-cef/`. CEF's build index grew past the 10 MB response limit of the crates.io release, which broke every download. `Cargo.toml` patches the copy in, and the `cp` above (which `./task setup` also does) puts it in the cef-rs checkout. [`vendor/README.md`](https://github.com/joshzcold/riptide/blob/main/vendor/README.md) says when to drop it.
 
 `rust-toolchain.toml` pins Rust 1.99.1, which rustup installs on first use. Rust 1.100 moved build-script output from `build/<crate>-<hash>/out` to `build/<crate>/<hash>/out`. `cef-dll-sys` finds the target directory three levels above its output, so with 1.100 it copies CEF's runtime into `target/<profile>/build` instead of next to `riptide`, which then doesn't start, and `scripts/cef-dir.sh` finds no CEF. Unpin once cef-rs handles the new layout.
 
