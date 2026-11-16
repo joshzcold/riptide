@@ -29,7 +29,7 @@ cargo build && ./target/debug/riptide
 
 Without `CEF_PATH`, the `cef-dll-sys` build script downloads the binaries into `target/` instead.
 
-`rust-toolchain.toml` pins Rust 1.99.1, which rustup installs on first use. Rust 1.100 moved build-script output from `build/<crate>-<hash>/out` to `build/<crate>/<hash>/out`. `cef-dll-sys` finds the target directory three levels above its output, so with 1.100 it copies CEF's runtime into `target/<profile>/build` instead of next to `riptide`, which then doesn't start, and `scripts/cef-dir.sh` finds no CEF. Unpin once cef-rs handles the new layout.
+`rust-toolchain.toml` pins Rust 1.99.1, which rustup installs on first use. Rust 1.100 moved build-script output from `build/<crate>-<hash>/out` to `build/<crate>/<hash>/out`. `cef-dll-sys` finds the target directory three levels above its output, so with 1.100 it copies CEF's runtime into `target/<profile>/build` instead of next to `riptide`, which then doesn't start, and `scripts/cef-dir.sh` finds no CEF. The AUR source package (`packaging/aur/riptide-browser/PKGBUILD`) builds with Arch's Rust instead, so its `build()` copies CEF's runtime next to `riptide` itself. Unpin once cef-rs handles the new layout, and drop that copy.
 
 ## Documentation
 
