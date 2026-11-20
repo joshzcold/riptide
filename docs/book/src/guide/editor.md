@@ -24,6 +24,8 @@ With `editor.vim` on (the default), the editor uses vim keys. These commands wor
 | `:q` | Close the tab, unless there are unwritten changes |
 | `:q!` | Close the tab and drop unwritten changes |
 
+Yanks go to the system clipboard (`yy`, `yw`, `"+y`), and `"*y` yanks to the primary selection on Linux. Deletes stay in the editor's registers, so `x` and `dd` don't replace what you copied. To paste from the clipboard, use `Ctrl+V` in insert mode.
+
 `Ctrl+S` also writes the file. With `editor.vim = false` the editor uses ordinary editing keys.
 
 The header shows the path, a dot when there are unwritten changes, and the result of the last write. Closing the tab some other way (`d`, `:tab-close`) asks first if there are unwritten changes.

@@ -45,6 +45,7 @@ pub fn handle_message(message: UiMessage) {
             force,
         } => crate::edit::save(&path, &text, version.as_deref(), force),
         UiMessage::EditQuit => crate::edit::quit(),
+        UiMessage::EditYank { text, primary } => crate::clipboard::yank_to(&text, "text", primary),
         UiMessage::SettingsBind {
             mode,
             keys,

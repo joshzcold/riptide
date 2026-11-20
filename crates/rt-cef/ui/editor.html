@@ -115,6 +115,9 @@ if (data.error) {
       }
       else status("No write since last change (add ! to override)", true);
     },
+    onYank(text, primary) {
+      rt.send("yank", JSON.stringify({ text, primary }));
+    },
     onChange(dirty) {
       document.body.classList.toggle("dirty", dirty);
       document.title = (dirty ? "● " : "") + name;

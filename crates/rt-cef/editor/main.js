@@ -117,7 +117,7 @@ const darkHighlight = HighlightStyle.define([
 /**
  * Make the editor. `opts`: parent, doc, path, vim, dark, readOnly, and the
  * callbacks onSave(text, force) (a promise of whether it was written),
- * onQuit(force) and onChange(dirty).
+ * onQuit(force), onChange(dirty) and onYank(text, primary).
  */
 function create(opts) {
   const dark = opts.dark;
@@ -129,6 +129,18 @@ function create(opts) {
 
   const isDirty = () => view.state.sliceDoc() !== saved;
   const save = (force) => opts.onSave(view.state.sliceDoc(), force);
+
+  // Yanks reach the system clipboard, as with nvim's clipboard=unnamedplus but
+  // without deletes; "* is the primary selection.
+  const registers = Vim.getRegisterController();
+  const pushText = registers.pushText.bind(registers);
+  registers.pushText = (name, operator, text, linewise, blockwise) => {
+    pushText(name, operator, text, linewise, blockwise);
+    const unnamed = !name || name === '"';
+    if ((unnamed && operator === "yank") || name === "+" || name === "*") {
+      opts.onYank(linewise && !text.endsWith("\n") ? `${text}\n` : text, name === "*");
+    }
+  };
 
   const bang = (params) => (params.argString || "").trim() === "!";
   Vim.defineEx("write", "w", (_cm, params) => save(bang(params)));

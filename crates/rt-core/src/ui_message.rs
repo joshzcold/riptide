@@ -105,6 +105,8 @@ pub enum UiMessage {
     },
     /// The editor page: close its tab (`:q`).
     EditQuit,
+    /// The editor page: vim yanked `text`, for the clipboard or the primary selection.
+    EditYank { text: String, primary: bool },
 }
 
 /// What the Plugins tab asks for every plugin.
@@ -332,6 +334,13 @@ struct Reopen {
 #[serde(deny_unknown_fields)]
 struct Session {
     session: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditYank {
+    text: String,
+    primary: bool,
 }
 
 #[derive(Deserialize)]
@@ -726,6 +735,13 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 force,
             })
         }
+        ("edit", "yank") => {
+            let EditYank { text, primary } = payload(name, json)?;
+            if text.len() as u64 > crate::edit::MAX_BYTES {
+                return Err(format!("{name}: too large"));
+            }
+            Ok(UiMessage::EditYank { text, primary })
+        }
         ("edit", "quit") => {
             let Nothing {} = payload(name, json)?;
             Ok(UiMessage::EditQuit)
@@ -842,6 +858,13 @@ mod tests {
             })
         );
         assert_eq!(parse(page, "quit", "{}"), Ok(UiMessage::EditQuit));
+        assert_eq!(
+            parse(page, "yank", r#"{"text":"line\n","primary":false}"#),
+            Ok(UiMessage::EditYank {
+                text: "line\n".into(),
+                primary: false
+            })
+        );
         // The path comes from the URL, never from the page.
         assert!(
             parse(
