@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Editor</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --base: #e6f0f3; --bg: #f7fbfc; --fg: #0b2233; --muted: #4f6b7a; --line: #d3e5ea; --accent: #0e7fa6;
+    --error: #b8323f; --ok: #2e7d32;
+    --sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+    --mono: "JetBrains Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --base: #061826; --bg: #0b2a3f; --fg: #e9f7f6; --muted: #8fb3c4; --line: #164260; --accent: #2ec4b6; }
+  }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--base); color: var(--fg); font: 13px/1.4 var(--sans); }
+  header { display: flex; gap: .8rem; align-items: center; padding: .35rem .8rem; background: var(--bg); border-bottom: 1px solid var(--line); }
+  /* Cut long paths at the start, keeping the file name. */
+  #path { font: 600 1em var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  #path bdi { direction: ltr; unicode-bidi: isolate; }
+  #dirty { color: var(--accent); visibility: hidden; }
+  body.dirty #dirty { visibility: visible; }
+  #lang, #status { color: var(--muted); white-space: nowrap; }
+  #status { margin-left: auto; }
+  #status.error { color: var(--error); font-weight: 600; }
+  #editor { flex: 1; min-height: 0; }
+  #message { padding: 2rem; color: var(--error); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <span id="dirty" title="Not written">●</span>
+  <span id="path"></span>
+  <span id="lang"></span>
+  <span id="status"></span>
+</header>
+<div id="editor"></div>
+<script>/*RT_BUNDLE*/</script>
+<script>
+"use strict";
+const data = /*RT_DATA*/null;
+const $ = (id) => document.getElementById(id);
+const name = data.path.split(/[\\/]/).pop();
+let version = data.version;
+let editor = null;
+let pending = null;
+let quitting = false;
+
+document.title = name;
+$("path").append(Object.assign(document.createElement("bdi"), { textContent: data.path }));
+
+function status(text, error) {
+  $("status").textContent = text;
+  $("status").classList.toggle("error", !!error);
+}
+
+// Dark highlighting follows riptide's theme, not the system's.
+function isDark() {
+  const rgb = getComputedStyle(document.body).backgroundColor.match(/\d+(\.\d+)?/g) || [255, 255, 255];
+  const [r, g, b] = rgb.map(Number);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+}
+
+function save(text, force) {
+  if (pending) return Promise.resolve(false);
+  status("Writing…");
+  return new Promise((resolve) => {
+    pending = { text, resolve };
+    try {
+      rt.send("save", JSON.stringify({ text, version, force }));
+    } catch (e) {
+      window.rtEditFailed(`Can't save: ${e.message}`);
+    }
+  });
+}
+
+// Called by the browser after a save.
+window.rtEditSaved = function (newVersion, bytes) {
+  version = newVersion;
+  const done = pending;
+  pending = null;
+  if (!done) return;
+  editor.markSaved(done.text);
+  status(`"${name}" ${bytes} bytes written`);
+  done.resolve(true);
+};
+
+window.rtEditFailed = function (error) {
+  const done = pending;
+  pending = null;
+  status(error, true);
+  if (done) done.resolve(false);
+};
+
+if (data.error) {
+  $("editor").remove();
+  const message = document.createElement("div");
+  message.id = "message";
+  message.textContent = data.error;
+  document.body.append(message);
+} else {
+  editor = RtEditor.create({
+    parent: $("editor"),
+    doc: data.text,
+    path: data.path,
+    vim: data.vim,
+    dark: isDark(),
+    onSave: save,
+    onQuit(force) {
+      if (force) {
+        quitting = true;
+        rt.send("quit", "{}");
+      }
+      else status("No write since last change (add ! to override)", true);
+    },
+    onChange(dirty) {
+      document.body.classList.toggle("dirty", dirty);
+      document.title = (dirty ? "● " : "") + name;
+    },
+  });
+  $("lang").textContent = RtEditor.languageFor(data.path) ? (name.includes(".") ? name.split(".").pop() : name) : "text";
+  if (!data.exists) status("New file");
+  addEventListener("beforeunload", (event) => {
+    // Closing the tab some other way asks first; :q! doesn't.
+    if (editor.isDirty() && !quitting) event.preventDefault();
+  });
+  editor.focus();
+}
+</script>
+</body>
+</html>

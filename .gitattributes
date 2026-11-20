@@ -1,2 +1,5 @@
 # Keep LF everywhere so generated files compare equal on every platform.
 * text=auto eol=lf
+
+# Built by scripts/update-editor-bundle.sh: no diffs, and not counted as source.
+crates/rt-cef/ui/editor.bundle.js linguist-generated=true -diff

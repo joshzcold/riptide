@@ -8,4 +8,5 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org), whic
 
 - `./task check` runs everything CI does: the [linters](testing.md#linters), unit tests, the e2e tests and the smoke test.
 - Generated files must be current: `UPDATE_LUA_TYPES=1 cargo test -p rt-config` rewrites `docs/lua/rt.meta.lua`, `docs/settings.md` and the generated reference pages after you add or change a command, setting or default binding.
+- The editor page's bundle, `crates/rt-cef/ui/editor.bundle.js`, and its license notices are built from `crates/rt-cef/editor/` by `scripts/update-editor-bundle.sh`. Run it after changing `editor/main.js` or its packages (`--latest` updates them), and commit the result.
 - User-visible changes need documentation in the same change; see [Writing documentation](docs.md).

@@ -137,7 +137,9 @@ Set these in `config.toml` (`hints.chars = "asdf"`), `config.lua` (`c.hints.char
 | `downloads.open_dispatcher` | string | `` | Program that opens downloads (:download-open); {} is the file, or it's added at the end. Empty for the desktop's default |
 | `downloads.remove_finished` | integer | `-1` | Take finished downloads off the list after this many milliseconds; -1 keeps them |
 | `editor.command` | string[] | `["gvim","-f","{file}","-c","normal {line}G{column0}l"]` | Editor for :open-editor; fields: {file}, {line}, {column}, {line0}, {column0} |
+| `editor.file_urls` | boolean | `true` | Open local text files (file:// pages that aren't HTML, SVG or PDF) in the built-in editor page, as :edit does |
 | `editor.remove_file` | boolean | `true` | Delete the temporary file after the editor closes; false keeps it, e.g. to recover text |
+| `editor.vim` | boolean | `true` | Vim keys in the built-in editor page (:edit); false gives ordinary editing keys and Ctrl+S to save |
 | `extensions.check_interval` | integer | `1` | Every this many days, check extensions installed from the Web Store for newer versions in the background and say once which have updates; nothing updates by itself (0: never) |
 | `extensions.load` | string[] | `[]` | Folders of unpacked Chrome extensions to load, besides the ones :extension-install installs (after a restart) |
 | `fileselect.directory` | string | `` | Folder the file picker (and {dir} in fileselect.*.command) starts in; empty means the last folder files were chosen from, or your home folder |
