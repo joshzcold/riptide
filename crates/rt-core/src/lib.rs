@@ -7,6 +7,7 @@ pub mod command;
 pub mod completion;
 pub mod config;
 pub mod dictionaries;
+pub mod edit;
 pub mod engine;
 pub mod extensions;
 pub mod fileselect;

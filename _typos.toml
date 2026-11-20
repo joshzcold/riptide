@@ -15,4 +15,4 @@ sentance = "sentance"
 teh = "teh"
 
 [files]
-extend-exclude = ["CHANGELOG.md", "*.png", "*.svg", "crates/rt-e2e/pages/blank.pdf", "crates/rt-adblock/resources/ubo.json"]
+extend-exclude = ["CHANGELOG.md", "*.png", "*.svg", "crates/rt-e2e/pages/blank.pdf", "crates/rt-adblock/resources/ubo.json", "crates/rt-cef/ui/editor.bundle.js", "crates/rt-cef/ui/editor.bundle.LICENSES.txt", "crates/rt-cef/editor/package-lock.json"]

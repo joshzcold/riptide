@@ -1454,10 +1454,22 @@ pub static SETTINGS: &[SettingDef] = &[
         editor_command
     ),
     def!(
+        "editor.file_urls",
+        Kind::Bool,
+        Value::Bool(true),
+        "Open local text files (file:// pages that aren't HTML, SVG or PDF) in the built-in editor page, as :edit does"
+    ),
+    def!(
         "editor.remove_file",
         Kind::Bool,
         Value::Bool(true),
         "Delete the temporary file after the editor closes; false keeps it, e.g. to recover text"
+    ),
+    def!(
+        "editor.vim",
+        Kind::Bool,
+        Value::Bool(true),
+        "Vim keys in the built-in editor page (:edit); false gives ordinary editing keys and Ctrl+S to save"
     ),
     def!(
         "extensions.check_interval",

@@ -398,6 +398,10 @@ pub enum Command {
     },
     /// Edit the focused text field in an external editor.
     OpenEditor,
+    /// Open a file in the built-in editor page; `None` edits the current `file://` page.
+    Edit {
+        path: Option<String>,
+    },
     /// Read the Greasemonkey scripts again.
     GreasemonkeyReload,
     /// Complete the file path typed in a path prompt.
@@ -1003,6 +1007,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(
         "extension-update",
         "Check installed extensions for updates, or update one: :extension-update [name]",
+    ),
+    spec(
+        "edit",
+        "Open a file in the built-in editor page: :edit [file] (absolute or ~/…; none edits the current file:// page)",
     ),
     spec(
         "open-editor",
@@ -1802,6 +1810,12 @@ pub fn parse(input: &str) -> Result<Command, CommandError> {
             }
         }
         "open-editor" | "edit-text" => Command::OpenEditor,
+        "edit" => {
+            let path = args.rest();
+            Command::Edit {
+                path: (!path.is_empty()).then(|| path.to_string()),
+            }
+        }
         "edit-url" => {
             let (target, related) = args.open_target();
             let url = args.rest();
@@ -2914,6 +2928,17 @@ mod tests {
         assert_eq!(argv, ["mpv", "https://x.org"]);
         assert!(parse("spawn -u").is_err());
         assert!(parse("spawn 'unclosed").is_err());
+    }
+
+    #[test]
+    fn edit_takes_the_rest_as_its_path() {
+        assert_eq!(
+            parse("edit ~/My Notes/todo.md"),
+            Ok(Command::Edit {
+                path: Some("~/My Notes/todo.md".into())
+            })
+        );
+        assert_eq!(parse("edit"), Ok(Command::Edit { path: None }));
     }
 
     #[test]
