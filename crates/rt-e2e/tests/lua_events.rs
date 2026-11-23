@@ -220,18 +220,16 @@ end)
     b.wait_until("the float is placed", |s| {
         s.floats.first().is_some_and(|f| f["placed"] == true)
     });
-    let status = std::process::Command::new("xdotool")
-        .args(["type", "--delay", "20", "hunter2"])
-        .env("DISPLAY", format!(":{}", b.display()))
-        .status()
-        .expect("xdotool");
-    assert!(status.success());
-    let status = std::process::Command::new("xdotool")
-        .args(["key", "Return"])
-        .env("DISPLAY", format!(":{}", b.display()))
-        .status()
-        .expect("xdotool");
-    assert!(status.success());
+    let xdotool = |args: &[&str]| {
+        let status = std::process::Command::new("xdotool")
+            .args(args)
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    xdotool(&["type", "--delay", "20", "hunter2"]);
+    xdotool(&["key", "Return"]);
     b.wait_until("the question got the keys", |s| {
         s.message() == Some("typed hunter2")
     });
