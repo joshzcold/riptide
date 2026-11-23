@@ -198,6 +198,43 @@ end)
     });
 }
 
+/// A float that appears while riptide asks something leaves the keyboard
+/// with the question: real keys, not the test channel, which skips focus.
+#[test]
+#[ignore = "starts a browser; run with ./task e2e"]
+fn a_float_shown_during_a_question_leaves_it_the_keyboard() {
+    let b = Browser::launch()
+        .lua(
+            r#"
+rt.command("ask-then-float", function()
+  rt.ui.input({ prompt = "Password", secret = true }, function(text)
+    rt.notify("typed " .. tostring(text))
+  end)
+  rt.defer(300, function() rt.ui.float({ title = "Status", lines = { "working" } }) end)
+end)
+"#,
+        )
+        .start("page.html");
+    b.run("ask-then-float");
+    b.wait_mode("prompt");
+    b.wait_until("the float is placed", |s| {
+        s.floats.first().is_some_and(|f| f["placed"] == true)
+    });
+    let xdotool = |args: &[&str]| {
+        let status = std::process::Command::new("xdotool")
+            .args(args)
+            .env("DISPLAY", format!(":{}", b.display()))
+            .status()
+            .expect("xdotool");
+        assert!(status.success());
+    };
+    xdotool(&["type", "--delay", "20", "hunter2"]);
+    xdotool(&["key", "Return"]);
+    b.wait_until("the question got the keys", |s| {
+        s.message() == Some("typed hunter2")
+    });
+}
+
 #[test]
 #[ignore = "starts a browser; run with ./task e2e"]
 fn panels_dock_beside_the_page_and_take_keys_when_focused() {
