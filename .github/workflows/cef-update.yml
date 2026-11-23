@@ -54,6 +54,13 @@ jobs:
           If it carries a Chromium security fix (https://chromereleases.googleblog.com), consider asking cef-rs for a release. The daily \`cef-update\` workflow opens the upgrade pull request once the crate is out.
           EOF
           )")"
+
+          # An issue about an older build is out of date now.
+          gh issue list --state open --search "\"is out, but the cef crate binds\" in:title" --json number,title \
+            --jq ".[] | select(.title | startswith(\"CEF \")) | select(.number != ${issue##*/}) | .number" |
+            while read -r old; do
+              gh issue close "$old" --reason "not planned" --comment "Superseded by $issue."
+            done
           scripts/notify.sh "CEF $build is out, but the cef crate lags" "$title" "$issue" warning
       - uses: actions/create-github-app-token@v3
         id: app
