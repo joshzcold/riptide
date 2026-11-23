@@ -73,6 +73,7 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 | M27 | Lua plugins: sandbox and permissions, git install with a lockfile, one checkout per repository, lazy loading, dependencies, events (`command_before` and `key` can cancel; both, and `command`, need a permission), keys (per-site too), commands, floats, panels, pages (in tabs, panels and floats), `rt.page.*`, `rt.ui.*`, status bar widgets, the Plugins tab with Add/Browse, options and keyring secrets, health checks, check/update/sync/restore/clean, a daily update check, `:help` for plugins, `--plugin-test`, the template and riptide-plugins repositories | configuration/plugins.md, configuration/lua.md |
 | M28 | Chrome (MV3) extensions: `:extension-install` from the Web Store, the Extensions tab, updates, floating popups, native messaging hosts | guide/extensions.md |
 | M29 | Splits: `:split`/`:vsplit` and the `s` keys, `<Ctrl-h/j/k/l>`, resizing by keys and by dragging a border, a line over the focused pane, layouts in sessions, crash notices and extension popups per pane; each pane has its own tabs (`:tab-move-pane`) and tab bar, and its own panel, so pages are only resized with their pane | guide/tabs.md |
+| M32 | The editor page: `:edit` and local text files open in `riptide://edit/` (CodeMirror with vim keys), `:w` saves and refuses files changed on disk | guide/editor.md |
 
 ---
 
@@ -82,6 +83,13 @@ The [architecture page](book/src/dev/architecture.md) explains the threading rul
 
 1. **Check by hand on a real desktop:** calls (below), and Wayland beyond what `crates/rt-e2e/tests/wayland.rs` checks under headless sway (clipboard, keys, app ID).
 2. **macOS and Windows packages** (M10), the largest milestone left.
+
+### File editor (M32)
+
+- **Terminal editors:** `editor.view = "terminal"` to open files in a terminal tab (xterm.js and a PTY, ConPTY on Windows) running your own editor, e.g. `editor.terminal_command = ["nvim", "+{line}", "{file}"]`. Needs a vendored xterm.js, a key story for `<Escape>` (passthrough, as the editor page does) and the same write rules.
+- Completion for `:edit` paths, as the download prompt has (`rt_core::path_complete`).
+- Mixed line endings: a file with both `\r\n` and `\n` shows the lone `\n`s as special characters.
+- Keys the test channel sends to a page lose Shift (`A` arrives as `a`, `<Shift-;>` as `;`), so the e2e tests save with `Ctrl+S` instead of typing `:w`. Macros replaying shifted keys into pages likely have the same problem (`vk::to_raw` and `client::key_event`).
 
 ### Extensions (M28)
 

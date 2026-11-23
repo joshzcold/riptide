@@ -76,6 +76,7 @@ Type these after `:`, or bind them to keys. `:help` shows the same list in the b
 | `:extensions` |  | List extensions in :settings, with their popups, options, updates and Remove |
 | `:extension-open` |  | Open an extension's popup over the page, or its options in a tab: :extension-open &lt;name&gt; [popup\|options] |
 | `:extension-update` |  | Check installed extensions for updates, or update one: :extension-update [name] |
+| `:edit` |  | Open a file in the built-in editor page: :edit [file] (absolute or ~/…; none edits the current file:// page) |
 | `:open-editor` |  | Edit the focused text field in editor.command (also :edit-text) |
 | `:edit-text` |  | Edit the focused text field in editor.command (the same as :open-editor) |
 | `:edit-url` |  | Edit the page's URL in editor.command, then open it: [-t\|-b\|-w\|-p] [-r] [url] |

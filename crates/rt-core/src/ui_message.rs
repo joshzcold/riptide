@@ -94,6 +94,19 @@ pub enum UiMessage {
     },
     /// The recover page: delete a crash's session.
     RecoverForget { session: String },
+    /// The editor page: write `text` to its file. `version` is the file's
+    /// [`crate::edit`] version when the page loaded it, `None` if it didn't exist;
+    /// `force` writes even if the file changed since.
+    EditSave {
+        path: String,
+        text: String,
+        version: Option<String>,
+        force: bool,
+    },
+    /// The editor page: close its tab (`:q`).
+    EditQuit,
+    /// The editor page: vim yanked `text`, for the clipboard or the primary selection.
+    EditYank { text: String, primary: bool },
 }
 
 /// What the Plugins tab asks for every plugin.
@@ -278,8 +291,8 @@ pub fn plugin_page_id(url: &str) -> Option<u32> {
 }
 
 /// The page at `url` that may send messages: a `riptide://ui/` page's file
-/// name, or `settings` and `recover` for `riptide://settings/` and
-/// `riptide://recover/`.
+/// name, `settings` and `recover` for `riptide://settings/` and
+/// `riptide://recover/`, or `edit` for an editor page.
 pub fn sender(url: &str) -> Option<&str> {
     if let Some(page) = url.strip_prefix(UI_PREFIX) {
         return page.split(['?', '#']).next();
@@ -287,14 +300,15 @@ pub fn sender(url: &str) -> Option<&str> {
     match split_url(url) {
         Some(("settings", "/")) => Some("settings"),
         Some(("recover", "/")) => Some("recover"),
+        Some(("edit", _)) => Some("edit"),
         _ => None,
     }
 }
 
 /// Whether a page in a tab (not one of riptide's bars) may send messages.
-/// Only the settings and recover pages may; web pages can't load or frame them.
+/// Only the settings, recover and editor pages may; web pages can't load or frame them.
 pub fn tab_may_send(url: &str) -> bool {
-    matches!(sender(url), Some("settings" | "recover"))
+    matches!(sender(url), Some("settings" | "recover" | "edit"))
 }
 
 /// A crash's session name, `_crashed-` and a date: the only sessions the
@@ -320,6 +334,21 @@ struct Reopen {
 #[serde(deny_unknown_fields)]
 struct Session {
     session: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditYank {
+    text: String,
+    primary: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditSave {
+    text: String,
+    version: Option<String>,
+    force: bool,
 }
 
 #[derive(Deserialize)]
@@ -684,6 +713,39 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
                 session: crashed_session(session)?,
             })
         }
+        ("edit", "save") => {
+            let EditSave {
+                text,
+                version,
+                force,
+            } = payload(name, json)?;
+            // The page writes only the file its own URL names.
+            let path =
+                crate::edit::path_from_url(url).ok_or_else(|| format!("{name}: bad path"))?;
+            if text.len() as u64 > crate::edit::MAX_BYTES {
+                return Err(format!("{name}: too large"));
+            }
+            if version.as_ref().is_some_and(|v| v.len() > 100) {
+                return Err(format!("{name}: bad version"));
+            }
+            Ok(UiMessage::EditSave {
+                path,
+                text,
+                version,
+                force,
+            })
+        }
+        ("edit", "yank") => {
+            let EditYank { text, primary } = payload(name, json)?;
+            if text.len() as u64 > crate::edit::MAX_BYTES {
+                return Err(format!("{name}: too large"));
+            }
+            Ok(UiMessage::EditYank { text, primary })
+        }
+        ("edit", "quit") => {
+            let Nothing {} = payload(name, json)?;
+            Ok(UiMessage::EditQuit)
+        }
         ("tabbar.html", "select-tab") => {
             let TabIndex { index } = payload(name, json)?;
             Ok(UiMessage::SelectTab { index })
@@ -776,6 +838,53 @@ pub fn parse(url: &str, name: &str, json: &str) -> Result<UiMessage, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn an_editor_page_saves_only_its_own_file() {
+        let page = "riptide://edit/tmp/a%20b.txt";
+        assert!(tab_may_send(page));
+        assert_eq!(
+            parse(
+                page,
+                "save",
+                r#"{"text":"hi\n","version":"1.2-3","force":false}"#
+            ),
+            Ok(UiMessage::EditSave {
+                path: "/tmp/a b.txt".into(),
+                text: "hi\n".into(),
+                version: Some("1.2-3".into()),
+                force: false,
+            })
+        );
+        assert_eq!(parse(page, "quit", "{}"), Ok(UiMessage::EditQuit));
+        assert_eq!(
+            parse(page, "yank", r#"{"text":"line\n","primary":false}"#),
+            Ok(UiMessage::EditYank {
+                text: "line\n".into(),
+                primary: false
+            })
+        );
+        // The path comes from the URL, never from the page.
+        assert!(
+            parse(
+                page,
+                "save",
+                r#"{"text":"","version":null,"force":true,"path":"/etc/passwd"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            parse(
+                "riptide://edit/",
+                "save",
+                r#"{"text":"","version":null,"force":true}"#
+            )
+            .is_err()
+        );
+        assert!(parse(page, "set", r#"{"name":"x","value":1}"#).is_err());
+        assert!(!tab_may_send("file:///tmp/a%20b.txt"));
+    }
 
     #[test]
     fn the_recover_page_reopens_and_forgets_only_crash_sessions() {

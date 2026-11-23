@@ -12,6 +12,7 @@ mod content;
 mod crash;
 mod dialogs;
 mod downloads;
+mod edit;
 mod eval;
 mod extensions;
 mod favicons;

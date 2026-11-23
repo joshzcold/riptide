@@ -117,8 +117,15 @@ wrap_request_handler! {
             if blocked {
                 tracing::warn!("blocked navigation to {url}");
             } else if let Some(browser) = browser
-                && frame.is_some_and(|f| f.is_main() != 0)
+                && let Some(frame) = frame
+                && frame.is_main() != 0
             {
+                // editor.file_urls: local text files open in the editor page.
+                if let Some(edit) = crate::edit::redirect(&url) {
+                    let mut task = crate::edit::Load::new(frame.clone(), edit);
+                    post_task(ThreadId::UI, Some(&mut task));
+                    return 1;
+                }
                 // content.call_sites: a link to a call opens in a call window.
                 let chrome_style = browser.host().is_some_and(|h| h.runtime_style() == RuntimeStyle::CHROME);
                 if !chrome_style && crate::tabs::is_call_site(&url) {

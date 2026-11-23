@@ -1311,6 +1311,8 @@ impl Engine {
             "normal" => Mode::Normal,
             "insert" => Mode::Insert,
             "passthrough" => Mode::Passthrough,
+            // The editor page has its own keys; <Shift-Escape> gets riptide's back.
+            _ if self.url.starts_with(crate::edit::PREFIX) => Mode::Passthrough,
             _ => return effects,
         };
         if self.mode != wanted
@@ -3588,6 +3590,23 @@ mod tests {
             Mode::Command,
             "the command line isn't interrupted"
         );
+    }
+
+    #[test]
+    fn the_editor_page_starts_in_passthrough() {
+        let mut e = engine();
+        e.set_url("riptide://edit/tmp/notes.md");
+        e.apply_mode_override();
+        assert_eq!(e.mode(), Mode::Passthrough);
+        e.settings
+            .set_for(
+                "riptide://edit/*",
+                "input.mode_override",
+                Value::Str("insert".into()),
+            )
+            .unwrap();
+        e.apply_mode_override();
+        assert_eq!(e.mode(), Mode::Insert, "a site setting still wins");
     }
 
     #[test]

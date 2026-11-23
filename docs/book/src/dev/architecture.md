@@ -11,7 +11,7 @@ Riptide is one Rust workspace around CEF's prebuilt Chromium. The [project plan]
 | `crates/rt-config` | Config paths per platform, the command line, TOML/Lua/autoconfig loading, the single-instance socket protocol, and the generated Lua types, settings docs and reference pages. |
 | `crates/rt-storage` | History (SQLite), quickmarks and bookmarks (plain text files), sessions (TOML). |
 | `crates/rt-adblock` | Ad and tracker blocking with Adblock Plus filter lists (Brave's adblock-rust). `resources/ubo.json` holds uBlock Origin's scriptlets and `$redirect` stand-ins; refresh it with `scripts/update-adblock-resources.sh` (needs Node) when uBlock Origin releases. |
-| `crates/rt-cef` | CEF integration: window layout, handlers, renderer-process bindings, the `riptide://` pages and the status bar and completion UI. |
+| `crates/rt-cef` | CEF integration: window layout, handlers, renderer-process bindings, the `riptide://` pages and the status bar and completion UI. The editor page (`riptide://edit/`, `src/edit.rs`) runs CodeMirror from `ui/editor.bundle.js`, built from `editor/` by `scripts/update-editor-bundle.sh` (needs Node); don't edit the bundle by hand. |
 
 The rule that keeps this testable: `rt-core` never depends on CEF. CEF is an adapter that turns events into `rt-core` inputs and carries out the actions `rt-core` returns.
 
@@ -36,7 +36,7 @@ There is a single executable. CEF launches its renderer, GPU and utility process
 
 ## The window
 
-Each window uses CEF Views in the Alloy runtime style. Every tab is its own `BrowserView`, and only the current one is visible. The tab bar, status bar, completion, prompts and messages are HTML pages (`crates/rt-cef/ui/`) served by the browser itself at `riptide://ui/…`, in their own views. Only `riptide://ui/` pages get the `rt.send()` channel to Rust, and the browser accepts only the messages each page is allowed to send. Web pages can't link to, frame or redirect to `riptide://` addresses.
+Each window uses CEF Views in the Alloy runtime style. Every tab is its own `BrowserView`, and only the current one is visible. The tab bar, status bar, completion, prompts and messages are HTML pages (`crates/rt-cef/ui/`) served by the browser itself at `riptide://ui/…`, in their own views. Only `riptide://ui/` pages and the settings, recover and editor pages get the `rt.send()` channel to Rust, and the browser accepts only the messages each page is allowed to send. The editor page can only write the file its own URL names (`rt_core::edit::path_from_url`), never a path the page sends. Web pages can't link to, frame or redirect to `riptide://` addresses.
 
 ## Where to look
 

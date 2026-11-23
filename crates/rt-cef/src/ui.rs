@@ -38,6 +38,14 @@ pub fn handle_message(message: UiMessage) {
         } => crate::settings_page::set(&name, &value, pattern.as_deref()),
         UiMessage::SettingsReset { name } => crate::settings_page::reset(&name),
         UiMessage::SettingsReady => crate::settings_page::refresh(),
+        UiMessage::EditSave {
+            path,
+            text,
+            version,
+            force,
+        } => crate::edit::save(&path, &text, version.as_deref(), force),
+        UiMessage::EditQuit => crate::edit::quit(),
+        UiMessage::EditYank { text, primary } => crate::clipboard::yank_to(&text, "text", primary),
         UiMessage::SettingsBind {
             mode,
             keys,

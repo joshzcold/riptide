@@ -12,6 +12,7 @@
 - [Privacy and content blocking](guide/privacy.md)
 - [Pages: dark mode, spell checking, DRM](guide/pages.md)
   - [H.264 and AAC: building CEF yourself](guide/h264.md)
+- [Editing local files](guide/editor.md)
 - [Programs, userscripts and Greasemonkey](guide/scripts.md)
 - [Passwords](guide/passwords.md)
 - [Extensions](guide/extensions.md)

@@ -383,7 +383,11 @@ pub fn local_file_url(input: &str, home: Option<&std::path::Path>) -> Option<Str
 }
 
 /// The path `input` names, with `~` expanded, if it's absolute.
-fn local_path(input: &str, home: Option<&std::path::Path>, windows: bool) -> Option<String> {
+pub(crate) fn local_path(
+    input: &str,
+    home: Option<&std::path::Path>,
+    windows: bool,
+) -> Option<String> {
     let tilde = input
         .strip_prefix("~/")
         .or_else(|| input.strip_prefix("~\\").filter(|_| windows));
@@ -404,7 +408,7 @@ fn local_path(input: &str, home: Option<&std::path::Path>, windows: bool) -> Opt
 }
 
 /// `C:\a b\x.html` as `file:///C:/a%20b/x.html`; `/tmp/x` as `file:///tmp/x`.
-fn path_to_file_url(path: &str, windows: bool) -> String {
+pub(crate) fn path_to_file_url(path: &str, windows: bool) -> String {
     let path = if windows {
         path.replace('\\', "/")
     } else {

@@ -863,6 +863,7 @@ fn run_command(command: Command, count: Option<u32>) {
         || crate::screenshot::run_command(&command)
         || crate::fileselect::run_command(&command)
         || crate::configcmd::run_command(&command)
+        || crate::edit::run_command(&command)
     {
         return;
     }
@@ -1358,6 +1359,7 @@ fn collect_ui_update(
     crate::scheme::set_page_css(rt_core::theme::page_css(&rt_core::theme::resolve(
         s.engine.settings(),
     )));
+    crate::edit::set_vim(s.engine.settings().bool("editor.vim"));
     // `:theme nord` shows nord while it's being typed or picked.
     let preview = status
         .command_line
