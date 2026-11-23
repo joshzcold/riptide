@@ -8,4 +8,5 @@ License: GPL-3.0-or-later
  On Debian systems, the full text is in /usr/share/common-licenses/GPL-3.
  With an additional permission under section 7 for loading a content
  decryption module such as Widevine: /opt/riptide/LICENSE-EXCEPTION.
- Chromium's and CEF's licenses are in /opt/riptide/CREDITS.html.
+ Chromium's and CEF's licenses are in /opt/riptide/CREDITS.html, and those
+ of the editor page's JavaScript in /opt/riptide/THIRD-PARTY-LICENSES.txt.

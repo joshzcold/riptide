@@ -59,6 +59,7 @@ for f in "${files[@]}"; do
 done
 cp -a "$build/locales" "$stage/"
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md packaging/riptide.desktop packaging/riptide.svg "$stage/"
+cp crates/rt-cef/ui/editor.bundle.LICENSES.txt "$stage/THIRD-PARTY-LICENSES.txt"
 crash_config > "$stage/crash_reporter.cfg"
 # CEF ships libcef.so with debug info (1.4 GB); stripped it is ~260 MB.
 strip "$stage/riptide" "$stage/libcef.so" "$stage/libvk_swiftshader.so"
@@ -131,7 +132,8 @@ License: GPL-3.0-or-later
  On Debian systems, the full text is in /usr/share/common-licenses/GPL-3.
  With an additional permission under section 7 for loading a content
  decryption module such as Widevine: /opt/riptide/LICENSE-EXCEPTION.
- Chromium's and CEF's licenses are in /opt/riptide/CREDITS.html.
+ Chromium's and CEF's licenses are in /opt/riptide/CREDITS.html, and those
+ of the editor page's JavaScript in /opt/riptide/THIRD-PARTY-LICENSES.txt.
 EOF
     # Packaged files must not be group- or world-writable, whatever the umask.
     chmod -R go-w "$tree"
@@ -224,7 +226,8 @@ Framework (CEF) and controlled from Rust: modes, hints, a command
 line, and configuration in TOML or Lua. Its license has an additional
 permission for loading a content decryption module such as Widevine
 (/opt/riptide/LICENSE-EXCEPTION); Chromium's and CEF's licenses are in
-/opt/riptide/CREDITS.html.
+/opt/riptide/CREDITS.html, and those of the editor page's JavaScript in
+/opt/riptide/THIRD-PARTY-LICENSES.txt.
 
 %install
 cp -a "$tree/." %{buildroot}/

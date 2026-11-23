@@ -129,6 +129,7 @@ rustPlatform.buildRustPackage {
       cp -rL "$release/$f" $out/lib/riptide/
     done
     chmod -R u+w $out/lib/riptide
+    install -Dm644 crates/rt-cef/ui/editor.bundle.LICENSES.txt $out/lib/riptide/THIRD-PARTY-LICENSES.txt
     # The Nix store can't hold a setuid sandbox helper, so there is none; the
     # sandbox uses user namespaces instead, which NixOS allows by default.
     makeWrapper $out/lib/riptide/riptide $out/bin/riptide \

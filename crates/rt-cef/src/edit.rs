@@ -17,6 +17,8 @@ use crate::shell;
 
 const TEMPLATE: &str = include_str!("../ui/editor.html");
 const BUNDLE: &str = include_str!("../ui/editor.bundle.js");
+/// The bundle's license notices, served at `riptide://licenses/`.
+pub const LICENSES: &str = include_str!("../ui/editor.bundle.LICENSES.txt");
 
 /// The page around its data: built once, since the bundle is large.
 static PARTS: LazyLock<(String, String)> = LazyLock::new(|| {

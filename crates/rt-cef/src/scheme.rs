@@ -66,6 +66,7 @@ fn page(host: &str, path: &str, private: bool) -> Option<(Arc<[u8]>, &'static st
         ("settings", "/") => Some((themed(crate::settings_page::page()), html)),
         ("process", "/") => Some((crate::spawn::output_page(), html)),
         ("edit", path) => Some((themed(crate::edit::page(path)), html)),
+        ("licenses", "/") => Some((Arc::from(crate::edit::LICENSES.as_bytes()), "text/plain")),
         _ => None,
     }
 }

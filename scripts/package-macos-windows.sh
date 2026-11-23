@@ -45,6 +45,7 @@ else
     cp -R "$cef/locales" "$stage/"
 fi
 cp LICENSE LICENSE-EXCEPTION README.md CHANGELOG.md "$stage/"
+cp crates/rt-cef/ui/editor.bundle.LICENSES.txt "$stage/THIRD-PARTY-LICENSES.txt"
 if [[ $os-$arch != macos-aarch64 ]]; then
     cat >"$stage/EXPERIMENTAL.txt" <<EOF
 This $os $arch build of riptide $version is experimental: it starts, but is untested by hand.

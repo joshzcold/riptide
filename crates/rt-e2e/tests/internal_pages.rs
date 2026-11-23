@@ -24,6 +24,11 @@ fn changelog_history_and_downloads_pages_open() {
         b.run(command);
         b.wait_until(&format!(":{command} opens"), |s| s.tab().title == title);
     }
+    b.run("open riptide://licenses/");
+    b.wait_eval(
+        "String(document.body.innerText.includes('@replit/codemirror-vim'))",
+        "true",
+    );
 }
 
 #[test]
