@@ -29,7 +29,8 @@ Framework (CEF) and controlled from Rust: modes, hints, a command
 line, and configuration in TOML or Lua. Its license has an additional
 permission for loading a content decryption module such as Widevine
 (/opt/riptide/LICENSE-EXCEPTION); Chromium's and CEF's licenses are in
-/opt/riptide/CREDITS.html.
+/opt/riptide/CREDITS.html, and those of the editor page's JavaScript in
+/opt/riptide/THIRD-PARTY-LICENSES.txt.
 
 %prep
 %setup -q -T -c

@@ -35,4 +35,5 @@ The header shows the path, a dot when there are unwritten changes, and the resul
 - Files must be UTF-8 text and at most 8 MB.
 - Windows line endings (`\r\n`) are kept as they are.
 - Syntax highlighting covers Rust, JavaScript and TypeScript, Python, Go, C and C++, Java, HTML, CSS, JSON, YAML, TOML, Markdown, SQL, XML, Lua, shell scripts, Dockerfiles and INI-style config files. Anything else is plain text.
+- The editor is built on [CodeMirror](https://codemirror.net/) and its vim mode. Their licenses are at `riptide://licenses/`, and in `THIRD-PARTY-LICENSES.txt` next to the `riptide` binary in release packages.
 - `:open-editor` and `:config-edit` are separate: they still open `editor.command`, your own editor program, in its own window.
