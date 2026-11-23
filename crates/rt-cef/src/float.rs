@@ -285,19 +285,25 @@ pub fn reposition() {
             shown = true;
         }
     }
-    // During a prompt the status bar keeps the keyboard, on purpose.
-    let prompting = shell::with(|s| {
-        matches!(
+    if !shown {
+        return;
+    }
+    // During a prompt the keys belong to the status bar (see
+    // `shell::focus_for_prompt`), so it gets them back rather than the tab.
+    let back = shell::with(|s| {
+        let prompting = matches!(
             s.engine.mode(),
             rt_core::Mode::Prompt | rt_core::Mode::YesNo
-        )
+        );
+        if prompting {
+            s.statusbar.clone()
+        } else {
+            s.tabs.current().map(|t| t.view.clone())
+        }
     })
-    .unwrap_or(false);
-    if shown
-        && !prompting
-        && let Some(tab) = shell::with(|s| s.tabs.current().map(|t| t.view.clone())).flatten()
-    {
-        crate::panes::focus_view(&tab);
+    .flatten();
+    if let Some(view) = back {
+        crate::panes::focus_view(&view);
     }
 }
 
