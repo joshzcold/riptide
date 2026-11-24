@@ -21,10 +21,14 @@ The [`nightly` pre-release](https://github.com/joshzcold/riptide/releases/tag/ni
 
 Add riptide's repository and your package manager installs it and keeps it updated with the rest of your system. Each release is built into it on the [openSUSE Build Service](https://build.opensuse.org/package/show/home:joshzcold/riptide), from the same Linux tarball as the downloads above.
 
-**Debian and Ubuntu** (x86_64 only). Set `repo` to `Debian_12`, `Debian_13`, `xUbuntu_22.04` or `xUbuntu_24.04`:
+**Debian and Ubuntu** (x86_64 only). There's a repository for each release: `Debian_12`, `Debian_13`, `xUbuntu_22.04` and `xUbuntu_24.04`. Use your own release's repository, since the packages depend on that release's library names. The first lines pick it from `/etc/os-release`. On a derivative such as Linux Mint, set `repo` to the release it's based on.
 
 ```sh
-repo=Debian_12
+. /etc/os-release
+case $ID in
+  ubuntu) repo=xUbuntu_$VERSION_ID ;;
+  debian) repo=Debian_$VERSION_ID ;;
+esac
 curl -fsSL https://download.opensuse.org/repositories/home:/joshzcold/$repo/Release.key \
   | gpg --dearmor | sudo tee /usr/share/keyrings/riptide.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/riptide.gpg] https://download.opensuse.org/repositories/home:/joshzcold/$repo/ /" \
@@ -32,10 +36,10 @@ echo "deb [signed-by=/usr/share/keyrings/riptide.gpg] https://download.opensuse.
 sudo apt update && sudo apt install riptide
 ```
 
-**Fedora** 43 and 44, x86_64 and aarch64. Use your Fedora version in the URL:
+**Fedora** 43 and 44, x86_64 and aarch64:
 
 ```sh
-sudo dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/joshzcold/Fedora_44/home:joshzcold.repo
+sudo dnf config-manager addrepo --from-repofile=https://download.opensuse.org/repositories/home:/joshzcold/Fedora_$(rpm -E %fedora)/home:joshzcold.repo
 sudo dnf install riptide
 ```
 
