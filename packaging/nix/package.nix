@@ -39,7 +39,7 @@
   libxext ? xorg.libXext,
   libxfixes ? xorg.libXfixes,
   libxrandr ? xorg.libXrandr,
-  version ? "0.25.0",
+  version ? "0.25.1",
   # A local tarball instead of the release's. (Not `src`: callPackage would
   # fill that in from nixpkgs.)
   tarball ? null,
@@ -55,7 +55,7 @@ stdenv.mkDerivation {
       fetchurl {
         url = "https://github.com/joshzcold/riptide/releases/download/v${version}/riptide-${version}-linux-x86_64.tar.gz";
         # Updated at each release from the tarball's sha256 (see docs: Releasing).
-        hash = "sha256-m1ZMX21K/On30Jnu6pxojDSv9GAXYRhWeQPcczAvymw=";
+        hash = "sha256-BAxrm1xUM0qVi2UkPOlMUR4Zza1oXG+o6VIZm9TVp4w=";
       };
 
   nativeBuildInputs = [
