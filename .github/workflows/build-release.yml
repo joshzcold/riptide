@@ -194,6 +194,10 @@ jobs:
           ref: ${{ inputs.ref }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # A restored CMake configuration names the compiler and linker paths of an older runner image.
+      - name: Forget cef-dll-sys's CMake configuration
+        shell: bash
+        run: rm -rf target/*/build/cef-dll-sys-*/out/build/{CMakeCache.txt,CMakeFiles}
       - run: cargo build --release --locked
       - name: Install Inno Setup
         if: matrix.platform == 'windows'
