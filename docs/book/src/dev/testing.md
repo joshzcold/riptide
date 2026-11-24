@@ -98,7 +98,7 @@ The [local-testing skill](https://github.com/joshzcold/riptide/blob/main/.claude
 | macos, windows | `cargo build`, the unit tests, and `--version`/`--paths`; then `crates/riptide/tests/desktop_start.rs` starts the browser, waits for its window over the named pipe or socket, checks that riptide's renderer code runs (in `riptide-helper` on macOS) and quits it |
 | docs | builds this book and checks its internal links and anchors with [lychee](https://github.com/lycheeverse/lychee) |
 
-The Windows job copies CEF's runtime next to `riptide.exe` first, since a restored cache skips cef-dll-sys's own copy. The macOS job builds `target/debug/riptide.app` with `scripts/bundle-macos.sh` and points the test at the binary inside it with `RIPTIDE_EXE`.
+Both jobs delete cef-dll-sys's restored CMake configuration (`CMakeCache.txt` and `CMakeFiles`) before building, since it names the compiler and linker paths of the runner image that wrote it, and CMake fails once a new image drops that MSVC version. The Windows job copies CEF's runtime next to `riptide.exe` first, since a restored cache skips cef-dll-sys's own copy. The macOS job builds `target/debug/riptide.app` with `scripts/bundle-macos.sh` and points the test at the binary inside it with `RIPTIDE_EXE`.
 
 [`.github/workflows/docs.yml`](https://github.com/joshzcold/riptide/blob/main/.github/workflows/docs.yml) publishes the book to GitHub Pages on every push to `main`, and checks its external links weekly.
 

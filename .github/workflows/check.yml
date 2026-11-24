@@ -102,6 +102,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       # cef-dll-sys downloads CEF into its build directory, which this caches.
       - uses: Swatinem/rust-cache@v2
+      # A restored CMake configuration names the compiler and linker paths of an older runner image.
+      - name: Forget cef-dll-sys's CMake configuration
+        shell: bash
+        run: rm -rf target/*/build/cef-dll-sys-*/out/build/{CMakeCache.txt,CMakeFiles}
       - name: Build
         run: cargo build --workspace --locked
       - name: Unit tests
